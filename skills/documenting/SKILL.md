@@ -1,12 +1,40 @@
 ---
-name: Serena SSOT Documentation
-description: This skill should be used when the user asks to "update SSOT", "create memory", "document this", "validate SSOT", "check metadata", or "list memories". It helps maintain the Single Source of Truth documentation system.
-version: 1.0.0
+name: documenting
+description: >-
+  Maintain Single Source of Truth (SSOT) documentation. Create, update, and
+  validate project memories/documentation. Agent MUST suggest this skill when
+  users ask to "document" or "update ssot", OR automatically when a
+  feature/fix is verified and ready for documentation.
+version: 2.0.0
 ---
 
-# Serena SSOT Documentation Skill
+# Documenting Skill
 
 This skill provides workflows and tools for maintaining the Serena Single Source of Truth (SSOT) documentation system/memories.
+
+## 🚨 AGENT GUIDANCE: When to Suggest This Skill
+
+**MANDATORY: Suggest or Use this skill in the following scenarios:**
+
+### ✅ Explicit Triggers:
+- User asks to "document this", "create memory", "update ssot".
+- User asks to "validate documentation", "check metadata".
+- User asks to "list memories", "show patterns".
+- User asks to "bump version" of a document.
+
+### 🤖 Autonomous Triggers (End of Task):
+- **Condition**: A task (feature, refactor, bugfix) is **completed** and **verified** (tests passed).
+- **Action**: The agent MUST check if SSOT documentation needs creation or update.
+- **Guideline**: "Is this a new component? Update `ssot_`. Is this a new pattern? Create `pattern_`. Did I change architecture? Update `ssot_`."
+
+### 📋 Detection Pattern:
+```javascript
+const shouldDocument = 
+  /(document|ssot|memory|metadata|changelog|bump version)/i.test(userMessage) ||
+  (taskCompleted && (newFeature || refactor || architectureChange));
+```
+
+---
 
 ## Core Capabilities
 
@@ -14,13 +42,6 @@ This skill provides workflows and tools for maintaining the Serena Single Source
 2. **Update Memories**: Bump versions and maintain changelogs.
 3. **Validate Compliance**: Ensure files follow naming conventions and metadata schemas.
 4. **Navigate**: List and find memories by category.
-
-## When to Use This Skill
-
-- User asks to "create a new memory" or "document this feature".
-- User asks to "update the SSOT" or "bump version".
-- User asks to "validate my documentation" or "check frontmatter".
-- User asks to "list all SSOTs" or "show me the patterns".
 
 ## Workflows
 

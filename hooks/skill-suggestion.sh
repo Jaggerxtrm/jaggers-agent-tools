@@ -27,34 +27,33 @@ if [ -f "$CONFIG_FILE" ]; then
   fi
 fi
 
-# Pattern detection for /ccs delegation (IT + EN, flexible)
+# Pattern detection for /ccs delegation (simple tasks - IT + EN, flexible)
 CCS_PATTERNS=(
   # Correzioni / Corrections
-  "typo|errore|errori|spelling|ortograf"
-  "correggi|fix|sistema|repair|risolv"
-  
-  # Test
-  "test|unit.*test|integration.*test"
-  "aggiungi.*test|add.*test|crea.*test|create.*test"
-  
-  # Refactoring
-  "refactor|rifattoriz|riorganiz|restructur"
-  "estrai|extract.*function|extract.*method"
-  
+  "^(fix|correggi|risolvi).*typo"
+  "^(fix|correggi).*spelling"
+
+  # Test semplici
+  "^(add|aggiungi|crea|create).*test"
+  "^(genera|generate).*(test|unit|case)"
+
+  # Refactoring semplice
+  "^(estrai|extract).*(function|method|funzione|metodo)"
+  "rename.*variable|rinomina.*variabile"
+
   # Documentazione
-  "doc|docstring|comment|commento"
-  "aggiorna.*doc|update.*doc|migliora.*doc|improve.*doc"
-  
+  "^(add|aggiungi).*(doc|docstring|comment)"
+  "^(aggiorna|update).*comment"
+
   # Formattazione
-  "format|formatta|lint|indenta|indent"
-  
+  "^(format|formatta|lint|indenta|indent)"
+
   # Type hints
-  "type|typing|tipo|tipi|hint"
-  "add.*type|aggiungi.*tipo"
-  
+  "^(add|aggiungi).*(type|typing|hint)"
+
   # Modifiche semplici
-  "rimuovi|remove|elimina|delete"
-  "modifica|modify|cambia|change"
+  "^(rimuovi|remove|elimina|delete).*(import|unused)"
+  "^(modifica|modify|cambia|change).*(name|nome)"
 )
 
 # Pattern detection for /p prompt improvement (IT + EN)
@@ -63,10 +62,7 @@ P_PATTERNS=(
   "analiz|analyz|esamina|studia|review|rivedi"
   "implementa|implement|create|crea"
   "spiega|explain|descri|describe"
-  "come|how|what.*is|cosa.*è|perch|why"
-  
-  # Prompt molto corti (qualsiasi lingua)
-  "^.{1,35}$"  # < 35 caratteri totali
+  "^(come|how|what|cosa|perch|why)"
 )
 
 # Exclusion patterns (complex tasks - don't suggest, IT + EN)
@@ -79,57 +75,114 @@ EXCLUDE_PATTERNS=(
   "complex|compless"
 )
 
+# Conversational patterns (greetings, simple acknowledgments - don't suggest)
+CONVERSATIONAL_PATTERNS=(
+  # Saluti / Greetings
+  "^(ciao|hi|hello|hey|buongiorno|buonasera|salve)([!.]|$)"
+  "^(good morning|good afternoon|good evening)([!.]|$)"
+
+  # Ringraziamenti / Thanks
+  "^(grazie|thanks|thank you|merci|thx)([!.]|$)"
+  "^(grazie mille|thanks a lot|many thanks)([!.]|$)"
+
+  # Acknowledgments
+  "^(ok|okay|va bene|perfetto|perfect|fine|d'accordo|agreed?)([!.]|$)"
+  "^(si|sì|yes|no|nope|yeah|yep)([!.]|$)"
+
+  # Congedi / Goodbyes
+  "^(arrivederci|addio|ciao|bye|goodbye|see you|ci vediamo)([!.]|$)"
+
+  # Domande conversazionali molto semplici
+  "^come stai\?$|^how are you\?$|^come va\?$"
+  "^tutto bene\?$|^all good\?$|^everything ok\?$"
+)
+
 # Function to check if prompt matches pattern
 matches_pattern() {
   local text="$1"
   local pattern="$2"
-  echo "$text" | grep -qiE "$pattern"
+  # Use /bin/grep explicitly to avoid rg alias issues
+  echo "$text" | /bin/grep -qiE "$pattern"
 }
 
 # Check exclusions first
 for pattern in "${EXCLUDE_PATTERNS[@]}"; do
   if matches_pattern "$PROMPT" "$pattern"; then
+    echo "{}"
     exit 0  # Complex task, don't suggest
   fi
 done
 
-# Check CCS delegation patterns
-SUGGEST_CCS=false
-for pattern in "${CCS_PATTERNS[@]}"; do
+# Check conversational patterns (don't suggest for greetings/acknowledgments)
+for pattern in "${CONVERSATIONAL_PATTERNS[@]}"; do
   if matches_pattern "$PROMPT" "$pattern"; then
-    SUGGEST_CCS=true
-    break
+    echo "{}"
+    exit 0  # Conversational message, don't suggest
   fi
 done
 
-# Check /p improvement patterns
-SUGGEST_P=false
-WORD_COUNT=$(echo "$PROMPT" | wc -w)
-if [ "$WORD_COUNT" -lt 8 ]; then
-  # Very short prompts benefit from structure
-  SUGGEST_P=true
-else
-  for pattern in "${P_PATTERNS[@]}"; do
+# Check delegation patterns (simple keyword trigger)
+SUGGEST_DELEGATION=false
+if matches_pattern "$PROMPT" "delegate"; then
+  SUGGEST_DELEGATION=true
+fi
+
+# Check CCS delegation patterns (only if not delegation workflow)
+SUGGEST_CCS=false
+if [ "$SUGGEST_DELEGATION" = false ]; then
+  for pattern in "${CCS_PATTERNS[@]}"; do
     if matches_pattern "$PROMPT" "$pattern"; then
-      SUGGEST_P=true
+      SUGGEST_CCS=true
       break
     fi
   done
 fi
 
-# Generate suggestion message
-if [ "$SUGGEST_CCS" = true ]; then
+# Check /p improvement patterns
+SUGGEST_P=false
+WORD_COUNT=$(echo "$PROMPT" | wc -w)
+
+# Check if prompt matches task patterns first
+for pattern in "${P_PATTERNS[@]}"; do
+  if matches_pattern "$PROMPT" "$pattern"; then
+    SUGGEST_P=true
+    break
+  fi
+done
+
+# Only suggest for very short prompts if they also look like tasks
+# (avoid false positives on conversational messages)
+if [ "$WORD_COUNT" -lt 6 ] && [ "$SUGGEST_P" = false ]; then
+  # Check if it contains at least one verb or task keyword
+  if matches_pattern "$PROMPT" "(creare|create|fare|do|aggiungere|add|modificare|modify|controllare|check|verificare|verify|testare|test)"; then
+    SUGGEST_P=true
+  fi
+fi
+
+# Generate suggestion message (systemReminder for Claude, not user)
+if [ "$SUGGEST_DELEGATION" = true ]; then
   cat <<EOF
 {
-  "systemMessage": "💡 **Skill Suggestion**: This task may benefit from \`/ccs\` delegation (cost-optimized execution). Type \`/ccs [task]\` to delegate, or continue normally."
+  "systemReminder": "💡 Claude Internal Reminder: User mentioned 'delegate'. Consider using the /delegate skill which will present an AskUserQuestion menu for profile selection (CCS simple tasks or unitAI workflows). The user will choose the profile - do NOT auto-execute."
 }
 EOF
+
+elif [ "$SUGGEST_CCS" = true ]; then
+  # Simple task - suggest /ccs for cost-optimized execution
+  cat <<EOF
+{
+  "systemReminder": "💡 Claude Internal Reminder: This appears to be a simple, deterministic task (typo/test/format/doc). Consider using the /ccs skill for cost-optimized delegation (GLM-4-Flash, Gemini-Flash, or Qwen). The skill will present an AskUserQuestion menu for profile selection."
+}
+EOF
+
 elif [ "$SUGGEST_P" = true ]; then
+  # Vague prompt - suggest /prompt-improving
   cat <<EOF
 {
-  "systemMessage": "💡 **Skill Suggestion**: This prompt could be improved with \`/prompt-improving\` (adds XML structure, examples, thinking space). Type \`/prompt-improving \"$PROMPT\"\` or continue normally."
+  "systemReminder": "💡 Claude Internal Reminder: This prompt appears vague or could benefit from structure. Consider using the /prompt-improving skill to add XML structure, examples, and thinking space before proceeding. This is optional - use your judgment."
 }
 EOF
+
 else
   # No suggestion
   echo "{}"
