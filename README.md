@@ -196,8 +196,8 @@ Adjust hook execution timeouts in `settings.json`:
 
 | Version | Date       | Highlights                             |
 | ------- | ---------- | -------------------------------------- |
+| 1.1.1   | 2026-02-03 | Dynamic path resolution in Sync logic  |
 | 1.1.0   | 2026-02-03 | Vault Sync, Orchestrating-agents loops |
-| 1.0.0   | 2026-02-03 | Initial orchestrating-agents & CLI     |
 | 5.1.0   | 2026-01-30 | Renamed `p` to `prompt-improving`      |
 | 5.0.0   | 2026-01-30 | Major refactoring, 90% token reduction |
 | 4.2.0   | Pre-2026   | Feature-rich baseline (155KB)          |

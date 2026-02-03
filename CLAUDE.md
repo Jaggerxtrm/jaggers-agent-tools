@@ -14,33 +14,20 @@
   - Python: Standard library only (no external deps for hooks)
 
 ## Key Files & Directories
-- `cli/lib/sync.js`: Logic for syncing/backporting configurations.
+- `cli/lib/sync.js`: Logic for syncing/backporting configurations. Includes dynamic path resolution for hardcoded repo paths.
 - `cli/lib/transform-gemini.js`: Logic for transforming Claude config to Gemini.
-- `skills/delegating/config.yaml`: Configuration for delegation skill.
-- `hooks/*.py`: Hook implementation scripts.
-
-## Common Commands
-
-### Installation
-- `npx github:Jaggerxtrm/jaggers-agent-tools` - Zero-cloning install/update (Recommended)
-- `npx ./cli` - Run local config manager (from root)
-- `node cli/index.js --reset` - Reset CLI context/config
-- `npx ./cli --dry-run` - Preview changes without writing to disk
-
-### Hook Testing
-- `python3 hooks/skill-suggestion.py` - Test hook logic manually
-- `cat test-input.json | python3 hooks/skill-suggestion.py` - Test with input
-
-### Documentation
-- `PYTHONPATH=/home/dawid/.gemini/skills/documenting cd /home/dawid/.gemini/skills/documenting && python3 scripts/orchestrator.py /home/dawid/projects/jaggers-agent-tools feature "desc" --scope=skills --category=docs`
-- `python3 /home/dawid/.gemini/skills/documenting/scripts/generate_template.py` - Create memory
 
 ## Gemini Support
 - The CLI automatically detects `~/.gemini` environments.
 - **Slash Commands**: Specialized commands available: `/orchestrate`, `/delegate`, `/document`, `/prompt`.
 - **Command Sync**: Syncs custom slash commands from `.gemini/commands/`.
 - **Auto-Command Generation**: Automatically transforms `SKILL.md` into Gemini `.toml` command files during sync.
+- **Path Resolution**: Fixes hardcoded paths in `settings.json` templates by dynamically resolving them to the user's target installation directory.
 - `settings.json` is dynamically transformed for Gemini compatibility:
   - Event names mapped (UserPromptSubmit -> BeforeAgent)
   - Paths rewritten to target directory
   - Unsupported fields filtered out
+
+### Documentation
+- `export PYTHONPATH=$PYTHONPATH:$(pwd)/skills/documenting && python3 skills/documenting/scripts/orchestrator.py . feature "desc" --scope=skills --category=docs`
+- `python3 skills/documenting/scripts/generate_template.py` - Create memory

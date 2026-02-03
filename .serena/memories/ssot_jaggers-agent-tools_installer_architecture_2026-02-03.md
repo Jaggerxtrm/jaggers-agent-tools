@@ -1,8 +1,8 @@
 ---
 title: "Installer and Sync Architecture"
-version: 1.1.0
+version: 1.1.1
 created: 2026-02-03
-updated: 2026-02-03T14:00:00+00:00
+updated: 2026-02-03T16:30:00+00:00
 scope: jaggers-config-manager
 category: ssot
 subcategory: installer
@@ -15,6 +15,9 @@ changelog:
   - version: 1.1.0
     date: 2026-02-03
     changes: Added zero-cloning support, Gemini command sync, and auto-generation.
+  - version: 1.1.1
+    date: 2026-02-03
+    changes: Implemented dynamic path resolution in sync logic to fix hardcoded paths in settings.json.
 ---
 
 # Installer and Sync Architecture - SSOT
@@ -49,6 +52,7 @@ Handles the actual file movement and cross-agent format conversion.
 - **Hook Transformation**: Maps Claude lifecycle events to Gemini equivalents (e.g., `UserPromptSubmit` → `BeforeAgent`).
 - **Command Auto-Generation**: Automatically transforms `SKILL.md` frontmatter into Gemini `.toml` command files.
 - **Claude Native Support**: Recognizes that Claude Code generates commands directly from skill metadata, avoiding redundant file creation.
+- **Dynamic Path Resolution**: Fixes hardcoded paths in `settings.json` (e.g., repository paths containing `/hooks/`) by resolving them to the actual user target directory during sync.
 
 ## Standards & Best Practices
 

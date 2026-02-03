@@ -69,10 +69,13 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
         if (item === 'settings.json') {
           const repoConfig = await fs.readJson(src);
 
+          // FIX: Resolve paths to match current target environment
+          // This fixes hardcoded paths (e.g. /home/dawid/...) from the repo
+          let finalRepoConfig = resolveConfigPaths(repoConfig, systemRoot);
+
           // Transform config for Gemini if needed
-          let finalRepoConfig = repoConfig;
           if (!isClaude) {
-            finalRepoConfig = transformGeminiConfig(repoConfig, systemRoot);
+            finalRepoConfig = transformGeminiConfig(finalRepoConfig, systemRoot);
           }
 
           // Use safe merge to preserve protected keys in local config
@@ -111,7 +114,10 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
         }
       } else if (category === 'config' && item === 'settings.json' && !isClaude && actionType === 'sync') {
         const configContent = await fs.readJson(src);
-        const transformedConfig = transformGeminiConfig(configContent, systemRoot);
+        
+        // Resolve paths here too for non-merging case (e.g. first install)
+        let transformedConfig = resolveConfigPaths(configContent, systemRoot);
+        transformedConfig = transformGeminiConfig(transformedConfig, systemRoot);
 
         if (!isDryRun) {
           await fs.remove(dest);
@@ -182,4 +188,28 @@ Use the ${name} skill to handle this: {{args}}
     console.error(`Error transforming skill to command: ${error.message}`);
     return null;
   }
+}
+
+/**
+ * Recursively resolves paths in the config to match the target directory
+ */
+function resolveConfigPaths(config, targetDir) {
+  const newConfig = JSON.parse(JSON.stringify(config));
+  
+  function recursiveReplace(obj) {
+    for (const key in obj) {
+      if (typeof obj[key] === 'string') {
+        // Match absolute paths containing /hooks/ and replace the prefix with targetDir/hooks
+        if (obj[key].match(/\/[^\s"']+\/hooks\//)) {
+           const hooksDir = path.join(targetDir, 'hooks');
+           obj[key] = obj[key].replace(/(\/[^\s"']+\/hooks\/)/g, `${hooksDir}/`);
+        }
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        recursiveReplace(obj[key]);
+      }
+    }
+  }
+
+  recursiveReplace(newConfig);
+  return newConfig;
 }
