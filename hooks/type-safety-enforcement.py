@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-import json
 import sys
 import os
 import subprocess
 
+# Add script directory to path to allow importing shared modules
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from agent_context import AgentContext
+
 # Configuration
 STRICT_DIRS = ["mcp_server"]
 WARN_DIRS = ["scripts"]
-PROJECT_ROOT = os.environ.get('CLAUDE_PROJECT_DIR', os.getcwd())
+PROJECT_ROOT = os.environ.get('GEMINI_PROJECT_DIR', os.environ.get('CLAUDE_PROJECT_DIR', os.getcwd()))
 VENV_PATH = os.path.join(PROJECT_ROOT, ".venv")
 
 # Colors
@@ -36,35 +39,30 @@ def run_mypy(target, is_strict):
         
         if result.returncode != 0:
             if is_strict:
-                print(f"{RED}❌ MYPY FAILED (STRICT MODE){NC}")
-                print(result.stdout)
-                print(f"
-{RED}🚫 COMMIT BLOCKED: Fix type errors in {target}{NC}")
-                print(f"{CYAN}💡 Run: source .venv/bin/activate && python -m mypy {target}{NC}")
+                print(f"{RED}❌ MYPY FAILED (STRICT MODE){NC}", file=sys.stderr)
+                print(result.stdout, file=sys.stderr)
+                print(f"\n{RED}🚫 COMMIT BLOCKED: Fix type errors in {target}{NC}", file=sys.stderr)
+                print(f"{CYAN}💡 Run: source .venv/bin/activate && python -m mypy {target}{NC}", file=sys.stderr)
                 return False
             else:
-                print(f"{YELLOW}⚠️  MYPY WARNING (LENIENT MODE){NC}")
-                print("
-".join(result.stdout.splitlines()[:20]))
-                print(f"
-{YELLOW}⚡ Type errors exist in {target} (commit allowed){NC}")
+                print(f"{YELLOW}⚠️  MYPY WARNING (LENIENT MODE){NC}", file=sys.stderr)
+                print("\n".join(result.stdout.splitlines()[:20]), file=sys.stderr)
+                print(f"\n{YELLOW}⚡ Type errors exist in {target} (commit allowed){NC}", file=sys.stderr)
                 return True
         else:
-            print(f"{GREEN}✅ MYPY PASSED: {target}{NC}")
+            print(f"{GREEN}✅ MYPY PASSED: {target}{NC}", file=sys.stderr)
             return True
 
     except Exception as e:
-        print(f"Error running mypy: {e}")
+        print(f"Error running mypy: {e}", file=sys.stderr)
         return True # Fail open
 
 try:
-    data = json.load(sys.stdin)
-    tool_name = data.get('tool_name')
-    tool_input = data.get('tool_input', {})
+    ctx = AgentContext()
 
-    # 1. Check Git Commits (Bash)
-    if tool_name == 'Bash':
-        command = tool_input.get('command', '')
+    # 1. Check Git Commits (Shell tools)
+    if ctx.is_shell_tool():
+        command = ctx.get_command()
         if 'git commit' in command:
             print(f"{CYAN}🔍 TYPE SAFETY CHECK: Validating staged Python files...{NC}", file=sys.stderr)
             
@@ -79,7 +77,7 @@ try:
 
             if not staged:
                 print(f"{GREEN}✅ No Python files staged{NC}", file=sys.stderr)
-                sys.exit(0)
+                ctx.allow()
 
             failed = False
             
@@ -92,28 +90,18 @@ try:
 
             # If failed, block the tool
             if failed:
-                print(json.dumps({
-                    "hookSpecificOutput": {
-                        "hookEventName": "PreToolUse",
-                        "permissionDecision": "deny",
-                        "permissionDecisionReason": "Type safety violations in strict directory."
-                    }
-                }))
-                sys.exit(0)
+                ctx.block(reason="Type safety violations in strict directory.")
             
-            sys.exit(0)
+            ctx.allow()
 
-    # 2. Check Edits (Edit/Write)
-    elif tool_name in ['Edit', 'Write']:
-        file_path = tool_input.get('file_path', '')
+    # 2. Check Edits (Write/Edit tools)
+    elif ctx.is_write_tool() or ctx.is_edit_tool():
+        file_path = ctx.get_file_path()
         if file_path.endswith('.py') and is_strict_path(file_path):
-            print(json.dumps({
-                "systemMessage": f"""{YELLOW}⚠️  EDITING STRICT TYPE-SAFE FILE{NC}
+            ctx.allow(system_message=f"""{YELLOW}⚠️  EDITING STRICT TYPE-SAFE FILE{NC}
 This file is in a STRICT zone ({', '.join(STRICT_DIRS)}).
 Any type errors will BLOCK commits.
-"""
-            }))
-            sys.exit(0)
+""")
 
 except Exception:
     sys.exit(0)

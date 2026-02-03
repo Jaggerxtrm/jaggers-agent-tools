@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-import json
 import sys
+import os
 import re
+
+# Add script directory to path to allow importing shared modules
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from agent_context import AgentContext
 
 # Configuration
 CCS_PATTERNS = [
@@ -54,29 +58,25 @@ def matches(text, patterns):
     return False
 
 try:
-    data = json.load(sys.stdin)
-    prompt = data.get('prompt', '')
+    ctx = AgentContext()
+    prompt = ctx.prompt
     
     if not prompt:
-        sys.exit(0)
+        ctx.fail_open()
 
     # 1. Check Exclusions
     if matches(prompt, EXCLUDE_PATTERNS) or matches(prompt, CONVERSATIONAL_PATTERNS):
-        sys.exit(0)
+        ctx.fail_open()
+
+    agent_name = ctx.agent_type.capitalize()
 
     # 2. Check Explicit Delegation
     if re.search(r'delegate', prompt, re.IGNORECASE):
-        print(json.dumps({
-            "systemMessage": "💡 Claude Internal Reminder: User mentioned 'delegate'. Consider using the /delegating skill to offload this task."
-        }))
-        sys.exit(0)
+        ctx.allow(system_message=f"💡 {agent_name} Internal Reminder: User mentioned 'delegate'. Consider using the /delegating skill to offload this task.")
 
     # 3. Check CCS Delegation (Simple Tasks)
     if matches(prompt, CCS_PATTERNS):
-        print(json.dumps({
-            "systemMessage": "💡 Claude Internal Reminder: This appears to be a simple, deterministic task (typo/test/format/doc). Consider using the /delegating skill (CCS backend) for cost-optimized execution."
-        }))
-        sys.exit(0)
+        ctx.allow(system_message=f"💡 {agent_name} Internal Reminder: This appears to be a simple, deterministic task (typo/test/format/doc). Consider using the /delegating skill (CCS backend) for cost-optimized execution.")
 
     # 4. Check Prompt Improving (/p)
     word_count = len(prompt.split())
@@ -88,12 +88,9 @@ try:
             is_vague = True
 
     if is_vague:
-        print(json.dumps({
-            "systemMessage": "💡 Claude Internal Reminder: This prompt appears vague or could benefit from structure. Consider using the /prompt-improving skill to add XML structure, examples, and thinking space before proceeding."
-        }))
-        sys.exit(0)
+        ctx.allow(system_message=f"💡 {agent_name} Internal Reminder: This prompt appears vague or could benefit from structure. Consider using the /prompt-improving skill to add XML structure, examples, and thinking space before proceeding.")
 
-    sys.exit(0)
+    ctx.fail_open()
 
 except Exception:
     sys.exit(0)
