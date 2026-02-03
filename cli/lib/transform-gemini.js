@@ -77,10 +77,12 @@ function transformHookDefinition(claudeDef, targetDir) {
 export async function transformSkillToCommand(skillMdPath) {
     try {
         const content = await fs.readFile(skillMdPath, 'utf8');
+        
         const frontmatterMatch = content.match(/^---([\s\S]+?)---/);
         if (!frontmatterMatch) return null;
         
         const frontmatter = frontmatterMatch[1];
+        
         const nameMatch = frontmatter.match(/name:\s*(.+)/);
         const descMatch = frontmatter.match(/description:\s*(.+)/);
         
@@ -97,39 +99,6 @@ Use the ${name} skill to handle this: {{args}}
         return toml;
     } catch (error) {
         console.error(`Error transforming skill to command: ${error.message}`);
-        return null;
-    }
-}
-
-/**
- * Transform a SKILL.md file into a Claude command .md content
- */
-export async function transformSkillToClaudeCommand(skillMdPath) {
-    try {
-        const content = await fs.readFile(skillMdPath, 'utf8');
-        const frontmatterMatch = content.match(/^---([\s\S]+?)---/);
-        if (!frontmatterMatch) return null;
-        
-        const frontmatter = frontmatterMatch[1];
-        const nameMatch = frontmatter.match(/name:\s*(.+)/);
-        const descMatch = frontmatter.match(/description:\s*(.+)/);
-        
-        if (!nameMatch || !descMatch) return null;
-        
-        const name = nameMatch[1].trim();
-        const description = descMatch[1].trim();
-        
-        const md = `# ${name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ')}
-
-${description}
-
-## Usage
-
-Use the ${name} skill to handle this: {{args}}
-`;
-        return md;
-    } catch (error) {
-        console.error(`Error transforming skill to Claude command: ${error.message}`);
         return null;
     }
 }

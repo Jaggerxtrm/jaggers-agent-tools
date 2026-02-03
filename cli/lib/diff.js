@@ -46,17 +46,22 @@ export async function calculateDiff(repoRoot, systemRoot) {
     const changeSet = {
         skills: { missing: [], outdated: [], drifted: [], total: 0 },
         hooks: { missing: [], outdated: [], drifted: [], total: 0 },
-        config: { missing: [], outdated: [], drifted: [], total: 0 },
-        commands: { missing: [], outdated: [], drifted: [], total: 0 }
+        config: { missing: [], outdated: [], drifted: [], total: 0 }
     };
 
-    // 1. Folders: Skills & Hooks & Commands
-    const folders = ['skills', 'hooks', 'commands'];
+    if (!isClaude) {
+        changeSet.commands = { missing: [], outdated: [], drifted: [], total: 0 };
+    }
+
+    // 1. Folders: Skills & Hooks & Commands (for Gemini)
+    const folders = ['skills', 'hooks'];
+    if (!isClaude) folders.push('commands');
 
     for (const category of folders) {
         let repoPath;
         if (category === 'commands') {
-            repoPath = isClaude ? path.join(repoRoot, '.claude', 'commands') : path.join(repoRoot, '.gemini', 'commands');
+            // Commands are always in .gemini/commands in repo
+            repoPath = path.join(repoRoot, '.gemini', 'commands');
         } else {
             repoPath = path.join(repoRoot, category);
         }
