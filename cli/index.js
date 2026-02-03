@@ -28,9 +28,12 @@ async function processTarget(targetDir, syncMode) {
     console.log(kleur.gray('Scanning differences...'));
     const changeSet = await calculateDiff(repoRoot, targetDir);
 
-    const totalMissing = changeSet.skills.missing.length + changeSet.hooks.missing.length + changeSet.config.missing.length;
-    const totalOutdated = changeSet.skills.outdated.length + changeSet.hooks.outdated.length + changeSet.config.outdated.length;
-    const totalDrifted = changeSet.skills.drifted.length + changeSet.hooks.drifted.length + changeSet.config.drifted.length;
+    const categories = ['skills', 'hooks', 'config'];
+    if (changeSet.commands) categories.push('commands');
+
+    const totalMissing = categories.reduce((sum, cat) => sum + changeSet[cat].missing.length, 0);
+    const totalOutdated = categories.reduce((sum, cat) => sum + changeSet[cat].outdated.length, 0);
+    const totalDrifted = categories.reduce((sum, cat) => sum + changeSet[cat].drifted.length, 0);
 
     // 2. Display Detailed Breakdown
     if (totalMissing === 0 && totalOutdated === 0 && totalDrifted === 0) {
@@ -39,34 +42,35 @@ async function processTarget(targetDir, syncMode) {
         console.log(kleur.bold('Analysis Results:'));
         
         // Missing (Green)
-        printDetails('[+] Missing in System (Will be Installed)', 
-            [
-                ...changeSet.skills.missing.map(s => `skills/${s}`), 
-                ...changeSet.hooks.missing.map(h => `hooks/${h}`),
-                ...changeSet.config.missing.map(c => `config/${c}`)
-            ], 
-            kleur.green
-        );
+        const missingItems = [];
+        categories.forEach(cat => {
+            changeSet[cat].missing.forEach(item => {
+                const prefix = (cat === 'commands') ? '.gemini/commands' : cat;
+                missingItems.push(`${prefix}/${item}`);
+            });
+        });
+        printDetails('[+] Missing in System (Will be Installed)', missingItems, kleur.green);
 
         // Outdated (Blue)
-        printDetails('[^] Outdated in System (Will be Updated)', 
-            [
-                ...changeSet.skills.outdated.map(s => `skills/${s}`), 
-                ...changeSet.hooks.outdated.map(h => `hooks/${h}`),
-                ...changeSet.config.outdated.map(c => `config/${c}`)
-            ], 
-            kleur.blue
-        );
+        const outdatedItems = [];
+        categories.forEach(cat => {
+            changeSet[cat].outdated.forEach(item => {
+                const prefix = (cat === 'commands') ? '.gemini/commands' : cat;
+                outdatedItems.push(`${prefix}/${item}`);
+            });
+        });
+        printDetails('[^] Outdated in System (Will be Updated)', outdatedItems, kleur.blue);
 
         // Drifted (Magenta)
-        printDetails('[<] Drifted / Locally Modified (Needs Backport or Manual Merge)', 
-            [
-                ...changeSet.skills.drifted.map(s => `skills/${s}`), 
-                ...changeSet.hooks.drifted.map(h => `hooks/${h}`),
-                ...changeSet.config.drifted.map(c => `config/${c}`)
-            ], 
-            kleur.magenta
-        );
+        const driftedItems = [];
+        categories.forEach(cat => {
+            changeSet[cat].drifted.forEach(item => {
+                const prefix = (cat === 'commands') ? '.gemini/commands' : cat;
+                driftedItems.push(`${prefix}/${item}`);
+            });
+        });
+        printDetails('[<] Drifted / Locally Modified (Needs Backport or Manual Merge)', driftedItems, kleur.magenta);
+        
         console.log(''); // spacer
     }
 

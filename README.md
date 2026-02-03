@@ -44,13 +44,22 @@ Unified task delegation system supporting both CCS (cost-optimized) and unitAI (
 
 **Deprecates**: `/ccs-delegation` (v5.0.0) - use `/delegation` instead
 
-### serena-lsp-workflow
+### orchestrating-agents
+
+Orchestrates task handoff and "handshaking" between Gemini and Qwen CLI agents for specialized reviews or second opinions.
+
+- **Invocation**: `/orchestrate [task]`
+- **Purpose**: Facilitates multi-model collaboration and cross-validation of complex logic.
+- **Hook**: None (Direct slash command via `.gemini/commands/orchestrate.toml`)
+- **Version**: 1.0.0
+
+### using-serena-lsp
 
 Master workflow combining Serena MCP semantic tools with LSP plugins for efficient code editing.
 
 - **Invocation**: Auto-suggested via hooks
 - **Purpose**: Surgical code editing with 75-80% token savings
-- **Hook**: `serena-workflow-reminder.sh`
+- **Hook**: `serena-workflow-reminder.py`
 - **Origin**: Serena MCP
 
 ### documenting
@@ -115,6 +124,8 @@ The Config Manager will:
 2. **Scan** for differences between the repo and your system.
 3. **Install/Update** skills and hooks using your preferred strategy (Copy or Symlink).
 4. **Configure** `settings.json` automatically to register hooks (supports both Claude and Gemini formats).
+5. **Sync Gemini Commands**: Synchronizes custom slash commands from `.gemini/commands/` to the Gemini environment.
+6. **Auto-Command Generation**: Automatically transforms `SKILL.md` files into Gemini `.toml` command files during synchronization.
 
 ### Manual Installation
 
@@ -195,7 +206,8 @@ jaggers-agent-tools/
 ├── skills/
 │   ├── prompt-improving/        # Prompt improvement skill
 │   ├── delegating/              # Task delegation skill
-│   ├── serena-lsp-workflow/     # Serena LSP workflow
+│   ├── orchestrating-agents/    # Multi-agent collaboration skill
+│   ├── using-serena-lsp/        # Serena LSP workflow
 │   └── documenting/             # Serena SSOT system
 └── hooks/
     ├── README.md                # Hooks documentation

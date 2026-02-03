@@ -31,11 +31,14 @@
 - `cat test-input.json | python3 hooks/skill-suggestion.py` - Test with input
 
 ### Documentation
-- `python3 skills/documenting/scripts/orchestrator.py` - Document changes
-- `python3 skills/documenting/scripts/generate_template.py` - Create memory
+- `PYTHONPATH=/home/dawid/.gemini/skills/documenting cd /home/dawid/.gemini/skills/documenting && python3 scripts/orchestrator.py /home/dawid/projects/jaggers-agent-tools feature "desc" --scope=skills --category=docs`
+- `python3 /home/dawid/.gemini/skills/documenting/scripts/generate_template.py` - Create memory
 
 ## Gemini Support
 - The CLI automatically detects `~/.gemini` environments.
+- `/orchestrate` command is available via `.gemini/commands/orchestrate.toml`.
+- **Command Sync**: Syncs custom slash commands from `.gemini/commands/`.
+- **Auto-Command Generation**: Automatically transforms `SKILL.md` into Gemini `.toml` command files during sync.
 - `settings.json` is dynamically transformed for Gemini compatibility:
   - Event names mapped (UserPromptSubmit -> BeforeAgent)
   - Paths rewritten to target directory

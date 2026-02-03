@@ -1,21 +1,22 @@
 import path from 'path';
 import fs from 'fs-extra';
 import kleur from 'kleur';
-import { transformGeminiConfig } from './transform-gemini.js';
+import { transformGeminiConfig, transformSkillToCommand } from './transform-gemini.js';
 
 /**
  * Execute a sync plan based on changeset and mode
  */
 export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType) {
+    const isClaude = systemRoot.includes('.claude') || systemRoot.includes('Claude');
     const categories = ['skills', 'hooks', 'config'];
+    if (!isClaude) categories.push('commands');
+    
     let count = 0;
 
     // Mapping for special file locations (repo relative path -> system relative path)
     const fileMapping = {
         'config/settings.json': { repo: 'config/settings.json', sys: 'settings.json' }
     };
-
-    const isClaude = systemRoot.includes('.claude') || systemRoot.includes('Claude');
 
     for (const category of categories) {
         const itemsToProcess = [];
@@ -28,14 +29,10 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
         }
 
         for (const item of itemsToProcess) {
-            // Previously skipped settings.json for non-Claude here. Removed to allow Gemini processing.
-
             let src, dest;
 
             if (category === 'config') {
-                // Special handling for config files
                 const mapping = fileMapping[`config/${item}`] || { repo: `config/${item}`, sys: item };
-
                 if (actionType === 'backport') {
                     src = path.join(systemRoot, mapping.sys);
                     dest = path.join(repoRoot, mapping.repo);
@@ -43,11 +40,17 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
                     src = path.join(repoRoot, mapping.repo);
                     dest = path.join(systemRoot, mapping.sys);
                 }
+            } else if (category === 'commands') {
+                if (actionType === 'backport') {
+                    src = path.join(systemRoot, category, item);
+                    dest = path.join(repoRoot, '.gemini', 'commands', item);
+                } else {
+                    src = path.join(repoRoot, '.gemini', 'commands', item);
+                    dest = path.join(systemRoot, category, item);
+                }
             } else {
-                // Standard folders (skills/hooks)
                 const repoPath = path.join(repoRoot, category);
                 const systemPath = path.join(systemRoot, category);
-
                 if (actionType === 'backport') {
                     src = path.join(systemPath, item);
                     dest = path.join(repoPath, item);
@@ -59,14 +62,12 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
 
             console.log(kleur.gray(`  ${actionType === 'backport' ? '<--' : '-->'} ${category}/${item}`));
 
-            // For config files, we usually want to Backup before Overwrite in sync mode
             if (category === 'config' && actionType === 'sync' && fs.existsSync(dest)) {
                 await fs.copy(dest, `${dest}.bak`);
                 console.log(kleur.gray(`      (Backup created: ${path.basename(dest)}.bak)`));
             }
 
             if (category === 'config' && item === 'settings.json' && !isClaude && actionType === 'sync') {
-                // Transform for Gemini: generate compatible config and write it
                 const configContent = await fs.readJson(src);
                 const transformedConfig = transformGeminiConfig(configContent, systemRoot);
                 await fs.remove(dest);
@@ -75,10 +76,25 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
                 await fs.remove(dest);
                 await fs.ensureSymlink(src, dest);
             } else {
-                // Copy mode
                 await fs.remove(dest);
                 await fs.copy(src, dest);
             }
+            
+            // Automatic Skill -> Command transformation for Gemini
+            if (category === 'skills' && !isClaude && actionType === 'sync') {
+                const skillMdPath = path.join(src, 'SKILL.md');
+                if (fs.existsSync(skillMdPath)) {
+                    const tomlContent = await transformSkillToCommand(skillMdPath);
+                    if (tomlContent) {
+                        const commandName = item.endsWith('.skill') ? item.replace('.skill', '') : item;
+                        const commandDest = path.join(systemRoot, 'commands', `${commandName}.toml`);
+                        await fs.ensureDir(path.dirname(commandDest));
+                        await fs.writeFile(commandDest, tomlContent);
+                        console.log(kleur.cyan(`      (Auto-generated slash command: /${commandName})`));
+                    }
+                }
+            }
+            
             count++;
         }
     }

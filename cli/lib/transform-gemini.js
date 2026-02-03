@@ -1,3 +1,4 @@
+import fs from 'fs-extra';
 
 /**
  * Transform Claude settings.json to Gemini-compatible format
@@ -21,10 +22,6 @@ export function transformGeminiConfig(claudeConfig, targetDir) {
         }
     }
 
-    // 2. Transfer other compatible fields (if any)
-    // Currently, permissions, plugins, statusLine seem incompatible or different
-    // We explicitly skip them as per analysis.
-
     return geminiConfig;
 }
 
@@ -36,9 +33,8 @@ function mapEventName(claudeEvent) {
         'UserPromptSubmit': 'BeforeAgent',
         'PreToolUse': 'BeforeTool',
         'SessionStart': 'SessionStart',
-        // Add more mappings as needed
     };
-    return map[claudeEvent] || null; // Return null if not supported
+    return map[claudeEvent] || null;
 }
 
 /**
@@ -50,7 +46,6 @@ function transformHookDefinition(claudeDef, targetDir) {
     };
 
     if (claudeDef.matcher) {
-        // Transform matchers: Read -> read_file, Write -> write_file, Edit -> replace, Bash -> run_shell_command
         let matcher = claudeDef.matcher;
         const toolMap = {
             'Read': 'read_file',
@@ -59,9 +54,7 @@ function transformHookDefinition(claudeDef, targetDir) {
             'Bash': 'run_shell_command'
         };
 
-        // Replace each tool name in the matcher (handling | separated values)
         for (const [claudeTool, geminiTool] of Object.entries(toolMap)) {
-            // Use regex with word boundary to avoid partial matches
             const regex = new RegExp(`\\b${claudeTool}\\b`, 'g');
             matcher = matcher.replace(regex, geminiTool);
         }
@@ -69,26 +62,18 @@ function transformHookDefinition(claudeDef, targetDir) {
         geminiDef.matcher = matcher;
     }
 
-    // Transform individual hooks within the definition
     geminiDef.hooks = claudeDef.hooks.map((h, index) => {
         const cmd = h.command;
-
-        // Dynamically re-target paths
-        // Replace .claude paths with the target directory path
-        // We use a regex to find absolute paths ending in .claude
         let newCommand = cmd;
         if (targetDir) {
-             // More robust replacement: Look for any path segment ending in .claude
-             // This handles /home/user/.claude, /Users/foo/.claude, etc.
              const claudePathRegex = /(\/[^\s"']+\.claude)/g;
              newCommand = newCommand.replace(claudePathRegex, (match) => {
-                 // Replace the matched .claude path with targetDir
                  return targetDir;
              });
         }
 
         return {
-            name: h.name || `generated-hook-${index}`, // Ensure unique names
+            name: h.name || `generated-hook-${index}`,
             type: "command",
             command: newCommand,
             timeout: h.timeout || 60000
@@ -96,4 +81,42 @@ function transformHookDefinition(claudeDef, targetDir) {
     });
 
     return geminiDef;
+}
+
+/**
+ * Transform a SKILL.md file into a Gemini command .toml content
+ * @param {String} skillMdPath - Path to the SKILL.md file
+ * @returns {String|null} - The TOML content or null if failed
+ */
+export async function transformSkillToCommand(skillMdPath) {
+    try {
+        const content = await fs.readFile(skillMdPath, 'utf8');
+        
+        // Extract frontmatter
+        const frontmatterMatch = content.match(/^---([\s\S]+?)---/);
+        if (!frontmatterMatch) return null;
+        
+        const frontmatter = frontmatterMatch[1];
+        
+        // Extract name and description
+        const nameMatch = frontmatter.match(/name:\s*(.+)/);
+        const descMatch = frontmatter.match(/description:\s*(.+)/);
+        
+        if (!nameMatch || !descMatch) return null;
+        
+        const name = nameMatch[1].trim();
+        const description = descMatch[1].trim();
+        
+        // Construct TOML
+        // We use triple quotes for both to be safe from nested quotes
+        const toml = `description = """${description}"""
+prompt = """
+Use the ${name} skill to handle this: {{args}}
+"""
+`;
+        return toml;
+    } catch (error) {
+        console.error(`Error transforming skill to command: ${error.message}`);
+        return null;
+    }
 }

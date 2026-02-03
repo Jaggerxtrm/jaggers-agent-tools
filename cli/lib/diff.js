@@ -41,16 +41,31 @@ async function getNewestMtime(targetPath) {
 }
 
 export async function calculateDiff(repoRoot, systemRoot) {
+    const isClaude = systemRoot.includes('.claude') || systemRoot.includes('Claude');
+
     const changeSet = {
         skills: { missing: [], outdated: [], drifted: [], total: 0 },
         hooks: { missing: [], outdated: [], drifted: [], total: 0 },
         config: { missing: [], outdated: [], drifted: [], total: 0 }
     };
 
-    // 1. Folders: Skills & Hooks
+    if (!isClaude) {
+        changeSet.commands = { missing: [], outdated: [], drifted: [], total: 0 };
+    }
+
+    // 1. Folders: Skills & Hooks & Commands
     const folders = ['skills', 'hooks'];
+    if (!isClaude) folders.push('commands');
+
     for (const category of folders) {
-        const repoPath = path.join(repoRoot, category);
+        // Special handling for commands which is in .gemini/commands in repo
+        let repoPath;
+        if (category === 'commands') {
+            repoPath = path.join(repoRoot, '.gemini', 'commands');
+        } else {
+            repoPath = path.join(repoRoot, category);
+        }
+        
         const systemPath = path.join(systemRoot, category);
 
         if (!fs.existsSync(repoPath)) continue;
@@ -72,12 +87,7 @@ export async function calculateDiff(repoRoot, systemRoot) {
         'settings.json': { repo: 'config/settings.json', sys: 'settings.json' }
     };
 
-    // settings.json is Claude-only
-    const isClaude = systemRoot.includes('.claude') || systemRoot.includes('Claude');
-
     for (const [name, paths] of Object.entries(configMapping)) {
-        // if (name === 'settings.json' && \!isClaude) continue;
-
         const itemRepoPath = path.join(repoRoot, paths.repo);
         const itemSystemPath = path.join(systemRoot, paths.sys);
         
