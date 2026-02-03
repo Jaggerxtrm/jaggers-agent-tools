@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-Agent Interactivity**: Support for both Gemini (`ask_user`) and Claude (`AskUserQuestion`) interactive menus.
 - Implement specialized Gemini slash commands (/delegate, /document, /prompt)
 - Enable zero-cloning installation via npx github:Jaggerxtrm/jaggers-agent-tools
+- Implement Vault Sync Architecture for non-destructive settings management. Protects local secrets, MCP servers, and auth data during sync. Includes atomic writes and dry-run mode.
 
 ### Changed
 - **CLI Enhancement**: Automatically transforms `SKILL.md` into Gemini `.toml` command files during sync.

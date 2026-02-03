@@ -24,12 +24,18 @@ function printDetails(title, items, colorFn) {
 async function processTarget(targetDir, syncMode) {
     console.log(kleur.cyan().bold(`\nTarget: ${targetDir}`));
     
+    const isClaude = targetDir.includes('.claude') || targetDir.includes('Claude');
+    const isDryRun = !!args['dry-run'];
+
+    if (isDryRun) {
+        console.log(kleur.yellow().bold('  [DRY RUN MODE - No changes will be written to disk]'));
+    }
+
     // 1. Scan/Diff
     console.log(kleur.gray('Scanning differences...'));
     const changeSet = await calculateDiff(repoRoot, targetDir);
 
-    const categories = ['skills', 'hooks', 'config'];
-    if (changeSet.commands) categories.push('commands');
+    const categories = ['skills', 'hooks', 'config', 'commands'];
 
     const totalMissing = categories.reduce((sum, cat) => sum + changeSet[cat].missing.length, 0);
     const totalOutdated = categories.reduce((sum, cat) => sum + changeSet[cat].outdated.length, 0);
@@ -45,7 +51,10 @@ async function processTarget(targetDir, syncMode) {
         const missingItems = [];
         categories.forEach(cat => {
             changeSet[cat].missing.forEach(item => {
-                const prefix = (cat === 'commands') ? '.gemini/commands' : cat;
+                let prefix = cat;
+                if (cat === 'commands') {
+                    prefix = isClaude ? '.claude/commands' : '.gemini/commands';
+                }
                 missingItems.push(`${prefix}/${item}`);
             });
         });
@@ -55,7 +64,10 @@ async function processTarget(targetDir, syncMode) {
         const outdatedItems = [];
         categories.forEach(cat => {
             changeSet[cat].outdated.forEach(item => {
-                const prefix = (cat === 'commands') ? '.gemini/commands' : cat;
+                let prefix = cat;
+                if (cat === 'commands') {
+                    prefix = isClaude ? '.claude/commands' : '.gemini/commands';
+                }
                 outdatedItems.push(`${prefix}/${item}`);
             });
         });
@@ -65,7 +77,10 @@ async function processTarget(targetDir, syncMode) {
         const driftedItems = [];
         categories.forEach(cat => {
             changeSet[cat].drifted.forEach(item => {
-                const prefix = (cat === 'commands') ? '.gemini/commands' : cat;
+                let prefix = cat;
+                if (cat === 'commands') {
+                    prefix = isClaude ? '.claude/commands' : '.gemini/commands';
+                }
                 driftedItems.push(`${prefix}/${item}`);
             });
         });
@@ -99,7 +114,7 @@ async function processTarget(targetDir, syncMode) {
 
     // Execute Sync/Backport
     console.log(kleur.gray('\nExecuting changes...'));
-    const count = await executeSync(repoRoot, targetDir, changeSet, syncMode, response.action);
+    const count = await executeSync(repoRoot, targetDir, changeSet, syncMode, response.action, isDryRun);
     
     console.log(kleur.green().bold(`\nSuccessfully processed ${count} items.`));
 }
@@ -112,13 +127,11 @@ async function main() {
     }
 
     try {
-        // Get dynamic targets
         const context = await getContext();
         
         console.log(kleur.dim(`\nMode: ${context.syncMode}`));
         console.log(kleur.dim(`Selected Targets: ${context.targets.length}`));
 
-        // Iterate over all selected targets
         for (const target of context.targets) {
             await processTarget(target, context.syncMode);
         }

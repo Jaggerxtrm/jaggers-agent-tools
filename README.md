@@ -127,9 +127,11 @@ The Config Manager will:
 1. **Detect** your agent configuration path (`~/.claude`, `~/.gemini`, etc.).
 2. **Scan** for differences between the repo and your system.
 3. **Install/Update** skills and hooks using your preferred strategy (Copy or Symlink).
-4. **Configure** `settings.json` automatically to register hooks (supports both Claude and Gemini formats).
-5. **Sync Gemini Commands**: Synchronizes custom slash commands from `.gemini/commands/` to the Gemini environment.
-6. **Auto-Command Generation**: Automatically transforms `SKILL.md` files into Gemini `.toml` command files during synchronization.
+4. **Vault Sync (New)**: Protects your local secrets (MCP API keys, OAuth tokens) during synchronization. It performs a non-destructive merge where local secrets are preserved and new repository features are added atomically.
+5. **Dry Run**: Support for `--dry-run` flag to preview changes without modifying files.
+6. **Configure** `settings.json` automatically to register hooks (supports both Claude and Gemini formats).
+7. **Sync Gemini Commands**: Synchronizes custom slash commands from `.gemini/commands/` to the Gemini environment.
+8. **Auto-Command Generation**: Automatically transforms `SKILL.md` files into Gemini `.toml` command files during synchronization.
 
 ### Manual Installation
 
@@ -174,7 +176,7 @@ Adjust hook execution timeouts in `settings.json`:
   "hooks": {
     "UserPromptSubmit": [{
       "hooks": [{
-        "timeout": 1  // Increase if hooks timeout frequently
+        "timeout": 5000  // Values in ms for Gemini, seconds for Claude
       }]
     }]
   }
@@ -193,7 +195,7 @@ Adjust hook execution timeouts in `settings.json`:
 
 | Version | Date       | Highlights                             |
 | ------- | ---------- | -------------------------------------- |
-| 1.1.0   | 2026-02-03 | Orchestrating-agents multi-turn loops  |
+| 1.1.0   | 2026-02-03 | Vault Sync, Orchestrating-agents loops |
 | 1.0.0   | 2026-02-03 | Initial orchestrating-agents & CLI     |
 | 5.1.0   | 2026-01-30 | Renamed `p` to `prompt-improving`      |
 | 5.0.0   | 2026-01-30 | Major refactoring, 90% token reduction |
