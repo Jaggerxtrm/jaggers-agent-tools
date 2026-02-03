@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Gemini Command Sync**: CLI support for synchronizing `.toml` commands and auto-generating them from skills.
 - **Cross-Agent Interactivity**: Support for both Gemini (`ask_user`) and Claude (`AskUserQuestion`) interactive menus.
 - Implement specialized Gemini slash commands (/delegate, /document, /prompt)
+- Enable zero-cloning installation via npx github:Jaggerxtrm/jaggers-agent-tools
 
 ### Changed
 - **CLI Enhancement**: Automatically transforms `SKILL.md` into Gemini `.toml` command files during sync.
