@@ -7,14 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-
 ### Added
-- Implement orchestrating-agents skill and /orchestrate slash command
-- Improve CLI to sync custom slash commands and auto-generate them from skills for Gemini
-- Implement multi-turn collaborative workflows (Design, Adversarial, Troubleshoot) in orchestrating-agents skill
-### Changed
-- Migrate hooks to Gemini
+- **Orchestrating Agents Skill**: Multi-model collaboration skill for Gemini and Qwen.
+- **Handshaking Workflows**: Deep multi-turn loops (Collaborative Design, Adversarial Review, Troubleshoot Session).
+- **Gemini Command Sync**: CLI support for synchronizing `.toml` commands and auto-generating them from skills.
+- **Cross-Agent Interactivity**: Support for both Gemini (`ask_user`) and Claude (`AskUserQuestion`) interactive menus.
 
+### Changed
+- **CLI Enhancement**: Automatically transforms `SKILL.md` into Gemini `.toml` command files during sync.
+- **Hook Migration**: Refined hook transformation logic for cross-agent compatibility.
+- Update SSOT and CHANGELOG for cross-agent compatibility and CLI improvements
+
+
+### Fixed
+- Fix hook execution timeouts by updating settings.json to use milliseconds and enhancing transform-gemini.js to handle unit mismatches and improve hook naming.
 ## [6.0.0] - 2026-02-01
 
 ### Added
