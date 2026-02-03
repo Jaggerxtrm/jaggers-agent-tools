@@ -1,19 +1,17 @@
 import path from 'path';
 import fs from 'fs-extra';
 import kleur from 'kleur';
-import { transformGeminiConfig, transformSkillToCommand } from './transform-gemini.js';
+import { transformGeminiConfig, transformSkillToCommand, transformSkillToClaudeCommand } from './transform-gemini.js';
 
 /**
  * Execute a sync plan based on changeset and mode
  */
 export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType) {
     const isClaude = systemRoot.includes('.claude') || systemRoot.includes('Claude');
-    const categories = ['skills', 'hooks', 'config'];
-    if (!isClaude) categories.push('commands');
+    const categories = ['skills', 'hooks', 'config', 'commands'];
     
     let count = 0;
 
-    // Mapping for special file locations (repo relative path -> system relative path)
     const fileMapping = {
         'config/settings.json': { repo: 'config/settings.json', sys: 'settings.json' }
     };
@@ -41,11 +39,12 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
                     dest = path.join(systemRoot, mapping.sys);
                 }
             } else if (category === 'commands') {
+                const repoCmdDir = isClaude ? path.join(repoRoot, '.claude', 'commands') : path.join(repoRoot, '.gemini', 'commands');
                 if (actionType === 'backport') {
                     src = path.join(systemRoot, category, item);
-                    dest = path.join(repoRoot, '.gemini', 'commands', item);
+                    dest = path.join(repoCmdDir, item);
                 } else {
-                    src = path.join(repoRoot, '.gemini', 'commands', item);
+                    src = path.join(repoCmdDir, item);
                     dest = path.join(systemRoot, category, item);
                 }
             } else {
@@ -80,16 +79,25 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
                 await fs.copy(src, dest);
             }
             
-            // Automatic Skill -> Command transformation for Gemini
-            if (category === 'skills' && !isClaude && actionType === 'sync') {
+            // Automatic Skill -> Command transformation
+            if (category === 'skills' && actionType === 'sync') {
                 const skillMdPath = path.join(src, 'SKILL.md');
                 if (fs.existsSync(skillMdPath)) {
-                    const tomlContent = await transformSkillToCommand(skillMdPath);
-                    if (tomlContent) {
+                    let cmdContent, cmdExt;
+                    
+                    if (isClaude) {
+                        cmdContent = await transformSkillToClaudeCommand(skillMdPath);
+                        cmdExt = '.md';
+                    } else {
+                        cmdContent = await transformSkillToCommand(skillMdPath);
+                        cmdExt = '.toml';
+                    }
+
+                    if (cmdContent) {
                         const commandName = item.endsWith('.skill') ? item.replace('.skill', '') : item;
-                        const commandDest = path.join(systemRoot, 'commands', `${commandName}.toml`);
+                        const commandDest = path.join(systemRoot, 'commands', `${commandName}${cmdExt}`);
                         await fs.ensureDir(path.dirname(commandDest));
-                        await fs.writeFile(commandDest, tomlContent);
+                        await fs.writeFile(commandDest, cmdContent);
                         console.log(kleur.cyan(`      (Auto-generated slash command: /${commandName})`));
                     }
                 }

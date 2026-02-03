@@ -9,31 +9,35 @@ This skill provides a structured workflow for multi-model collaboration between 
 
 ## Interactive Orchestration
 
-When a task involves high complexity (new features, deep bugs, or "getting out of trouble"), suggest a multi-turn orchestration session:
+When a task involves high complexity (new features, deep bugs, or "getting out of trouble"), suggest a multi-turn orchestration session using the appropriate tool for your environment:
 
+### For Gemini CLI (`ask_user`)
 ```typescript
 ask_user({
   questions: [{
     question: "This task requires deep collaboration. Which orchestration workflow should we use?",
     header: "Orchestrate",
-    multiSelect: false,
     options: [
-      {
-        label: "Collaborative Design",
-        description: "Agent A proposes -> Agent B critiques -> Agent A refines. [Features]"
-      },
-      {
-        label: "Adversarial Review",
-        description: "Agent A proposes -> Agent B attacks (Red Team) -> Agent A defends. [Security]"
-      },
-      {
-        label: "Troubleshoot Session",
-        description: "Multi-agent hypothesis testing for emergency bugs. [Trouble]"
-      },
-      {
-        label: "Single Handshake",
-        description: "Standard one-turn second opinion."
-      }
+      { label: "Collaborative Design", description: "Agent A proposes -> Agent B critiques -> Agent A refines." },
+      { label: "Adversarial Review", description: "Agent A proposes -> Agent B attacks (Red Team) -> Agent A defends." },
+      { label: "Troubleshoot Session", description: "Multi-agent hypothesis testing for emergency bugs." },
+      { label: "Single Handshake", description: "Standard one-turn second opinion." }
+    ]
+  }]
+});
+```
+
+### For Claude Code (`AskUserQuestion`)
+```typescript
+AskUserQuestion({
+  questions: [{
+    question: "This task requires deep collaboration. Which orchestration workflow should we use?",
+    header: "Orchestrate",
+    options: [
+      { label: "Collaborative Design", description: "Agent A proposes -> Agent B critiques -> Agent A refines." },
+      { label: "Adversarial Review", description: "Agent A proposes -> Agent B attacks (Red Team) -> Agent A defends." },
+      { label: "Troubleshoot Session", description: "Multi-agent hypothesis testing for emergency bugs." },
+      { label: "Single Handshake", description: "Standard one-turn second opinion." }
     ]
   }]
 });

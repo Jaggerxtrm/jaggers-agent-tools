@@ -46,22 +46,17 @@ export async function calculateDiff(repoRoot, systemRoot) {
     const changeSet = {
         skills: { missing: [], outdated: [], drifted: [], total: 0 },
         hooks: { missing: [], outdated: [], drifted: [], total: 0 },
-        config: { missing: [], outdated: [], drifted: [], total: 0 }
+        config: { missing: [], outdated: [], drifted: [], total: 0 },
+        commands: { missing: [], outdated: [], drifted: [], total: 0 }
     };
 
-    if (!isClaude) {
-        changeSet.commands = { missing: [], outdated: [], drifted: [], total: 0 };
-    }
-
     // 1. Folders: Skills & Hooks & Commands
-    const folders = ['skills', 'hooks'];
-    if (!isClaude) folders.push('commands');
+    const folders = ['skills', 'hooks', 'commands'];
 
     for (const category of folders) {
-        // Special handling for commands which is in .gemini/commands in repo
         let repoPath;
         if (category === 'commands') {
-            repoPath = path.join(repoRoot, '.gemini', 'commands');
+            repoPath = isClaude ? path.join(repoRoot, '.claude', 'commands') : path.join(repoRoot, '.gemini', 'commands');
         } else {
             repoPath = path.join(repoRoot, category);
         }
@@ -82,7 +77,6 @@ export async function calculateDiff(repoRoot, systemRoot) {
     }
 
     // 2. Config Files (Explicit Mapping)
-    // repo/config/settings.json -> system/settings.json
     const configMapping = {
         'settings.json': { repo: 'config/settings.json', sys: 'settings.json' }
     };
