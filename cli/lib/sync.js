@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs-extra';
 import kleur from 'kleur';
-import { transformGeminiConfig } from './transform-gemini.js';
+import { transformGeminiConfig, transformSkillToCommand } from './transform-gemini.js';
 import { safeMergeConfig } from './atomic-config.js';  // Import the new atomic config handler
 
 /**

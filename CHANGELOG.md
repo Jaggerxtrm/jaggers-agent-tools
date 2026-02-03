@@ -20,11 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI Enhancement**: Automatically transforms `SKILL.md` into Gemini `.toml` command files during sync.
 - **Hook Migration**: Refined hook transformation logic for cross-agent compatibility.
 - Update SSOT and CHANGELOG for cross-agent compatibility and CLI improvements
+- Consolidate all v1.1.0 improvements: Zero-Cloning, Metadata-driven commands, and multi-turn orchestration
 
 
 ### Fixed
 - Fix hook execution timeouts by updating settings.json to use milliseconds and enhancing transform-gemini.js to handle unit mismatches and improve hook naming.
 - Prevent redundant auto-generation of commands for core skills in CLI
+- Fix ReferenceError in sync.js by adding missing import and verify via Qwen handshake
 ## [6.0.0] - 2026-02-01
 
 ### Added
