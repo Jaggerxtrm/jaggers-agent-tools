@@ -1,0 +1,9 @@
+description = "Orchestrate a task handoff to a neighboring agent (Gemini/Qwen) for review or collaboration."
+prompt = """
+Use the orchestrating-agents skill to handle this request: {{args}}
+
+1. First, detect available neighbors.
+2. If the user specified an agent, target that one. Otherwise, choose the best one for the task.
+3. Perform a 2-phase handshake (Proposal -> Refinement) as defined in the skill protocol.
+4. Ingest the result into our current session.
+"""
