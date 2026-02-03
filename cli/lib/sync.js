@@ -110,6 +110,7 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
           }
         }
       } else if (category === 'config' && item === 'settings.json' && !isClaude && actionType === 'sync') {
+        // This is the original logic for reference - now handled above
         const configContent = await fs.readJson(src);
         const transformedConfig = transformGeminiConfig(configContent, systemRoot);
 
@@ -154,32 +155,3 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
   return count;
 }
 
-// Import the transformSkillToCommand function from transform-gemini.js
-async function transformSkillToCommand(skillMdPath) {
-  try {
-    const content = await fs.readFile(skillMdPath, 'utf8');
-
-    const frontmatterMatch = content.match(/^---([\s\S]+?)---/);
-    if (!frontmatterMatch) return null;
-
-    const frontmatter = frontmatterMatch[1];
-
-    const nameMatch = frontmatter.match(/name:\s*(.+)/);
-    const descMatch = frontmatter.match(/description:\s*(.+)/);
-
-    if (!nameMatch || !descMatch) return null;
-
-    const name = nameMatch[1].trim();
-    const description = descMatch[1].trim();
-
-    const toml = `description = """${description}"""
-prompt = """
-Use the ${name} skill to handle this: {{args}}
-"""
-`;
-    return toml;
-  } catch (error) {
-    console.error(`Error transforming skill to command: ${error.message}`);
-    return null;
-  }
-}
