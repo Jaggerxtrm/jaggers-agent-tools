@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs-extra';
 import kleur from 'kleur';
-import { transformGeminiConfig } from './transform-gemini.js';
+import { transformGeminiConfig, transformSkillToCommand } from './transform-gemini.js';
 import { safeMergeConfig } from './atomic-config.js';  // Import the new atomic config handler
 
 /**
@@ -158,36 +158,6 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
   }
 
   return count;
-}
-
-// Import the transformSkillToCommand function from transform-gemini.js
-async function transformSkillToCommand(skillMdPath) {
-  try {
-    const content = await fs.readFile(skillMdPath, 'utf8');
-
-    const frontmatterMatch = content.match(/^---([\s\S]+?)---/);
-    if (!frontmatterMatch) return null;
-
-    const frontmatter = frontmatterMatch[1];
-
-    const nameMatch = frontmatter.match(/name:\s*(.+)/);
-    const descMatch = frontmatter.match(/description:\s*(.+)/);
-
-    if (!nameMatch || !descMatch) return null;
-
-    const name = nameMatch[1].trim();
-    const description = descMatch[1].trim();
-
-    const toml = `description = """${description}"""
-prompt = """
-Use the ${name} skill to handle this: {{args}}
-"""
-`;
-    return toml;
-  } catch (error) {
-    console.error(`Error transforming skill to command: ${error.message}`);
-    return null;
-  }
 }
 
 /**
