@@ -1,0 +1,65 @@
+---
+title: "Orchestrating Agents Architecture"
+version: 1.1.0
+created: 2026-02-03
+updated: 2026-02-03T13:30:00+00:00
+scope: orchestrating-agents
+category: ssot
+subcategory: multi-agent
+domain: [orchestration, gemini, qwen, handshaking, workflows]
+status: active
+changelog:
+  - version: 1.0.0
+    date: 2026-02-03
+    changes: Initial implementation with 2-phase handshake.
+  - version: 1.1.0
+    date: 2026-02-03
+    changes: Added multi-turn collaborative workflows and interactive menu.
+---
+
+# Orchestrating Agents Architecture - SSOT
+
+## Overview
+
+The `orchestrating-agents` skill enables deep collaboration between the primary agent and neighboring CLI agents (Gemini and Qwen). It moves beyond simple task delegation by implementing "Handshaking" protocols—multi-turn exchanges of ideas, critiques, and refinements.
+
+## Key Components
+
+### 1. Detection Engine (`scripts/detect_neighbors.py`)
+- **Purpose**: Identifies which neighboring agents are authenticated and available in the current `$PATH`.
+- **Supported Agents**: Gemini, Qwen.
+
+### 2. Handover Protocol (`references/handover-protocol.md`)
+Defines the headless command structure for each agent:
+- **Gemini**: `gemini -p "..."` (Initial) and `gemini --resume latest -p "..."` (Follow-up).
+- **Qwen**: `qwen "..."` (Initial) and `qwen -c "..."` (Follow-up).
+
+### 3. Orchestration Workflows (`references/workflows.md`)
+Implements structured multi-turn loops:
+- **Collaborative Design**: 3-turn loop (Proposal → Critique → Refinement).
+- **Adversarial Review**: 3-turn "Red Team" loop (Draft → Attack → Defense).
+- **Troubleshoot Session**: 4-turn hypothesis testing loop.
+
+### 4. Configuration (`config.yaml`)
+- Defines regex patterns for automatic workflow triggering (e.g., "security audit" → adversarial).
+- Sets priority and default behaviors.
+
+## Integration Patterns
+
+### AgentContext Ingestion
+The skill utilizes the `AgentContext` pattern (defined in `hooks/agent_context.py`) to pipe the output from neighboring agents back into the primary agent's reasoning as `additionalContext`. This ensures a seamless flow of information without manual copy-pasting.
+
+### Slash Command Support
+The `/orchestrate` command (configured in `.gemini/commands/orchestrate.toml`) provides a human-friendly entry point to these complex workflows, allowing users to initiate deep collaboration with a single command.
+
+## Standards & Best Practices
+
+1. **Gerund Naming**: The skill follows the project's gerund naming convention (`orchestrating-agents`).
+2. **Conciseness**: Only relevant snippets are sent to neighboring agents to preserve context windows.
+3. **Interactive Selection**: For high-complexity tasks, the skill MUST use `ask_user` to let the user select the appropriate workflow.
+
+## Related Documentation
+
+- `skills/orchestrating-agents/SKILL.md` - Core skill instructions.
+- `ssot_jaggers-agent-tools_documenting_workflow_2026-02-03.md` - Project documentation standards.
+- `docs/delegation-architecture.md` - Comparison with the `delegating` skill backend system.
