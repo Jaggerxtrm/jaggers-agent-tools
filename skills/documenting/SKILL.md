@@ -51,6 +51,18 @@ const shouldDocument =
 
 ## Workflows
 
+**🚨 MANDATORY FIRST STEP FOR ALL WORKFLOWS:**
+
+Before using ANY Serena tools (`write_memory`, `read_memory`, `search_for_pattern`, etc.) or symbolic operations, you MUST activate the project:
+
+```javascript
+mcp__plugin_serena_serena__activate_project({ project: "/path/to/current/working/directory" })
+```
+
+**Why this is critical**: Without project activation, Serena cannot access memories or locate files, causing operations to fail or loop indefinitely. This step establishes the working context.
+
+---
+
 ### 1. Creating a New Memory
 
 To create a new documentation file:
@@ -248,3 +260,10 @@ See `references/taxonomy.md` for full details.
 - **`scripts/validate_metadata.py`**: Metadata validator.
 - **`scripts/bump_version.sh`**: Version bumping utility.
 - **`scripts/list_by_category.sh`**: Category listing utility.
+
+## ⚠️ Critical Constraints
+
+1. **NEVER skip project activation** - Call `mcp__plugin_serena_serena__activate_project()` before ANY Serena operation
+2. **Use the current working directory** - Pass the actual project path, not a placeholder
+3. **Activate once per session** - After activation, all subsequent memory/file operations will work correctly
+4. **Check activation status** - If memory operations fail or files aren't found, you likely forgot to activate

@@ -24,26 +24,41 @@ priority: high
 
 ## Standard Workflows
 
+**🚨 MANDATORY FIRST STEP FOR ALL WORKFLOWS:**
+
+Before using ANY Serena semantic tools (`get_symbols_overview`, `find_symbol`, `replace_symbol_body`, etc.), you MUST activate the project:
+
+```javascript
+mcp__plugin_serena_serena__activate_project({ project: "/path/to/current/working/directory" })
+```
+
+**Why this is critical**: Without project activation, Serena cannot locate code symbols and will fail or loop indefinitely. This step establishes the working context for all symbolic operations.
+
+---
+
 ### 1. Explore Code (The "Overview First" Pattern)
 
 Avoid reading full files >300 LOC.
 
-1.  **Understand Structure**: `get_symbols_overview(depth=1)`
-2.  **Drill Down**: `find_symbol(name_path="...", include_body=true)`
-3.  **Reflect**: `think_about_collected_information()`
+1.  **Activate Project**: `mcp__plugin_serena_serena__activate_project()`
+2.  **Understand Structure**: `get_symbols_overview(depth=1)`
+3.  **Drill Down**: `find_symbol(name_path="...", include_body=true)`
+4.  **Reflect**: `think_about_collected_information()`
 
 ### 2. Surgical Editing
 
-1.  **Locate**: `find_symbol(include_body=true)` to get current code.
-2.  **Check Impact**: `find_referencing_symbols()` to find usages.
-3.  **Edit**: `replace_symbol_body(...)` to update.
-4.  **Verify**: Run tests or syntax checks (e.g., `python -m py_compile`).
+1.  **Activate Project**: `mcp__plugin_serena_serena__activate_project()` (if not already done)
+2.  **Locate**: `find_symbol(include_body=true)` to get current code.
+3.  **Check Impact**: `find_referencing_symbols()` to find usages.
+4.  **Edit**: `replace_symbol_body(...)` to update.
+5.  **Verify**: Run tests or syntax checks (e.g., `python -m py_compile`).
 
 ### 3. Adding Features
 
-1.  **Context**: `read_memory()` or `get_symbols_overview()` to understand patterns.
-2.  **Locate Anchor**: `find_symbol()` to find where to insert.
-3.  **Insert**: `insert_after_symbol(...)` to add new class/function.
+1.  **Activate Project**: `mcp__plugin_serena_serena__activate_project()` (if not already done)
+2.  **Context**: `read_memory()` or `get_symbols_overview()` to understand patterns.
+3.  **Locate Anchor**: `find_symbol()` to find where to insert.
+4.  **Insert**: `insert_after_symbol(...)` to add new class/function.
 
 ## File Size Guidelines
 
@@ -58,3 +73,10 @@ Avoid reading full files >300 LOC.
 *   **LSP Integration**: `Read()` on a Python file automatically triggers Pyright analysis. Use the feedback to fix type errors surgically.
 *   **Symbol Names**: Use `substring_matching=true` if you aren't sure of the exact name.
 *   **Safety**: Always find references before renaming or changing signatures.
+
+## ⚠️ Critical Constraints
+
+1. **NEVER skip project activation** - It must be the first Serena operation in any workflow
+2. **Use the current working directory** - Pass the actual project path, not a placeholder
+3. **Activate once per session** - After activation, all subsequent Serena tools will work correctly
+4. **Check activation status** - If Serena tools fail with "symbol not found" errors, you likely forgot to activate
