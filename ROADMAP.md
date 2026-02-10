@@ -7,6 +7,7 @@ Planned improvements and feature additions for Claude Code skills.
 ## `prompt-improving` Skill
 
 ### Current State (v5.1.0)
+
 - ✅ Simplified from 118 to 64 lines
 - ✅ Context detection (3 categories)
 - ✅ AskUserQuestion for ambiguous prompts
@@ -20,6 +21,7 @@ Planned improvements and feature additions for Claude Code skills.
 **Goal:** Enable batch prompt improvement via code execution for multi-prompt workflows.
 
 **Use Case:**
+
 ```python
 # User: "Improve these 10 prompts for me"
 prompts = [
@@ -38,16 +40,19 @@ for prompt in prompts:
 ```
 
 **Implementation:**
+
 - Add `allowed_callers: ["code_execution_20250825"]` to skill tool definition
 - Update skill to work as async Python function
 - Enable batch processing (10-100 prompts → single aggregated output)
 - Token savings: N prompts × M tokens → 1x aggregated result
 
 **Breaking Changes:**
+
 - Requires beta header: `advanced-tool-use-2025-11-20`
 - API-only feature (not available in Claude Desktop)
 
 **Dependencies:**
+
 - Anthropic Programmatic Tool Calling (currently beta)
 - Code execution tool enabled
 
@@ -60,11 +65,13 @@ for prompt in prompts:
 **Goal:** Re-introduce lightweight quality metrics without token overhead.
 
 **Approach:**
+
 - Simple 0-5 score (not 0-100 like v4.2.0)
 - Inline heuristics (no separate reference file)
 - Report score ONLY if requested explicitly
 
 **Criteria:**
+
 1. Structure (XML tags present)
 2. Examples (multishot included)
 3. Clarity (task well-defined)
@@ -72,6 +79,7 @@ for prompt in prompts:
 5. Constraints (limitations specified)
 
 **Usage:**
+
 ```
 /prompt-improving "analyze logs" --score
 → Returns improved prompt + quality assessment
@@ -86,6 +94,7 @@ for prompt in prompts:
 **Goal:** Pre-built templates for common tasks.
 
 **Templates:**
+
 - `analysis` - Log/data analysis tasks
 - `coding` - Code generation/refactoring
 - `debugging` - Bug investigation
@@ -93,12 +102,14 @@ for prompt in prompts:
 - `documentation` - Docs writing
 
 **Usage:**
+
 ```
 /prompt-improving "fix auth bug" --template debugging
 → Applies debugging-specific XML structure
 ```
 
 **Implementation:**
+
 - New reference file: `templates.md` (5-10KB)
 - Template selection via keyword detection
 - Override via `--template` flag
@@ -112,11 +123,13 @@ for prompt in prompts:
 **Goal:** Automatically add `<thinking>` tags for complex reasoning tasks.
 
 **Detection:**
+
 - Analyze prompt complexity (ambiguity, dependencies, constraints)
 - Insert chain-of-thought structure if score > threshold
 - Preserve user's original structure if already present
 
 **Example:**
+
 ```
 Before: "Find the root cause of the performance issue"
 After:
@@ -142,31 +155,47 @@ After:
 **Goal:** Suggest relevant prefill patterns based on task type.
 
 **Mechanism:**
+
 - Detect task category (analysis, coding, debugging, etc.)
 - Show AskUserQuestion menu with recommended prefills
 - User can accept, customize, or skip
 
 **Example:**
+
 ```typescript
 AskUserQuestion({
-  questions: [{
-    question: "This looks like a debugging task. Would you like to use a debugging-optimized prefill?",
-    multiSelect: false,
-    options: [
-      { label: "Yes, use debugging prefill", description: "Adds systematic investigation structure" },
-      { label: "No, standard improvement", description: "Apply basic XML structure only" }
-    ]
-  }]
-})
+  questions: [
+    {
+      question:
+        "This looks like a debugging task. Would you like to use a debugging-optimized prefill?",
+      multiSelect: false,
+      options: [
+        {
+          label: "Yes, use debugging prefill",
+          description: "Adds systematic investigation structure",
+        },
+        {
+          label: "No, standard improvement",
+          description: "Apply basic XML structure only",
+        },
+      ],
+    },
+  ],
+});
 ```
 
 **Timeline:** Q2 2027
 
 ---
 
+## `documenting` Skill
+
+Add more metadata for clear identification of involved scripts/files in the documentations, so that a script referenced by the skill can find them more easily.
+
 ## `delegating` Skill
 
 ### Current State (v6.0.0)
+
 - ✅ Unified CCS + unitAI backend support
 - ✅ Configuration-driven patterns (`config.yaml`)
 - ✅ Auto-focus detection
@@ -179,6 +208,7 @@ AskUserQuestion({
 **Goal:** Track delegation success/failure rates per profile.
 
 **Implementation:**
+
 - Log delegation outcomes to `~/.ccs/delegation-log.json`
 - Show success rate in AskUserQuestion menu
 - Suggest profile switch if success rate < 70%
@@ -192,6 +222,7 @@ AskUserQuestion({
 **Goal:** User-defined delegation profiles.
 
 **Implementation:**
+
 - Config file: `~/.ccs/profiles.json`
 - Define custom profiles with specific models/parameters
 - Reference in skill via `--profile custom-name`
@@ -207,6 +238,7 @@ AskUserQuestion({
 **Goal:** Proactive skill suggestions beyond `/prompt-improving` and `/ccs`.
 
 **Implementation:**
+
 - Extend `skill-suggestion.sh` to detect other skills
 - Pattern matching for custom skills in `~/.claude/skills/`
 - Dynamic suggestion based on user prompt content
@@ -220,12 +252,14 @@ AskUserQuestion({
 **Goal:** Chain multiple skills together.
 
 **Example:**
+
 ```
 /prompt-improving "fix auth" | /ccs --profile glm
 → Improve prompt, then delegate to CCS
 ```
 
 **Implementation:**
+
 - Pipe operator support in skill invocation
 - Output of skill 1 → input of skill 2
 - Requires skill output standardization
@@ -237,6 +271,7 @@ AskUserQuestion({
 ## Deprecation Timeline
 
 ### v4.2.0 Features (Removed in v5.0.0)
+
 - ❌ Quality metrics (11KB) - **REMOVED**
 - ❌ Context detection rules (10KB) - **REMOVED**
 - ❌ Complexity scoring (14KB) - **REMOVED**
@@ -256,11 +291,13 @@ AskUserQuestion({
 **Goal:** Expose skills as MCP tools for cross-client compatibility.
 
 **Challenges:**
+
 - MCP tools currently can't use Programmatic Tool Calling
 - Skills rely on Claude Code-specific features (AskUserQuestion)
 - Requires MCP protocol extensions
 
 **Wait for:**
+
 - MCP + PTC compatibility
 - MCP standardization of interactive dialogs
 
@@ -281,6 +318,7 @@ AskUserQuestion({
 ## Contributing
 
 Suggest roadmap items by creating issues in:
+
 - `ROADMAP.md` (this file)
 - Or discuss in `.serena/memories/skills-evolution.md`
 
@@ -293,18 +331,21 @@ Suggest roadmap items by creating issues in:
 ### Current Architecture Assessment
 
 **Components Identified:**
+
 - CLI (Node.js sync orchestrator)
 - Skills (SKILL.md → .toml transformation)
 - Hooks (event-driven Python/JS)
 - Documentation (SSOT pattern in `.serena/memories/`)
 
 **Strengths:**
+
 - Zero-cloning install via `npx github:Jaggerxtrm/jaggers-agent-tools`
 - Vault Protection (atomic merge with PROTECTED_KEYS)
 - Cross-agent compatibility (Claude ↔ Gemini)
 - Token efficiency (75-80% via serena-lsp)
 
 **Critical Weaknesses Identified:**
+
 1. **Atomic Inconsistency**: Linear sync iteration can fail mid-process, leaving environment in "Frankenstein" state
 2. **Conflict Blindness**: No version manifest for detecting drift during backports
 3. **Namespace Collision**: Generic skill names can collide with MCP servers or internal commands
@@ -318,6 +359,7 @@ Suggest roadmap items by creating issues in:
 **Solution:** Session Snapshot pattern with automatic rollback.
 
 **Implementation:**
+
 ```javascript
 // cli/lib/sync.js
 async function executeSync(items) {
@@ -328,7 +370,7 @@ async function executeSync(items) {
     }
     await validateEnvironment(); // Post-sync smoke test
   } catch (error) {
-    console.error('Sync failed, rolling back...');
+    console.error("Sync failed, rolling back...");
     await rollback(snapshot);
     throw error;
   }
@@ -336,11 +378,13 @@ async function executeSync(items) {
 ```
 
 **Files to Modify:**
+
 - `cli/lib/sync.js` - Add snapshot/rollback logic
 - `cli/lib/snapshot.js` (NEW) - Snapshot management
 - `cli/lib/validate.js` (NEW) - Post-sync validation
 
 **Success Criteria:**
+
 - Failed sync leaves environment in pre-sync state
 - User can manually trigger `--rollback` to previous session
 - Sync log tracks which files were modified
@@ -356,6 +400,7 @@ async function executeSync(items) {
 **Solution:** `sync-manifest.json` with sha256 hashes and version tracking.
 
 **Implementation:**
+
 ```json
 // ~/.claude/sync-manifest.json or ~/.gemini/sync-manifest.json
 {
@@ -377,16 +422,19 @@ async function executeSync(items) {
 ```
 
 **Workflow:**
+
 1. Before sync: Compare local manifest hashes with repo versions
 2. If drift detected: Trigger interactive 3-way merge or conflict prompt
 3. After sync: Update manifest with new hashes and timestamps
 
 **Files to Modify:**
+
 - `cli/lib/manifest.js` (NEW) - Manifest management
 - `cli/lib/sync.js` - Add manifest comparison before sync
 - `cli/lib/merge.js` (NEW) - 3-way merge for conflicts
 
 **Success Criteria:**
+
 - Sync detects local modifications before overwriting
 - User prompted to resolve conflicts interactively
 - Backports can't silently regress to older versions
@@ -402,6 +450,7 @@ async function executeSync(items) {
 **Solution:** Provider prefix strategy with collision registry.
 
 **Implementation:**
+
 ```javascript
 // cli/lib/transform-gemini.js
 function transformSkillToCommand(skill) {
@@ -415,8 +464,8 @@ function transformSkillToCommand(skill) {
   }
 
   registry[commandName] = {
-    source: 'jaggers-agent-tools',
-    version: skill.version
+    source: "jaggers-agent-tools",
+    version: skill.version,
   };
   saveRegistry(registry);
 
@@ -425,11 +474,13 @@ function transformSkillToCommand(skill) {
 ```
 
 **Files to Modify:**
+
 - `cli/lib/transform-gemini.js` - Add prefix logic
 - `cli/lib/registry.js` (NEW) - Collision detection
 - `~/.gemini/command-registry.json` (NEW) - Command tracking
 
 **Success Criteria:**
+
 - Commands prefixed with `j:` (e.g., `/j:delegate`)
 - Collision warnings before overwriting existing commands
 - Registry tracks command ownership and versions
@@ -447,6 +498,7 @@ function transformSkillToCommand(skill) {
 **Implementation:**
 
 1. **Sync Log:**
+
 ```bash
 # ~/.claude/sync.log or ~/.gemini/sync.log
 [2026-02-03 10:30:15] SYNC START (session-abc123)
@@ -457,6 +509,7 @@ function transformSkillToCommand(skill) {
 ```
 
 2. **Post-Sync Validation:**
+
 ```javascript
 async function validateEnvironment() {
   // Check skill files are valid markdown
@@ -467,17 +520,20 @@ async function validateEnvironment() {
 ```
 
 3. **Strict Mode:**
+
 ```bash
 npx ./cli --strict
 # Fails sync if ANY drifted files found without user approval
 ```
 
 **Files to Modify:**
+
 - `cli/lib/logger.js` (NEW) - Structured logging
 - `cli/lib/validate.js` - Environment validation
 - `cli/index.js` - Add `--strict` flag
 
 **Success Criteria:**
+
 - Every sync creates timestamped log entry
 - Post-sync validation detects corrupted files
 - `--strict` mode prevents accidental overwrites
@@ -493,6 +549,7 @@ npx ./cli --strict
 **Solution:** Dedicated `Resolver` class for transformation logic.
 
 **Implementation:**
+
 ```javascript
 // cli/lib/resolver.js
 class ConfigResolver {
@@ -507,8 +564,8 @@ class ConfigResolver {
 
   resolveEventName(claudeEvent) {
     const eventMap = {
-      'UserPromptSubmit': 'BeforeAgent',
-      'PreToolUse': 'BeforeTool'
+      UserPromptSubmit: "BeforeAgent",
+      PreToolUse: "BeforeTool",
     };
     return eventMap[claudeEvent] || claudeEvent;
   }
@@ -516,11 +573,13 @@ class ConfigResolver {
 ```
 
 **Files to Modify:**
+
 - `cli/lib/resolver.js` (NEW) - Centralized transformation logic
 - `cli/lib/transform-gemini.js` - Use Resolver class
 - `cli/lib/sync.js` - Decouple from transformation details
 
 **Success Criteria:**
+
 - Transformation logic isolated from sync orchestration
 - Easier to debug path resolution issues
 - Simpler to add new agent types in future
@@ -552,13 +611,13 @@ class ConfigResolver {
 
 ### Implementation Priority
 
-| Priority | Phase | Impact | Effort | Timeline |
-|----------|-------|--------|--------|----------|
-| 🔴 HIGH | Transactional Sync | Prevents data loss | Medium | Q2 2026 |
-| 🔴 HIGH | Manifest Versioning | Prevents conflicts | Medium | Q2 2026 |
-| 🟡 MEDIUM | Namespace Prefixes | Prevents collisions | Low | Q3 2026 |
-| 🟡 MEDIUM | Observability | Improves debugging | Low | Q3 2026 |
-| 🟢 LOW | Transformation Refactor | Code quality | Medium | Q4 2026 |
+| Priority  | Phase                   | Impact              | Effort | Timeline |
+| --------- | ----------------------- | ------------------- | ------ | -------- |
+| 🔴 HIGH   | Transactional Sync      | Prevents data loss  | Medium | Q2 2026  |
+| 🔴 HIGH   | Manifest Versioning     | Prevents conflicts  | Medium | Q2 2026  |
+| 🟡 MEDIUM | Namespace Prefixes      | Prevents collisions | Low    | Q3 2026  |
+| 🟡 MEDIUM | Observability           | Improves debugging  | Low    | Q3 2026  |
+| 🟢 LOW    | Transformation Refactor | Code quality        | Medium | Q4 2026  |
 
 ---
 
@@ -567,6 +626,7 @@ class ConfigResolver {
 **Methodology:** 3-turn handshake protocol (Gemini → Qwen → Gemini)
 
 **Key Finding:** Neither agent independently identified all critical issues:
+
 - **Gemini** excelled at pattern recognition and design intent analysis
 - **Qwen** excelled at edge case identification and resilience concerns
 - **Synthesis** produced concrete, prioritized improvements

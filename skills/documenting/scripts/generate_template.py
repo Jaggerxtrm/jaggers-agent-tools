@@ -250,10 +250,10 @@ def main():
         print("Categories: ssot, pattern, reference, plan")
         print("")
         print("Examples:")
-        print("  generate_template.py ssot ssot_analytics_new_2026-01-20.md \\")
+        print("  generate_template.py ssot analytics_new_ssot.md \\")
         print("      title='New Analytics SSOT' domain='analytics' subcategory='metrics'")
         print("")
-        print("  generate_template.py pattern pattern_caching_strategy_2026-01.md \\")
+        print("  generate_template.py pattern caching_strategy_pattern.md \\")
         print("      title='Caching Strategy Pattern' domain='performance'")
         sys.exit(1)
 

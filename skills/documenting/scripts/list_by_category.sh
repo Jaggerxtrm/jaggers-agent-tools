@@ -1,5 +1,5 @@
 #!/bin/bash
-# List Serena memories filtered by category prefix
+# List Serena memories filtered by category suffix
 #
 # Usage: list_by_category.sh [category]
 # category: ssot | pattern | plan | reference | archive | troubleshoot | all
@@ -20,13 +20,13 @@ if [ ! -d "$MEMORIES_DIR" ]; then
     exit 1
 fi
 
-# Function to list files with a given prefix
-list_prefix() {
-    local prefix=$1
+# Function to list files with a given suffix
+list_suffix() {
+    local suffix=$1
     local label=$2
     local files
 
-    files=$(find "$MEMORIES_DIR" -maxdepth 1 -name "${prefix}_*.md" -type f 2>/dev/null | sort)
+    files=$(find "$MEMORIES_DIR" -maxdepth 1 -name "*_${suffix}.md" -type f 2>/dev/null | sort)
 
     if [ -n "$files" ]; then
         echo ""
@@ -40,38 +40,38 @@ list_prefix() {
 # List by category
 case "$CATEGORY" in
     ssot)
-        list_prefix "ssot" "SSOT Memories"
+        list_suffix "ssot" "SSOT Memories"
         ;;
     pattern)
-        list_prefix "pattern" "Pattern Memories"
+        list_suffix "pattern" "Pattern Memories"
         ;;
     plan)
-        list_prefix "plan" "Plan Memories"
+        list_suffix "plan" "Plan Memories"
         ;;
     reference)
-        list_prefix "reference" "Reference Memories"
+        list_suffix "reference" "Reference Memories"
         ;;
     archive)
-        list_prefix "archive" "Archived Memories"
+        list_suffix "archive" "Archived Memories"
         ;;
     troubleshoot)
-        list_prefix "troubleshoot" "Troubleshooting Guides"
+        list_suffix "troubleshoot" "Troubleshooting Guides"
         ;;
     all)
         echo "Memories in: $MEMORIES_DIR"
-        list_prefix "ssot" "SSOT Memories"
-        list_prefix "pattern" "Pattern Memories"
-        list_prefix "plan" "Plan Memories"
-        list_prefix "reference" "Reference Memories"
-        list_prefix "troubleshoot" "Troubleshooting Guides"
-        list_prefix "archive" "Archived Memories (Deprecated)"
+        list_suffix "ssot" "SSOT Memories"
+        list_suffix "pattern" "Pattern Memories"
+        list_suffix "plan" "Plan Memories"
+        list_suffix "reference" "Reference Memories"
+        list_suffix "troubleshoot" "Troubleshooting Guides"
+        list_suffix "archive" "Archived Memories (Deprecated)"
 
         # Count special files
-        commit_logs=$(find "$MEMORIES_DIR" -maxdepth 1 -name "commit_log*.md" -type f 2>/dev/null | wc -l)
+        commit_logs=$(find "$MEMORIES_DIR" -maxdepth 1 -name "*_commit_log.md" -type f 2>/dev/null | wc -l)
         if [ "$commit_logs" -gt 0 ]; then
             echo ""
             echo "=== Commit Logs ==="
-            find "$MEMORIES_DIR" -maxdepth 1 -name "commit_log*.md" -type f | sort | while read -r file; do
+            find "$MEMORIES_DIR" -maxdepth 1 -name "*_commit_log.md" -type f | sort | while read -r file; do
                 basename "$file"
             done
         fi

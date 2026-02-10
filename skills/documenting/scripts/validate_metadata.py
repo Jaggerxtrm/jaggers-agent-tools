@@ -20,7 +20,7 @@ REQUIRED_FIELDS = {
     "archive": ["title", "version", "updated", "scope", "category", "archived_date"],
 }
 
-CATEGORY_PREFIXES = ["ssot_", "pattern_", "plan_", "reference_", "archive_", "troubleshoot_", "commit_log"]
+CATEGORY_SUFFIXES = ["ssot", "pattern", "plan", "reference", "archive", "troubleshoot", "commit_log"]
 
 
 def extract_frontmatter(content):
@@ -39,14 +39,17 @@ def validate_naming(filename):
     """Validate filename follows naming conventions."""
     errors = []
 
-    # Check if starts with known category prefix
-    has_prefix = any(filename.startswith(prefix) for prefix in CATEGORY_PREFIXES)
-    if not has_prefix:
-        errors.append(f"Filename should start with one of: {', '.join(CATEGORY_PREFIXES)}")
-
     # Check if ends with .md
     if not filename.endswith('.md'):
         errors.append("Filename should end with .md")
+        return errors
+
+    stem = filename[:-3]  # Remove .md
+    
+    # Check if ends with known category suffix
+    has_suffix = any(stem.endswith(f"_{suffix}") for suffix in CATEGORY_SUFFIXES)
+    if not has_suffix:
+        errors.append(f"Filename should end with one of: {', '.join(['_' + s + '.md' for s in CATEGORY_SUFFIXES])}")
 
     return errors
 
@@ -87,18 +90,27 @@ def validate_metadata(filepath):
         print_results(errors, warnings)
         return False
 
-    # Determine category from filename
+    # Determine category from filename suffix
     category = None
-    for prefix in CATEGORY_PREFIXES:
-        if path.name.startswith(prefix):
-            category = prefix.rstrip('_')
+    stem = path.name[:-3]
+    for suffix in CATEGORY_SUFFIXES:
+        if stem.endswith(f"_{suffix}"):
+            category = suffix
             break
 
     # Check required fields based on category
-    required = REQUIRED_FIELDS.get(category, REQUIRED_FIELDS["ssot"])
-    missing_fields = [field for field in required if field not in metadata]
-    if missing_fields:
-        errors.append(f"Missing required fields: {', '.join(missing_fields)}")
+    # If category is troubleshoot or commit_log, they might not have strict requirements yet
+    if category in REQUIRED_FIELDS:
+        required = REQUIRED_FIELDS[category]
+        missing_fields = [field for field in required if field not in metadata]
+        if missing_fields:
+            errors.append(f"Missing required fields: {', '.join(missing_fields)}")
+    else:
+        # Default to ssot requirements if unknown but has suffix
+        required = REQUIRED_FIELDS["ssot"]
+        missing_fields = [field for field in required if field not in metadata]
+        if missing_fields:
+            errors.append(f"Missing required fields: {', '.join(missing_fields)}")
 
     # Validate version format (if present)
     if "version" in metadata:
@@ -146,7 +158,7 @@ def print_results(errors, warnings):
 def main():
     if len(sys.argv) < 2:
         print("Usage: validate_metadata.py <memory-file.md>")
-        print("Example: validate_metadata.py ssot_analytics_volatility_2026-01-14.md")
+        print("Example: validate_metadata.py analytics_volatility_ssot.md")
         sys.exit(1)
 
     filepath = sys.argv[1]
