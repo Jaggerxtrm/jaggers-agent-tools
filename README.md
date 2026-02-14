@@ -185,7 +185,7 @@ Adjust hook execution timeouts in `settings.json`:
   "hooks": {
     "UserPromptSubmit": [{
       "hooks": [{
-        "timeout": 5000  // Values in ms for Gemini, seconds for Claude
+        "timeout": 5000  // Timeout in milliseconds (5000ms = 5 seconds) for both Claude and Gemini
       }]
     }]
   }

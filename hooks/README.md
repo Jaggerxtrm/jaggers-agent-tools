@@ -30,7 +30,7 @@ Hooks intercept specific events in the Claude Code lifecycle to provide:
       "hooks": [{
         "type": "command",
         "command": "/home/user/.claude/hooks/skill-suggestion.py",
-        "timeout": 1
+        "timeout": 5000  // Claude: seconds (5000s), Gemini: milliseconds (5s)
       }]
     }]
   },
@@ -82,7 +82,7 @@ Hooks intercept specific events in the Claude Code lifecycle to provide:
       "hooks": [{
         "type": "command",
         "command": "/home/user/.claude/hooks/pip-venv-guard.py",
-        "timeout": 3
+        "timeout": 3000  // 3 seconds in milliseconds (both Claude & Gemini)
       }]
     }]
   }
@@ -104,7 +104,7 @@ Hooks intercept specific events in the Claude Code lifecycle to provide:
       "hooks": [{
         "type": "command",
         "command": "/home/user/.claude/hooks/type-safety-enforcement.py",
-        "timeout": 10
+        "timeout": 10000  // 10 seconds in milliseconds (both Claude & Gemini)
       }]
     }]
   }

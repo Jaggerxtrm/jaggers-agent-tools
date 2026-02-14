@@ -44,38 +44,60 @@ class AgentContext:
         return self.tool_input.get('file_path', '')
 
     def block(self, reason, system_message=None):
-        """Unified block response for both agents"""
-        output = {
-            "decision": "deny",
-            "reason": reason,
-            "hookSpecificOutput": {
+        """Unified block response.
+
+        Only PreToolUse hooks support permissionDecision: deny.
+        For other hooks, use continue: false to block execution.
+        """
+        output = {}
+
+        if system_message:
+            output["systemMessage"] = system_message
+
+        # Only PreToolUse hooks support permissionDecision
+        if self.event == "PreToolUse":
+            output["hookSpecificOutput"] = {
                 "hookEventName": self.event,
                 "permissionDecision": "deny",
                 "permissionDecisionReason": reason
             }
-        }
-        if system_message:
-            output["systemMessage"] = system_message
-        
-        # Claude uses permissionDecisionReason for display
-        # Gemini uses reason for tool error feedback
-        
+        else:
+            # For non-PreToolUse hooks, use continue: false to block
+            output["continue"] = False
+            output["stopReason"] = reason
+
         print(json.dumps(output))
         sys.exit(0)
 
     def allow(self, system_message=None, additional_context=None):
-        """Unified allow response"""
-        output = {"decision": "allow"}
+        """Unified allow response.
+
+        For PreToolUse hooks: outputs permissionDecision in hookSpecificOutput
+        For other hooks (UserPromptSubmit, SessionStart, PostToolUse):
+          only systemMessage and/or additionalContext are valid
+        """
+        output = {}
+
         if system_message:
             output["systemMessage"] = system_message
-        
-        if additional_context:
-            output["hookSpecificOutput"] = {
-                "hookEventName": self.event,
-                "additionalContext": additional_context
-            }
-            
-        print(json.dumps(output))
+
+        # Build hookSpecificOutput if we have PreToolUse or additionalContext
+        if self.event == "PreToolUse" or additional_context:
+            hook_output = {"hookEventName": self.event}
+
+            # Only PreToolUse supports permissionDecision
+            if self.event == "PreToolUse":
+                hook_output["permissionDecision"] = "allow"
+
+            if additional_context:
+                hook_output["additionalContext"] = additional_context
+
+            output["hookSpecificOutput"] = hook_output
+
+        # Only print output if we have something to say
+        if output:
+            print(json.dumps(output))
+
         sys.exit(0)
 
     def fail_open(self):
