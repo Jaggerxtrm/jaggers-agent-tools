@@ -35,10 +35,10 @@ ccs_profiles:
     description: "Qwen-2.5 - Code quality and pattern detection"
 
 # ----------------------------------------------------------------------------
-# unitAI Workflows: Multi-agent orchestration for complex tasks
-# Execute via: ToolSearch("unitAI") + mcp__unitAI__workflow_{name}
+# Orchestration Workflows: Direct multi-agent orchestration (Gemini + Qwen)
+# Execute via: gemini -p "{prompt}" | qwen "{prompt}"
 # ----------------------------------------------------------------------------
-unitai_workflows:
+orchestration_workflows:
   parallel-review:
     patterns:
       - "review.*(code|security|quality)"
@@ -46,15 +46,8 @@ unitai_workflows:
       - "security.*(audit|review|scan)"
       - "analyze.*code|code.*analysis"
     cost: high
-    params:
-      # Focus auto-detected from keywords:
-      # - "security" → focus: security
-      # - "performance" → focus: performance
-      # - default → focus: quality
-      focus: auto
-      autonomyLevel: read-only
-      strategy: standard  # or "double-check" for critical
-    description: "Multi-agent code review (Gemini + Qwen + optional Cursor/Droid)"
+    description: "Multi-agent code review (Gemini proposal -> Qwen critique -> Gemini refinement)"
+    pattern: collaborative  # Map to orchestration-agents patterns
 
   feature-design:
     patterns:
@@ -63,11 +56,8 @@ unitai_workflows:
       - "design.*implement"
       - "build.*feature"
     cost: high
-    params:
-      autonomyLevel: high
-      architecturalFocus: auto  # auto-detect: performance, security, maintainability
-      testType: integration
-    description: "Full development workflow (Architect → Implementer → Tester)"
+    description: "Full development workflow (Gemini design -> Qwen implementation -> Gemini verification)"
+    pattern: collaborative
 
   pre-commit-validate:
     patterns:
@@ -75,10 +65,8 @@ unitai_workflows:
       - "pre.*commit|before.*commit"
       - "check.*staged"
     cost: medium
-    params:
-      depth: thorough  # quick | thorough | paranoid
-      autonomyLevel: MEDIUM
-    description: "Validate staged changes (secrets, quality, breaking changes)"
+    description: "Validate staged changes (Gemini secrets check -> Qwen quality check)"
+    pattern: handshake
 
   bug-hunt:
     patterns:
@@ -87,9 +75,8 @@ unitai_workflows:
       - "fix.*unknown|unknown.*error"
       - "root.*cause"
     cost: high
-    params:
-      autonomyLevel: MEDIUM
-    description: "Root cause analysis and remediation planning"
+    description: "Root cause analysis (Gemini hypothesis -> Qwen verification -> Gemini remediation)"
+    pattern: troubleshoot
 
   refactor-sprint:
     patterns:
@@ -98,9 +85,8 @@ unitai_workflows:
       - "migrate|migration"
       - "technical.*debt"
     cost: high
-    params:
-      depth: deep  # shallow | deep
-    description: "Large-scale refactoring coordination"
+    description: "Large-scale refactoring coordination (Gemini plan -> Qwen execution)"
+    pattern: collaborative
 
   validate-last-commit:
     patterns:
@@ -108,18 +94,16 @@ unitai_workflows:
       - "check.*last.*commit"
       - "review.*commit"
     cost: medium
-    params:
-      commit_ref: HEAD
-      autonomyLevel: read-only
-    description: "Post-commit validation (quality, security, breaking changes)"
+    description: "Post-commit validation (Gemini quality check -> Qwen security check)"
+    pattern: handshake
 
 # ----------------------------------------------------------------------------
 # Pattern Priority: Higher priority checked first
-# unitAI workflows have priority over CCS simple tasks
+# Orchestration workflows have priority over CCS simple tasks
 # ----------------------------------------------------------------------------
 priority:
-  - unitai_workflows  # Complex multi-agent tasks first
-  - ccs_profiles      # Simple cost-optimized tasks second
+  - orchestration_workflows  # Complex multi-agent tasks first
+  - ccs_profiles             # Simple cost-optimized tasks second
 
 # ----------------------------------------------------------------------------
 # Default Backend: Used when no pattern matches

@@ -2,21 +2,28 @@ import path from 'path';
 import fs from 'fs-extra';
 import kleur from 'kleur';
 import { transformGeminiConfig, transformSkillToCommand } from './transform-gemini.js';
-import { safeMergeConfig } from './atomic-config.js';  // Import the new atomic config handler
+import { safeMergeConfig } from './atomic-config.js';
+import { ConfigAdapter } from './config-adapter.js';
 
 /**
  * Execute a sync plan based on changeset and mode
  */
 export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun = false) {
   const isClaude = systemRoot.includes('.claude') || systemRoot.includes('Claude');
+  const isQwen = systemRoot.includes('.qwen') || systemRoot.includes('Qwen');
+  const isGemini = systemRoot.includes('.gemini') || systemRoot.includes('Gemini');
   const categories = ['skills', 'hooks', 'config'];
-  if (!isClaude) categories.push('commands'); // Commands are only managed for Gemini environments
+  
+  if (isQwen) {
+    categories.push('qwen-commands');
+  } else if (isGemini) {
+    categories.push('commands', 'antigravity-workflows');
+  } else if (!isClaude) {
+    categories.push('commands');
+  }
 
   let count = 0;
-
-  const fileMapping = {
-    'config/settings.json': { repo: 'config/settings.json', sys: 'settings.json' }
-  };
+  const adapter = new ConfigAdapter(systemRoot);
 
   for (const category of categories) {
     const itemsToProcess = [];
@@ -24,6 +31,16 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
     if (actionType === 'sync') {
       itemsToProcess.push(...changeSet[category].missing);
       itemsToProcess.push(...changeSet[category].outdated);
+      
+      // PRUNE: Handle removals from system if no longer in repo
+      if (mode === 'prune') {
+        for (const itemToDelete of changeSet[category].drifted || []) {
+           const dest = path.join(systemRoot, category, itemToDelete);
+           console.log(kleur.red(`  [x] PRUNING ${category}/${itemToDelete}`));
+           if (!isDryRun) await fs.remove(dest);
+           count++;
+        }
+      }
     } else if (actionType === 'backport') {
       itemsToProcess.push(...changeSet[category].drifted);
     }
@@ -31,59 +48,59 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
     for (const item of itemsToProcess) {
       let src, dest;
 
-      if (category === 'config') {
-        const mapping = fileMapping[`config/${item}`] || { repo: `config/${item}`, sys: item };
-        if (actionType === 'backport') {
-          src = path.join(systemRoot, mapping.sys);
-          dest = path.join(repoRoot, mapping.repo);
-        } else {
-          src = path.join(repoRoot, mapping.repo);
-          dest = path.join(systemRoot, mapping.sys);
+      if (category === 'config' && item === 'settings.json' && actionType === 'sync') {
+        src = path.join(repoRoot, 'config', 'settings.json');
+        dest = path.join(systemRoot, 'settings.json');
+        
+        console.log(kleur.gray(`  --> config/settings.json`));
+
+        const repoConfig = await fs.readJson(src);
+        let finalRepoConfig = resolveConfigPaths(repoConfig, systemRoot);
+
+        if (!isClaude) {
+          finalRepoConfig = transformGeminiConfig(finalRepoConfig, systemRoot);
         }
-      } else if (category === 'commands') {
-        // Commands are always in .gemini/commands in repo
-        const repoCmdDir = path.join(repoRoot, '.gemini', 'commands');
-        if (actionType === 'backport') {
-          src = path.join(systemRoot, category, item);
-          dest = path.join(repoCmdDir, item);
-        } else {
-          src = path.join(repoCmdDir, item);
-          dest = path.join(systemRoot, category, item);
-        }
-      } else {
-        const repoPath = path.join(repoRoot, category);
-        const systemPath = path.join(systemRoot, category);
-        if (actionType === 'backport') {
-          src = path.join(systemPath, item);
-          dest = path.join(repoPath, item);
-        } else {
-          src = path.join(repoPath, item);
-          dest = path.join(systemPath, item);
-        }
-      }
-
-      console.log(kleur.gray(`  ${actionType === 'backport' ? '<--' : '-->'} ${category}/${item}`));
-
-      if (category === 'config' && actionType === 'sync' && fs.existsSync(dest)) {
-        // Use the safe merge for config files to preserve protected keys
-        if (item === 'settings.json') {
-          const repoConfig = await fs.readJson(src);
-
-          // FIX: Resolve paths to match current target environment
-          // This fixes hardcoded paths (e.g. /home/dawid/...) from the repo
-          let finalRepoConfig = resolveConfigPaths(repoConfig, systemRoot);
-
-          // Transform config for Gemini if needed
-          if (!isClaude) {
-            finalRepoConfig = transformGeminiConfig(finalRepoConfig, systemRoot);
+        
+        // Inject MCP Servers
+        const mcpSrc = path.join(repoRoot, 'config', 'mcp_servers.json');
+        if (await fs.pathExists(mcpSrc)) {
+          const mcpRaw = await fs.readJson(mcpSrc);
+          const mcpAdapted = adapter.adaptMcpConfig(mcpRaw);
+          if (mcpAdapted.mcpServers) {
+            finalRepoConfig.mcpServers = { ...(finalRepoConfig.mcpServers || {}), ...mcpAdapted.mcpServers };
+            if (!isDryRun) console.log(kleur.dim(`      (Injected MCP servers)`));
           }
+        }
 
-          // BUGFIX: Also resolve paths in existing local config before merging
-          // This ensures hardcoded paths from previous installations get corrected
+        // Inject Hooks
+        const hooksSrc = path.join(repoRoot, 'config', 'hooks.json');
+        if (await fs.pathExists(hooksSrc)) {
+          const hooksRaw = await fs.readJson(hooksSrc);
+          const hooksAdapted = adapter.adaptHooksConfig(hooksRaw);
+          if (hooksAdapted.hooks) {
+            finalRepoConfig.hooks = { ...(finalRepoConfig.hooks || {}), ...hooksAdapted.hooks };
+            if (!isDryRun) console.log(kleur.dim(`      (Injected hooks)`));
+          }
+        }
+
+        if (fs.existsSync(dest)) {
           const localConfig = await fs.readJson(dest);
           const resolvedLocalConfig = resolveConfigPaths(localConfig, systemRoot);
 
-          // Use safe merge to preserve protected keys in local config
+          // Handle PRUNE mode for mcpServers and hooks
+          if (mode === 'prune') {
+            // Remove local MCP servers NOT in our canonical source
+            if (localConfig.mcpServers && finalRepoConfig.mcpServers) {
+                const canonicalServers = new Set(Object.keys(finalRepoConfig.mcpServers));
+                for (const serverName of Object.keys(localConfig.mcpServers)) {
+                    if (!canonicalServers.has(serverName)) {
+                        delete localConfig.mcpServers[serverName];
+                        if (!isDryRun) console.log(kleur.red(`      (Pruned local MCP server: ${serverName})`));
+                    }
+                }
+            }
+          }
+
           const mergeResult = await safeMergeConfig(dest, finalRepoConfig, {
             backupOnSuccess: true,
             preserveComments: true,
@@ -92,44 +109,40 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
           });
 
           if (mergeResult.updated) {
-            console.log(kleur.blue(`      (Configuration safely merged with protected keys preserved)`));
-
-            // Report specific changes
-            if (mergeResult.changes.length > 0) {
-              for (const change of mergeResult.changes) {
-                if (isDryRun) {
-                  console.log(kleur.yellow(`      (DRY RUN: ${change})`));
-                } else {
-                  console.log(kleur.green(`      (${change})`));
-                }
-              }
-            }
-          } else {
-            console.log(kleur.gray(`      (No changes needed for configuration)`));
+            console.log(kleur.blue(`      (Configuration safely merged)`));
           }
         } else {
-          // For other config files, use the original approach
           if (!isDryRun) {
-            await fs.copy(dest, `${dest}.bak`);
+            await fs.ensureDir(path.dirname(dest));
+            await fs.writeJson(dest, finalRepoConfig, { spaces: 2 });
           }
-          console.log(kleur.gray(`      (Backup created: ${path.basename(dest)}.bak)`));
-
-          if (!isDryRun) {
-            await fs.copy(src, dest);
-          }
+          console.log(kleur.green(`      (Created new configuration)`));
         }
-      } else if (category === 'config' && item === 'settings.json' && !isClaude && actionType === 'sync') {
-        const configContent = await fs.readJson(src);
-        
-        // Resolve paths here too for non-merging case (e.g. first install)
-        let transformedConfig = resolveConfigPaths(configContent, systemRoot);
-        transformedConfig = transformGeminiConfig(transformedConfig, systemRoot);
+        count++;
+        continue;
+      }
 
-        if (!isDryRun) {
-          await fs.remove(dest);
-          await fs.writeJson(dest, transformedConfig, { spaces: 2 });
-        }
-      } else if (mode === 'symlink' && actionType === 'sync') {
+      // Standard file sync for other items
+      const repoPath = category === 'commands' ? path.join(repoRoot, '.gemini', 'commands') :
+                       category === 'qwen-commands' ? path.join(repoRoot, '.qwen', 'commands') :
+                       category === 'antigravity-workflows' ? path.join(repoRoot, '.gemini', 'antigravity', 'global_workflows') :
+                       path.join(repoRoot, category);
+
+      const systemPath = category === 'qwen-commands' ? path.join(systemRoot, 'commands') :
+                         category === 'antigravity-workflows' ? path.join(systemRoot, '.gemini', 'antigravity', 'global_workflows') :
+                         path.join(systemRoot, category);
+
+      if (actionType === 'backport') {
+        src = path.join(systemPath, item);
+        dest = path.join(repoPath, item);
+      } else {
+        src = path.join(repoPath, item);
+        dest = path.join(systemPath, item);
+      }
+
+      console.log(kleur.gray(`  ${actionType === 'backport' ? '<--' : '-->'} ${category}/${item}`));
+
+      if (mode === 'symlink' && actionType === 'sync' && category !== 'config') {
         if (!isDryRun) {
           await fs.remove(dest);
           await fs.ensureSymlink(src, dest);
@@ -141,26 +154,33 @@ export async function executeSync(repoRoot, systemRoot, changeSet, mode, actionT
         }
       }
 
-      // Automatic Skill -> Command transformation for Gemini
+      // Gemini Skill -> Command transformation
       if (category === 'skills' && !isClaude && actionType === 'sync') {
         const skillMdPath = path.join(src, 'SKILL.md');
         if (fs.existsSync(skillMdPath)) {
           const result = await transformSkillToCommand(skillMdPath);
-          if (result) {
-            const { toml, commandName } = result;
-            const commandDest = path.join(systemRoot, 'commands', `${commandName}.toml`);
-
-            if (!isDryRun) {
-              await fs.ensureDir(path.dirname(commandDest));
-              await fs.writeFile(commandDest, toml);
-            }
-            console.log(kleur.cyan(`      (Auto-generated slash command: /${commandName})`));
+          if (result && !isDryRun) {
+            const commandDest = path.join(systemRoot, 'commands', `${result.commandName}.toml`);
+            await fs.ensureDir(path.dirname(commandDest));
+            await fs.writeFile(commandDest, result.toml);
+            console.log(kleur.cyan(`      (Auto-generated slash command: /${result.commandName})`));
           }
         }
       }
 
       count++;
     }
+  }
+
+  // Final Step: Write Sync Manifest
+  if (!isDryRun && actionType === 'sync') {
+    const manifestPath = path.join(systemRoot, '.jaggers-sync-manifest.json');
+    const manifest = {
+        lastSync: new Date().toISOString(),
+        repoRoot,
+        items: count
+    };
+    await fs.writeJson(manifestPath, manifest, { spaces: 2 });
   }
 
   return count;

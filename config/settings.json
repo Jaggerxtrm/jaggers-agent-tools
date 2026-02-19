@@ -23,69 +23,8 @@
     "defaultMode": "default"
   },
   "model": "sonnet",
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/dawid/.claude/hooks/skill-suggestion.py",
-            "timeout": 5000
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/dawid/.claude/hooks/serena-workflow-reminder.py"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Read|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/dawid/.claude/hooks/serena-workflow-reminder.py"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/dawid/.claude/hooks/pip-venv-guard.py"
-          },
-          {
-            "type": "command",
-            "command": "/home/dawid/.claude/hooks/type-safety-enforcement.py",
-            "timeout": 30000
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/dawid/.claude/hooks/type-safety-enforcement.py"
-          }
-        ]
-      }
-    ]
-  },
   "skillSuggestions": {
     "enabled": true
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "/home/dawid/.claude/hooks/statusline-starship.sh"
   },
   "enabledPlugins": {
     "pyright-lsp@claude-plugins-official": true,

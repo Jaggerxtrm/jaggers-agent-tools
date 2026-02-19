@@ -40,6 +40,29 @@ Hooks intercept specific events in the Claude Code lifecycle to provide:
 }
 ```
 
+### skill-discovery.py
+
+**Purpose**: Scans the `@skills/` directory for `SKILL.md` files and injects a summarized list of all available local skills into the agent's context at the start of a session.
+
+**Trigger**: SessionStart
+
+**Skills**: All skills found in the repository's `skills/` directory.
+
+**Configuration**:
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "hooks": [{
+        "type": "command",
+        "command": "/home/user/.claude/hooks/skill-discovery.py",
+        "timeout": 5000
+      }]
+    }]
+  }
+}
+```
+
 ### serena-workflow-reminder.py
 
 **Purpose**: Enforces semantic workflow using "Using Serena LSP".

@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "name": "skill-discovery",
+            "type": "command",
+            "command": "$GEMINI_PROJECT_DIR/hooks/skill-discovery.py",
+            "timeout": 5000,
+            "description": "Automatically loads available skills from @skills/ into the agent context."
+          }
+        ]
+      }
+    ]
+  },
+  "hooksConfig": {
+    "disabled": [
+      "generated-hook-0",
+      "generated-hook-0",
+      "generated-hook-1",
+      "generated-hook-0",
+      "generated-hook-0",
+      "generated-hook-0",
+      "generated-hook-1",
+      "skill-discovery"
+    ]
+  }
+}

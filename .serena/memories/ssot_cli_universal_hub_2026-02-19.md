@@ -1,0 +1,51 @@
+---
+title: Universal Configuration Hub Architecture
+version: 1.0.0
+updated: 2026-02-19
+domain: cli
+type: ssot
+tags: [sync, config, mcp, hooks, cursor, gemini, claude]
+changelog:
+  - version: 1.0.0
+    date: 2026-02-19
+    description: Initial SSOT for Universal Configuration Hub with MCP/Hooks injection.
+---
+
+# Universal Configuration Hub Architecture
+
+## Overview
+The Universal Configuration Hub is a professional-grade configuration management system for AI coding tools (Claude Code, Gemini CLI, Cursor). It centralizes all configurations into a "Single Source of Truth" repository and dynamically compiles/deploys them to tool-specific locations with automatic format and path adaptation.
+
+## Components
+
+### 1. Canonical Configuration Sources
+- **`config/mcp_servers.json`**: Central definitions for all MCP servers. Supports standard JSON format.
+- **`config/hooks.json`**: Abstract hook definitions mapping events (e.g., `UserPromptSubmit`) to script names.
+- **`config/settings.json`**: General tool settings (model preferences, security, UI).
+
+### 2. ConfigAdapter (`cli/lib/config-adapter.js`)
+The "Compiler" of the hub. It translates canonical configurations into tool-specific formats.
+- **MCP Adaptation**: Handles `mcpServers` (Claude/Gemini/Cursor) vs `mcp` (OpenCode).
+- **Hooks Adaptation**: Maps Claude events (e.g., `PreToolUse`) to Gemini events (e.g., `BeforeTool`) and transforms matchers (e.g., `Bash` -> `run_shell_command`).
+- **Env Var Transformer**: Automatically converts environment variable syntax:
+    - `Claude`: `${VAR}`
+    - `Cursor`: `${env:VAR}`
+    - `OpenCode`: `{env:VAR}`
+
+### 3. Sync Engine (`cli/lib/sync.js`)
+The execution layer that performs the physical synchronization.
+- **Atomic Writes**: Uses `atomic-config.js` to ensure configuration files are never corrupted during a crash.
+- **Protected Keys**: Preserves local-only settings (like OAuth tokens or personal preferences) during merges.
+- **Prune Mode**: Automatically removes local skills, hooks, or MCP servers that are no longer present in the repository.
+- **Sync Manifest**: Tracks the history of synchronizations in `.jaggers-sync-manifest.json`.
+
+## Supported Targets
+- **Claude Code**: `~/.claude/settings.json`
+- **Gemini CLI**: `~/.gemini/settings.json`
+- **Cursor**: `~/.cursor/mcp.json`
+- **Qwen CLI**: `~/.qwen/settings.json`
+
+## Workflow: Creating a New Skill
+1. Create skill in `skills/my-skill/SKILL.md`.
+2. (Optional) Define associated hooks in `config/hooks.json`.
+3. Run `node cli/index.js` to deploy to all active tools.

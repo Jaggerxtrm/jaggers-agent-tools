@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "script": "skill-suggestion.py",
+        "timeout": 5000
+      }
+    ],
+    "SessionStart": [
+      {
+        "script": "serena-workflow-reminder.py"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit",
+        "script": "serena-workflow-reminder.py"
+      },
+      {
+        "matcher": "Bash",
+        "script": "type-safety-enforcement.py",
+        "timeout": 30000
+      },
+      {
+        "matcher": "Edit|Write",
+        "script": "type-safety-enforcement.py"
+      }
+    ]
+  },
+  "skillSuggestions": {
+    "enabled": true
+  },
+  "statusLine": {
+    "script": "statusline-starship.sh"
+  }
+}

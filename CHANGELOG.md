@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Performed DevOps audit and implemented initial CI/CD workflow with GitHub Actions
+- Refactor CLI sync engine to Universal Hub architecture with MCP/Hooks injection and VSync-style format adaptation.
 ### Removed
 - **gsd-check-update.js**: Removed deprecated GSD workflow update checker hook from all configurations
 

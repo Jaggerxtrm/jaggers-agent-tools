@@ -42,28 +42,53 @@ async function getNewestMtime(targetPath) {
 
 export async function calculateDiff(repoRoot, systemRoot) {
     const isClaude = systemRoot.includes('.claude') || systemRoot.includes('Claude');
+    const isQwen = systemRoot.includes('.qwen') || systemRoot.includes('Qwen');
+    const isGemini = systemRoot.includes('.gemini') || systemRoot.includes('Gemini');
 
     const changeSet = {
         skills: { missing: [], outdated: [], drifted: [], total: 0 },
         hooks: { missing: [], outdated: [], drifted: [], total: 0 },
         config: { missing: [], outdated: [], drifted: [], total: 0 },
-        commands: { missing: [], outdated: [], drifted: [], total: 0 }
+        commands: { missing: [], outdated: [], drifted: [], total: 0 },
+        'qwen-commands': { missing: [], outdated: [], drifted: [], total: 0 },
+        'antigravity-workflows': { missing: [], outdated: [], drifted: [], total: 0 }
     };
 
-    // 1. Folders: Skills & Hooks & Commands (for Gemini)
+    // 1. Folders: Skills & Hooks & Commands (for different environments)
     const folders = ['skills', 'hooks'];
-    if (!isClaude) folders.push('commands');
+    if (isQwen) {
+        folders.push('qwen-commands');
+    } else if (isGemini) {
+        folders.push('commands', 'antigravity-workflows');
+    } else if (!isClaude) {
+        folders.push('commands');
+    }
 
     for (const category of folders) {
         let repoPath;
         if (category === 'commands') {
             // Commands are always in .gemini/commands in repo
             repoPath = path.join(repoRoot, '.gemini', 'commands');
+        } else if (category === 'qwen-commands') {
+            // Qwen commands are in .qwen/commands in repo
+            repoPath = path.join(repoRoot, '.qwen', 'commands');
+        } else if (category === 'antigravity-workflows') {
+            // Antigravity workflows are in .gemini/antigravity/global_workflows in repo
+            repoPath = path.join(repoRoot, '.gemini', 'antigravity', 'global_workflows');
         } else {
             repoPath = path.join(repoRoot, category);
         }
         
-        const systemPath = path.join(systemRoot, category);
+        let systemPath;
+        if (category === 'qwen-commands') {
+            systemPath = path.join(systemRoot, 'commands');
+        } else if (category === 'antigravity-workflows') {
+            systemPath = path.join(systemRoot, '.gemini', 'antigravity', 'global_workflows');
+        } else if (category === 'commands') {
+            systemPath = path.join(systemRoot, category);
+        } else {
+            systemPath = path.join(systemRoot, category);
+        }
 
         if (!fs.existsSync(repoPath)) continue;
 

@@ -1,0 +1,54 @@
+{
+  "ba92bb75": {
+    "workflow": "collaborative",
+    "task": "How should the Jaggers orchestration ecosystem handle session pinning for multi-turn agent workflows?",
+    "started": "2026-02-17T23:27:24.727Z",
+    "status": "in_progress",
+    "turns": [
+      {
+        "n": 1,
+        "agent": "gemini",
+        "artifact": "/home/dawid/projects/jaggers-agent-tools/.jaggers/handover/turn_1_ba92bb75.md",
+        "done": true
+      }
+    ],
+    "gemini_session": "1b7837eb-ab75-4ee1-a00e-7edf935559c5"
+  },
+  "06395e07": {
+    "workflow": "collaborative",
+    "task": "How should the Jaggers orchestration ecosystem handle session pinning for multi-turn agent workflows?",
+    "started": "2026-02-17T23:30:00.113Z",
+    "status": "in_progress",
+    "turns": [
+      {
+        "n": 1,
+        "agent": "gemini",
+        "artifact": "/home/dawid/projects/jaggers-agent-tools/.jaggers/handover/turn_1_06395e07.md",
+        "done": true
+      }
+    ],
+    "gemini_session": "3c018e99-4f28-4fe3-a4bb-40fb0a48f154"
+  },
+  "0a84b5bf": {
+    "workflow": "collaborative",
+    "task": "test",
+    "started": "2026-02-17T23:38:05.478Z",
+    "status": "in_progress",
+    "turns": []
+  },
+  "68c4d363": {
+    "workflow": "collaborative",
+    "task": "How should the Jaggers orchestration ecosystem handle session pinning for multi-turn agent workflows?",
+    "started": "2026-02-17T23:43:42.917Z",
+    "status": "in_progress",
+    "turns": [
+      {
+        "n": 1,
+        "agent": "gemini",
+        "artifact": "/home/dawid/projects/jaggers-agent-tools/.jaggers/handover/turn_1_68c4d363.md",
+        "done": true
+      }
+    ],
+    "gemini_session": "343336f7-a201-4511-a53e-990eb7091cc1"
+  }
+}
