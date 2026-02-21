@@ -4,10 +4,10 @@
   "description": "Installer for Jaggers Agent Tools (Skills & Hooks)",
   "type": "module",
   "bin": {
-    "jaggers-config": "./cli/index.js"
+    "jaggers-config": "./cli/dist/index.js"
   },
   "scripts": {
-    "start": "node cli/index.js",
+    "start": "node cli/dist/index.js",
     "lint": "echo 'No linting configured'",
     "test": "echo 'No tests configured'"
   },

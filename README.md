@@ -120,33 +120,109 @@ Maintains Single Source of Truth (SSOT) documentation system for projects.
 
 ### 🚀 Zero-Cloning Installation (Recommended)
 
-The fastest way to install or update the entire suite of tools on any machine is using `npx`. This method doesn't require you to clone the repository manually.
+The fastest way to install or update on any machine — no cloning required:
 
 ```bash
 npx -y github:Jaggerxtrm/jaggers-agent-tools
 ```
 
-**What this does:**
-1. **Auto-Detects**: Searches for `~/.claude`, `~/.gemini`, and other agent environments.
-2. **Interactive Sync**: Prompts you to select which environments to update.
-3. **Cross-Agent**: Installs skills, hooks, and automatically generates specialized slash commands.
-4. **Vault Protection**: Safely merges your `settings.json` while preserving local secrets and MCP configurations.
+This auto-detects your agent environments, shows a diff, and syncs everything in one step.
 
 ---
 
-### 🛠️ Smart Local Installation
-
-If you have already cloned the repository, use the local Config Manager:
+### 🛠️ Local Installation (after cloning)
 
 ```bash
-npx ./cli
+git clone https://github.com/Jaggerxtrm/jaggers-agent-tools.git
+cd jaggers-agent-tools/cli
+npm install       # also runs `prepare` which builds the TypeScript
+npm link          # registers `jaggers-config` globally
 ```
 
-### Manual Installation
+You can now run `jaggers-config` from anywhere.
+
+---
+
+## CLI User Guide
+
+### Synopsis
+
+```
+jaggers-config <command> [options]
+```
+
+| Command  | Description                       |
+| -------- | --------------------------------- |
+| `sync`   | Sync tools to target environments |
+| `status` | Show diff without making changes  |
+| `reset`  | Clear saved preferences           |
+
+---
+
+### `jaggers-config sync`
+
+The main command. Detects your agent environments, calculates what's changed, and applies updates.
+
+```bash
+jaggers-config sync                # interactive — prompts for targets and confirmation
+jaggers-config sync --dry-run      # preview what WOULD change, write nothing
+jaggers-config sync -y             # skip confirmation prompts (CI-friendly)
+jaggers-config sync --prune        # also remove system items no longer in the repo
+jaggers-config sync --backport     # reverse direction: copy drifted local edits → repo
+```
+
+**What it syncs per target environment:**
+
+| Item            | Claude               | Gemini               | Qwen               |
+| --------------- | -------------------- | -------------------- | ------------------ |
+| `skills/`       | ✅ copy/symlink       | ✅ copy/symlink       | ✅ copy/symlink     |
+| `hooks/`        | ✅ copy/symlink       | ✅ copy/symlink       | ✅ copy/symlink     |
+| `settings.json` | ✅ safe merge         | ✅ safe merge         | ✅ safe merge       |
+| MCP servers     | via `claude mcp add` | via `gemini mcp add` | via `qwen mcp add` |
+| Slash commands  | auto-generated       | `.toml` files        | `.toml` files      |
+
+**Diff categories shown before sync:**
+
+- `+ missing` — item exists in repo but not in your system (will be added)
+- `↑ outdated` — repo is newer than your system (will be updated)
+- `✗ drifted` — your local copy is newer than the repo (skipped unless `--backport`)
+
+**Safe merge behaviour for `settings.json`:**  
+Protected keys (your local MCP servers, permissions, auth tokens, model preferences) are **never overwritten**. New keys from the repo are merged in non-destructively.
+
+**Sync modes** (saved between runs, prompted on first sync):
+- `copy` — default; plain file copy
+- `symlink` — live symlinks so edits to `skills/` immediately reflect system-wide *(Linux/macOS only; Windows falls back to copy automatically)*
+
+---
+
+### `jaggers-config status`
+
+Read-only diff view — no files written:
+
+```bash
+jaggers-config status
+```
+
+Shows the same `missing / outdated / drifted` breakdown as `sync`, but stops there.
+
+---
+
+### `jaggers-config reset`
+
+Clears saved preferences (sync mode, etc.):
+
+```bash
+jaggers-config reset
+```
+
+---
+
+### Manual Installation (without CLI)
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/jaggers-agent-tools.git
+   git clone https://github.com/Jaggerxtrm/jaggers-agent-tools.git
    cd jaggers-agent-tools
    ```
 
@@ -155,10 +231,9 @@ npx ./cli
    cp -r skills/* ~/.claude/skills/
    ```
 
-3. Copy hooks to Claude Code:
+3. Copy hooks:
    ```bash
    cp hooks/* ~/.claude/hooks/
-   chmod +x ~/.claude/hooks/*.sh
    ```
 
 ## Configuration
@@ -236,13 +311,14 @@ Adjust hook execution timeouts in `settings.json`:
 
 ## Version History
 
-| Version | Date       | Highlights                             |
-| ------- | ---------- | -------------------------------------- |
-| 1.1.1   | 2026-02-03 | Dynamic path resolution in Sync logic  |
-| 1.1.0   | 2026-02-03 | Vault Sync, Orchestrating-agents loops |
-| 5.1.0   | 2026-01-30 | Renamed `p` to `prompt-improving`      |
-| 5.0.0   | 2026-01-30 | Major refactoring, 90% token reduction |
-| 4.2.0   | Pre-2026   | Feature-rich baseline (155KB)          |
+| Version | Date       | Highlights                                         |
+| ------- | ---------- | -------------------------------------------------- |
+| 1.2.0   | 2026-02-21 | CLI rewritten in TypeScript, Commander.js sub-cmds |
+| 1.1.1   | 2026-02-03 | Dynamic path resolution in Sync logic              |
+| 1.1.0   | 2026-02-03 | Vault Sync, Orchestrating-agents loops             |
+| 5.1.0   | 2026-01-30 | Renamed `p` to `prompt-improving`                  |
+| 5.0.0   | 2026-01-30 | Major refactoring, 90% token reduction             |
+| 4.2.0   | Pre-2026   | Feature-rich baseline (155KB)                      |
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
@@ -253,20 +329,38 @@ jaggers-agent-tools/
 ├── README.md                    # This file
 ├── CHANGELOG.md                 # Version history
 ├── ROADMAP.md                   # Future plans
-├── cli/                         # Config Manager CLI
+├── cli/                         # Config Manager CLI (TypeScript)
+│   ├── src/
+│   │   ├── index.ts             # Entry point (Commander program)
+│   │   ├── commands/            # sync.ts, status.ts, reset.ts
+│   │   ├── adapters/            # base, claude, gemini, qwen, registry
+│   │   ├── core/                # context, diff, sync-executor, manifest, rollback
+│   │   ├── utils/               # hash, atomic-config, config-adapter, env-manager…
+│   │   └── types/               # Zod schemas (config.ts) + shared interfaces (models.ts)
+│   ├── dist/                    # Compiled output (generated by `npm run build`)
+│   ├── tsconfig.json
+│   ├── tsup.config.ts
+│   └── package.json
 ├── skills/
 │   ├── prompt-improving/        # Prompt improvement skill
 │   ├── delegating/              # Task delegation skill
 │   ├── orchestrating-agents/    # Multi-agent collaboration skill
 │   ├── using-serena-lsp/        # Serena LSP workflow
 │   └── documenting/             # Serena SSOT system
-└── hooks/
-    ├── README.md                # Hooks documentation
-    ├── skill-suggestion.py      # Skill auto-suggestion
-    ├── pip-venv-guard.py        # Venv enforcement
-    ├── serena-workflow-reminder.py # Serena reminder
-    ├── type-safety-enforcement.py # Type safety
-    └── statusline.js            # Status line display
+├── hooks/
+│   ├── README.md                # Hooks documentation
+│   ├── skill-suggestion.py      # Skill auto-suggestion
+│   ├── pip-venv-guard.py        # Venv enforcement
+│   ├── serena-workflow-reminder.py # Serena reminder
+│   ├── type-safety-enforcement.py # Type safety
+│   └── statusline.js            # Status line display
+├── config/
+│   ├── mcp_servers.json         # Canonical core MCP servers
+│   ├── mcp_servers_optional.json
+│   └── settings.json            # Base settings template
+└── docs/
+    ├── mcp-servers-config.md    # MCP setup guide
+    └── plans/                   # Implementation & deferred plans
 ```
 
 ## Contributing

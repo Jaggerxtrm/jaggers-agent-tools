@@ -1,8 +1,8 @@
 ---
 title: "Installer and Sync Architecture"
-version: 1.1.1
+version: 1.2.0
 created: 2026-02-03
-updated: 2026-02-03T16:30:00+00:00
+updated: 2026-02-21T16:00:00+01:00
 scope: jaggers-config-manager
 category: ssot
 subcategory: installer
@@ -18,6 +18,9 @@ changelog:
   - version: 1.1.1
     date: 2026-02-03
     changes: Implemented dynamic path resolution in sync logic to fix hardcoded paths in settings.json.
+  - version: 1.2.0
+    date: 2026-02-21
+    changes: Full TypeScript migration. Commander.js sub-commands (sync/status/reset). Adapter pattern. Rollback protection. Zod schemas. Windows compatibility baked in.
 ---
 
 # Installer and Sync Architecture - SSOT
@@ -37,22 +40,38 @@ The suite is distributed as a self-installing package via `npx`. This ensures th
 Used for developing new tools or manual synchronization of a cloned repository.
 - **Command**: `npx ./cli`
 
-## Core Logic (`cli/lib/`)
+## Architecture (v1.2.0 — TypeScript)
 
-### 1. Context Detection (`context.js`)
-Identifies agent installation paths (`~/.claude`, `~/.gemini`, `~/.qwen`) and manages persistence of user preferences (e.g., `copy` vs `symlink` mode).
+The CLI is now a fully typed TypeScript package compiled with `tsup`. Entry: `cli/dist/index.js`.
 
-### 2. Difference Engine (`diff.js`)
-Performs an MD5-based comparison between the repository source and the system-level installation.
-- **Categories**: `skills`, `hooks`, `config`, and `commands` (Gemini-only).
-- **Drift Detection**: Identifies local modifications in the system environment.
+### Sub-commands (Commander.js)
+- `jaggers-config sync [--dry-run] [-y] [--prune] [--backport]`
+- `jaggers-config status` — read-only diff
+- `jaggers-config reset` — clear saved preferences
 
-### 3. Sync & Transformation (`sync.js`, `transform-gemini.js`)
-Handles the actual file movement and cross-agent format conversion.
-- **Hook Transformation**: Maps Claude lifecycle events to Gemini equivalents (e.g., `UserPromptSubmit` → `BeforeAgent`).
-- **Command Auto-Generation**: Automatically transforms `SKILL.md` frontmatter into Gemini `.toml` command files.
-- **Claude Native Support**: Recognizes that Claude Code generates commands directly from skill metadata, avoiding redundant file creation.
-- **Dynamic Path Resolution**: Fixes hardcoded paths in `settings.json` (e.g., repository paths containing `/hooks/`) by resolving them to the actual user target directory during sync.
+### Adapter Pattern (`cli/src/adapters/`)
+- `ToolAdapter` abstract base class
+- `ClaudeAdapter`, `GeminiAdapter`, `QwenAdapter` implementations
+- `detectAdapter(systemRoot)` factory with Windows path normalization
+
+### Core Modules (`cli/src/core/`)
+- `context.ts` — environment detection and target selection
+- `diff.ts` — MD5-based changeset calculation (missing/outdated/drifted)
+- `sync-executor.ts` — file copy/symlink with rollback protection
+- `manifest.ts` — `.jaggers-sync-manifest.json` read/write
+- `rollback.ts` — backup/restore for atomic operations
+
+### Utils (`cli/src/utils/`)
+- `hash.ts` — MD5 file/directory hashing
+- `atomic-config.ts` — deep merge with protected key preservation
+- `config-adapter.ts` — cross-agent format transforms + Windows path fix
+- `env-manager.ts` — `~/.config/jaggers-agent-tools/.env` management
+- `sync-mcp-cli.ts` — native `mcp add/remove` via agent CLIs
+- `transform-gemini.ts` — SKILL.md → Gemini `.toml` command generation
+
+### Type Definitions (`cli/src/types/`)
+- `config.ts` — Zod schemas: `SyncMode`, `ChangeSet`, `Manifest`
+- `models.ts` — shared interfaces: `Skill`, `Hook`, `MCPServer`
 
 ## Standards & Best Practices
 
