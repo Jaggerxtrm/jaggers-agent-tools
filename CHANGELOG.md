@@ -5,7 +5,43 @@ All notable changes to Claude Code skills and configuration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-21
+
+### Added
+
+#### CLI: TypeScript Migration
+- **Full TypeScript rewrite** of `cli/` — all modules ported from plain JavaScript ESM to strict TypeScript
+- **Commander.js** replaces `minimist` for structured sub-command routing
+- **Zod schemas** for runtime validation of `ChangeSet`, `SyncMode`, `Manifest`, `MCPServer`
+- **Adapter Pattern** — `ToolAdapter` base class with `ClaudeAdapter`, `GeminiAdapter`, `QwenAdapter` implementations
+  - `detectAdapter(systemRoot)` factory replaces scattered `includes('.claude')` checks codebase-wide
+- **Rollback protection** — `core/rollback.ts` backs up every file before write; restores all on any failure
+- **Hash-only diffing** — Pure MD5 comparison via `utils/hash.ts`; mtime used only as drift tie-breaker
+- **`prepare` npm script** — auto-builds on `npm install`, restoring `npx github:Jaggerxtrm/jaggers-agent-tools` support
+- **`vitest` test infrastructure** added to devDependencies (tests deferred, see `docs/plans/cli-testing.md`)
+
+#### New sub-commands
+- `jaggers-config sync [--dry-run] [-y] [--prune] [--backport]` — main sync
+- `jaggers-config status` — read-only diff view (no file writes)
+- `jaggers-config reset` — replaces `--reset` flag from old CLI
+
+#### Windows Compatibility (baked in)
+- `registry.ts` normalises backslashes before path matching
+- `config-adapter.ts` uses `python` (not `python3`) on Windows for hook scripts
+- `sync-executor.ts` falls back from symlinks to copy on Windows with a user warning
+
+### Changed
+- `cli/package.json` `bin` and root `package.json` `bin` now point to `cli/dist/index.js` (compiled output)
+- `cli/package.json` `scripts` updated: `build` (tsup), `dev` (tsx), `typecheck` (tsc), `test` (vitest), `start` (node dist)
+- Old `cli/index.js` and `cli/lib/*.js` preserved on disk but no longer referenced
+
+### Fixed
+- **Double-shebang bug** in tsup output — removed `banner` config, relying on tsup's auto-detection from `src/index.ts`
+
+---
+
 ## [Unreleased]
+
 
 ### Added
 - **MCP Servers Configuration v3.1.0**: Centralized environment file management
