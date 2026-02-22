@@ -4,6 +4,10 @@ import { Manifest, ManifestSchema } from '../types/config.js';
 
 const MANIFEST_FILE = '.jaggers-sync-manifest.json';
 
+export function getManifestPath(projectDir: string): string {
+    return join(projectDir, MANIFEST_FILE);
+}
+
 export async function loadManifest(projectDir: string): Promise<Manifest | null> {
     const manifestPath = join(projectDir, MANIFEST_FILE);
 

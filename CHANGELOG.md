@@ -5,6 +5,41 @@ All notable changes to Claude Code skills and configuration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-22
+
+### Added
+
+#### CLI UX Improvements (vsync-inspired)
+- **Ora Spinners**: Visual feedback for all async operations (detect, diff, sync)
+- **Enhanced Status**: Last sync time, item counts, health indicators, actionable hints
+- **Single Confirmation**: Collect all changesets, display full plan, ask once
+- **Drifted Items Feedback**: Report skipped drifted items post-sync with backport hint
+
+### Changed
+
+#### Safety Improvements
+- **Prune Mode Guard**: Added `PruneModeReadError` — aborts if system read fails in prune mode
+- **Repo Root Detection**: Dynamic detection via `findRepoRoot()` utility (walks up looking for `skills/` + `hooks/`)
+- **Dry-Run Banner**: Moved from before target selection to after plan display
+- **Error Handling**: Global handlers for clean error messages (no stack traces)
+- **Ignored Items**: Filter `__pycache__`, `.DS_Store`, `node_modules` from diff scanning
+
+### Dependencies
+- Added `ora` for spinner UI
+
+### Files Modified
+- `cli/src/core/diff.ts` — Prune guard, ignored items filtering
+- `cli/src/utils/repo-root.ts` — New utility
+- `cli/src/commands/sync.ts` — Spinners, single confirm, feedback improvements
+- `cli/src/commands/status.ts` — Enhanced output with timestamps
+- `cli/src/core/manifest.ts` — Added `getManifestPath()`
+- `cli/src/index.ts` — Global error handlers
+
+### Documentation
+- New SSOT: `ssot_cli_ux_improvements_2026-02-22.md`
+
+---
+
 ## [1.2.0] - 2026-02-21
 
 ### Added

@@ -171,6 +171,13 @@ jaggers-config sync --prune        # also remove system items no longer in the r
 jaggers-config sync --backport     # reverse direction: copy drifted local edits → repo
 ```
 
+**UX Features:**
+- **Spinners**: Visual feedback during slow operations (detect, diff, sync)
+- **Single Confirmation**: See full plan across all targets, confirm once
+- **Smart Feedback**: Reports skipped drifted items with backport hint
+- **Safety Guards**: Prune mode aborts on read failures to prevent data loss
+- **Clean Errors**: User-friendly error messages (no stack traces)
+
 **What it syncs per target environment:**
 
 | Item            | Claude               | Gemini               | Qwen               |
@@ -198,13 +205,17 @@ Protected keys (your local MCP servers, permissions, auth tokens, model preferen
 
 ### `jaggers-config status`
 
-Read-only diff view — no files written:
+Read-only diff view with enhanced feedback — no files written:
 
 ```bash
 jaggers-config status
 ```
 
-Shows the same `missing / outdated / drifted` breakdown as `sync`, but stops there.
+**Output includes:**
+- Last synced time (relative: "3 hours ago")
+- Item counts from manifest (skills, hooks, config)
+- Per-target health: ✓ Up-to-date / ⚠ Pending changes
+- Actionable hint: "Run `jaggers-config sync` to apply changes"
 
 ---
 
@@ -313,6 +324,7 @@ Adjust hook execution timeouts in `settings.json`:
 
 | Version | Date       | Highlights                                         |
 | ------- | ---------- | -------------------------------------------------- |
+| 1.3.0   | 2026-02-22 | CLI UX improvements (spinners, safety, feedback)   |
 | 1.2.0   | 2026-02-21 | CLI rewritten in TypeScript, Commander.js sub-cmds |
 | 1.1.1   | 2026-02-03 | Dynamic path resolution in Sync logic              |
 | 1.1.0   | 2026-02-03 | Vault Sync, Orchestrating-agents loops             |

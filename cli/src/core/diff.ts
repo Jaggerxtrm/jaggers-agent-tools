@@ -5,7 +5,17 @@ import type { ChangeSet } from '../types/config.js';
 import { getAdapter } from '../adapters/registry.js';
 import { detectAdapter } from '../adapters/registry.js';
 
-export async function calculateDiff(repoRoot: string, systemRoot: string): Promise<ChangeSet> {
+// Items to ignore from diff scanning (similar to .gitignore)
+const IGNORED_ITEMS = new Set(['__pycache__', '.DS_Store', 'Thumbs.db', '.gitkeep', 'node_modules']);
+
+export class PruneModeReadError extends Error {
+    constructor(path: string) {
+        super(`Cannot read ${path} in prune mode — aborting to prevent accidental deletion`);
+        this.name = 'PruneModeReadError';
+    }
+}
+
+export async function calculateDiff(repoRoot: string, systemRoot: string, pruneMode: boolean = false): Promise<ChangeSet> {
     const adapter = detectAdapter(systemRoot);
     const isClaude = adapter?.toolName === 'claude-code';
     const isQwen = adapter?.toolName === 'qwen';
@@ -46,7 +56,7 @@ export async function calculateDiff(repoRoot: string, systemRoot: string): Promi
 
         if (!(await fs.pathExists(repoPath))) continue;
 
-        const items = await fs.readdir(repoPath);
+        const items = (await fs.readdir(repoPath)).filter(i => !IGNORED_ITEMS.has(i));
         (changeSet[category as keyof ChangeSet] as any).total = items.length;
 
         for (const item of items) {
@@ -55,7 +65,8 @@ export async function calculateDiff(repoRoot: string, systemRoot: string): Promi
                 item,
                 join(repoPath, item),
                 join(systemPath, item),
-                changeSet
+                changeSet,
+                pruneMode
             );
         }
     }
@@ -82,7 +93,8 @@ async function compareItem(
     item: string,
     repoPath: string,
     systemPath: string,
-    changeSet: ChangeSet
+    changeSet: ChangeSet,
+    pruneMode: boolean = false
 ): Promise<void> {
     const cat = changeSet[category] as any;
 
@@ -92,7 +104,19 @@ async function compareItem(
     }
 
     const repoHash = await hashDirectory(repoPath);
-    const systemHash = await hashDirectory(systemPath);
+    
+    // Wrap system-side hash read in try/catch for prune mode safety
+    let systemHash: string;
+    try {
+        systemHash = await hashDirectory(systemPath);
+    } catch (error) {
+        if (pruneMode) {
+            throw new PruneModeReadError(systemPath);
+        }
+        // If not in prune mode, treat as missing
+        cat.missing.push(item);
+        return;
+    }
 
     if (repoHash !== systemHash) {
         const repoMtime = await getNewestMtime(repoPath);
