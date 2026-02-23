@@ -1,0 +1,163 @@
+---
+name: {{ service_name }}
+description: Specialized knowledge for {{ service_name }} service in darth_feedor. Covers architecture, operational patterns, troubleshooting, data flows, and integration with dependencies. Use when debugging {{ service_name }} issues, analyzing performance, checking data freshness, or understanding functionality.
+---
+
+# {{ service_name }} Skill
+
+## Service Overview
+{{ service_description or "[PENDING RESEARCH] - Provide a high-level overview of the service's purpose and key features." }}
+
+**Key Features:**
+- **Container:** `{{ container_name }}`
+- **Entry Point:** `{{ entry_point or "[PENDING RESEARCH] - Identify the main entrypoint and command line arguments." }}`
+- **Image:** `{{ image }}`
+- **Source Context:** `{{ source_file }}`
+
+## Architecture
+**Dependencies:**
+{% for dep in external_deps %}
+- {{ dep }}
+{% endfor %}
+{% if not external_deps %}- [None detected]{% endif %}
+
+**Ports:**
+{% for port in ports %}
+- `{{ port }}`
+{% endfor %}
+{% if not ports %}- Internal only{% endif %}
+
+**Volumes:**
+{% for vol in volumes %}
+- `{{ vol }}`
+{% endfor %}
+{% if not volumes %}- [None detected or no explicit volumes mapped]{% endif %}
+
+**Source Files:**
+{% if entrypoint_script %}
+- `{{ entrypoint_script }}` - Entrypoint script
+{% endif %}
+{% for file in source_files %}
+- `{{ file }}`
+{% endfor %}
+
+<!-- SEMANTIC_START -->
+## Semantic Deep Dive
+
+### Core Logic
+{% if classes %}
+**Classes:**
+{% for cls in classes %}
+- `{{ cls.name }}`: methods={{ cls.methods | join(', ') }}
+{% endfor %}
+{% endif %}
+
+{% if functions %}
+**Top-level Functions:**
+{% for func in functions %}
+- `{{ func }}`
+{% endfor %}
+{% endif %}
+
+### Logic Anchors
+{% if sql_queries %}
+**SQL Patterns:**
+{% for sql in sql_queries %}
+- `{{ sql }}`
+{% endfor %}
+{% endif %}
+
+{% if redis_ops %}
+**Redis Operations:**
+{% for op in redis_ops %}
+- `{{ op }}`
+{% endfor %}
+{% endif %}
+
+{% if http_calls %}
+**Outbound HTTP Calls:**
+{% for call in http_calls %}
+- `{{ call }}`
+{% endfor %}
+{% endif %}
+
+### Troubleshooting
+- **Scenario 1**: Service doesn't start. Check `log_hunter.py` for error patterns.
+- **Scenario 2**: Database connection failure. Verify `DB_URL` env var.
+<!-- SEMANTIC_END -->
+
+## Data Flows
+1. **Input:** [PENDING RESEARCH] - Trace where data comes from.
+2. **Process:** [PENDING RESEARCH] - How is data transformed?
+3. **Output:** [PENDING RESEARCH] - Where is data stored or sent?
+
+## Integration Points
+- **Database:** Postgres (Host: ${DB_HOST:-timescaledb}:5432)
+- **Redis:** Redis (Host: ${REDIS_HOST:-redis}:6379)
+- **Environment Variables:**
+{% for env in env_vars %}
+  - `{{ env }}`
+{% endfor %}
+
+## Database Interactions
+**Primary Tables:**
+{% for table in tables %}
+- `{{ table }}`
+{% endfor %}
+{% if not tables %}[PENDING RESEARCH] - Identify main tables accessed.{% endif %}
+
+**Key Queries:**
+{% if sql_queries %}
+{% for sql in sql_queries %}
+- `{{ sql }}`
+{% endfor %}
+{% else %}
+[PENDING RESEARCH] - Extract key SELECT/INSERT/UPDATE patterns.
+{% endif %}
+
+## Redis Usage
+{% if redis_ops %}
+The service uses Redis for the following operations:
+{% for op in redis_ops %}
+- `{{ op }}`
+{% endfor %}
+{% else %}
+Redis is configured but **not actively used** or no operations were detected.
+{% endif %}
+
+## Common Operations
+
+**Service Health Check:**
+```bash
+python3 .claude/skills/{{ service_name }}/scripts/health_probe.py
+```
+
+**Run Data Explorer:**
+```bash
+python3 .claude/skills/{{ service_name }}/scripts/data_explorer.py --list
+```
+
+**View Logs:**
+```bash
+docker logs -f {{ container_name }}
+```
+
+## Troubleshooting Guide
+- **Symptom**: Service initialization failure.
+  - **Check**: Environment variables and database connectivity.
+- **Symptom**: Data not being processed.
+  - **Check**: Log patterns using `log_hunter.py`.
+
+## Scripts
+- `health_probe.py` - Connectivity and status checks
+- `data_explorer.py` - DB/Redis data inspection tool
+- `log_hunter.py` - Error pattern analysis
+
+## References
+- **SSOT Reference:** `references/architecture_ssot.md`
+- **REFINEMENT BRIEF:** `REFINEMENT_BRIEF.md`
+
+## Resources
+
+- **SSOT Reference:** `references/architecture_ssot.md`
+- **REFINEMENT BRIEF:** `REFINEMENT_BRIEF.md`

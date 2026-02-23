@@ -4,6 +4,7 @@ import kleur from 'kleur';
 import { createSyncCommand } from './commands/sync.js';
 import { createStatusCommand } from './commands/status.js';
 import { createResetCommand } from './commands/reset.js';
+import { createAddOptionalCommand } from './commands/add-optional.js';
 
 const program = new Command();
 
@@ -24,6 +25,7 @@ program.exitOverride((err) => {
 program.addCommand(createSyncCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createResetCommand());
+program.addCommand(createAddOptionalCommand());
 
 // Default action: run sync (for backwards compatibility)
 program

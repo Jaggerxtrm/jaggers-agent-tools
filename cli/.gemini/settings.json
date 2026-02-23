@@ -23,6 +23,17 @@
     "deepwiki": {
       "url": "https://mcp.deepwiki.com/mcp",
       "type": "http"
+    },
+    "unitAI": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@jaggerxtrm/unitai"
+      ]
+    },
+    "omni-search-engine": {
+      "url": "http://127.0.0.1:8765/sse",
+      "type": "sse"
     }
   }
 }

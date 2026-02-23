@@ -47,9 +47,9 @@ const AGENT_CLI: Record<AgentName, AgentCLI> = {
     },
     gemini: {
         command: 'gemini',
-        listArgs: ['mcp', 'list'],
+        listArgs: ['mcp', 'list'], // list doesn't support -s flag, lists all scopes
         addStdio: (name, cmd, args, env) => {
-            const base = ['mcp', 'add', name, cmd];
+            const base = ['mcp', 'add', '-s', 'user', name, cmd];
             if (args && args.length > 0) base.push(...args);
             if (env && Object.keys(env).length > 0) {
                 for (const [key, value] of Object.entries(env)) {
@@ -59,7 +59,7 @@ const AGENT_CLI: Record<AgentName, AgentCLI> = {
             return base;
         },
         addHttp: (name, url, headers) => {
-            const base = ['mcp', 'add', '-t', 'http', name, url];
+            const base = ['mcp', 'add', '-s', 'user', '-t', 'http', name, url];
             if (headers) {
                 for (const [key, value] of Object.entries(headers)) {
                     base.push('-H', `${key}=${resolveEnvVar(value)}`);
@@ -68,16 +68,16 @@ const AGENT_CLI: Record<AgentName, AgentCLI> = {
             return base;
         },
         addSse: (name, url) => {
-            return ['mcp', 'add', '-t', 'sse', name, url];
+            return ['mcp', 'add', '-s', 'user', '-t', 'sse', name, url];
         },
-        remove: (name) => ['mcp', 'remove', name],
+        remove: (name) => ['mcp', 'remove', '-s', 'user', name],
         parseList: (output) => parseMcpListOutput(output, /^✓ ([a-zA-Z0-9_-]+):/)
     },
     qwen: {
         command: 'qwen',
         listArgs: ['mcp', 'list'],
         addStdio: (name, cmd, args, env) => {
-            const base = ['mcp', 'add', name, cmd];
+            const base = ['mcp', 'add', '-s', 'user', name, cmd];
             if (args && args.length > 0) base.push(...args);
             if (env && Object.keys(env).length > 0) {
                 for (const [key, value] of Object.entries(env)) {
@@ -87,7 +87,7 @@ const AGENT_CLI: Record<AgentName, AgentCLI> = {
             return base;
         },
         addHttp: (name, url, headers) => {
-            const base = ['mcp', 'add', '-t', 'http', name, url];
+            const base = ['mcp', 'add', '-s', 'user', '-t', 'http', name, url];
             if (headers) {
                 for (const [key, value] of Object.entries(headers)) {
                     base.push('-H', `${key}=${resolveEnvVar(value)}`);
@@ -96,9 +96,9 @@ const AGENT_CLI: Record<AgentName, AgentCLI> = {
             return base;
         },
         addSse: (name, url) => {
-            return ['mcp', 'add', '-t', 'sse', name, url];
+            return ['mcp', 'add', '-s', 'user', '-t', 'sse', name, url];
         },
-        remove: (name) => ['mcp', 'remove', name],
+        remove: (name) => ['mcp', 'remove', '-s', 'user', name],
         parseList: (output) => parseMcpListOutput(output, /^✓ ([a-zA-Z0-9_-]+):/)
     }
 };
@@ -301,8 +301,9 @@ export async function syncMcpServersWithCli(
 /**
  * Load canonical MCP config from repository
  */
-export function loadCanonicalMcpConfig(repoRoot: string): any {
+export function loadCanonicalMcpConfig(repoRoot: string, includeOptional: boolean = false): any {
     const corePath = path.join(repoRoot, 'config', 'mcp_servers.json');
+    const optionalPath = path.join(repoRoot, 'config', 'mcp_servers_optional.json');
 
     const config: any = { mcpServers: {} };
 
@@ -311,5 +312,78 @@ export function loadCanonicalMcpConfig(repoRoot: string): any {
         config.mcpServers = { ...config.mcpServers, ...core.mcpServers };
     }
 
+    if (includeOptional && fs.existsSync(optionalPath)) {
+        const optional = fs.readJsonSync(optionalPath);
+        config.mcpServers = { ...config.mcpServers, ...optional.mcpServers };
+    }
+
     return config;
+}
+
+/**
+ * Prompt user to select optional MCP servers
+ */
+export async function promptOptionalServers(repoRoot: string): Promise<string[] | false> {
+    const optionalPath = path.join(repoRoot, 'config', 'mcp_servers_optional.json');
+    
+    if (!fs.existsSync(optionalPath)) {
+        return false;
+    }
+
+    const optional = fs.readJsonSync(optionalPath);
+    const servers = Object.entries(optional.mcpServers || {}).map(([name, server]: [string, any]) => ({
+        name,
+        description: server._notes?.description || 'No description',
+        prerequisite: server._notes?.prerequisite || ''
+    }));
+
+    if (servers.length === 0) {
+        return false;
+    }
+
+    console.log(kleur.bold('\n📦 Optional MCP Servers Available:'));
+    console.log(kleur.dim('   These are not installed by default.\n'));
+
+    for (let i = 0; i < servers.length; i++) {
+        const server = servers[i];
+        console.log(kleur.cyan(`   [${i + 1}] ${server.name}`));
+        console.log(kleur.dim(`      ${server.description}`));
+        if (server.prerequisite) {
+            console.log(kleur.yellow(`      ⚠️  ${server.prerequisite}`));
+        }
+    }
+
+    console.log(kleur.dim('\n   Enter numbers separated by commas (e.g., 1,2) or press Enter to skip.\n'));
+
+    // @ts-ignore
+    const prompts = await import('prompts');
+    
+    const { selection } = await prompts.default({
+        type: 'text',
+        name: 'selection',
+        message: 'Which optional servers would you like to install?',
+        initial: '',
+        format: (val: string) => val.trim()
+    });
+
+    if (!selection || selection.trim() === '') {
+        console.log(kleur.gray('  Skipping optional servers.\n'));
+        return false;
+    }
+
+    // Parse selection (e.g., "1,2" or "1, 2" or "1 2")
+    const selectedIndices = selection
+        .split(/[,\s]+/)
+        .map(s => parseInt(s.trim(), 10) - 1)
+        .filter(n => !isNaN(n) && n >= 0 && n < servers.length);
+
+    if (selectedIndices.length === 0) {
+        console.log(kleur.gray('  No valid selection. Skipping optional servers.\n'));
+        return false;
+    }
+
+    const selected = selectedIndices.map(i => servers[i].name);
+    console.log(kleur.green(`  Selected: ${selected.join(', ')}\n`));
+    
+    return selected;
 }

@@ -4,7 +4,7 @@ import kleur from 'kleur';
 import { transformGeminiConfig, transformSkillToCommand } from '../utils/transform-gemini.js';
 import { safeMergeConfig } from '../utils/atomic-config.js';
 import { ConfigAdapter } from '../utils/config-adapter.js';
-import { syncMcpServersWithCli, loadCanonicalMcpConfig, detectAgent } from '../utils/sync-mcp-cli.js';
+import { syncMcpServersWithCli, loadCanonicalMcpConfig, detectAgent, promptOptionalServers } from '../utils/sync-mcp-cli.js';
 import { createBackup, restoreBackup, cleanupBackup, type BackupInfo } from './rollback.js';
 import type { ChangeSet } from '../types/config.js';
 
@@ -37,9 +37,52 @@ export async function executeSync(
         const agent = detectAgent(systemRoot);
         if (agent && actionType === 'sync') {
             console.log(kleur.gray(`  --> ${agent} MCP servers (via ${agent} mcp CLI)`));
-            const canonicalConfig = loadCanonicalMcpConfig(repoRoot);
+            
+            // Check if optional servers prompt was already shown
+            const manifestPath = path.join(systemRoot, '.jaggers-sync-manifest.json');
+            let manifest: any = {};
+            if (await fs.pathExists(manifestPath)) {
+                manifest = await fs.readJson(manifestPath);
+            }
+            
+            const wasOptionalPromptShown = manifest.optionalServersPrompted || false;
+            
+            // Prompt for optional servers if not shown yet
+            let includeOptional = false;
+            let selectedOptionalServers: string[] = [];
+            
+            if (!wasOptionalPromptShown) {
+                const selected = await promptOptionalServers(repoRoot);
+                if (selected && Array.isArray(selected)) {
+                    includeOptional = selected.length > 0;
+                    selectedOptionalServers = selected;
+                }
+                // Mark that prompt was shown (even if user declined)
+                manifest.optionalServersPrompted = true;
+            }
+            
+            const canonicalConfig = loadCanonicalMcpConfig(repoRoot, includeOptional);
+            
+            // If user selected specific optional servers, filter to only those
+            if (selectedOptionalServers.length > 0 && canonicalConfig.mcpServers) {
+                const filteredServers: any = {};
+                const coreServers = fs.readJsonSync(path.join(repoRoot, 'config', 'mcp_servers.json')).mcpServers;
+                for (const [name, server] of Object.entries(canonicalConfig.mcpServers)) {
+                    // Include all core servers + selected optional ones
+                    if (coreServers[name] || selectedOptionalServers.includes(name)) {
+                        filteredServers[name] = server;
+                    }
+                }
+                canonicalConfig.mcpServers = filteredServers;
+            }
+            
             await syncMcpServersWithCli(agent, canonicalConfig, isDryRun, mode === 'prune');
             count++;
+            
+            // Update manifest to track that prompt was shown
+            if (!isDryRun) {
+                await fs.writeJson(manifestPath, manifest, { spaces: 2 });
+            }
         }
 
         for (const category of categories) {
