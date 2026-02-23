@@ -1,6 +1,3 @@
-
-
-
 ---
 name: delegating
 description: >-
