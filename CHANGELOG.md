@@ -30,6 +30,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2026-02-23
+
+### Added
+
+#### Service Skills Set (`project-skills/service-skills-set/`)
+- **Complete rewrite** of project-specific service skill infrastructure — replaces deprecated `service-skill-builder`
+- **Trinity skills** installed into `.claude/skills/` of any target project:
+  - `creating-service-skills` — 3-phase workflow: scaffold → Serena LSP deep dive → hook registration
+  - `using-service-skills` — SessionStart catalog injection + PreToolUse skill enforcement
+  - `updating-service-skills` — PostToolUse drift detection
+- **Scripts**:
+  - `scaffolder.py` — generates SKILL.md skeleton, script stubs, and auto-detects official docs from 30+ technology mappings (Docker images, requirements.txt, Cargo.toml, package.json)
+  - `deep_dive.py` — prints Serena LSP-driven research protocol with tool table for Phase 2
+  - `cataloger.py` — SessionStart hook; outputs ~150-token XML service catalog
+  - `skill_activator.py` — PreToolUse hook; territory glob + Bash command matching; injects skill load enforcement
+  - `drift_detector.py` — PostToolUse hook (`check-hook` stdin mode) + manual `check`, `sync`, `scan` subcommands
+  - `bootstrap.py` — shared registry CRUD and project root resolution via git
+- **Service registry**: `.claude/skills/service-registry.json` with territory globs, skill path, last sync
+- **Git hooks** (`pre-commit`, `pre-push`): idempotent marker-based installation for SSOT reminder and skill staleness warning
+- **Installer** (`install-service-skills.py`): single-purpose ~90-line script; copies trinity, merges settings.json hooks, activates git hooks; idempotent
+- **Phase 3 — Hook Registration**: new phase in `creating-service-skills` workflow verifies PreToolUse wiring, confirms territory globs in registry, communicates auto-activation to user
+
+### Changed
+
+- Project structure: moved into `project-skills/service-skills-set/` with `.claude/` subdirectory
+- `settings.json` PostToolUse hook moved to project-level (was only in skill frontmatter — now always-on)
+- PreToolUse added to `settings.json` for territory-based skill auto-enforcement
+
+### Fixed
+
+- `allowed-tools` in skill frontmatter: corrected to Claude Code native tool names — removed invalid MCP/Serena names
+- `SessionStart` removed from skill frontmatter (unsupported); moved to `settings.json`
+- Removed `disable-model-invocation: true` from workflow skill and scaffolder template
+- `project_root.glob()` type error in `bootstrap.py` fixed by wrapping with `Path()`
+
+### Documentation
+
+- Added `project-skills/service-skills-set/service-skills-readme.md`
+- New SSOT memory: `ssot_jaggers-agent-tools_service_skills_set_2026-02-23`
+
+---
+
 ## [1.3.0] - 2026-02-22
 
 ### Added
