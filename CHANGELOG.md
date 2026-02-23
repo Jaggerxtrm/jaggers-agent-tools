@@ -5,6 +5,31 @@ All notable changes to Claude Code skills and configuration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-02-23
+
+### Changed
+
+#### Delegating Skill Hardening
+- **Description rewrite**: Proactive language with trigger keywords (`tests`, `typos`, `refactors`, `code reviews`, `debugging`) — auto-discovery now fires without explicit "delegate" keyword
+- **Frontmatter cleanup**: Removed unsupported fields (`version`, `gemini-command`, `gemini-prompt`); added `allowed-tools: Bash`
+- **CCS nested session fix**: All CCS execution commands now use `env -u CLAUDECODE ccs {profile} -p "{task}"` — confirmed working inside Claude Code sessions
+- **Interactive menu**: Replaced TypeScript `ask_user()` pseudocode with prose `AskUserQuestion` instructions
+
+#### skill-suggestion.py Hook
+- **Orchestration patterns**: Added `ORCHESTRATION_PATTERNS` — hook now fires for code reviews, feature implementation, debugging, security audits, commit validation
+- **CLAUDECODE detection**: Hints correctly say "Gemini or Qwen directly" when running inside Claude Code (CCS unavailable), "CCS backend" otherwise
+- **Security exclusion fix**: Narrowed `security` exclude pattern to only block auth/vuln *implementation* — security *reviews* now correctly route to orchestration
+
+### Files Modified
+- `skills/delegating/SKILL.md` — Description, frontmatter, pseudocode, CCS command
+- `hooks/skill-suggestion.py` — Orchestration patterns, CLAUDECODE detection, security exclusion
+
+### Documentation
+- Updated SSOT: `ssot_cli_hooks_2026-02-03` → v1.1.0
+- New SSOT: `ssot_jaggers-agent-tools_delegating_skill_2026-02-23` v1.0.0
+
+---
+
 ## [1.3.0] - 2026-02-22
 
 ### Added
