@@ -1,15 +1,19 @@
 {
   "name": "jaggers-agent-tools",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Installer for Jaggers Agent Tools (Skills & Hooks)",
   "type": "module",
   "bin": {
     "jaggers-config": "./cli/dist/index.cjs"
   },
   "scripts": {
+    "build": "npm run build --prefix cli",
     "start": "node cli/dist/index.cjs",
     "lint": "echo 'No linting configured'",
     "test": "echo 'No tests configured'"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "comment-json": "^4.2.3",
@@ -17,7 +21,6 @@
     "dotenv": "^17.3.1",
     "fs-extra": "^11.2.0",
     "kleur": "^4.1.5",
-    "minimist": "^1.2.8",
     "prompts": "^2.4.2"
   }
 }

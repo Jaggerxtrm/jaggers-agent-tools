@@ -32,6 +32,12 @@ jobs:
     - name: Install Node dependencies
       run: npm install && cd cli && npm install
 
+    - name: Build TypeScript
+      run: cd cli && npm run build
+
+    - name: Verify dist is up to date
+      run: git diff --exit-code cli/dist/ || (echo "dist/ is out of sync — run 'cd cli && npm run build' and commit the result" && exit 1)
+
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
