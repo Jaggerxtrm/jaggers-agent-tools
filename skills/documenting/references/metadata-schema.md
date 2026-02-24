@@ -38,6 +38,7 @@ domain: [tag1, tag2]
 | `subcategory` | string | **Required** | Specific component name |
 | `domain` | array | **Required** | List of relevant domain tags |
 | `changelog` | array | **Required** | List of version history entries |
+| `tracks` | array | Optional | Glob patterns (fnmatch) for files this memory documents. Used by drift_detector.py to detect documentation drift. |
 
 #### Pattern (`pattern_`)
 | Field | Type | Requirement | Description |
@@ -90,6 +91,9 @@ category: ssot
 subcategory: volatility
 domain: [analytics, math, options]
 applicability: core-pricing-engine
+tracks:
+  - "src/analytics/**/*.py"
+  - "src/analytics/config.yaml"
 changelog:
   - 2.1.0 (2026-01-14): Added SABR model details.
   - 2.0.0 (2025-12-20): Major refactor of surface construction.
