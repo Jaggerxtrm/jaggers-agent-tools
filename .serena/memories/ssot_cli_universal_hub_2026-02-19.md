@@ -3,6 +3,9 @@ title: Universal Configuration Hub Architecture
 version: 2.0.0
 updated: 2026-02-21
 domain: cli
+tracks:
+  - "cli/src/**"
+  - "config/settings.json"
 type: ssot
 tags: [sync, config, mcp, hooks, cursor, gemini, claude]
 changelog:

@@ -1,12 +1,16 @@
 ---
 title: CLI Hook System
-version: 1.0.0
-updated: 2026-02-03
+version: 1.1.0
+updated: 2026-02-23
 domain: cli
+tracks:
+  - "hooks/**"
+  - "config/settings.json"
 scope: cli-hooks
 category: ssot
 changelog:
   - 1.0.0: Initial documentation of the CLI hook system and recent timeout fixes.
+  - 1.1.0: Document skill-suggestion.py orchestration patterns and CLAUDECODE detection added in delegating skill hardening.
 ---
 
 # CLI Hook System
@@ -39,7 +43,29 @@ To improve debuggability, hooks are assigned names during transformation:
 - **`skill-suggestion.py`**: Requires ~5s timeout for regex and processing.
 - **`type-safety-enforcement.py`**: Requires ~30s timeout to allow `mypy` or `pyright` checks to complete on large files.
 
+## skill-suggestion.py — Pattern Details
+
+Fires on every `UserPromptSubmit`. Injects `system_message` hints when task patterns are detected.
+
+### Pattern Groups
+
+| Group | Patterns | Action |
+|-------|----------|--------|
+| `CONVERSATIONAL_PATTERNS` | hello, thanks, ok, yes/no, bye | Silent pass-through |
+| `EXCLUDE_PATTERNS` | architecture, `(add\|implement).*auth`, performance, migrate | Silent pass-through |
+| Explicit delegation | `delegate` keyword | Hint: use /delegating |
+| `CCS_PATTERNS` | typo, test, doc, format, lint, type hints, rename | Hint: /delegating (CCS or Gemini/Qwen if $CLAUDECODE set) |
+| `ORCHESTRATION_PATTERNS` | code review, security audit, implement feature, debug, refactor sprint, validate commit | Hint: /delegating (Gemini+Qwen orchestration) |
+| `P_PATTERNS` | analyze, implement, explain, vague short commands | Hint: /prompt-improving |
+
+### CLAUDECODE Detection
+When `$CLAUDECODE` env var is set (i.e., running inside a Claude Code session), CCS hints correctly say "Gemini or Qwen directly (CCS unavailable inside Claude Code)" instead of "CCS backend".
+
+### Security Exclusion Nuance
+`security` alone does NOT exclude — only `(add|implement|fix|patch).*(security|auth|oauth)` does. This allows security *review* tasks to route to orchestration while blocking security *implementation*.
+
 ## References
 - `cli/lib/transform-gemini.js`
 - `config/settings.json`
+- `hooks/skill-suggestion.py`
 - `hooks/README.md`

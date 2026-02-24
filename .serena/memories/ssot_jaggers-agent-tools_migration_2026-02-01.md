@@ -7,6 +7,8 @@ scope: jaggers-agent-tools-migration
 category: ssot
 subcategory: infrastructure
 domain: [hooks, delegation, python, cli, tooling]
+tracks:
+  - "cli/**"
 status: active
 changelog:
   - version: 1.0.0

@@ -7,6 +7,9 @@ scope: jaggers-config-manager
 category: ssot
 subcategory: installer
 domain: [infrastructure, cli, sync, gemini, claude, npx]
+tracks:
+  - "cli/**"
+  - "config/**"
 status: active
 changelog:
   - version: 1.0.0

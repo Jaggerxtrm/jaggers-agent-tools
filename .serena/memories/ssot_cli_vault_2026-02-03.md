@@ -3,6 +3,9 @@ title: CLI Vault Sync Architecture
 version: 1.0.0
 updated: 2026-02-03
 domain: cli
+tracks:
+  - "config/settings.json"
+  - "cli/src/**/*vault*"
 scope: cli-vault
 category: ssot
 changelog:

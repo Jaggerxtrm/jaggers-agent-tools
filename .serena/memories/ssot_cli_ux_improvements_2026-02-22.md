@@ -3,6 +3,9 @@ title: CLI UX Improvements — Vsyc-Inspired Enhancements
 version: 1.0.0
 updated: 2026-02-22
 domain: cli
+tracks:
+  - "cli/src/commands/**"
+  - "cli/src/core/**"
 type: ssot
 tags: [cli, ux, sync, status, error-handling, spinners]
 changelog:

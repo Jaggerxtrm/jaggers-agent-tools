@@ -3,6 +3,9 @@ title: MCP Servers Configuration and Sync
 version: 3.1.0
 updated: 2026-02-21
 domain: cli
+tracks:
+  - "config/mcp_servers*.json"
+  - "cli/src/**/*mcp*"
 type: ssot
 tags: [mcp, config, sync, claude, gemini, qwen, env]
 changelog:

@@ -7,6 +7,8 @@ scope: jaggers-agent-tools
 category: ssot
 subcategory: workflow
 domain: [documentation, ssot, changelog, readme, claude-md]
+tracks:
+  - "skills/documenting/**"
 status: active
 changelog:
   - version: 1.0.0

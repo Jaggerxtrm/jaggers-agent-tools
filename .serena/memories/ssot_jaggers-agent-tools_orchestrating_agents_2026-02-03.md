@@ -7,6 +7,8 @@ scope: orchestrating-agents
 category: ssot
 subcategory: multi-agent
 domain: [orchestration, gemini, qwen, handshaking, workflows]
+tracks:
+  - "skills/orchestrating-agents/**"
 status: active
 changelog:
   - version: 1.0.0
