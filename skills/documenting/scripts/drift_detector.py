@@ -26,6 +26,7 @@ def find_project_root() -> Path:
     for parent in [p, *p.parents]:
         if (parent / ".serena" / "memories").exists():
             return parent
+    print(f"Warning: no .serena/memories/ found in ancestors of {p}; using cwd", file=sys.stderr)
     return p
 
 
@@ -59,19 +60,33 @@ def extract_updated(content: str) -> str:
 
 # ── File matching ─────────────────────────────────────────────────────────────
 
+def _match_glob(path: str, pattern: str) -> bool:
+    """Match a file path against a glob pattern with proper ** support."""
+    path_parts = Path(path).as_posix().split("/")
+    pattern_parts = Path(pattern).as_posix().split("/")
+
+    def _match(pp, pat):
+        if not pat:
+            return not pp
+        if pat[0] == "**":
+            # ** matches zero or more segments
+            for i in range(len(pp) + 1):
+                if _match(pp[i:], pat[1:]):
+                    return True
+            return False
+        if not pp:
+            return False
+        return fnmatch.fnmatch(pp[0], pat[0]) and _match(pp[1:], pat[1:])
+
+    return _match(path_parts, pattern_parts)
+
+
 def match_files_to_tracks(files: list, tracks: list) -> list:
-    """Return files that match any of the tracks globs."""
+    """Return files that match any of the tracks globs (supports **)."""
     matched = []
     for f in files:
         for pattern in tracks:
-            # Try the pattern as-is, with ** replaced by *, and with **/ removed
-            # (the last handles cases like hooks/**/*.py matching hooks/file.py)
-            candidates = [
-                pattern,
-                pattern.replace("**", "*"),
-                pattern.replace("**/", ""),
-            ]
-            if any(fnmatch.fnmatch(f, c) for c in candidates):
+            if _match_glob(f, pattern):
                 matched.append(f)
                 break
     return matched
@@ -194,7 +209,7 @@ def cmd_check(args: list):
         sys.exit(0)
 
 
-def cmd_hook(args: list):
+def cmd_hook(_args: list):
     """Stop hook mode — outputs JSON reminder only if session files touch any tracks."""
     project_root = find_project_root()
     session_files = get_session_written_files(project_root)

@@ -63,3 +63,18 @@ def test_format_scan_report_stale():
 def test_format_scan_report_clean():
     report = format_scan_report({})
     assert any(word in report.lower() for word in ["clean", "no stale", "up to date"])
+
+
+def test_match_files_to_tracks_no_false_positive():
+    """A .py file in an unrelated dir must NOT match hooks/**/*.py"""
+    files = ["cli/src/transform.py", "docs/something.py"]
+    tracks = ["hooks/**/*.py"]
+    assert match_files_to_tracks(files, tracks) == []
+
+
+def test_match_files_to_tracks_direct_child():
+    """hooks/**/*.py must match files directly under hooks/ (no subdir)"""
+    files = ["hooks/skill-suggestion.py"]
+    tracks = ["hooks/**/*.py"]
+    matched = match_files_to_tracks(files, tracks)
+    assert "hooks/skill-suggestion.py" in matched
