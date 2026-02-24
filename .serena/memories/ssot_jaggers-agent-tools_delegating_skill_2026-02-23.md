@@ -1,7 +1,7 @@
 ---
 title: Delegating Skill
-version: 1.0.0
-updated: 2026-02-23
+version: 1.1.0
+updated: 2026-02-24
 domain: skills
 tracks:
   - "skills/delegating/**"
@@ -9,6 +9,7 @@ tracks:
 scope: delegating
 category: ssot
 changelog:
+  - 1.1.0: Document tmux+PTY workaround required for CCS execution from within Claude Code.
   - 1.0.0: Initial documentation after skill hardening (v7.0.0 → hardened).
 ---
 
@@ -63,18 +64,31 @@ Unsupported fields removed: `version`, `gemini-command`, `gemini-prompt`.
 
 ## CCS Execution Inside Claude Code
 
-CCS spawns Claude Code subprocesses. When `$CLAUDECODE` is set, the nested session guard blocks it.
+CCS spawns Claude Code subprocesses. When `$CLAUDECODE` is set, the nested session guard blocks it. Additionally, CCS requires a **PTY** (pseudo-terminal) to render its progress output — without one, it exits silently with no output.
 
-**Fix**: Always use `env -u CLAUDECODE ccs {profile} -p "{task}"` for CCS calls.
+**Two requirements for CCS from within Claude Code:**
+1. `env -u CLAUDECODE` — unsets the nested session guard
+2. **tmux** — provides the PTY that CCS needs for output
 
-This was confirmed safe: parent session survives, GLM-4.7 responds correctly (tested 2026-02-23).
+**Workaround pattern:**
+```bash
+tmux new-session -d -s ccs_task "env -u CLAUDECODE ccs {profile} -p '{task}' > /tmp/ccs_out.txt 2>&1"
+sleep 30  # or poll until session exits
+cat /tmp/ccs_out.txt
+```
+
+Note: `env -u CLAUDECODE ccs {profile} -p "{task}"` alone (no tmux) exits silently — no output, no error.
+
+**Gemini and Qwen** are standalone CLIs; they do not wrap `claude`, require no PTY, and work directly via Bash.
+
+Confirmed: parent session survives, GLM-4.7 responds correctly (tested 2026-02-24).
 
 ## Interactive Flow
 
 1. `AskUserQuestion` — "Delegate or work in main session?"
 2. If delegate → `AskUserQuestion` — backend selection (Auto / GLM / Gemini / Qwen / Orchestration)
 3. Execute via appropriate CLI:
-   - CCS: `env -u CLAUDECODE ccs {profile} -p "{task}"`
+   - CCS: tmux + `env -u CLAUDECODE ccs {profile} -p '{task}' > /tmp/ccs_out.txt 2>&1` (see CCS Execution section)
    - Gemini: `gemini -p "{task}"`
    - Qwen: `qwen "{task}"`
    - Orchestration: sequential gemini/qwen turns per workflow protocol

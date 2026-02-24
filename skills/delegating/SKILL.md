@@ -106,7 +106,14 @@ When `backend: 'orchestration'` is selected, **Claude autonomously** chooses the
 1. **Parse override flag** (if present: `--glm`, `--gemini`, `--orchestrate`, etc.)
 2. **Auto-select backend** using keyword-based logic.
 3. **Route to appropriate backend:**
-   - **CCS**: `env -u CLAUDECODE ccs {profile} -p "{task}"`
+   - **CCS**: `env -u CLAUDECODE ccs {profile} -p "{task}" > /tmp/ccs_out.txt 2>&1` (run via tmux, then `cat /tmp/ccs_out.txt`)
+     > **Note**: CCS wraps the `claude` CLI, which requires a PTY for output and blocks on the `CLAUDECODE` nested-session guard. Use tmux to provide a PTY and redirect output to a file:
+     > ```bash
+     > tmux new-session -d -s ccs_task "env -u CLAUDECODE ccs {profile} -p '{task}' > /tmp/ccs_out.txt 2>&1"
+     > sleep 30  # or poll until session exits
+     > cat /tmp/ccs_out.txt
+     > ```
+     > Gemini and Qwen are called directly and do not need this workaround.
    - **Orchestration**:
      - Use `gemini -p` or `qwen` based on the selected pattern.
      - Capture output and pipe to the next agent as needed.
