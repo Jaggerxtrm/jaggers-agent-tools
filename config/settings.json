@@ -26,6 +26,19 @@
   "skillSuggestions": {
     "enabled": true
   },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.claude/skills/documenting/scripts/drift_detector.py\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "pyright-lsp@claude-plugins-official": true,
     "serena@claude-plugins-official": true,
