@@ -26,7 +26,7 @@ from pathlib import Path
 BOOTSTRAP_DIR = Path(__file__).parent.parent.parent / "creating-service-skills" / "scripts"
 sys.path.insert(0, str(BOOTSTRAP_DIR))
 
-from bootstrap import list_services, RootResolutionError
+from bootstrap import RootResolutionError, list_services  # noqa: E402
 
 
 def generate_catalog() -> str:

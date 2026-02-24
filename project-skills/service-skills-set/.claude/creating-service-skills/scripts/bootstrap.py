@@ -11,25 +11,28 @@ Skills location:   .claude/skills/<service-id>/
 
 import json
 import os
-import subprocess
+import subprocess  # nosec B404
 import sys
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 
 class BootstrapError(Exception):
     """Base exception for bootstrap operations."""
+
     pass
 
 
 class RootResolutionError(BootstrapError):
     """Raised when project root cannot be determined."""
+
     pass
 
 
 class RegistryError(BootstrapError):
     """Raised when registry operations fail."""
+
     pass
 
 
@@ -44,12 +47,12 @@ def get_project_root() -> str:
         RootResolutionError: If git command fails or returns invalid path
     """
     try:
-        result = subprocess.run(
-            ['git', 'rev-parse', '--show-toplevel'],
+        result = subprocess.run(  # nosec B603 B607
+            ["git", "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
             check=True,
-            timeout=5
+            timeout=5,
         )
         root = result.stdout.strip()
 
@@ -64,14 +67,14 @@ def get_project_root() -> str:
     except subprocess.CalledProcessError as e:
         raise RootResolutionError(
             f"Git root resolution failed: {e.stderr.strip() if e.stderr else str(e)}"
-        )
-    except subprocess.TimeoutExpired:
-        raise RootResolutionError("Git command timed out")
-    except FileNotFoundError:
-        raise RootResolutionError("Git not found in PATH")
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise RootResolutionError("Git command timed out") from e
+    except FileNotFoundError as e:
+        raise RootResolutionError("Git not found in PATH") from e
 
 
-def get_skills_root(project_root: Optional[str] = None) -> Path:
+def get_skills_root(project_root: str | None = None) -> Path:
     """
     Get the .claude/skills/ directory path.
 
@@ -83,10 +86,10 @@ def get_skills_root(project_root: Optional[str] = None) -> Path:
     """
     if project_root is None:
         project_root = get_project_root()
-    return Path(project_root) / '.claude' / 'skills'
+    return Path(project_root) / ".claude" / "skills"
 
 
-def get_registry_path(project_root: Optional[str] = None) -> Path:
+def get_registry_path(project_root: str | None = None) -> Path:
     """
     Get the service-registry.json path.
 
@@ -96,10 +99,10 @@ def get_registry_path(project_root: Optional[str] = None) -> Path:
     Returns:
         Path to .claude/skills/service-registry.json
     """
-    return get_skills_root(project_root) / 'service-registry.json'
+    return get_skills_root(project_root) / "service-registry.json"
 
 
-def load_registry(project_root: Optional[str] = None) -> Dict[str, Any]:
+def load_registry(project_root: str | None = None) -> dict[str, Any]:
     """
     Load the service registry.
 
@@ -118,15 +121,15 @@ def load_registry(project_root: Optional[str] = None) -> Dict[str, Any]:
         return {"version": "1.0", "services": {}}
 
     try:
-        with open(registry_path, 'r', encoding='utf-8') as f:
+        with open(registry_path, encoding="utf-8") as f:
             return json.load(f)
     except json.JSONDecodeError as e:
-        raise RegistryError(f"Invalid JSON in registry: {e}")
-    except IOError as e:
-        raise RegistryError(f"Cannot read registry: {e}")
+        raise RegistryError(f"Invalid JSON in registry: {e}") from e
+    except OSError as e:
+        raise RegistryError(f"Cannot read registry: {e}") from e
 
 
-def save_registry(data: Dict[str, Any], project_root: Optional[str] = None) -> None:
+def save_registry(data: dict[str, Any], project_root: str | None = None) -> None:
     """
     Save the service registry.
 
@@ -143,19 +146,19 @@ def save_registry(data: Dict[str, Any], project_root: Optional[str] = None) -> N
     skills_root.mkdir(parents=True, exist_ok=True)
 
     try:
-        with open(registry_path, 'w', encoding='utf-8') as f:
+        with open(registry_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-    except IOError as e:
-        raise RegistryError(f"Cannot write registry: {e}")
+    except OSError as e:
+        raise RegistryError(f"Cannot write registry: {e}") from e
 
 
 def register_service(
     service_id: str,
     name: str,
-    territory: List[str],
+    territory: list[str],
     skill_path: str,
     description: str = "",
-    project_root: Optional[str] = None
+    project_root: str | None = None,
 ) -> None:
     """
     Register a new service in the registry.
@@ -181,13 +184,13 @@ def register_service(
         "territory": territory,
         "skill_path": skill_path,
         "description": description,
-        "last_sync": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        "last_sync": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
     save_registry(registry, project_root)
 
 
-def unregister_service(service_id: str, project_root: Optional[str] = None) -> bool:
+def unregister_service(service_id: str, project_root: str | None = None) -> bool:
     """
     Remove a service from the registry.
 
@@ -208,7 +211,7 @@ def unregister_service(service_id: str, project_root: Optional[str] = None) -> b
     return True
 
 
-def get_service(service_id: str, project_root: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def get_service(service_id: str, project_root: str | None = None) -> dict[str, Any] | None:
     """
     Get a service by ID.
 
@@ -223,7 +226,7 @@ def get_service(service_id: str, project_root: Optional[str] = None) -> Optional
     return registry.get("services", {}).get(service_id)
 
 
-def list_services(project_root: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+def list_services(project_root: str | None = None) -> dict[str, dict[str, Any]]:
     """
     List all registered services.
 
@@ -237,7 +240,7 @@ def list_services(project_root: Optional[str] = None) -> Dict[str, Dict[str, Any
     return registry.get("services", {})
 
 
-def find_service_for_path(file_path: str, project_root: Optional[str] = None) -> Optional[str]:
+def find_service_for_path(file_path: str, project_root: str | None = None) -> str | None:
     """
     Find which service (if any) owns a given file path.
 
@@ -274,8 +277,8 @@ def find_service_for_path(file_path: str, project_root: Optional[str] = None) ->
                 if glob_match == test_path:
                     return service_id
             # Prefix match for directory patterns
-            base = pattern.replace('/**/*', '').replace('/**', '').rstrip('/')
-            if str(file_path).startswith(base + '/') or str(file_path) == base:
+            base = pattern.replace("/**/*", "").replace("/**", "").rstrip("/")
+            if str(file_path).startswith(base + "/") or str(file_path) == base:
                 return service_id
 
     return None

@@ -17,20 +17,20 @@ Subcommands:
 
 import json
 import sys
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 
 # Bootstrap lives in creating-service-skills — shared utility
 BOOTSTRAP_DIR = Path(__file__).parent.parent.parent / "creating-service-skills" / "scripts"
 sys.path.insert(0, str(BOOTSTRAP_DIR))
 
-from bootstrap import (
-    get_project_root,
-    load_registry,
-    find_service_for_path,
-    get_service,
-    save_registry,
+from bootstrap import (  # noqa: E402
     RootResolutionError,
+    find_service_for_path,
+    get_project_root,
+    get_service,
+    load_registry,
+    save_registry,
 )
 
 
@@ -156,16 +156,16 @@ def scan_drift(project_root: str | None = None) -> list[dict]:
             for fp in root.glob(pattern):
                 if fp.is_file():
                     try:
-                        mtime = datetime.fromtimestamp(
-                            fp.stat().st_mtime, tz=timezone.utc
-                        )
+                        mtime = datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc)
                         if mtime > sync_time:
-                            drifted.append({
-                                "service_id": service_id,
-                                "service_name": service.get("name", service_id),
-                                "file_path": str(fp.relative_to(root)),
-                                "last_sync": last_sync_str,
-                            })
+                            drifted.append(
+                                {
+                                    "service_id": service_id,
+                                    "service_name": service.get("name", service_id),
+                                    "file_path": str(fp.relative_to(root)),
+                                    "last_sync": last_sync_str,
+                                }
+                            )
                     except (OSError, ValueError):
                         continue
 
@@ -206,8 +206,10 @@ def main() -> None:
         if drifted:
             print(f"Found {len(drifted)} drifted service(s):")
             for item in drifted:
-                print(f"  {item['service_id']}: {item['file_path']} "
-                      f"(last sync: {item['last_sync']})")
+                print(
+                    f"  {item['service_id']}: {item['file_path']} "
+                    f"(last sync: {item['last_sync']})"
+                )
         else:
             print("No drift detected.")
 

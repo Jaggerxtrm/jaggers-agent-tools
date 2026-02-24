@@ -82,6 +82,8 @@ source code. Use **Serena LSP tools exclusively** — never read entire files.
 | Data flow (who calls what) | `find_referencing_symbols(name_path, relative_path)` |
 | Entry point detection | `search_for_pattern('if __name__|def main|async def main')` |
 | Docker port mapping | `search_for_pattern("ports:|DB_PORT|POSTGRES_PORT")` |
+| **Actual table names** | `execute_db_query("SELECT tablename FROM pg_tables WHERE schemaname='public'")` |
+| **Actual column names** | `execute_db_query("SELECT column_name, data_type FROM information_schema.columns WHERE table_name='X'")` |
 
 **Do NOT read entire files.** Map first → read only the symbols you need.
 
@@ -94,9 +96,11 @@ source code. Use **Serena LSP tools exclusively** — never read entire files.
 - Service type: daemon / one-shot / cron?
 - Restart policy and `depends_on:` conditions
 
-**Data Layer**
+**Data Layer** — verify ALL of these against the live DB before writing any scripts:
+- Run `SELECT tablename FROM pg_tables WHERE schemaname='public'` → get exact table list
+- For each output table: run `SELECT column_name, data_type FROM information_schema.columns WHERE table_name='<table>'` → get exact column names
+- Confirm which tables have a timestamp column and which do not (use `COUNT(*)` freshness check for tables with no timestamp)
 - Which tables does it WRITE vs. only READ?
-- Timestamp column for each output table
 - Realistic stale threshold per table (in minutes)
 - Redis/S3/file state usage
 - SQL parameterization: flag any f-string SQL
@@ -118,6 +122,35 @@ source code. Use **Serena LSP tools exclusively** — never read entire files.
 
 After research is complete, replace ALL `[PENDING RESEARCH]` stubs in `scripts/`.
 Each script must be fully implemented — no TODOs, no placeholder SQL.
+
+#### Mandatory DB Connection Pattern (all scripts that touch the DB)
+
+```python
+from dotenv import load_dotenv
+from pathlib import Path
+import sys
+
+project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+env_file = project_root / ".env"
+if env_file.exists():
+    load_dotenv(str(env_file))
+
+sys.path.insert(0, str(project_root))
+from shared.db_pool_manager import execute_db_query
+```
+
+Never use raw `psycopg2` or hardcoded credentials. Always use `execute_db_query` from
+`shared.db_pool_manager`. The `.env` load is mandatory — scripts without it will fail
+when the environment is clean.
+
+#### Script Integrity Rules
+
+1. **Schema first** — query `information_schema` before writing any SQL. Never guess table or column names.
+2. **Every `try` has an `except`** — incomplete try/except blocks crash silently. Every DB call must be wrapped with a matching except that captures the error into the result.
+3. **Function names match call sites** — after renaming any function, search for all call sites and update them.
+4. **`qwen -y` for delegation** — when delegating Phase 2 to Qwen, always pass the `-y` flag (YOLO/non-interactive mode) otherwise Qwen will research but never write files.
+5. **No `ccs gemini`** — Gemini is invoked as `gemini -p "..."` directly; GLM is `env -u CLAUDECODE ccs glm -p "..."`; Qwen is `qwen -y "..."`.
+6. **`venv/bin/python3` for testing** — diagnostic scripts must be tested with the project venv, not system python, which may lack `dotenv` and other deps.
 
 #### `scripts/health_probe.py`
 
@@ -173,6 +206,66 @@ Required features:
 | `scheduled_poller` | `auth_checker.py` | Token file present + not expired |
 
 See [references/script_quality_standards.md](references/script_quality_standards.md) for complete templates.
+
+#### `scripts/Makefile` (required — always present)
+
+The scaffolder creates a stub `Makefile` in Phase 1. In Phase 2 you **must verify it is
+correct and complete** — it is the primary entry point users and agents use to run diagnostics.
+
+**Standard template** (copy verbatim, replace `<service-id>` comment only):
+
+```makefile
+# Skill diagnostic scripts for <service-id>
+# Usage: make <target>   (from this directory)
+# Override python: make health PYTHON=/path/to/python3
+
+# Auto-detect: prefer project venv (4 levels up), fall back to system python3
+_VENV := $(wildcard ../../../../venv/bin/python3)
+PYTHON ?= $(if $(_VENV),../../../../venv/bin/python3,python3)
+
+.PHONY: health health-json data data-json logs errors db help
+
+help:
+	@echo "Available targets:"
+	@echo "  health      - Run health probe (human readable)"
+	@echo "  health-json - Run health probe (JSON output)"
+	@echo "  data        - Show latest DB records"
+	@echo "  data-json   - Show latest DB records (JSON, limit 5)"
+	@echo "  logs        - Tail and analyze recent logs"
+	@echo "  errors      - Show errors/criticals only"
+	@echo "  db          - Run DB helper example queries"
+	@echo ""
+	@echo "Python: $(PYTHON)"
+
+health:
+	$(PYTHON) health_probe.py
+
+health-json:
+	$(PYTHON) health_probe.py --json
+
+data:
+	$(PYTHON) data_explorer.py
+
+data-json:
+	$(PYTHON) data_explorer.py --json --limit 5
+
+logs:
+	$(PYTHON) log_hunter.py --tail 50
+
+errors:
+	$(PYTHON) log_hunter.py --errors-only --tail 50
+
+db:
+	$(PYTHON) db_helper.py
+```
+
+**Rules for the delegated Phase 2 agent:**
+
+1. **Do not remove or rename the standard targets** — they form the stable interface.
+2. **Add service-specific targets** below the standard block if the service needs them (e.g. `make auth`, `make schema`, `make backfill`).
+3. **The `_VENV` auto-detect path (`../../../../venv/bin/python3`) is fixed** — it resolves from `scripts/` → service dir → `skills/` → `.claude/` → project root → `venv/`. Do not change the depth.
+4. **Recipe lines use a real tab character**, not spaces. Makefile syntax requires this.
+5. **Verify with `make help`** after writing — the Python path shown must resolve to the project venv, not system python.
 
 ---
 
@@ -256,15 +349,28 @@ instead of ad-hoc queries.
 
 A skill is **complete** (not a draft) when ALL of these are true:
 
+**Schema verification (before writing any script):**
+- [ ] `SELECT tablename FROM pg_tables WHERE schemaname='public'` run — real table names confirmed
+- [ ] `SELECT column_name, data_type FROM information_schema.columns WHERE table_name='X'` run per output table
+- [ ] Tables with no timestamp column identified — `COUNT(*)` used for freshness check instead
+
+**Script completeness:**
 - [ ] No `[PENDING RESEARCH]` markers remain in SKILL.md
 - [ ] Service type classified and documented
-- [ ] `health_probe.py`: real container check + actual table freshness + fix commands
+- [ ] All scripts use mandatory DB connection pattern (`dotenv` + `shared.db_pool_manager`)
+- [ ] `health_probe.py`: real container check + actual table freshness + fix commands; every `try` has `except`
 - [ ] `log_hunter.py`: patterns sourced from codebase, not invented; severity bucketed
-- [ ] `data_explorer.py`: real table + parameterized SQL + correct external port
+- [ ] `data_explorer.py`: real table + real column names + parameterized SQL
+- [ ] `db_helper.py`: example queries against real tables with correct column names
 - [ ] At least one specialist script for the service type
+- [ ] All function names consistent between definition and call sites
 - [ ] Troubleshooting table has ≥5 rows from real failure modes
 - [ ] All docker compose commands verified against actual config
 - [ ] All scripts support `--json` flag
+- [ ] `scripts/Makefile` generated with standard targets: `health`, `health-json`, `data`, `data-json`, `logs`, `errors`, `db`
+- [ ] Scripts tested with `venv/bin/python3` (not system python3) — 0 import errors
+
+**Registration:**
 - [ ] `references/deep_dive.md` Phase 2 checklist completed
 - [ ] Official docs links in References section verified
 - [ ] Service registered in `.claude/skills/service-registry.json`

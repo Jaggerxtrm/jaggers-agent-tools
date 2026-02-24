@@ -17,41 +17,40 @@ from pathlib import Path
 script_dir = Path(__file__).parent
 sys.path.insert(0, str(script_dir))
 
-from bootstrap import get_project_root, RootResolutionError
 
 # ---------------------------------------------------------------------------
 # Service type classification
 # ---------------------------------------------------------------------------
 SERVICE_TYPES: dict[str, dict] = {
     "continuous_db_writer": {
-        "patterns":  ["insert", "update", "upsert", "execute", "copy_records"],
+        "patterns": ["insert", "update", "upsert", "execute", "copy_records"],
         "indicators": ["timescaledb", "postgres", "asyncpg", "psycopg", "sqlalchemy"],
-        "script":    "data_explorer.py",
-        "health":    "table_freshness + row_count",
+        "script": "data_explorer.py",
+        "health": "table_freshness + row_count",
     },
     "http_api_server": {
-        "patterns":  ["route", "endpoint", "handler", "router", "@app.get", "@app.post"],
+        "patterns": ["route", "endpoint", "handler", "router", "@app.get", "@app.post"],
         "indicators": ["fastapi", "flask", "express", "aiohttp", "uvicorn"],
-        "script":    "endpoint_tester.py",
-        "health":    "http_probe (real routes, not just /health)",
+        "script": "endpoint_tester.py",
+        "health": "http_probe (real routes, not just /health)",
     },
     "one_shot_migration": {
-        "patterns":  ["migrate", "alembic", "upgrade", "seed", "backfill", "--init"],
+        "patterns": ["migrate", "alembic", "upgrade", "seed", "backfill", "--init"],
         "indicators": ["alembic", "prisma migrate", "flyway"],
-        "script":    "coverage_checker.py",
-        "health":    "exit_code + expected schema presence",
+        "script": "coverage_checker.py",
+        "health": "exit_code + expected schema presence",
     },
     "file_watcher": {
-        "patterns":  ["inotify", "watchdog", "watch", "chokidar", "fsevents"],
+        "patterns": ["inotify", "watchdog", "watch", "chokidar", "fsevents"],
         "indicators": ["inotify", "watchdog", "notify"],
-        "script":    "state_inspector.py",
-        "health":    "mount_path_accessible + state_file_present + db_recency",
+        "script": "state_inspector.py",
+        "health": "mount_path_accessible + state_file_present + db_recency",
     },
     "scheduled_poller": {
-        "patterns":  ["schedule", "interval", "cron", "sleep", "asyncio.sleep"],
+        "patterns": ["schedule", "interval", "cron", "sleep", "asyncio.sleep"],
         "indicators": ["apscheduler", "celery", "rq", "dramatiq"],
-        "script":    "service_specific.py",
-        "health":    "token_presence + last_run_recency",
+        "script": "service_specific.py",
+        "health": "token_presence + last_run_recency",
     },
 }
 
@@ -83,7 +82,7 @@ def classify_service(directory: Path) -> dict:
                 for ind in cfg["indicators"]:
                     if ind in content:
                         scores[stype] = scores.get(stype, 0) + 1
-        except (IOError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError):
             continue
 
     if not scores:
@@ -110,7 +109,8 @@ def print_deep_dive_questions(service_type: str) -> None:
 
     The agent answers every question using Serena LSP tools — NOT raw file reads.
     """
-    print(f"""
+    print(
+        f"""
 === Phase 2 Deep Dive: {service_type} ===
 
 IMPORTANT — Use Serena LSP tools for all code exploration:
@@ -166,10 +166,12 @@ SECTION 2: Data Layer
 10. Are all SQL queries parameterized?
     → search_for_pattern("f\\".*SELECT|f'.*INSERT|%s|\\$1|bindparams")
     → Flag any f-string SQL as a security issue.
-""")
+"""
+    )
 
     if service_type == "continuous_db_writer":
-        print("""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        print(
+            """━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 3 (continuous_db_writer): Write Patterns
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 11. Is it bulk INSERT or row-by-row?
@@ -178,10 +180,12 @@ SECTION 3 (continuous_db_writer): Write Patterns
     → search_for_pattern("ON CONFLICT|upsert|INSERT OR REPLACE")
 13. Expected row growth rate (rows/hour)?
     → Estimate from sleep intervals × data volume.
-""")
+"""
+        )
 
     elif service_type == "http_api_server":
-        print("""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        print(
+            """━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 3 (http_api_server): API Endpoints
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 11. List ALL real routes (not just /health).
@@ -190,10 +194,12 @@ SECTION 3 (http_api_server): API Endpoints
     → search_for_pattern("Depends|require_auth|Authorization|Bearer")
 13. Expected response times per endpoint?
     → Check for timeouts, DB queries, external calls in each handler.
-""")
+"""
+        )
 
     elif service_type == "file_watcher":
-        print("""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        print(
+            """━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 3 (file_watcher): File Monitoring
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 11. What mount paths does it monitor?
@@ -202,9 +208,11 @@ SECTION 3 (file_watcher): File Monitoring
     → search_for_pattern("state_file|checkpoint|last_processed|cursor")
 13. What happens when the mount becomes unavailable?
     → search_for_pattern("except.*OSError|mount.*error|inotify.*limit")
-""")
+"""
+        )
 
-    print("""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    print(
+        """━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 4: Failure Modes (required ≥5 rows)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 For each failure mode, find the exact fix command.
@@ -245,12 +253,13 @@ Now replace ALL [PENDING RESEARCH] stubs in scripts/:
 
   scripts/<specialist>.py  (based on service type: {service_type})
     - See references/script_quality_standards.md for the template
-""")
+"""
+    )
 
 
 def generate_protected_regions() -> str:
     """Template for protected regions that preserve manual refinements during auto-updates."""
-    return '''
+    return """
 ## Protected Regions
 
 <!-- SEMANTIC_START -->
@@ -260,7 +269,7 @@ Add deep operational knowledge here after Phase 2.
 This section is preserved during auto-updates.
 
 <!-- SEMANTIC_END -->
-'''
+"""
 
 
 def main() -> None:

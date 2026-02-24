@@ -11,15 +11,15 @@ Configured in .claude/settings.json PreToolUse hook.
 Must be fast: pure file I/O + string matching, no subprocess.
 """
 
+import fnmatch
 import json
 import sys
 from pathlib import Path
-import fnmatch
 
 BOOTSTRAP_DIR = Path(__file__).parent.parent.parent / "creating-service-skills" / "scripts"
 sys.path.insert(0, str(BOOTSTRAP_DIR))
 
-from bootstrap import load_registry, get_project_root, RootResolutionError
+from bootstrap import RootResolutionError, get_project_root, load_registry  # noqa: E402
 
 
 def match_territory(file_path: str, territory: list[str], project_root: Path) -> bool:
@@ -40,8 +40,10 @@ def match_territory(file_path: str, territory: list[str], project_root: Path) ->
             parts = pattern.split("**/")
             if len(parts) == 2:
                 prefix, suffix = parts
-                rel_check = rel[len(prefix):] if rel.startswith(prefix) else rel
-                if fnmatch.fnmatch(rel_check, suffix) or fnmatch.fnmatch(rel, f"{prefix}*/{suffix}"):
+                rel_check = rel[len(prefix) :] if rel.startswith(prefix) else rel
+                if fnmatch.fnmatch(rel_check, suffix) or fnmatch.fnmatch(
+                    rel, f"{prefix}*/{suffix}"
+                ):
                     return True
                 # Also check if file is anywhere under the prefix dir
                 if prefix and rel.startswith(prefix.rstrip("/")):
@@ -57,7 +59,9 @@ def match_territory(file_path: str, territory: list[str], project_root: Path) ->
     return False
 
 
-def find_service_for_file(file_path: str, services: dict, project_root: Path) -> tuple[str, dict] | None:
+def find_service_for_file(
+    file_path: str, services: dict, project_root: Path
+) -> tuple[str, dict] | None:
     """Return (service_id, service_data) if file is in any territory, else None."""
     for service_id, data in services.items():
         if match_territory(file_path, data.get("territory", []), project_root):
@@ -73,15 +77,13 @@ def find_service_for_command(command: str, services: dict) -> tuple[str, dict] |
         if service_id in cmd_lower:
             return service_id, data
         # Match the container name pattern (service name with dashes/underscores)
-        name = data.get("name", "").lower().replace(" ", "-")
-        if name and name in cmd_lower:
+        if data.get("name") and data.get("name", "").lower().replace(" ", "-") in cmd_lower:
             return service_id, data
     return None
 
 
 def build_context(service_id: str, data: dict) -> str:
     skill_path = data.get("skill_path", f".claude/skills/{service_id}/SKILL.md")
-    name = data.get("name", service_id)
     desc = data.get("description", "")
     desc_line = f"\n  What it covers: {desc}" if desc else ""
 
@@ -102,7 +104,7 @@ def main() -> None:
     except (json.JSONDecodeError, EOFError):
         sys.exit(0)
 
-    tool_name  = data.get("tool_name", "")
+    tool_name = data.get("tool_name", "")
     tool_input = data.get("tool_input", {})
 
     try:
