@@ -23,7 +23,7 @@ const config = new Conf({
     },
 });
 
-function getCandidatePaths(): Array<{ label: string; path: string }> {
+export function getCandidatePaths(): Array<{ label: string; path: string }> {
     const home = os.homedir();
     const appData = process.env.APPDATA;
     const isWindows = process.platform === 'win32';

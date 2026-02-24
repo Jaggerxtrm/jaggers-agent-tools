@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import kleur from 'kleur';
-import { getContext } from '../core/context.js';
+import { getCandidatePaths } from '../core/context.js';
 import { calculateDiff } from '../core/diff.js';
 import { findRepoRoot } from '../utils/repo-root.js';
 import { getManifestPath } from '../core/manifest.js';
@@ -29,8 +29,15 @@ export function createStatusCommand(): Command {
             const { json } = opts;
 
             const repoRoot = await findRepoRoot();
-            const ctx = await getContext();
-            const { targets } = ctx;
+            const candidates = getCandidatePaths();
+            const targets: string[] = [];
+            for (const c of candidates) {
+                if (await fs.pathExists(c.path)) targets.push(c.path);
+            }
+            if (targets.length === 0) {
+                console.log(kleur.yellow('\n  No agent environments found (~/.claude, ~/.gemini, ~/.qwen)\n'));
+                return;
+            }
 
             // Collect data for all targets
             interface TargetStatus {
