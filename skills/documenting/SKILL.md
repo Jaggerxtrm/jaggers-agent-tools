@@ -1,10 +1,10 @@
 ---
 name: documenting
 description: >-
-  Maintain Single Source of Truth (SSOT) documentation. Create, update, and
-  validate project memories/documentation. Agent MUST suggest this skill when
-  users ask to "document" or "update ssot", OR automatically when a
-  feature/fix is verified and ready for documentation.
+  Maintain SSOT documentation with drift detection. Runs drift_detector.py scan
+  on invoke to identify stale memories. Creates/updates Serena memories with
+  auto-generated INDEX blocks. MUST be suggested after any feature, refactor,
+  or architecture change is verified complete.
 gemini-command: document
 gemini-prompt: |
   1. Identify the task: Create new memory, Update existing, or Validate compliance.
@@ -53,63 +53,59 @@ const shouldDocument =
 
 **🚨 MANDATORY FIRST STEP FOR ALL WORKFLOWS:**
 
-Before using ANY Serena tools (`write_memory`, `read_memory`, `search_for_pattern`, etc.) or symbolic operations, you MUST activate the project:
+Before using ANY Serena tools, activate the project:
 
 ```javascript
 mcp__plugin_serena_serena__activate_project({ project: "/path/to/current/working/directory" })
 ```
 
-**Why this is critical**: Without project activation, Serena cannot access memories or locate files, causing operations to fail or loop indefinitely. This step establishes the working context.
-
 ---
 
-### 1. Creating a New Memory
-
-To create a new documentation file:
-
-1. **Choose a Category**:
-   - `ssot`: For system components (Single Source of Truth)
-   - `pattern`: For reusable design patterns
-   - `plan`: For implementation plans
-   - `reference`: For cheat sheets and API docs
-
-2. **Generate Template**:
-   Use the `generate_template.py` script to create a file with the correct boilerplate.
-
-   ```bash
-   # Example: Create a new SSOT
-   python3 scripts/generate_template.py ssot analytics_newcomponent_ssot.md \
-     title="New Component SSOT" domain="analytics"
-   ```
-
-3. **Fill Content**:
-   Edit the generated markdown file to add your content.
-
-### 2. Updating an Existing Memory
-
-When modifying an existing memory:
-
-1. **Edit Content**: Make your changes to the markdown body.
-2. **Bump Version**: Use the `bump_version.sh` helper to determine the next version.
-
-   ```bash
-   # Check current version
-   grep "version:" my_file.md
-
-   # Calculate next version
-   bash scripts/bump_version.sh 1.0.0 patch
-   ```
-
-3. **Update Frontmatter**:
-   - Update `version` field
-   - Update `updated` timestamp
-   - Add entry to `changelog`
-
-### 3. Validating Compliance
-
-Ensure your files meet the standards:
+### Step 1: Detect drift
 
 ```bash
-# Validate a specific file
-python3 scripts/validate_metadata.py my_file_ssot.md
+python3 "$HOME/.claude/skills/documenting/scripts/drift_detector.py" scan
 ```
+
+Review the output. If nothing is stale and no explicit documentation request was made → confirm to user and stop.
+
+### Step 2: Decide action
+
+| Situation | Action |
+|---|---|
+| New feature shipped | Create new SSOT memory OR update existing |
+| Refactor / architecture change | Update relevant SSOT, bump minor version |
+| Bug fix only | CHANGELOG entry only (skip memory update unless behaviour changed) |
+| SKILL.md drift flagged | Update skill + run `validate_metadata.py` on it |
+
+### Step 3: Create or update memory
+
+**Creating a new memory:**
+```bash
+python3 "$HOME/.claude/skills/documenting/scripts/generate_template.py" \
+  ssot <name>_ssot.md title="..." domain="..." subcategory="..."
+```
+Fill `[PENDING]` placeholders. Add `tracks:` globs pointing to the files this memory documents.
+
+**Updating an existing memory:**
+1. Read the `<!-- INDEX -->` block only — identify which sections need updating
+2. Use `search_for_pattern` to jump directly to stale sections (avoids reading the full file)
+3. Bump `version:` (patch = content fix, minor = new section, major = full rewrite)
+4. Update `updated:` timestamp to today
+
+### Step 4: Regenerate INDEX
+
+```bash
+python3 "$HOME/.claude/skills/documenting/scripts/validate_metadata.py" <memory-file>
+```
+
+This regenerates the `<!-- INDEX -->` block automatically from the current `##` headings.
+
+### Step 5: Update CHANGELOG
+
+```bash
+python3 "$HOME/.claude/skills/documenting/scripts/changelog/add_entry.py" \
+  <version> <type> "<summary>"
+```
+
+Types: `Added`, `Changed`, `Fixed`, `Removed`.
