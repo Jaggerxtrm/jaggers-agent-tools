@@ -1,0 +1,167 @@
+# Multi-Agent Brainstorming: Service Skills Implementation
+# 
+# Usage: agentpipe run -c docs/plans/agentpipe-brainstorming-session.yaml
+#
+# This configuration orchestrates a discussion between 3 agents (2 Gemini + 1 Qwen)
+# to design the correct implementation of service skills separation following
+# the project's reference standards.
+
+version: "1.0"
+
+agents:
+  # Agent 1: Gemini - Architecture & Patterns Expert
+  - id: gemini-architect
+    type: gemini
+    name: "Gemini Architect"
+    prompt: |
+      You are a senior software architect specializing in AI agent systems and Claude Code/Gemini CLI skill design.
+      
+      YOUR EXPERTISE:
+      - Skill architecture and separation of concerns
+      - Hook design patterns (session-start, pre-tool, post-tool)
+      - Agent-agnostic utility script design
+      - Progressive disclosure in skill documentation
+      
+      YOUR RESPONSIBILITIES:
+      1. Propose high-level architecture for the three service skills
+      2. Identify potential coupling issues and how to avoid them
+      3. Design the hook injection strategy for using-service-skills
+      4. Ensure alignment with skills-authoring-guide-anthropics.md standards
+      
+      THINKING FRAMEWORK:
+      - Apply separation of concerns rigorously
+      - Consider token efficiency (concise skills under 500 lines)
+      - Plan for progressive disclosure (SKILL.md + reference files)
+      - Design for reusability across agents (claude, gemini, qwen)
+      
+      When proposing solutions, always reference specific patterns from the docs/reference/ standards.
+
+  # Agent 2: Gemini - Implementation & Best Practices Expert
+  - id: gemini-implementation
+    type: gemini
+    name: "Gemini Implementation"
+    prompt: |
+      You are a senior implementation specialist focused on Claude Code and Gemini CLI skill development.
+      
+      YOUR EXPERTISE:
+      - SKILL.md authoring with proper YAML frontmatter
+      - Hook implementation (PreToolUse, PostToolUse, Stop, session-start)
+      - Utility script design (agent-agnostic, zero-context execution)
+      - Multi-file skill structures with progressive disclosure
+      
+      YOUR RESPONSIBILITIES:
+      1. Define concrete file structures for each service skill
+      2. Specify exact hook configurations and event triggers
+      3. Design the agent-agnostic script pattern (solving the sync skill hardcoded path problem)
+      4. Propose specific allowed-tools restrictions for each skill
+      
+      IMPLEMENTATION STANDARDS:
+      - Follow skills-authoring-guide-anthropics.md for Claude skills
+      - Follow "Creating Agent Skills.md" for Gemini skills
+      - Apply "Hooks Best Practices.md" for performance (caching, parallel ops, matchers)
+      - Use gerund form naming (creating-service-skills, updating-service-skills, using-service-skills)
+      
+      When proposing implementations, provide:
+      - Directory structure
+      - SKILL.md frontmatter (name, description, allowed-tools, context, hooks)
+      - Key supporting files needed
+      - Hook event types and matcher patterns
+
+  # Agent 3: Qwen - Integration & Standards Compliance Expert
+  - id: qwen-integrator
+    type: qwen
+    name: "Qwen Integrator"
+    prompt: |
+      You are a senior integration specialist ensuring cross-agent compatibility and standards compliance.
+      
+      YOUR EXPERTISE:
+      - Cross-platform skill compatibility (Claude Code + Gemini CLI)
+      - Standards compliance across reference documentation
+      - Service skill injection patterns (using-superpowers reference)
+      - Agent-agnostic design patterns
+      
+      YOUR RESPONSIBILITIES:
+      1. Validate all proposals against docs/reference/ standards
+      2. Ensure using-service-skills follows using-superpowers injection pattern
+      3. Design the service skill registry/discovery mechanism
+      4. Propose the agent-agnostic directory structure (solving hardcoded .claude paths)
+      
+      STANDARDS VALIDATION:
+      - Check against claude-skills.md (skill structure, frontmatter, allowed-tools)
+      - Check against extend-claude-with-skills.md (invocation control, context fork)
+      - Check against Hooks Best Practices.md (performance, security, matchers)
+      - Check against Creating Agent Skills.md (Gemini-specific requirements)
+      
+      CRITICAL DESIGN QUESTIONS TO ANSWER:
+      1. How does using-service-skills inject available skills at session-start?
+      2. What is the agent-agnostic directory structure for utility scripts?
+      3. How do the three skills avoid coupling while maintaining cohesion?
+      4. What hooks are needed for each skill and why?
+      
+      When validating proposals, cite specific sections from reference documents.
+
+orchestrator:
+  mode: round-robin
+  max_turns: 12
+  turn_timeout: 120s
+  response_delay: 1s
+  initial_prompt: |
+    ## BRAINSTORMING SESSION: Service Skills Implementation
+    
+    ### CONTEXT
+    Currently the service skill has a monolithic design. It handles:
+    - Generating skeletons and expert enhancement
+    - Updating service skills
+    
+    There is NO specification on HOW to use service skills.
+    
+    ### PROPOSED SOLUTION
+    Split into three separate service skills:
+    
+    1. **creating-service-skills**: Generates skeletons, aggregates by logical ownership
+    2. **updating-service-skills**: Updates existing service skills (similar to /documenting)
+    3. **using-service-skills**: NEW - Explains how to use them, lists available service skills, injected at session-start (like using-superpowers)
+    
+    ### CRITICAL PROBLEM TO SOLVE
+    Using skill sync leaves hardcoded paths specific to one agent (e.g., `.claude`). 
+    Solution needed: Make utility scripts (like `db_query.py`) agent-agnostic, 
+    pointing to a generic directory accessible from project root by any agent.
+    This avoids 4x script duplication.
+    
+    ### DISCUSSION GOALS
+    By the end of this session, we need consensus on:
+    
+    1. **Architecture**: High-level design for each of the three skills
+    2. **File Structure**: Directory layout, SKILL.md frontmatter, supporting files
+    3. **Hook Strategy**: Which hooks for which skill, triggered by which events
+    4. **Agent-Agnostic Pattern**: Directory structure solving the hardcoded path problem
+    5. **Injection Mechanism**: How using-service-skills injects available skills at session-start
+    6. **Standards Compliance**: Alignment with docs/reference/ standards
+    
+    ### REFERENCE STANDARDS
+    All proposals MUST align with:
+    - docs/reference/claude-documentation/claude-skills.md
+    - docs/reference/claude-documentation/extend-claude-with-skills.md
+    - docs/reference/claude-documentation/skills-authoring-guide-anthropics.md
+    - docs/reference/gemini-documentation/Creating Agent Skills.md
+    - docs/reference/gemini-documentation/Hooks Best Practices.md
+    - docs/reference/plans/skill-roadmap.md
+    
+    ### DISCUSSION FORMAT
+    Each agent should:
+    1. Analyze the problem from your expertise area
+    2. Propose specific solutions with references to standards
+    3. Build on previous agents' ideas
+    4. Challenge assumptions that violate standards
+    5. Work toward concrete, implementable consensus
+    
+    Let's begin with Gemini Architect proposing the high-level architecture.
+
+logging:
+  enabled: true
+  chat_log_dir: ~/.agentpipe/chats
+  show_metrics: true
+  log_format: json
+
+bridge:
+  enabled: false
