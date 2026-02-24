@@ -5,6 +5,33 @@ All notable changes to Claude Code skills and configuration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-02-24
+
+### Added
+
+#### Documenting Skill Hardening
+- **`drift_detector.py`**: New script with `scan`, `check`, and `hook` subcommands — detects stale memories by cross-referencing `tracks:` globs against git-modified files
+- **`tracks:` frontmatter field**: Each memory now declares which file globs it documents; added to schema, all templates, and all 11 existing memories
+- **Intra-memory INDEX blocks**: `validate_metadata.py` now auto-generates a `<!-- INDEX -->` TOC table inside each memory from `##` headings + first-sentence summaries — allows agents to navigate without reading full documents
+- **Stop hook**: `config/settings.json` wired with Stop hook → `drift_detector.py hook`; fires at session end, injects a one-line reminder only when stale memories detected (zero token cost when clean)
+- **23 tests**: `test_validate_metadata.py` (4) and `test_drift_detector.py` (8, including `**` glob regression tests) added to existing suite
+
+### Changed
+- **`validate_metadata.py`**: INDEX generation now unconditional (no longer blocked by schema validation errors)
+- **`SKILL.md` workflow**: Rewritten with drift-first 5-step protocol and decision table (new feature → SSOT, bug fix → changelog only, etc.)
+- **All 11 existing memories**: `tracks:` globs added; INDEX blocks regenerated
+
+### Fixed
+- `extract_headings`: closing ` ``` ` was captured as section summary due to `in_code` toggle firing before capture check — fixed with `continue`
+- `match_files_to_tracks`: `**/` expansion was producing `*.py` (too broad); replaced with recursive segment-by-segment `_match_glob` helper
+- `inject_index`: frontmatter split hardened with anchored regex to prevent corruption on non-standard file openings
+- `generate_index_table`: anchor generation collapsed consecutive hyphens from stripped `()/` chars
+
+### Documentation
+- Updated SSOT: `ssot_jaggers-agent-tools_documenting_workflow_2026-02-03` → v2.0.0
+
+---
+
 ## [1.4.0] - 2026-02-23
 
 ### Changed
