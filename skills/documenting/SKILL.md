@@ -105,7 +105,9 @@ This regenerates the `<!-- INDEX -->` block automatically from the current `##` 
 
 ```bash
 python3 "$HOME/.claude/skills/documenting/scripts/changelog/add_entry.py" \
-  <version> <type> "<summary>"
+  <changelog_file> <type> "<summary>"
 ```
+
+> `<changelog_file>`: path to target CHANGELOG.md (e.g. `CHANGELOG.md` or `.serena/memories/CHANGELOG.md`)
 
 Types: `Added`, `Changed`, `Fixed`, `Removed`.
