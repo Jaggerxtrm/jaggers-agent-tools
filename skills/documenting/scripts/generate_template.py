@@ -181,6 +181,7 @@ scope: {scope}
 category: plan
 subcategory: {subcategory}
 status: draft
+tracks: []
 changelog:
   - 0.1.0 ({date}): Initial plan creation.
 tracks: []

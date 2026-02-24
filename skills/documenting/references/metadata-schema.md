@@ -46,12 +46,18 @@ domain: [tag1, tag2]
 | `version` | semver | **Required** | Pattern version |
 | `updated` | timestamp | **Required** | ISO8601 timestamp |
 | `domain` | array | **Required** | Tags for applicability |
+| `tracks` | array | Optional | Glob patterns for files this memory documents. Used by drift_detector.py. |
 
 #### Plan (`plan_`)
 | Field | Type | Requirement | Description |
 |-------|------|-------------|-------------|
 | `status` | enum | **Required** | draft, in-progress, completed, abandoned |
 | `plan_ref` | string | Optional | ID of related ticket/issue |
+| `tracks` | array | Optional | Glob patterns for files this memory documents. Used by drift_detector.py. |
+
+#### Reference (`reference_`)
+
+No required category-specific fields beyond the common required fields. The `tracks` field is also available as an optional field (glob patterns for files this memory documents, used by drift_detector.py).
 
 #### Archive (`archive_`)
 | Field | Type | Requirement | Description |
