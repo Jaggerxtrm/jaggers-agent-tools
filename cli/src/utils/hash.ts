@@ -29,7 +29,7 @@ export async function getNewestMtime(targetPath: string): Promise<number> {
     if (!(await fs.pathExists(targetPath))) return 0;
 
     const stats = await fs.stat(targetPath);
-    let maxTime = stats.mtimeMs;
+    let maxTime = 0;
 
     if (stats.isDirectory()) {
         const children = await fs.readdir(targetPath);

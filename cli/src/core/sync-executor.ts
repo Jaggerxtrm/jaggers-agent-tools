@@ -106,7 +106,6 @@ export async function executeSync(
                     const agent = detectAgent(systemRoot);
                     if (agent) {
                         console.log(kleur.gray(`  (Skipped: ${agent} uses ${agent} mcp CLI for MCP servers)`));
-                        count++;
                         continue;
                     }
 
@@ -247,8 +246,11 @@ export async function executeSync(
     } catch (error: any) {
         console.error(kleur.red(`\nSync failed, rolling back ${backups.length} changes...`));
         for (const backup of backups) {
-            await restoreBackup(backup);
-            await cleanupBackup(backup);
+            try {
+                await restoreBackup(backup);
+            } finally {
+                await cleanupBackup(backup);
+            }
         }
         throw error;
     }

@@ -46,6 +46,6 @@ export type ManifestItem = z.infer<typeof ManifestItemSchema>;
 export const ManifestSchema = z.object({
     version: z.string().optional().default('1'),
     lastSync: z.string(),
-    items: z.record(z.string(), ManifestItemSchema).optional().default({}),
+    items: z.number().optional().default(0),
 });
 export type Manifest = z.infer<typeof ManifestSchema>;

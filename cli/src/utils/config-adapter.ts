@@ -75,7 +75,9 @@ export class ConfigAdapter {
 
         this.targetFormat = this.isCursor ? 'cursor' :
             this.isAntigravity ? 'antigravity' :
-                (this.isClaude ? 'claude' : 'claude');
+                this.isClaude ? 'claude' :
+                    this.isGemini ? 'gemini' :
+                        this.isQwen ? 'qwen' : 'claude';
 
         this.hooksDir = path.join(this.systemRoot, 'hooks');
     }

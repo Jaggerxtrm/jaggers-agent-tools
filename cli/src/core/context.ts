@@ -48,7 +48,7 @@ export async function getContext(): Promise<Context> {
 
     for (const c of candidates) {
         const exists = await fs.pathExists(c.path);
-        const icon = exists ? '[X]' : '[ ]';
+        const icon = exists ? kleur.green('●') : kleur.gray('○');
         const desc = exists ? 'Found' : 'Not found (will create)';
 
         choices.push({
@@ -68,8 +68,12 @@ export async function getContext(): Promise<Context> {
         instructions: false,
     });
 
-    if (!response.targets || response.targets.length === 0) {
-        console.log(kleur.gray('No targets selected. Exiting.'));
+    if (response.targets === undefined) {
+        console.log(kleur.gray('\nCancelled.'));
+        process.exit(130);
+    }
+    if (response.targets.length === 0) {
+        console.log(kleur.gray('No targets selected.'));
         process.exit(0);
     }
 

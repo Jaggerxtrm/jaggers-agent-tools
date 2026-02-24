@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'fs-extra';
 // @ts-ignore
 import { parse, stringify } from 'comment-json';
@@ -101,7 +102,7 @@ export async function atomicWrite(filePath: string, data: any, options: AtomicWr
         backupSuffix = '.bak'
     } = options;
 
-    const tempFilePath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).substr(2, 9)}`;
+    const tempFilePath = `${filePath}.tmp.${randomUUID()}`;
 
     try {
         let content: string;

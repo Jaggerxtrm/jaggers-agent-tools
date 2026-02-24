@@ -117,19 +117,16 @@ function parseMcpListOutput(output: string, pattern: RegExp): string[] {
 function resolveEnvVar(value: string): string {
     if (typeof value !== 'string') return value;
 
-    const envMatch = value.match(/\$\{([A-Z0-9_]+)\}/i);
-    if (envMatch) {
-        const envName = envMatch[1];
-        const envValue = process.env[envName];
+    return value.replace(/\$\{([A-Z0-9_]+)\}/g, (_match, envName) => {
+        const upperName = envName.toUpperCase();
+        const envValue = process.env[upperName];
         if (envValue) {
             return envValue;
         } else {
-            console.warn(kleur.yellow(`  ⚠️  Environment variable ${envName} is not set in ${getEnvFilePath()}`));
+            console.warn(kleur.yellow(`  ⚠️  Environment variable ${upperName} is not set in ${getEnvFilePath()}`));
             return '';
         }
-    }
-
-    return value;
+    });
 }
 
 export function detectAgent(systemRoot: string): AgentName | null {
@@ -191,7 +188,7 @@ function executeCommand(agent: AgentName, args: string[], dryRun: boolean = fals
     }
 
     try {
-        execSync(command, { stdio: 'pipe' });
+        execSync(command, { stdio: 'pipe', timeout: 10000 });
         console.log(kleur.green(`  ✓ ${args.slice(2).join(' ')}`));
         return { success: true };
     } catch (error: any) {
@@ -295,7 +292,8 @@ export async function syncMcpServersWithCli(
     // Only warn about missing env vars when we are actually about to add servers
     const missingEnvVars = checkRequiredEnvVars();
     if (missingEnvVars.length > 0) {
-        handleMissingEnvVars(missingEnvVars);
+        const shouldProceed = handleMissingEnvVars(missingEnvVars);
+        if (!shouldProceed) return;
     }
 
     let successCount = 0;
@@ -303,7 +301,7 @@ export async function syncMcpServersWithCli(
         const cmd = buildAddCommand(agent, name, server as any);
         if (cmd) {
             const result = executeCommand(agent, cmd, dryRun);
-            if (result.success) {
+            if (result.success && !result.skipped) {
                 successCount++;
                 console.log(kleur.green(`  + ${name}`));
             }

@@ -26,7 +26,7 @@ export function createStatusCommand(): Command {
     return new Command('status')
         .description('Show diff between repo and target environments (read-only)')
         .action(async () => {
-            const loadingSpinner = ora('Loading status…').start();
+            const loadingSpinner = ora('Checking environments…').start();
             
             const repoRoot = await findRepoRoot();
             const ctx = await getContext();
@@ -43,7 +43,7 @@ export function createStatusCommand(): Command {
                     if (await fs.pathExists(manifestPath)) {
                         const manifest = await fs.readJson(manifestPath);
                         if (manifest.lastSync) {
-                            console.log(kleur.gray(`  Last synced: ${formatRelativeTime(manifest.lastSync)}`));
+                            console.log(kleur.gray(`  Last synced: ${formatRelativeTime(new Date(manifest.lastSync).getTime())}`));
                         }
                         // Count items from manifest
                         const itemCounts: string[] = [];
@@ -88,15 +88,6 @@ export function createStatusCommand(): Command {
                     console.log(kleur.yellow(`\n  ⚠ Pending changes: ${totalChanges}`));
                 }
             }
-
-            // Show hint if there are any changes
-            const anyChanges = targets.some(async (target) => {
-                const repoRoot = await findRepoRoot();
-                const changeSet = await calculateDiff(repoRoot, target);
-                return Object.values(changeSet).some((cat: any) => 
-                    cat.missing.length > 0 || cat.outdated.length > 0 || cat.drifted.length > 0
-                );
-            });
 
             console.log(kleur.gray('\n💡 Run `jaggers-config sync` to apply changes\n'));
         });
