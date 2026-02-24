@@ -44,8 +44,10 @@ def generate_index_table(headings: list) -> str:
     rows = ["| Section | Summary |", "|---|---|"]
     for heading, summary in headings:
         anchor = heading.lower()
-        for ch in " /()":
-            anchor = anchor.replace(ch, "-" if ch == " " else "")
+        for ch in "/()":
+            anchor = anchor.replace(ch, "")
+        anchor = re.sub(r"[\s_]+", "-", anchor)
+        anchor = re.sub(r"-+", "-", anchor)
         anchor = anchor.strip("-")
         rows.append(f"| [{heading}](#{anchor}) | {summary or '_no summary_'} |")
     return "\n".join(rows) + "\n"
@@ -63,9 +65,9 @@ def inject_index(content: str, table: str) -> str:
         return content[:existing.start()] + block + content[existing.end():]
 
     # Insert after second --- (end of frontmatter)
-    parts = content.split("---\n", 2)
-    if len(parts) >= 3:
-        return parts[0] + "---\n" + parts[1] + "---\n\n" + block + "\n" + parts[2]
+    fm_match = re.match(r"^(---\n.*?\n---\n)(.*)", content, re.DOTALL)
+    if fm_match:
+        return fm_match.group(1) + "\n" + block + "\n" + fm_match.group(2)
 
     return block + "\n" + content
 
