@@ -28,6 +28,8 @@ def extract_headings(content: str) -> list:
                 l = lines[j].strip()
                 if l.startswith("```"):
                     in_code = not in_code
+                    j += 1
+                    continue
                 if not in_code and l and not l.startswith("#") and not l.startswith("|") and not l.startswith("-"):
                     # Take up to first period, strip trailing period
                     sentence = l.split(".")[0].strip()
@@ -195,15 +197,14 @@ def validate_metadata(filepath):
 
     print_results(errors, warnings)
 
-    # Regenerate INDEX block when validation passes
-    if len(errors) == 0:
-        headings = extract_headings(content)
-        if headings:
-            table = generate_index_table(headings)
-            new_content = inject_index(content, table)
-            if new_content != content:
-                path.write_text(new_content, encoding="utf-8")
-                print("  ✏️  INDEX regenerated.")
+    # Regenerate INDEX block unconditionally (navigation aid, independent of schema validity)
+    headings = extract_headings(content)
+    if headings:
+        table = generate_index_table(headings)
+        new_content = inject_index(content, table)
+        if new_content != content:
+            path.write_text(new_content, encoding="utf-8")
+            print("  ✏️  INDEX regenerated.")
 
     return len(errors) == 0
 
