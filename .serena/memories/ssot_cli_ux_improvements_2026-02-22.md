@@ -1,6 +1,6 @@
 ---
 title: CLI UX Improvements — Vsyc-Inspired Enhancements
-version: 1.1.0
+version: 2.0.0
 updated: 2026-02-25
 domain: cli
 tracks:
@@ -9,6 +9,9 @@ tracks:
 type: ssot
 tags: [cli, ux, sync, status, error-handling, spinners]
 changelog:
+  - version: 2.0.0
+    date: 2026-02-25
+    description: Unified 3-phase sync flow (improvement 11). Preflight runs all checks in parallel. Single prompts multiselect replaces per-target confirm. add-optional deprecated. Drifted/optionals pre-unchecked. Optional server auto-install moved into sync Phase 3.
   - version: 1.1.0
     date: 2026-02-25
     description: add-optional.ts enhanced with prerequisite install spinner and post-install guidance banner (improvement 10)
@@ -416,9 +419,14 @@ const items = (await fs.readdir(repoPath)).filter(i => !IGNORED_ITEMS.has(i));
 |------|---------|
 | `cli/src/core/diff.ts` | Added `PruneModeReadError`, `IGNORED_ITEMS`, prune mode param |
 | `cli/src/utils/repo-root.ts` | New utility for dynamic repo root detection |
-| `cli/src/commands/sync.ts` | Spinners, single confirm, dry-run positioning, drifted feedback |
+| `cli/src/commands/sync.ts` | **v2**: full 3-phase rewrite (preflight → multiselect → execute) |
 | `cli/src/commands/status.ts` | Enhanced output with timestamps, counts, health |
+| `cli/src/commands/add-optional.ts` | **deprecated** — prints redirect to `jaggers-config sync` |
 | `cli/src/core/manifest.ts` | Added `getManifestPath()` helper |
+| `cli/src/core/preflight.ts` | **new** — parallel preflight checks, PreflightPlan types |
+| `cli/src/core/interactive-plan.ts` | **new** — prompts multiselect, SelectedPlan types |
+| `cli/src/core/sync-executor.ts` | Removed inline optional prompt; added `selectedMcpServers?` param |
+| `cli/src/utils/sync-mcp-cli.ts` | Exported `getCurrentServers`, `AgentName` |
 | `cli/src/index.ts` | Global error handlers |
 | `cli/package.json` | Added `ora` dependency |
 
@@ -467,6 +475,49 @@ jaggers-config sync --dry-run  # ✓ Single prompt, proper banner positioning
 
        npx gitnexus analyze
 ```
+
+---
+
+### 11. Unified 3-Phase Sync Flow
+
+**Problem:** The sync flow had multiple UX pain points:
+- Optional server prompts appeared mid-flow, once per target
+- No upfront visibility into what will change across all targets
+- `add-optional` was a separate command users had to discover
+- Drifted items were silently skipped with no opt-in choice
+
+**Solution:** Rewrote `sync.ts` with a 3-phase architecture. Merged `add-optional` into main sync.
+
+**Phase 1 — Parallel Preflight:** Single spinner runs all checks concurrently:
+```
+✔ Ready — 27 potential change(s) across 4 target(s)
+```
+
+**Phase 2 — Single Multiselect Plan:** All items presented in one `prompts` multiselect:
+```
+📋 Sync Plan  (space to toggle, a = all, enter to confirm)
+
+  ── .claude files ──
+  ◉ [+] config/settings.json
+  ── .claude MCP servers ──
+  ◉ [+] serena
+  ── optional servers ──
+  ◯ [?] gitnexus ⚠ Requires npm install -g gitnexus
+```
+- `[~]` drifted items default to `◯` (skip recommended)
+- `[?]` optional servers default to `◯` (opt-in)
+- `--yes`/`-y`: auto-applies defaults, no prompt
+- `--dry-run`: displays plan, no changes written
+
+**Phase 3 — Ordered Execution:** prerequisite installs → file sync → MCP sync → post-install messages.
+
+**Files Modified:**
+- `cli/src/core/preflight.ts` — new file
+- `cli/src/core/interactive-plan.ts` — new file
+- `cli/src/core/sync-executor.ts` — removed inline prompt, added `selectedMcpServers?` param
+- `cli/src/commands/sync.ts` — full rewrite
+- `cli/src/commands/add-optional.ts` — deprecated (prints redirect notice)
+- `cli/src/utils/sync-mcp-cli.ts` — exported `getCurrentServers`, `AgentName`
 
 ---
 

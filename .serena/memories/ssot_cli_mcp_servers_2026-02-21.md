@@ -1,6 +1,6 @@
 ---
 title: MCP Servers Configuration and Sync
-version: 3.2.0
+version: 3.2.1
 updated: 2026-02-25
 domain: cli
 tracks:
@@ -9,6 +9,9 @@ tracks:
 type: ssot
 tags: [mcp, config, sync, claude, gemini, qwen, env]
 changelog:
+  - version: 3.2.1
+    date: 2026-02-25
+    description: Optional server selection now part of jaggers-config sync (multiselect Phase 2). add-optional deprecated. getCurrentServers and AgentName exported from sync-mcp-cli.ts.
   - version: 3.2.0
     date: 2026-02-25
     description: Added gitnexus as optional MCP server. Documented install_cmd/post_install_message auto-install metadata pattern.
@@ -73,7 +76,7 @@ The MCP Servers Configuration provides a **canonical source** for MCP server def
 
 ### Optional MCP Servers (`config/mcp_servers_optional.json`)
 
-**User choice** - via `jaggers-config add-optional`. Auto-installs prerequisites when `_notes.install_cmd` is set.
+**User choice** - presented in the `jaggers-config sync` multiselect plan (Phase 2). `add-optional` command is deprecated. Auto-installs prerequisites when `_notes.install_cmd` is set (Phase 3).
 
 | Server | Type | Description | Prerequisites | Auto-Install |
 |--------|------|-------------|---------------|--------------|
@@ -83,10 +86,10 @@ The MCP Servers Configuration provides a **canonical source** for MCP server def
 
 ### Auto-Install Metadata Pattern
 
-Optional servers can define `_notes.install_cmd` and `_notes.post_install_message` in `config/mcp_servers_optional.json`. When a user selects that server via `jaggers-config add-optional`, the CLI:
+Optional servers can define `_notes.install_cmd` and `_notes.post_install_message` in `config/mcp_servers_optional.json`. When a user selects that server in the `jaggers-config sync` multiselect, the CLI (Phase 3):
 1. Runs `install_cmd` with an `ora` spinner
-2. Syncs the MCP server via `claude/gemini/qwen mcp add`
-3. Prints `post_install_message` under a yellow "⚠️ Next Steps Required" banner
+2. Syncs the MCP server via `claude/gemini/qwen mcp add` (through `sync-executor.ts`)
+3. Prints `post_install_message` under a yellow "⚠️ Next Steps Required" banner after all targets are done
 
 **Example** (gitnexus):
 ```json

@@ -1,6 +1,6 @@
 ---
 title: Universal Configuration Hub Architecture
-version: 2.1.0
+version: 2.2.0
 updated: 2026-02-25
 domain: cli
 tracks:
@@ -9,6 +9,9 @@ tracks:
 type: ssot
 tags: [sync, config, mcp, hooks, cursor, gemini, claude]
 changelog:
+  - version: 2.2.0
+    date: 2026-02-25
+    description: Sync engine rewritten as 3-phase unified flow. add-optional deprecated. Optional servers now part of main sync multiselect.
   - version: 2.1.0
     date: 2026-02-25
     description: GitNexus added to optional MCP servers. Optional server list now includes gitnexus with auto-install support.
@@ -53,12 +56,15 @@ The "Compiler" of the hub. It translates canonical configurations into tool-spec
     - `Cursor`: `${env:VAR}`
     - `OpenCode`: `{env:VAR}`
 
-### 3. Sync Engine (`cli/lib/sync.js`)
-The execution layer that performs the physical synchronization.
+### 3. Sync Engine (`cli/src/commands/sync.ts` + `cli/src/core/`)
+The execution layer performs synchronization in 3 phases:
+- **Phase 1 — Preflight** (`core/preflight.ts`): Parallel `Promise.all` checks across all targets. Returns `PreflightPlan` with file diffs, MCP status, and optional servers.
+- **Phase 2 — Interactive Plan** (`core/interactive-plan.ts`): Single `prompts` multiselect. Drifted items and optional servers pre-unchecked. Supports `--dry-run` (display only) and `-y` (auto-apply defaults).
+- **Phase 3 — Execute** (`core/sync-executor.ts`): Ordered: prerequisite installs → file sync → MCP sync → post-install messages.
 - **Atomic Writes**: Uses `atomic-config.js` to ensure configuration files are never corrupted during a crash.
-- **Protected Keys**: Preserves local-only settings (like OAuth tokens or personal preferences) during merges.
-- **Prune Mode**: Automatically removes local skills, hooks, or MCP servers that are no longer present in the repository.
-- **Sync Manifest**: Tracks the history of synchronizations in `.jaggers-sync-manifest.json`.
+- **Protected Keys**: Preserves local-only settings during merges.
+- **Prune Mode**: Removes local skills/hooks/MCP servers not in canonical repo (`--prune` flag).
+- **Sync Manifest**: Tracks synchronization history in `.jaggers-sync-manifest.json`.
 
 ## Supported Targets
 - **Claude Code**: `~/.claude/settings.json`
@@ -69,4 +75,4 @@ The execution layer that performs the physical synchronization.
 ## Workflow: Creating a New Skill
 1. Create skill in `skills/my-skill/SKILL.md`.
 2. (Optional) Define associated hooks in `config/hooks.json`.
-3. Run `node cli/index.js` to deploy to all active tools.
+3. Run `jaggers-config sync` to deploy to all active tools (3-phase: preflight → multiselect plan → execute).

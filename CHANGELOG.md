@@ -209,6 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Universal Hub SSOT**: Updated to v2.0.0, references new MCP Servers SSOT
 - **Metadata**: Added `_notes` fields to MCP configs for documentation and prerequisites
 - **Env File Location**: Moved from repo to `~/.config/jaggers-agent-tools/.env` (centralized)
+- Unified 3-phase sync flow: preflight.ts (parallel checks), interactive-plan.ts (prompts multiselect), sync.ts rewrite. add-optional deprecated. Drifted/optionals pre-unchecked by default.
 
 ### Deprecated
 - **Single MCP Config File**: `config/mcp_servers.json` now core-only, optional servers separated

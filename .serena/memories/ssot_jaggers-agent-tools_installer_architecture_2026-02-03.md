@@ -1,6 +1,6 @@
 ---
 title: "Installer and Sync Architecture"
-version: 1.3.0
+version: 1.4.0
 created: 2026-02-03
 updated: 2026-02-25
 scope: jaggers-config-manager
@@ -21,6 +21,9 @@ changelog:
   - version: 1.1.1
     date: 2026-02-03
     changes: Implemented dynamic path resolution in sync logic to fix hardcoded paths in settings.json.
+  - version: 1.4.0
+    date: 2026-02-25
+    changes: Unified 3-phase sync flow. New core/preflight.ts and core/interactive-plan.ts. sync.ts rewritten to run preflight → multiselect plan → execute. add-optional.ts deprecated (redirects to sync). Optional server auto-install moved into sync phase 3.
   - version: 1.3.0
     date: 2026-02-25
     changes: GitNexus integration. add-optional.ts supports _notes.install_cmd (auto-installs npm packages with ora spinner) and _notes.post_install_message (post-sync guidance banner). Hook and skills now synced via standard pipeline.
@@ -36,7 +39,7 @@ changelog:
 | [Distribution Models](#distribution-models) | The suite is distributed as a self-installing package via `npx` |
 | [Architecture (v1.2.0 — TypeScript)](#architecture-v1.2.0-—-typescript) | The CLI is now a fully typed TypeScript package compiled with `tsup` |
 | [Standards & Best Practices](#standards-&-best-practices) | 1 |
-| [Optional Server Auto-Install Pattern (v1.3.0)](#optional-server-auto-install-pattern-v1.3.0) | `cli/src/commands/add-optional |
+| [3-Phase Unified Sync Flow (v1.4.0)](#3-phase-unified-sync-flow-v1.4.0) | `cli/src/commands/sync |
 | [Related Documentation](#related-documentation) | _no summary_ |
 <!-- END INDEX -->
 
@@ -64,9 +67,10 @@ Used for developing new tools or manual synchronization of a cloned repository.
 The CLI is now a fully typed TypeScript package compiled with `tsup`. Entry: `cli/dist/index.js`.
 
 ### Sub-commands (Commander.js)
-- `jaggers-config sync [--dry-run] [-y] [--prune] [--backport]`
+- `jaggers-config sync [--dry-run] [-y] [--prune] [--backport]` — 3-phase unified sync (see below)
 - `jaggers-config status` — read-only diff
 - `jaggers-config reset` — clear saved preferences
+- `jaggers-config add-optional` — **deprecated**, redirects to `jaggers-config sync`
 
 ### Adapter Pattern (`cli/src/adapters/`)
 - `ToolAdapter` abstract base class
@@ -76,7 +80,9 @@ The CLI is now a fully typed TypeScript package compiled with `tsup`. Entry: `cl
 ### Core Modules (`cli/src/core/`)
 - `context.ts` — environment detection and target selection
 - `diff.ts` — MD5-based changeset calculation (missing/outdated/drifted)
-- `sync-executor.ts` — file copy/symlink with rollback protection
+- `preflight.ts` — **new** parallel `Promise.all` checks across all targets; returns `PreflightPlan` with `TargetPlan[]`, `OptionalServerItem[]`
+- `interactive-plan.ts` — **new** `prompts` multiselect UI; drifted pre-unchecked, optionals pre-unchecked; returns `SelectedPlan | null`
+- `sync-executor.ts` — file copy/symlink with rollback protection; accepts `selectedMcpServers?: string[]` (optional server names pre-selected upstream)
 - `manifest.ts` — `.jaggers-sync-manifest.json` read/write
 - `rollback.ts` — backup/restore for atomic operations
 
@@ -98,19 +104,36 @@ The CLI is now a fully typed TypeScript package compiled with `tsup`. Entry: `cl
 2. **Platform Neutrality**: Uses forward slashes and cross-platform path resolution for Windows/Linux/macOS compatibility.
 3. **Transparency**: Explicitly displays a breakdown of `[+] Missing`, `[^] Outdated`, and `[<] Drifted` items before execution.
 
-## Optional Server Auto-Install Pattern (v1.3.0)
+## 3-Phase Unified Sync Flow (v1.4.0)
 
-`cli/src/commands/add-optional.ts` supports automatic prerequisite installation for optional MCP servers.
+`cli/src/commands/sync.ts` is the single entry point for all sync operations. Optional servers are now part of the main sync flow (not a separate command).
 
-**Metadata fields** (in `config/mcp_servers_optional.json` → `_notes`):
-- `install_cmd`: shell command to run before MCP add (e.g. `npm install -g gitnexus`)
-- `post_install_message`: message printed after sync under a yellow "⚠️ Next Steps Required" banner
+### Phase 1: Preflight (`core/preflight.ts`)
+`runPreflight(repoRoot, prune)` runs all checks in parallel via `Promise.all`:
+- Detects which target dirs exist (`~/.claude`, `~/.gemini`, `~/.qwen`, `~/.gemini/antigravity`)
+- Calculates file diff (missing/outdated/drifted) per target
+- Checks which core MCP servers are installed per agent
+- Loads optional servers not yet installed
+Returns `PreflightPlan` with `syncMode` set to `'prune'` if `--prune` passed, else `'copy'`.
 
-**Flow in `add-optional.ts`:**
-1. User selects server(s) from interactive menu
-2. For each selected server with `install_cmd`: run via `execSync` with `ora` spinner
-3. Run `claude/gemini/qwen mcp add` for each selected server
-4. Print all `post_install_message` values at the end
+### Phase 2: Interactive Plan (`core/interactive-plan.ts`)
+`interactivePlan(plan, { dryRun, yes })` presents a single `prompts` multiselect:
+- `[+]` missing items — pre-checked
+- `[↑]` outdated items — pre-checked
+- `[~]` drifted items — **pre-unchecked** (local edits preserved by default)
+- `[?]` optional servers — **pre-unchecked** (opt-in)
+- `--dry-run`: displays plan without prompting, returns null
+- `--yes`/`-y`: auto-applies defaults without prompting
+
+### Phase 3: Execute (ordered)
+1. **Prerequisite installs**: `execSync(installCmd)` with `ora` spinner for each selected optional server
+2. **File sync**: `executeSync()` per target with partial ChangeSet (only selected items)
+3. **MCP sync**: `syncMcpServersWithCli()` via `executeSync`, merging selected optionals into core config
+4. **Post-install messages**: yellow "⚠️ Next Steps Required" banner
+
+**Metadata fields** in `config/mcp_servers_optional.json → _notes`:
+- `install_cmd`: shell command run before MCP add (e.g. `npm install -g gitnexus`)
+- `post_install_message`: displayed after sync
 
 **Current servers with auto-install:** `gitnexus` (`npm install -g gitnexus`)
 
