@@ -4,7 +4,7 @@ import path from 'path';
 import kleur from 'kleur';
 import { ensureEnvFile, loadEnvFile, checkRequiredEnvVars, handleMissingEnvVars, getEnvFilePath } from './env-manager.js';
 
-type AgentName = 'claude' | 'gemini' | 'qwen';
+export type AgentName = 'claude' | 'gemini' | 'qwen';
 
 interface AgentCLI {
     command: string;
