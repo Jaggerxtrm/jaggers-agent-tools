@@ -231,7 +231,7 @@ function executeCommand(agent: AgentName, args: string[], dryRun: boolean = fals
     }
 }
 
-function getCurrentServers(agent: AgentName): string[] {
+export function getCurrentServers(agent: AgentName): string[] {
     const cli = AGENT_CLI[agent];
     try {
         const output = execSync(`${cli.command} ${cli.listArgs.join(' ')}`, {
