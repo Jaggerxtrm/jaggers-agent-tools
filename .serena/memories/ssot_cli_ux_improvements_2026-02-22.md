@@ -1,7 +1,7 @@
 ---
 title: CLI UX Improvements — Vsyc-Inspired Enhancements
-version: 1.0.0
-updated: 2026-02-22
+version: 1.1.0
+updated: 2026-02-25
 domain: cli
 tracks:
   - "cli/src/commands/**"
@@ -9,6 +9,9 @@ tracks:
 type: ssot
 tags: [cli, ux, sync, status, error-handling, spinners]
 changelog:
+  - version: 1.1.0
+    date: 2026-02-25
+    description: add-optional.ts enhanced with prerequisite install spinner and post-install guidance banner (improvement 10)
   - version: 1.0.0
     date: 2026-02-22
     description: Initial implementation of 9 UX improvements inspired by vsync patterns
@@ -434,6 +437,35 @@ cd cli && npm run typecheck  # ✓ No errors
 jaggers-config --help  # ✓ Clean output
 jaggers-config status  # ✓ Enhanced output with spinners
 jaggers-config sync --dry-run  # ✓ Single prompt, proper banner positioning
+```
+
+---
+
+### 10. Optional Server Prerequisite Install (add-optional.ts)
+
+**Problem:** Selecting an optional MCP server that required a global npm package gave no feedback and could silently fail.
+
+**Solution:** `add-optional.ts` now reads `_notes.install_cmd` from each selected server in `mcp_servers_optional.json`. If present, runs it via `execSync` with an `ora` spinner before MCP sync, then prints `_notes.post_install_message` under a yellow "⚠️ Next Steps Required" banner after all targets are synced.
+
+**Visual Feedback:**
+```
+  Selected: gitnexus
+
+⠸ Installing prerequisite: npm install -g gitnexus
+✔ Installed: npm install -g gitnexus
+
+📂 Target: .claude
+  ✓ gitnexus (added)
+
+✓ Optional MCP servers added successfully
+
+⚠️  Next Steps Required:
+
+[gitnexus]
+  ⚡ GitNexus must be indexed per project!
+     Run inside each project you want to use it with:
+
+       npx gitnexus analyze
 ```
 
 ---

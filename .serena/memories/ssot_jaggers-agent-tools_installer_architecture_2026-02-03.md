@@ -1,8 +1,8 @@
 ---
 title: "Installer and Sync Architecture"
-version: 1.2.0
+version: 1.3.0
 created: 2026-02-03
-updated: 2026-02-21T16:00:00+01:00
+updated: 2026-02-25
 scope: jaggers-config-manager
 category: ssot
 subcategory: installer
@@ -21,6 +21,9 @@ changelog:
   - version: 1.1.1
     date: 2026-02-03
     changes: Implemented dynamic path resolution in sync logic to fix hardcoded paths in settings.json.
+  - version: 1.3.0
+    date: 2026-02-25
+    changes: GitNexus integration. add-optional.ts supports _notes.install_cmd (auto-installs npm packages with ora spinner) and _notes.post_install_message (post-sync guidance banner). Hook and skills now synced via standard pipeline.
   - version: 1.2.0
     date: 2026-02-21
     changes: Full TypeScript migration. Commander.js sub-commands (sync/status/reset). Adapter pattern. Rollback protection. Zod schemas. Windows compatibility baked in.
@@ -33,6 +36,7 @@ changelog:
 | [Distribution Models](#distribution-models) | The suite is distributed as a self-installing package via `npx` |
 | [Architecture (v1.2.0 — TypeScript)](#architecture-v1.2.0-—-typescript) | The CLI is now a fully typed TypeScript package compiled with `tsup` |
 | [Standards & Best Practices](#standards-&-best-practices) | 1 |
+| [Optional Server Auto-Install Pattern (v1.3.0)](#optional-server-auto-install-pattern-v1.3.0) | `cli/src/commands/add-optional |
 | [Related Documentation](#related-documentation) | _no summary_ |
 <!-- END INDEX -->
 
@@ -94,7 +98,24 @@ The CLI is now a fully typed TypeScript package compiled with `tsup`. Entry: `cl
 2. **Platform Neutrality**: Uses forward slashes and cross-platform path resolution for Windows/Linux/macOS compatibility.
 3. **Transparency**: Explicitly displays a breakdown of `[+] Missing`, `[^] Outdated`, and `[<] Drifted` items before execution.
 
+## Optional Server Auto-Install Pattern (v1.3.0)
+
+`cli/src/commands/add-optional.ts` supports automatic prerequisite installation for optional MCP servers.
+
+**Metadata fields** (in `config/mcp_servers_optional.json` → `_notes`):
+- `install_cmd`: shell command to run before MCP add (e.g. `npm install -g gitnexus`)
+- `post_install_message`: message printed after sync under a yellow "⚠️ Next Steps Required" banner
+
+**Flow in `add-optional.ts`:**
+1. User selects server(s) from interactive menu
+2. For each selected server with `install_cmd`: run via `execSync` with `ora` spinner
+3. Run `claude/gemini/qwen mcp add` for each selected server
+4. Print all `post_install_message` values at the end
+
+**Current servers with auto-install:** `gitnexus` (`npm install -g gitnexus`)
+
 ## Related Documentation
 
 - `ssot_jaggers-agent-tools_documenting_workflow_2026-02-03.md` - Documentation standards.
 - `ssot_jaggers-agent-tools_orchestrating_agents_2026-02-03.md` - Orchestration skill architecture.
+- `ssot_cli_mcp_servers_2026-02-21.md` - MCP servers configuration and sync.

@@ -199,6 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enhanced `EnvVarTransformer` for cross-agent compatibility
 - **Documentation**: New comprehensive guide `docs/mcp-servers-config.md`
 - **README Update**: Added MCP Servers configuration section with links to documentation
+- GitNexus system integration into CLI installer: optional MCP server (gitnexus) with auto npm install, PreToolUse hook (hooks/gitnexus/gitnexus-hook.cjs), and 4 knowledge-graph skills synced via standard pipeline
 
 ### Changed
 - **MCP Configuration Cleanup**: Removed unused servers from canonical source

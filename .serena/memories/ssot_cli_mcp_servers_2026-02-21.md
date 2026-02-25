@@ -1,7 +1,7 @@
 ---
 title: MCP Servers Configuration and Sync
-version: 3.1.0
-updated: 2026-02-21
+version: 3.2.0
+updated: 2026-02-25
 domain: cli
 tracks:
   - "config/mcp_servers*.json"
@@ -9,6 +9,9 @@ tracks:
 type: ssot
 tags: [mcp, config, sync, claude, gemini, qwen, env]
 changelog:
+  - version: 3.2.0
+    date: 2026-02-25
+    description: Added gitnexus as optional MCP server. Documented install_cmd/post_install_message auto-install metadata pattern.
   - version: 3.1.0
     date: 2026-02-21
     description: Added centralized env file management at ~/.config/jaggers-agent-tools/.env. CLI auto-creates and validates required env vars.
@@ -70,12 +73,28 @@ The MCP Servers Configuration provides a **canonical source** for MCP server def
 
 ### Optional MCP Servers (`config/mcp_servers_optional.json`)
 
-**User choice** - prompted during sync (not yet implemented):
+**User choice** - via `jaggers-config add-optional`. Auto-installs prerequisites when `_notes.install_cmd` is set.
 
-| Server | Type | Description | Prerequisites | Repository |
-|--------|------|-------------|---------------|------------|
-| `unitAI` | stdio | Multi-agent workflow orchestration | `npx` (Node.js) | https://github.com/Jaggerxtrm/unitAI |
-| `omni-search-engine` | sse | Local search engine | Running service on port 8765 | https://github.com/Jaggerxtrm/omni-search-engine |
+| Server | Type | Description | Prerequisites | Auto-Install |
+|--------|------|-------------|---------------|--------------|
+| `unitAI` | stdio | Multi-agent workflow orchestration | `npx` (Node.js) | No |
+| `omni-search-engine` | sse | Local search engine | Running service on port 8765 | No |
+| `gitnexus` | stdio | Codebase knowledge graph (call chains, blast radius, semantic search) | `npm install -g gitnexus` | **Yes** — runs automatically on selection |
+
+### Auto-Install Metadata Pattern
+
+Optional servers can define `_notes.install_cmd` and `_notes.post_install_message` in `config/mcp_servers_optional.json`. When a user selects that server via `jaggers-config add-optional`, the CLI:
+1. Runs `install_cmd` with an `ora` spinner
+2. Syncs the MCP server via `claude/gemini/qwen mcp add`
+3. Prints `post_install_message` under a yellow "⚠️ Next Steps Required" banner
+
+**Example** (gitnexus):
+```json
+"_notes": {
+  "install_cmd": "npm install -g gitnexus",
+  "post_install_message": "⚡ Run 'npx gitnexus analyze' inside each project to index it"
+}
+```
 
 ---
 
