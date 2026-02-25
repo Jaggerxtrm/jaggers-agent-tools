@@ -2,7 +2,7 @@
 
 **Date**: 2026-02-25
 **Status**: Approved
-**Version**: 1.0.0
+**Version**: 1.1.0
 
 ## 1. Identity & Core Concept
 
@@ -19,22 +19,26 @@
 +---------------------------------------------------+
 |                  AGENT FORGE                        |
 |                                                     |
-|  Orchestrator (TS/Bun)                             |
-|  +- Agent Registry  (who exists, how to start)     |
-|  +- Session Store   (who is running, state)         |
-|  +- Protocol Engine  (workflow turn definitions)    |
-|  +- Message Bus      (tmux pipe + file log)         |
-|                                                     |
-|  Execution Layer (tmux)                             |
-|  +- af_claude   (boss pane)                         |
-|  +- af_gemini   (worker pane)                       |
-|  +- af_qwen     (worker pane)                       |
-|  +- af_glm      (worker pane)                       |
-|                                                     |
-|  UI Layer (optional)                                |
+|  LAYER 4: UI (optional)                             |
 |  +- TUI Dashboard  (Ink)                            |
 |  +- CLI commands   (headless)                       |
+|  +- Registry Browser (specialists/protocols/etc.)   |
 |  +- tmux status-bar (always-on indicator)           |
+|                                                     |
+|  LAYER 3: Orchestration                             |
+|  +- Protocol Engine  (workflow turn definitions)    |
+|  +- Routing Engine   (pattern -> agent/protocol)    |
+|  +- Message Bus      (tmux pipe + file log)         |
+|                                                     |
+|  LAYER 2: Execution                                 |
+|  +- Session Store    (who is running, state)        |
+|  +- tmux Manager     (session CRUD, capture, send)  |
+|  +- af_claude, af_gemini, af_qwen, af_glm          |
+|                                                     |
+|  LAYER 1: Identity & Knowledge                      |
+|  +- Agent Profiles   (Body: how to start/resume)    |
+|  +- Specialist Defs  (Brain: .specialist.yaml)      |
+|  +- Agent Registry   (profile + specialist loader)  |
 +---------------------------------------------------+
 ```
 
@@ -45,6 +49,7 @@
 3. **Declarative protocols**: Workflows (collaborative, adversarial, etc.) are defined in YAML, not hardcoded.
 4. **Agent-agnostic**: A profile YAML defines how to start/resume/kill any agent.
 5. **Resilience**: If the forge process dies, agents continue in tmux. `forge attach` reconnects.
+6. **Brain + Body**: Profiles define the Body (how to run an agent), Specialists define the Brain (what an agent knows). Both are YAML, both are composable.
 
 ---
 
@@ -191,6 +196,7 @@ created -> booting -> ready -> working -> idle -> (working -> idle)* -> complete
 CREATE TABLE sessions (
   id            TEXT PRIMARY KEY,      -- uuid
   agent_id      TEXT NOT NULL,         -- "claude", "gemini", etc.
+  specialist_id TEXT,                  -- "mercury-db-health" (null if no specialist)
   role          TEXT NOT NULL,         -- "boss", "worker"
   tmux_session  TEXT NOT NULL,         -- "af_claude_abc123"
   status        TEXT NOT NULL,         -- lifecycle state
@@ -657,6 +663,7 @@ agent-forge
 +-- init                    # Initialize project (.agent-forge/, profiles/)
 +-- start [--boss <agent>]  # Start boss session (default: claude)
 +-- spawn <agent> [prompt]  # Start worker agent with optional task
+|   +-- --specialist <name> # Load specialist brain (system prompt, config)
 +-- send <agent> <message>  # Send message to agent (wait-for-ready)
 +-- read <agent> [--tail N] # Read agent output (pane or log)
 +-- status [agent]          # Status of all/one
@@ -682,6 +689,17 @@ agent-forge
 |   +-- list
 |   +-- show <name>
 |   +-- validate <file>
+|
++-- specialist              # Specialist management
+|   +-- list [--scope sys|user|project]  # List available specialists
+|   +-- show <name>         # Show specialist details (frontmatter + prompt preview)
+|   +-- create [--from-skill <name>]     # Create new specialist (interactive or from skill)
+|   +-- validate <file>     # Validate .specialist.yaml schema
+|   +-- check-health        # Run staleness detection on all specialists
+|
++-- registry                # Unified view of all resources
+|   +-- list                # List all profiles, protocols, specialists, skills
+|   +-- search <query>      # Search across all resources by name/description
 |
 +-- tui                     # Launch TUI dashboard
 |
@@ -715,6 +733,36 @@ agent-forge profile test gemini                # verify gemini works
 agent-forge profile add --name cursor \
   --start "cursor-agent" \
   --prompt-flag "--ask"
+```
+
+### Specialist-Driven Examples
+
+```bash
+# Spawn with specialist brain — agent gets domain-specific system prompt
+agent-forge spawn gemini --specialist mercury-db-health "Check connection pools"
+
+# List available specialists grouped by scope
+agent-forge specialist list
+# SYSTEM (built-in)
+#   code-reviewer       "General-purpose code review specialist"
+# USER (~/.agent-forge/specialists/)
+#   doc-writer          "Technical documentation specialist"
+# PROJECT (.agent-forge/specialists/)
+#   mercury-db-health   "Monitors Mercury PostgreSQL health"
+#   mercury-ingestion   "Monitors ingestion pipeline health"
+
+# Run protocol with specialist-equipped agents
+agent-forge run adversarial \
+  --agents attacker=gemini,defender=qwen \
+  --specialist:attacker=security-auditor \
+  --specialist:defender=mercury-api-guard \
+  --task "Review payment endpoint" \
+  --context "$(cat src/api/payment.ts)"
+
+# Check specialist staleness (files_to_watch changed since last update)
+agent-forge specialist check-health
+# mercury-db-health: OK (updated 3d ago)
+# mercury-ingestion: STALE (database/models.py changed 2d after specialist update)
 ```
 
 ### Integration with Claude (the boss)
@@ -762,18 +810,53 @@ The TUI is a "view" on the state — not the main process. Launched with `agent-
 | | 14:26 claude->qwen      | |                               | |
 | |   "Validate fixes..."   | | Elapsed: 4m 23s               | |
 | +-------------------------+ +-------------------------------+ |
-| [F1]Help [F2]Fleet [F3]Send [F4]Protocol [F5]Logs [q]Quit    |
-+---------------------------------------------------------------+
+| [F1]Help [F2]Fleet [F3]Send [F4]Protocol [F5]Logs [F6]Registry [q]Quit |
++------------------------------------------------------------------------+
 ```
+
+### Registry Panel (F6)
+
+```
++- Registry [F6] ─────────────────────────────────────────+
+| SPECIALISTS                    | DETAILS                 |
+|   system (2)                   | mercury-db-health v1.2  |
+|     code-reviewer              | "Monitors Mercury       |
+|     security-auditor           |  PostgreSQL health..."  |
+|   user (1)                     |                         |
+|     doc-writer                 | Profile: gemini         |
+|   project (3)                  | Model: gemini-2.0-flash |
+|   > mercury-db-health          | Stale: NO (3d ago)      |
+|     mercury-ingestion          | Watches: models.py      |
+|     mercury-api-guard          |                         |
+| PROTOCOLS (4)                  | [s] spawn with this     |
+|   collaborative                | [e] edit yaml           |
+|   adversarial                  | [v] view full yaml      |
+|   troubleshoot                 | [c] check health        |
+|   handshake                    |                         |
+| PROFILES (4)                   |                         |
+|   claude, gemini, qwen, glm   |                         |
+| SKILLS (read-only, detected)   |                         |
+|   delegating, orchestrating... |                         |
++-────────────────────────────────────────────────────────+
+```
+
+The Registry panel discovers and displays all resources from three scopes:
+- **System**: Built-in, shipped with agent-forge
+- **User**: `~/.agent-forge/{specialists,protocols,profiles}/`
+- **Project**: `.agent-forge/{specialists,protocols,profiles}/`
+- **Skills** (read-only): Detected from `~/.claude/skills/` and `.claude/skills/`
+
+Each resource shows its frontmatter metadata (name, version, description, category).
 
 ### Panels
 
 | Panel | Content | Update mechanism |
 |-------|---------|------------------|
-| **Fleet** | Agent list with status, duration, role | Poll every 2-5s (detection patterns) |
+| **Fleet** | Agent list with status, duration, role, specialist | Poll every 2-5s (detection patterns) |
 | **Active Agent** | Output tail of selected agent | tmux capture-pane streaming |
 | **Messages** | Inter-agent message log | SQLite messages table |
 | **Protocol** | Running protocol state (completed/in-progress turns) | Orchestrator state |
+| **Registry** | All specialists, protocols, profiles, skills with details | File scan on open + manual refresh |
 
 ### Keybindings
 
@@ -788,6 +871,7 @@ The TUI is a "view" on the state — not the main process. Launched with `agent-
 | `l` | Open log file in `$PAGER` |
 | `t` | Toggle: switch to direct tmux pane (Ctrl+B to return) |
 | `F5` | Full-screen log view |
+| `F6` | Toggle Registry panel (browse specialists/protocols/profiles/skills) |
 | `q` | Quit TUI (agents continue in background) |
 
 ### tmux Pass-Through
@@ -832,6 +916,7 @@ agent-forge/
 |   |   +-- message-bus.ts          # Inter-agent messaging
 |   |   +-- registry.ts             # Agent profile registry
 |   |   +-- protocol-engine.ts      # YAML protocol executor
+|   |   +-- specialist-loader.ts    # .specialist.yaml discovery, validation, rendering
 |   |
 |   +-- tmux/
 |   |   +-- manager.ts              # tmux session CRUD
@@ -846,6 +931,7 @@ agent-forge/
 |   |   |   +-- agent-view.tsx
 |   |   |   +-- messages-panel.tsx
 |   |   |   +-- protocol-panel.tsx
+|   |   |   +-- registry-panel.tsx  # Browse specialists/protocols/profiles/skills
 |   |   |   +-- status-bar.tsx
 |   |   +-- hooks/
 |   |       +-- use-sessions.ts
@@ -857,6 +943,7 @@ agent-forge/
 |       +-- session.ts
 |       +-- protocol.ts
 |       +-- message.ts
+|       +-- specialist.ts
 |
 +-- profiles/                       # Built-in agent profiles
 |   +-- claude.yaml
@@ -869,6 +956,10 @@ agent-forge/
 |   +-- adversarial.yaml
 |   +-- troubleshoot.yaml
 |   +-- handshake.yaml
+|
++-- specialists/                    # Built-in specialist definitions
+|   +-- code-reviewer.specialist.yaml
+|   +-- security-auditor.specialist.yaml
 |
 +-- tests/
 |   +-- core/
@@ -898,18 +989,20 @@ bun install -g agent-forge
 ### Configuration Files
 
 ```
-~/.agent-forge/                 # Global
+~/.agent-forge/                 # Global (user scope)
 +-- config.yaml                 # Global config
 +-- profiles/                   # User custom profiles
 +-- protocols/                  # User custom protocols
++-- specialists/                # User custom specialists (*.specialist.yaml)
 +-- state.db                    # SQLite
 +-- logs/
     +-- <session-id>-<agent>.log
 
-.agent-forge/                   # Per-project overrides (optional)
+.agent-forge/                   # Per-project overrides (project scope)
 +-- config.yaml
 +-- profiles/
 +-- protocols/
++-- specialists/                # Project-specific specialists (*.specialist.yaml)
 ```
 
 ### Key Dependencies
@@ -949,12 +1042,20 @@ v0.3.0 -- TUI
   tmux pass-through (t key)
   Status bar tmux integration
 
-v0.4.0 -- Advanced Protocols
-  Built-in: +adversarial, +troubleshoot
-  Protocol variables, conditional turns
-  Routing engine (pattern -> protocol auto-selection)
+v0.4.0 -- Specialist System
+  Specialist loader: .specialist.yaml discovery, Zod validation, template rendering
+  CLI: specialist list/show/create/validate/check-health
+  spawn --specialist flag
+  3-scope discovery: system, user (~/.agent-forge/), project (.agent-forge/)
+  Built-in specialists: code-reviewer, security-auditor
 
-v0.5.0 -- Resilience & Polish
+v0.5.0 -- Advanced Protocols + Registry
+  Built-in protocols: +adversarial, +troubleshoot
+  Protocol variables, conditional turns
+  Routing engine (pattern -> agent/protocol auto-selection)
+  Registry CLI: unified view of all resources
+
+v0.6.0 -- Resilience & Polish
   Reconciliation loop (zombie detection)
   attach/detach lifecycle
   Log management (rotation, cleanup)
@@ -986,10 +1087,18 @@ v1.3.0 -- Hooks & Events
   Protocol completion hooks
   Integration with Claude Code hooks
 
-v2.0.0 -- Agent Marketplace
-  Browse/install community protocols
+v1.4.0 -- Proactive Specialists
+  Heartbeat system (scheduled specialist execution)
+  Staleness auto-detection + updater agent
+  Specialist-to-specialist communication (Inbox pattern)
+  Continuous monitoring mode
+
+v2.0.0 -- Agent Marketplace & Ecosystem
+  Browse/install community protocols and specialists
   Protocol composition (chain protocols)
+  Specialist marketplace (share domain-specific configs)
   Multi-project support
+  Skill-to-specialist migration CLI
 ```
 
 ### Competitive Differentiation
@@ -1004,13 +1113,201 @@ v2.0.0 -- Agent Marketplace
 | **TUI** | Bubble Tea (rich) | ANSI dashboard | Ink (React-based) |
 | **Headless** | Yes (CLI) | Yes (CLI) | Yes (CLI-first) |
 | **Skill integration** | None | CLAUDE.md overlay | Protocol definitions from skills |
-| **USP** | MCP management, forking | Hierarchy, worktrees | Declarative protocols, routing |
+| **Domain knowledge** | None | CLAUDE.md overlay | .specialist.yaml (Brain layer) |
+| **USP** | MCP management, forking | Hierarchy, worktrees | Declarative protocols + specialists |
 
-**Unique selling point**: Agent Forge is the only tool that makes orchestration workflows **declarative and reusable**. You don't write code to orchestrate — you write YAML.
+**Unique selling points**:
+1. Agent Forge is the only tool that makes orchestration workflows **declarative and reusable** — you write YAML, not code.
+2. The **Specialist System** (Brain + Body) separates domain knowledge from execution infrastructure, making agents truly domain-expert and their knowledge portable across runtimes (TS, Python, Docker).
 
 ---
 
-## 10. Research & Inspiration
+## 10. Specialist System Integration
+
+The Specialist System provides the "Brain" layer — domain-specific knowledge, prompts, execution config, and validation rules — while Agent Forge provides the "Body" — tmux sessions, communication, orchestration.
+
+### Relationship: Brain + Body
+
+```
+Profile (Body)                    Specialist (Brain)
+profiles/gemini.yaml              specialists/mercury-db-health.specialist.yaml
++-- how to start                  +-- what it knows (system prompt)
++-- how to resume                 +-- how to reason (task template)
++-- how to detect status          +-- what model to use (execution)
++-- env vars                      +-- what to validate (output schema)
+                                  +-- when it's stale (files_to_watch)
+```
+
+An agent session can have:
+- **Profile only**: Generic agent, no domain specialization (current behavior)
+- **Profile + Specialist**: Domain-expert agent with pre-loaded knowledge
+- **Specialist only**: Inferred profile from `specialist.execution.preferred_profile`
+
+### Specialist YAML Schema (.specialist.yaml)
+
+Compatible with the existing Python Pydantic implementation (darth_feedor). Agent Forge implements a TypeScript loader (Zod) that reads the same format.
+
+```yaml
+# .agent-forge/specialists/mercury-db-health.specialist.yaml
+specialist:
+  metadata:
+    name: mercury-db-health
+    version: 1.2.0
+    description: "Monitors Mercury PostgreSQL health, query performance, connection pools"
+    category: monitoring/database
+    created: 2026-02-08T00:00:00Z
+    updated: 2026-02-24T00:00:00Z
+    author: jagger
+
+  execution:
+    preferred_profile: gemini       # Which Agent Forge profile to use
+    model: gemini-2.0-flash         # Model override (informational for non-API agents)
+    temperature: 0.2
+    response_format: json
+    fallback_model: qwen-plus
+
+  prompt:
+    system: |
+      You are the Mercury Database Health Specialist. You monitor PostgreSQL
+      health for the Mercury trading platform. You know the schema intimately
+      and can diagnose connection pool issues, slow queries, and replication lag.
+    task_template: |
+      **TASK:** $query
+      **CONTEXT:** Check the following systems:
+      - Connection pools (pgbouncer)
+      - Slow query log (>500ms)
+      - Replication lag
+      - Disk usage on data tablespace
+      **OUTPUT:** JSON with health_status, issues[], recommendations[]
+    normalize_template: |
+      Fix word count violations in this output:
+      $violations
+      $generated_output
+    output_schema:
+      type: object
+      required: [health_status, issues, recommendations]
+
+  validation:
+    files_to_watch:
+      - mercury/database/models.py
+      - mercury/database/migrations/
+    references:
+      - type: ssot_memory
+        path: .serena/memories/ssot_mercury_database_2026-02-05.md
+    stale_threshold_days: 14
+
+  capabilities:                     # Optional: advanced features (future)
+    can_chat: true
+    tools:
+      - name: docker_inspect
+        purpose: "Check container runtime status"
+      - name: context7
+        purpose: "Look up PostgreSQL documentation"
+```
+
+### Spawn Flow with Specialist
+
+```
+agent-forge spawn gemini --specialist mercury-db-health "Check connection pools"
+                |                        |                        |
+                v                        v                        v
+        Load profile             Load specialist           User's task
+        gemini.yaml         mercury-db-health.yaml
+                |                        |                        |
+                v                        v                        v
+        commands.start_with_prompt    prompt.system          prompt.task_template
+        "gemini -p '${PROMPT}'"       + rendered with        $query = user task
+                                      task_template
+                |                        |
+                +--------+---------------+
+                         |
+                         v
+              Final command:
+              gemini -p "[system prompt]\n\n[rendered task_template]"
+              in tmux session af_gemini_<uuid>
+```
+
+### Specialist Discovery (3-scope)
+
+```
+Priority (highest first):
+1. Project:  .agent-forge/specialists/*.specialist.yaml
+2. User:     ~/.agent-forge/specialists/*.specialist.yaml
+3. System:   <agent-forge-install>/specialists/*.specialist.yaml
+
+Merge rule: Project overrides User overrides System (by metadata.name)
+```
+
+### Staleness Detection
+
+```typescript
+async function checkHealth(): Promise<HealthReport[]> {
+  const specialists = await loader.loadAll();
+  const reports: HealthReport[] = [];
+
+  for (const spec of specialists) {
+    const stale = spec.validation.files_to_watch.some(file => {
+      const fileModified = fs.statSync(file).mtime;
+      const specUpdated = new Date(spec.metadata.updated);
+      return fileModified > specUpdated;
+    });
+
+    const aged = daysSince(spec.metadata.updated) > spec.validation.stale_threshold_days;
+
+    reports.push({
+      name: spec.metadata.name,
+      status: stale ? "STALE" : aged ? "AGED" : "OK",
+      reason: stale ? "Watched files changed" : aged ? "Threshold exceeded" : null,
+    });
+  }
+  return reports;
+}
+```
+
+### Skill-to-Specialist Promotion
+
+Skills are procedural (how to do something). Specialists are domain-specific (what to know about something). A skill can be promoted to a specialist when it has domain-specific knowledge worth persisting.
+
+```bash
+agent-forge specialist create --from-skill delegating
+# Reads skills/delegating/SKILL.md frontmatter
+# Extracts: name, description
+# Generates: .agent-forge/specialists/delegating.specialist.yaml
+# User fills in: execution config, prompt templates, validation rules
+```
+
+### Compatibility with Python Implementation
+
+The existing Python `SpecialistLoader` (Pydantic) and the new TypeScript loader (Zod) read the same `.specialist.yaml` format. This means:
+
+- Specialists created for Mercury Docker services (Python) work in Agent Forge (TS)
+- Specialists created via Agent Forge CLI work in Docker containers (Python)
+- The `.specialist.yaml` format is the shared contract — language-agnostic
+
+### Future: Continuous Specialist (Heartbeat)
+
+In future versions, specialists can be "persistent" — running on a schedule (like CAO Flows):
+
+```yaml
+specialist:
+  # ... metadata, prompt, etc.
+  heartbeat:
+    enabled: true
+    interval: 15m
+    on_wake:
+      - check_inbox          # Read messages from other agents
+      - check_watched_files  # Detect code changes
+      - run_health_check     # Execute task_template with default query
+    on_issue:
+      - notify_manager       # Send message to boss agent
+      - create_proposal      # Draft a fix proposal
+```
+
+This transforms specialists from passive (invoked on demand) to proactive (self-monitoring), aligning with the "office of agents" vision.
+
+---
+
+## 11. Research & Inspiration
 
 ### Agent Deck (asheshgoplani/agent-deck)
 - Go + Bubble Tea TUI
@@ -1042,3 +1339,26 @@ v2.0.0 -- Agent Marketplace
 - tmux+PTY workaround for CCS execution
 
 **Migrated**: All routing patterns, protocol turn definitions, CLI command templates become agent-forge profiles and protocols.
+
+### Specialist System (darth_feedor POC + vision docs)
+- YAML-based configuration-as-code for AI task prompts
+- Pydantic validation, auto-discovery (`*.specialist.yaml`), template rendering
+- Production-tested in `ext-summarizer` container (24-36x iteration improvement)
+- Volume-mounted hot-reload without Docker rebuilds
+- Vision: "Office of Agents" with Brain (specialist YAML) + Body (CAO/tmux infrastructure)
+- CAO integration: Handoff (sync), Assign (async), Inbox system, Watchdog, Flows
+- Proactive heartbeat agents, inter-agent social protocol, staleness detection
+
+**Adopted**: .specialist.yaml format, Zod re-implementation of Pydantic schema, 3-scope discovery, staleness detection, Brain+Body architecture, skill-to-specialist promotion.
+**Deferred**: Heartbeat/Flow system (future version), vector memory, full CAO integration.
+**Not adopted**: Python as primary runtime (TS instead), CAO REST API (direct tmux instead).
+
+### CLI Agent Orchestrator / CAO (awslabs)
+- Python + FastAPI REST orchestrator for tmux-isolated agents
+- Handoff (sync) and Assign (async) patterns
+- Inbox system with Watchdog-based IDLE detection
+- Flow system with cron scheduling + conditional scripts
+- MCP integration via FastMCP
+
+**Adopted**: Handoff/Assign concepts (as spawn + protocol patterns), Inbox concept (as message bus), IDLE detection via pane content.
+**Not adopted**: REST API layer (overkill for local tool), FastMCP integration (Agent Forge is CLI-first).
