@@ -6,9 +6,6 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
@@ -1203,7 +1200,7 @@ var require_command = __commonJS({
     var EventEmitter = require("events").EventEmitter;
     var childProcess = require("child_process");
     var path14 = require("path");
-    var fs14 = require("fs");
+    var fs15 = require("fs");
     var process16 = require("process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
     var { CommanderError: CommanderError2 } = require_error();
@@ -2197,7 +2194,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} subcommandName
        */
       _checkForMissingExecutable(executableFile, executableDir, subcommandName) {
-        if (fs14.existsSync(executableFile)) return;
+        if (fs15.existsSync(executableFile)) return;
         const executableDirMessage = executableDir ? `searched for local subcommand relative to directory '${executableDir}'` : "no directory for search for local subcommand, use .executableDir() to supply a custom directory";
         const executableMissing = `'${executableFile}' does not exist
  - if '${subcommandName}' is not meant to be an executable command, remove description parameter from '.command()' and use '.description()' instead
@@ -2216,10 +2213,10 @@ Expecting one of '${allowedValues.join("', '")}'`);
         const sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
         function findFile(baseDir, baseName) {
           const localBin = path14.resolve(baseDir, baseName);
-          if (fs14.existsSync(localBin)) return localBin;
+          if (fs15.existsSync(localBin)) return localBin;
           if (sourceExt.includes(path14.extname(baseName))) return void 0;
           const foundExt = sourceExt.find(
-            (ext) => fs14.existsSync(`${localBin}${ext}`)
+            (ext) => fs15.existsSync(`${localBin}${ext}`)
           );
           if (foundExt) return `${localBin}${foundExt}`;
           return void 0;
@@ -2231,7 +2228,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
         if (this._scriptPath) {
           let resolvedScriptPath;
           try {
-            resolvedScriptPath = fs14.realpathSync(this._scriptPath);
+            resolvedScriptPath = fs15.realpathSync(this._scriptPath);
           } catch {
             resolvedScriptPath = this._scriptPath;
           }
@@ -3466,4963 +3463,6 @@ var require_commander = __commonJS({
   }
 });
 
-// node_modules/kleur/index.mjs
-function run(arr, str) {
-  let i = 0, tmp, beg = "", end = "";
-  for (; i < arr.length; i++) {
-    tmp = arr[i];
-    beg += tmp.open;
-    end += tmp.close;
-    if (!!~str.indexOf(tmp.close)) {
-      str = str.replace(tmp.rgx, tmp.close + tmp.open);
-    }
-  }
-  return beg + str + end;
-}
-function chain(has, keys) {
-  let ctx = { has, keys };
-  ctx.reset = $.reset.bind(ctx);
-  ctx.bold = $.bold.bind(ctx);
-  ctx.dim = $.dim.bind(ctx);
-  ctx.italic = $.italic.bind(ctx);
-  ctx.underline = $.underline.bind(ctx);
-  ctx.inverse = $.inverse.bind(ctx);
-  ctx.hidden = $.hidden.bind(ctx);
-  ctx.strikethrough = $.strikethrough.bind(ctx);
-  ctx.black = $.black.bind(ctx);
-  ctx.red = $.red.bind(ctx);
-  ctx.green = $.green.bind(ctx);
-  ctx.yellow = $.yellow.bind(ctx);
-  ctx.blue = $.blue.bind(ctx);
-  ctx.magenta = $.magenta.bind(ctx);
-  ctx.cyan = $.cyan.bind(ctx);
-  ctx.white = $.white.bind(ctx);
-  ctx.gray = $.gray.bind(ctx);
-  ctx.grey = $.grey.bind(ctx);
-  ctx.bgBlack = $.bgBlack.bind(ctx);
-  ctx.bgRed = $.bgRed.bind(ctx);
-  ctx.bgGreen = $.bgGreen.bind(ctx);
-  ctx.bgYellow = $.bgYellow.bind(ctx);
-  ctx.bgBlue = $.bgBlue.bind(ctx);
-  ctx.bgMagenta = $.bgMagenta.bind(ctx);
-  ctx.bgCyan = $.bgCyan.bind(ctx);
-  ctx.bgWhite = $.bgWhite.bind(ctx);
-  return ctx;
-}
-function init(open, close) {
-  let blk = {
-    open: `\x1B[${open}m`,
-    close: `\x1B[${close}m`,
-    rgx: new RegExp(`\\x1b\\[${close}m`, "g")
-  };
-  return function(txt) {
-    if (this !== void 0 && this.has !== void 0) {
-      !!~this.has.indexOf(open) || (this.has.push(open), this.keys.push(blk));
-      return txt === void 0 ? this : $.enabled ? run(this.keys, txt + "") : txt + "";
-    }
-    return txt === void 0 ? chain([open], [blk]) : $.enabled ? run([blk], txt + "") : txt + "";
-  };
-}
-var FORCE_COLOR, NODE_DISABLE_COLORS, NO_COLOR, TERM, isTTY, $, kleur_default;
-var init_kleur = __esm({
-  "node_modules/kleur/index.mjs"() {
-    "use strict";
-    isTTY = true;
-    if (typeof process !== "undefined") {
-      ({ FORCE_COLOR, NODE_DISABLE_COLORS, NO_COLOR, TERM } = process.env || {});
-      isTTY = process.stdout && process.stdout.isTTY;
-    }
-    $ = {
-      enabled: !NODE_DISABLE_COLORS && NO_COLOR == null && TERM !== "dumb" && (FORCE_COLOR != null && FORCE_COLOR !== "0" || isTTY),
-      // modifiers
-      reset: init(0, 0),
-      bold: init(1, 22),
-      dim: init(2, 22),
-      italic: init(3, 23),
-      underline: init(4, 24),
-      inverse: init(7, 27),
-      hidden: init(8, 28),
-      strikethrough: init(9, 29),
-      // colors
-      black: init(30, 39),
-      red: init(31, 39),
-      green: init(32, 39),
-      yellow: init(33, 39),
-      blue: init(34, 39),
-      magenta: init(35, 39),
-      cyan: init(36, 39),
-      white: init(37, 39),
-      gray: init(90, 39),
-      grey: init(90, 39),
-      // background colors
-      bgBlack: init(40, 49),
-      bgRed: init(41, 49),
-      bgGreen: init(42, 49),
-      bgYellow: init(43, 49),
-      bgBlue: init(44, 49),
-      bgMagenta: init(45, 49),
-      bgCyan: init(46, 49),
-      bgWhite: init(47, 49)
-    };
-    kleur_default = $;
-  }
-});
-
-// node_modules/prompts/node_modules/kleur/index.js
-var require_kleur = __commonJS({
-  "node_modules/prompts/node_modules/kleur/index.js"(exports2, module2) {
-    "use strict";
-    var { FORCE_COLOR: FORCE_COLOR2, NODE_DISABLE_COLORS: NODE_DISABLE_COLORS2, TERM: TERM2 } = process.env;
-    var $2 = {
-      enabled: !NODE_DISABLE_COLORS2 && TERM2 !== "dumb" && FORCE_COLOR2 !== "0",
-      // modifiers
-      reset: init2(0, 0),
-      bold: init2(1, 22),
-      dim: init2(2, 22),
-      italic: init2(3, 23),
-      underline: init2(4, 24),
-      inverse: init2(7, 27),
-      hidden: init2(8, 28),
-      strikethrough: init2(9, 29),
-      // colors
-      black: init2(30, 39),
-      red: init2(31, 39),
-      green: init2(32, 39),
-      yellow: init2(33, 39),
-      blue: init2(34, 39),
-      magenta: init2(35, 39),
-      cyan: init2(36, 39),
-      white: init2(37, 39),
-      gray: init2(90, 39),
-      grey: init2(90, 39),
-      // background colors
-      bgBlack: init2(40, 49),
-      bgRed: init2(41, 49),
-      bgGreen: init2(42, 49),
-      bgYellow: init2(43, 49),
-      bgBlue: init2(44, 49),
-      bgMagenta: init2(45, 49),
-      bgCyan: init2(46, 49),
-      bgWhite: init2(47, 49)
-    };
-    function run2(arr, str) {
-      let i = 0, tmp, beg = "", end = "";
-      for (; i < arr.length; i++) {
-        tmp = arr[i];
-        beg += tmp.open;
-        end += tmp.close;
-        if (str.includes(tmp.close)) {
-          str = str.replace(tmp.rgx, tmp.close + tmp.open);
-        }
-      }
-      return beg + str + end;
-    }
-    function chain2(has, keys) {
-      let ctx = { has, keys };
-      ctx.reset = $2.reset.bind(ctx);
-      ctx.bold = $2.bold.bind(ctx);
-      ctx.dim = $2.dim.bind(ctx);
-      ctx.italic = $2.italic.bind(ctx);
-      ctx.underline = $2.underline.bind(ctx);
-      ctx.inverse = $2.inverse.bind(ctx);
-      ctx.hidden = $2.hidden.bind(ctx);
-      ctx.strikethrough = $2.strikethrough.bind(ctx);
-      ctx.black = $2.black.bind(ctx);
-      ctx.red = $2.red.bind(ctx);
-      ctx.green = $2.green.bind(ctx);
-      ctx.yellow = $2.yellow.bind(ctx);
-      ctx.blue = $2.blue.bind(ctx);
-      ctx.magenta = $2.magenta.bind(ctx);
-      ctx.cyan = $2.cyan.bind(ctx);
-      ctx.white = $2.white.bind(ctx);
-      ctx.gray = $2.gray.bind(ctx);
-      ctx.grey = $2.grey.bind(ctx);
-      ctx.bgBlack = $2.bgBlack.bind(ctx);
-      ctx.bgRed = $2.bgRed.bind(ctx);
-      ctx.bgGreen = $2.bgGreen.bind(ctx);
-      ctx.bgYellow = $2.bgYellow.bind(ctx);
-      ctx.bgBlue = $2.bgBlue.bind(ctx);
-      ctx.bgMagenta = $2.bgMagenta.bind(ctx);
-      ctx.bgCyan = $2.bgCyan.bind(ctx);
-      ctx.bgWhite = $2.bgWhite.bind(ctx);
-      return ctx;
-    }
-    function init2(open, close) {
-      let blk = {
-        open: `\x1B[${open}m`,
-        close: `\x1B[${close}m`,
-        rgx: new RegExp(`\\x1b\\[${close}m`, "g")
-      };
-      return function(txt) {
-        if (this !== void 0 && this.has !== void 0) {
-          this.has.includes(open) || (this.has.push(open), this.keys.push(blk));
-          return txt === void 0 ? this : $2.enabled ? run2(this.keys, txt + "") : txt + "";
-        }
-        return txt === void 0 ? chain2([open], [blk]) : $2.enabled ? run2([blk], txt + "") : txt + "";
-      };
-    }
-    module2.exports = $2;
-  }
-});
-
-// node_modules/prompts/dist/util/action.js
-var require_action = __commonJS({
-  "node_modules/prompts/dist/util/action.js"(exports2, module2) {
-    "use strict";
-    module2.exports = (key, isSelect) => {
-      if (key.meta && key.name !== "escape") return;
-      if (key.ctrl) {
-        if (key.name === "a") return "first";
-        if (key.name === "c") return "abort";
-        if (key.name === "d") return "abort";
-        if (key.name === "e") return "last";
-        if (key.name === "g") return "reset";
-      }
-      if (isSelect) {
-        if (key.name === "j") return "down";
-        if (key.name === "k") return "up";
-      }
-      if (key.name === "return") return "submit";
-      if (key.name === "enter") return "submit";
-      if (key.name === "backspace") return "delete";
-      if (key.name === "delete") return "deleteForward";
-      if (key.name === "abort") return "abort";
-      if (key.name === "escape") return "exit";
-      if (key.name === "tab") return "next";
-      if (key.name === "pagedown") return "nextPage";
-      if (key.name === "pageup") return "prevPage";
-      if (key.name === "home") return "home";
-      if (key.name === "end") return "end";
-      if (key.name === "up") return "up";
-      if (key.name === "down") return "down";
-      if (key.name === "right") return "right";
-      if (key.name === "left") return "left";
-      return false;
-    };
-  }
-});
-
-// node_modules/prompts/dist/util/strip.js
-var require_strip = __commonJS({
-  "node_modules/prompts/dist/util/strip.js"(exports2, module2) {
-    "use strict";
-    module2.exports = (str) => {
-      const pattern = ["[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)", "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"].join("|");
-      const RGX = new RegExp(pattern, "g");
-      return typeof str === "string" ? str.replace(RGX, "") : str;
-    };
-  }
-});
-
-// node_modules/sisteransi/src/index.js
-var require_src = __commonJS({
-  "node_modules/sisteransi/src/index.js"(exports2, module2) {
-    "use strict";
-    var ESC = "\x1B";
-    var CSI = `${ESC}[`;
-    var beep = "\x07";
-    var cursor = {
-      to(x, y) {
-        if (!y) return `${CSI}${x + 1}G`;
-        return `${CSI}${y + 1};${x + 1}H`;
-      },
-      move(x, y) {
-        let ret = "";
-        if (x < 0) ret += `${CSI}${-x}D`;
-        else if (x > 0) ret += `${CSI}${x}C`;
-        if (y < 0) ret += `${CSI}${-y}A`;
-        else if (y > 0) ret += `${CSI}${y}B`;
-        return ret;
-      },
-      up: (count = 1) => `${CSI}${count}A`,
-      down: (count = 1) => `${CSI}${count}B`,
-      forward: (count = 1) => `${CSI}${count}C`,
-      backward: (count = 1) => `${CSI}${count}D`,
-      nextLine: (count = 1) => `${CSI}E`.repeat(count),
-      prevLine: (count = 1) => `${CSI}F`.repeat(count),
-      left: `${CSI}G`,
-      hide: `${CSI}?25l`,
-      show: `${CSI}?25h`,
-      save: `${ESC}7`,
-      restore: `${ESC}8`
-    };
-    var scroll = {
-      up: (count = 1) => `${CSI}S`.repeat(count),
-      down: (count = 1) => `${CSI}T`.repeat(count)
-    };
-    var erase = {
-      screen: `${CSI}2J`,
-      up: (count = 1) => `${CSI}1J`.repeat(count),
-      down: (count = 1) => `${CSI}J`.repeat(count),
-      line: `${CSI}2K`,
-      lineEnd: `${CSI}K`,
-      lineStart: `${CSI}1K`,
-      lines(count) {
-        let clear = "";
-        for (let i = 0; i < count; i++)
-          clear += this.line + (i < count - 1 ? cursor.up() : "");
-        if (count)
-          clear += cursor.left;
-        return clear;
-      }
-    };
-    module2.exports = { cursor, scroll, erase, beep };
-  }
-});
-
-// node_modules/prompts/dist/util/clear.js
-var require_clear = __commonJS({
-  "node_modules/prompts/dist/util/clear.js"(exports2, module2) {
-    "use strict";
-    function _createForOfIteratorHelper(o, allowArrayLike) {
-      var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
-      if (!it) {
-        if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
-          if (it) o = it;
-          var i = 0;
-          var F = function F2() {
-          };
-          return { s: F, n: function n() {
-            if (i >= o.length) return { done: true };
-            return { done: false, value: o[i++] };
-          }, e: function e(_e) {
-            throw _e;
-          }, f: F };
-        }
-        throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
-      }
-      var normalCompletion = true, didErr = false, err;
-      return { s: function s() {
-        it = it.call(o);
-      }, n: function n() {
-        var step = it.next();
-        normalCompletion = step.done;
-        return step;
-      }, e: function e(_e2) {
-        didErr = true;
-        err = _e2;
-      }, f: function f() {
-        try {
-          if (!normalCompletion && it.return != null) it.return();
-        } finally {
-          if (didErr) throw err;
-        }
-      } };
-    }
-    function _unsupportedIterableToArray(o, minLen) {
-      if (!o) return;
-      if (typeof o === "string") return _arrayLikeToArray(o, minLen);
-      var n = Object.prototype.toString.call(o).slice(8, -1);
-      if (n === "Object" && o.constructor) n = o.constructor.name;
-      if (n === "Map" || n === "Set") return Array.from(o);
-      if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
-    }
-    function _arrayLikeToArray(arr, len) {
-      if (len == null || len > arr.length) len = arr.length;
-      for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
-      return arr2;
-    }
-    var strip = require_strip();
-    var _require = require_src();
-    var erase = _require.erase;
-    var cursor = _require.cursor;
-    var width = (str) => [...strip(str)].length;
-    module2.exports = function(prompt, perLine) {
-      if (!perLine) return erase.line + cursor.to(0);
-      let rows = 0;
-      const lines = prompt.split(/\r?\n/);
-      var _iterator = _createForOfIteratorHelper(lines), _step;
-      try {
-        for (_iterator.s(); !(_step = _iterator.n()).done; ) {
-          let line = _step.value;
-          rows += 1 + Math.floor(Math.max(width(line) - 1, 0) / perLine);
-        }
-      } catch (err) {
-        _iterator.e(err);
-      } finally {
-        _iterator.f();
-      }
-      return erase.lines(rows);
-    };
-  }
-});
-
-// node_modules/prompts/dist/util/figures.js
-var require_figures = __commonJS({
-  "node_modules/prompts/dist/util/figures.js"(exports2, module2) {
-    "use strict";
-    var main = {
-      arrowUp: "\u2191",
-      arrowDown: "\u2193",
-      arrowLeft: "\u2190",
-      arrowRight: "\u2192",
-      radioOn: "\u25C9",
-      radioOff: "\u25EF",
-      tick: "\u2714",
-      cross: "\u2716",
-      ellipsis: "\u2026",
-      pointerSmall: "\u203A",
-      line: "\u2500",
-      pointer: "\u276F"
-    };
-    var win = {
-      arrowUp: main.arrowUp,
-      arrowDown: main.arrowDown,
-      arrowLeft: main.arrowLeft,
-      arrowRight: main.arrowRight,
-      radioOn: "(*)",
-      radioOff: "( )",
-      tick: "\u221A",
-      cross: "\xD7",
-      ellipsis: "...",
-      pointerSmall: "\xBB",
-      line: "\u2500",
-      pointer: ">"
-    };
-    var figures = process.platform === "win32" ? win : main;
-    module2.exports = figures;
-  }
-});
-
-// node_modules/prompts/dist/util/style.js
-var require_style = __commonJS({
-  "node_modules/prompts/dist/util/style.js"(exports2, module2) {
-    "use strict";
-    var c = require_kleur();
-    var figures = require_figures();
-    var styles3 = Object.freeze({
-      password: {
-        scale: 1,
-        render: (input) => "*".repeat(input.length)
-      },
-      emoji: {
-        scale: 2,
-        render: (input) => "\u{1F603}".repeat(input.length)
-      },
-      invisible: {
-        scale: 0,
-        render: (input) => ""
-      },
-      default: {
-        scale: 1,
-        render: (input) => `${input}`
-      }
-    });
-    var render = (type) => styles3[type] || styles3.default;
-    var symbols = Object.freeze({
-      aborted: c.red(figures.cross),
-      done: c.green(figures.tick),
-      exited: c.yellow(figures.cross),
-      default: c.cyan("?")
-    });
-    var symbol2 = (done, aborted2, exited) => aborted2 ? symbols.aborted : exited ? symbols.exited : done ? symbols.done : symbols.default;
-    var delimiter = (completing) => c.gray(completing ? figures.ellipsis : figures.pointerSmall);
-    var item = (expandable, expanded) => c.gray(expandable ? expanded ? figures.pointerSmall : "+" : figures.line);
-    module2.exports = {
-      styles: styles3,
-      render,
-      symbols,
-      symbol: symbol2,
-      delimiter,
-      item
-    };
-  }
-});
-
-// node_modules/prompts/dist/util/lines.js
-var require_lines = __commonJS({
-  "node_modules/prompts/dist/util/lines.js"(exports2, module2) {
-    "use strict";
-    var strip = require_strip();
-    module2.exports = function(msg, perLine) {
-      let lines = String(strip(msg) || "").split(/\r?\n/);
-      if (!perLine) return lines.length;
-      return lines.map((l) => Math.ceil(l.length / perLine)).reduce((a, b) => a + b);
-    };
-  }
-});
-
-// node_modules/prompts/dist/util/wrap.js
-var require_wrap = __commonJS({
-  "node_modules/prompts/dist/util/wrap.js"(exports2, module2) {
-    "use strict";
-    module2.exports = (msg, opts = {}) => {
-      const tab = Number.isSafeInteger(parseInt(opts.margin)) ? new Array(parseInt(opts.margin)).fill(" ").join("") : opts.margin || "";
-      const width = opts.width;
-      return (msg || "").split(/\r?\n/g).map((line) => line.split(/\s+/g).reduce((arr, w) => {
-        if (w.length + tab.length >= width || arr[arr.length - 1].length + w.length + 1 < width) arr[arr.length - 1] += ` ${w}`;
-        else arr.push(`${tab}${w}`);
-        return arr;
-      }, [tab]).join("\n")).join("\n");
-    };
-  }
-});
-
-// node_modules/prompts/dist/util/entriesToDisplay.js
-var require_entriesToDisplay = __commonJS({
-  "node_modules/prompts/dist/util/entriesToDisplay.js"(exports2, module2) {
-    "use strict";
-    module2.exports = (cursor, total, maxVisible) => {
-      maxVisible = maxVisible || total;
-      let startIndex = Math.min(total - maxVisible, cursor - Math.floor(maxVisible / 2));
-      if (startIndex < 0) startIndex = 0;
-      let endIndex = Math.min(startIndex + maxVisible, total);
-      return {
-        startIndex,
-        endIndex
-      };
-    };
-  }
-});
-
-// node_modules/prompts/dist/util/index.js
-var require_util = __commonJS({
-  "node_modules/prompts/dist/util/index.js"(exports2, module2) {
-    "use strict";
-    module2.exports = {
-      action: require_action(),
-      clear: require_clear(),
-      style: require_style(),
-      strip: require_strip(),
-      figures: require_figures(),
-      lines: require_lines(),
-      wrap: require_wrap(),
-      entriesToDisplay: require_entriesToDisplay()
-    };
-  }
-});
-
-// node_modules/prompts/dist/elements/prompt.js
-var require_prompt = __commonJS({
-  "node_modules/prompts/dist/elements/prompt.js"(exports2, module2) {
-    "use strict";
-    var readline = require("readline");
-    var _require = require_util();
-    var action = _require.action;
-    var EventEmitter = require("events");
-    var _require2 = require_src();
-    var beep = _require2.beep;
-    var cursor = _require2.cursor;
-    var color = require_kleur();
-    var Prompt = class extends EventEmitter {
-      constructor(opts = {}) {
-        super();
-        this.firstRender = true;
-        this.in = opts.stdin || process.stdin;
-        this.out = opts.stdout || process.stdout;
-        this.onRender = (opts.onRender || (() => void 0)).bind(this);
-        const rl = readline.createInterface({
-          input: this.in,
-          escapeCodeTimeout: 50
-        });
-        readline.emitKeypressEvents(this.in, rl);
-        if (this.in.isTTY) this.in.setRawMode(true);
-        const isSelect = ["SelectPrompt", "MultiselectPrompt"].indexOf(this.constructor.name) > -1;
-        const keypress = (str, key) => {
-          let a = action(key, isSelect);
-          if (a === false) {
-            this._ && this._(str, key);
-          } else if (typeof this[a] === "function") {
-            this[a](key);
-          } else {
-            this.bell();
-          }
-        };
-        this.close = () => {
-          this.out.write(cursor.show);
-          this.in.removeListener("keypress", keypress);
-          if (this.in.isTTY) this.in.setRawMode(false);
-          rl.close();
-          this.emit(this.aborted ? "abort" : this.exited ? "exit" : "submit", this.value);
-          this.closed = true;
-        };
-        this.in.on("keypress", keypress);
-      }
-      fire() {
-        this.emit("state", {
-          value: this.value,
-          aborted: !!this.aborted,
-          exited: !!this.exited
-        });
-      }
-      bell() {
-        this.out.write(beep);
-      }
-      render() {
-        this.onRender(color);
-        if (this.firstRender) this.firstRender = false;
-      }
-    };
-    module2.exports = Prompt;
-  }
-});
-
-// node_modules/prompts/dist/elements/text.js
-var require_text = __commonJS({
-  "node_modules/prompts/dist/elements/text.js"(exports2, module2) {
-    "use strict";
-    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
-      try {
-        var info2 = gen[key](arg);
-        var value = info2.value;
-      } catch (error49) {
-        reject(error49);
-        return;
-      }
-      if (info2.done) {
-        resolve(value);
-      } else {
-        Promise.resolve(value).then(_next, _throw);
-      }
-    }
-    function _asyncToGenerator(fn) {
-      return function() {
-        var self = this, args = arguments;
-        return new Promise(function(resolve, reject) {
-          var gen = fn.apply(self, args);
-          function _next(value) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
-          }
-          function _throw(err) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
-          }
-          _next(void 0);
-        });
-      };
-    }
-    var color = require_kleur();
-    var Prompt = require_prompt();
-    var _require = require_src();
-    var erase = _require.erase;
-    var cursor = _require.cursor;
-    var _require2 = require_util();
-    var style = _require2.style;
-    var clear = _require2.clear;
-    var lines = _require2.lines;
-    var figures = _require2.figures;
-    var TextPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.transform = style.render(opts.style);
-        this.scale = this.transform.scale;
-        this.msg = opts.message;
-        this.initial = opts.initial || ``;
-        this.validator = opts.validate || (() => true);
-        this.value = ``;
-        this.errorMsg = opts.error || `Please Enter A Valid Value`;
-        this.cursor = Number(!!this.initial);
-        this.cursorOffset = 0;
-        this.clear = clear(``, this.out.columns);
-        this.render();
-      }
-      set value(v) {
-        if (!v && this.initial) {
-          this.placeholder = true;
-          this.rendered = color.gray(this.transform.render(this.initial));
-        } else {
-          this.placeholder = false;
-          this.rendered = this.transform.render(v);
-        }
-        this._value = v;
-        this.fire();
-      }
-      get value() {
-        return this._value;
-      }
-      reset() {
-        this.value = ``;
-        this.cursor = Number(!!this.initial);
-        this.cursorOffset = 0;
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.value = this.value || this.initial;
-        this.done = this.aborted = true;
-        this.error = false;
-        this.red = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      validate() {
-        var _this = this;
-        return _asyncToGenerator(function* () {
-          let valid = yield _this.validator(_this.value);
-          if (typeof valid === `string`) {
-            _this.errorMsg = valid;
-            valid = false;
-          }
-          _this.error = !valid;
-        })();
-      }
-      submit() {
-        var _this2 = this;
-        return _asyncToGenerator(function* () {
-          _this2.value = _this2.value || _this2.initial;
-          _this2.cursorOffset = 0;
-          _this2.cursor = _this2.rendered.length;
-          yield _this2.validate();
-          if (_this2.error) {
-            _this2.red = true;
-            _this2.fire();
-            _this2.render();
-            return;
-          }
-          _this2.done = true;
-          _this2.aborted = false;
-          _this2.fire();
-          _this2.render();
-          _this2.out.write("\n");
-          _this2.close();
-        })();
-      }
-      next() {
-        if (!this.placeholder) return this.bell();
-        this.value = this.initial;
-        this.cursor = this.rendered.length;
-        this.fire();
-        this.render();
-      }
-      moveCursor(n) {
-        if (this.placeholder) return;
-        this.cursor = this.cursor + n;
-        this.cursorOffset += n;
-      }
-      _(c, key) {
-        let s1 = this.value.slice(0, this.cursor);
-        let s2 = this.value.slice(this.cursor);
-        this.value = `${s1}${c}${s2}`;
-        this.red = false;
-        this.cursor = this.placeholder ? 0 : s1.length + 1;
-        this.render();
-      }
-      delete() {
-        if (this.isCursorAtStart()) return this.bell();
-        let s1 = this.value.slice(0, this.cursor - 1);
-        let s2 = this.value.slice(this.cursor);
-        this.value = `${s1}${s2}`;
-        this.red = false;
-        if (this.isCursorAtStart()) {
-          this.cursorOffset = 0;
-        } else {
-          this.cursorOffset++;
-          this.moveCursor(-1);
-        }
-        this.render();
-      }
-      deleteForward() {
-        if (this.cursor * this.scale >= this.rendered.length || this.placeholder) return this.bell();
-        let s1 = this.value.slice(0, this.cursor);
-        let s2 = this.value.slice(this.cursor + 1);
-        this.value = `${s1}${s2}`;
-        this.red = false;
-        if (this.isCursorAtEnd()) {
-          this.cursorOffset = 0;
-        } else {
-          this.cursorOffset++;
-        }
-        this.render();
-      }
-      first() {
-        this.cursor = 0;
-        this.render();
-      }
-      last() {
-        this.cursor = this.value.length;
-        this.render();
-      }
-      left() {
-        if (this.cursor <= 0 || this.placeholder) return this.bell();
-        this.moveCursor(-1);
-        this.render();
-      }
-      right() {
-        if (this.cursor * this.scale >= this.rendered.length || this.placeholder) return this.bell();
-        this.moveCursor(1);
-        this.render();
-      }
-      isCursorAtStart() {
-        return this.cursor === 0 || this.placeholder && this.cursor === 1;
-      }
-      isCursorAtEnd() {
-        return this.cursor === this.rendered.length || this.placeholder && this.cursor === this.rendered.length + 1;
-      }
-      render() {
-        if (this.closed) return;
-        if (!this.firstRender) {
-          if (this.outputError) this.out.write(cursor.down(lines(this.outputError, this.out.columns) - 1) + clear(this.outputError, this.out.columns));
-          this.out.write(clear(this.outputText, this.out.columns));
-        }
-        super.render();
-        this.outputError = "";
-        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(this.done), this.red ? color.red(this.rendered) : this.rendered].join(` `);
-        if (this.error) {
-          this.outputError += this.errorMsg.split(`
-`).reduce((a, l, i) => a + `
-${i ? " " : figures.pointerSmall} ${color.red().italic(l)}`, ``);
-        }
-        this.out.write(erase.line + cursor.to(0) + this.outputText + cursor.save + this.outputError + cursor.restore + cursor.move(this.cursorOffset, 0));
-      }
-    };
-    module2.exports = TextPrompt;
-  }
-});
-
-// node_modules/prompts/dist/elements/select.js
-var require_select = __commonJS({
-  "node_modules/prompts/dist/elements/select.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt();
-    var _require = require_util();
-    var style = _require.style;
-    var clear = _require.clear;
-    var figures = _require.figures;
-    var wrap = _require.wrap;
-    var entriesToDisplay = _require.entriesToDisplay;
-    var _require2 = require_src();
-    var cursor = _require2.cursor;
-    var SelectPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.hint = opts.hint || "- Use arrow-keys. Return to submit.";
-        this.warn = opts.warn || "- This option is disabled";
-        this.cursor = opts.initial || 0;
-        this.choices = opts.choices.map((ch, idx) => {
-          if (typeof ch === "string") ch = {
-            title: ch,
-            value: idx
-          };
-          return {
-            title: ch && (ch.title || ch.value || ch),
-            value: ch && (ch.value === void 0 ? idx : ch.value),
-            description: ch && ch.description,
-            selected: ch && ch.selected,
-            disabled: ch && ch.disabled
-          };
-        });
-        this.optionsPerPage = opts.optionsPerPage || 10;
-        this.value = (this.choices[this.cursor] || {}).value;
-        this.clear = clear("", this.out.columns);
-        this.render();
-      }
-      moveCursor(n) {
-        this.cursor = n;
-        this.value = this.choices[n].value;
-        this.fire();
-      }
-      reset() {
-        this.moveCursor(0);
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        if (!this.selection.disabled) {
-          this.done = true;
-          this.aborted = false;
-          this.fire();
-          this.render();
-          this.out.write("\n");
-          this.close();
-        } else this.bell();
-      }
-      first() {
-        this.moveCursor(0);
-        this.render();
-      }
-      last() {
-        this.moveCursor(this.choices.length - 1);
-        this.render();
-      }
-      up() {
-        if (this.cursor === 0) {
-          this.moveCursor(this.choices.length - 1);
-        } else {
-          this.moveCursor(this.cursor - 1);
-        }
-        this.render();
-      }
-      down() {
-        if (this.cursor === this.choices.length - 1) {
-          this.moveCursor(0);
-        } else {
-          this.moveCursor(this.cursor + 1);
-        }
-        this.render();
-      }
-      next() {
-        this.moveCursor((this.cursor + 1) % this.choices.length);
-        this.render();
-      }
-      _(c, key) {
-        if (c === " ") return this.submit();
-      }
-      get selection() {
-        return this.choices[this.cursor];
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        let _entriesToDisplay = entriesToDisplay(this.cursor, this.choices.length, this.optionsPerPage), startIndex = _entriesToDisplay.startIndex, endIndex = _entriesToDisplay.endIndex;
-        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(false), this.done ? this.selection.title : this.selection.disabled ? color.yellow(this.warn) : color.gray(this.hint)].join(" ");
-        if (!this.done) {
-          this.outputText += "\n";
-          for (let i = startIndex; i < endIndex; i++) {
-            let title, prefix, desc = "", v = this.choices[i];
-            if (i === startIndex && startIndex > 0) {
-              prefix = figures.arrowUp;
-            } else if (i === endIndex - 1 && endIndex < this.choices.length) {
-              prefix = figures.arrowDown;
-            } else {
-              prefix = " ";
-            }
-            if (v.disabled) {
-              title = this.cursor === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
-              prefix = (this.cursor === i ? color.bold().gray(figures.pointer) + " " : "  ") + prefix;
-            } else {
-              title = this.cursor === i ? color.cyan().underline(v.title) : v.title;
-              prefix = (this.cursor === i ? color.cyan(figures.pointer) + " " : "  ") + prefix;
-              if (v.description && this.cursor === i) {
-                desc = ` - ${v.description}`;
-                if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
-                  desc = "\n" + wrap(v.description, {
-                    margin: 3,
-                    width: this.out.columns
-                  });
-                }
-              }
-            }
-            this.outputText += `${prefix} ${title}${color.gray(desc)}
-`;
-          }
-        }
-        this.out.write(this.outputText);
-      }
-    };
-    module2.exports = SelectPrompt;
-  }
-});
-
-// node_modules/prompts/dist/elements/toggle.js
-var require_toggle = __commonJS({
-  "node_modules/prompts/dist/elements/toggle.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt();
-    var _require = require_util();
-    var style = _require.style;
-    var clear = _require.clear;
-    var _require2 = require_src();
-    var cursor = _require2.cursor;
-    var erase = _require2.erase;
-    var TogglePrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.value = !!opts.initial;
-        this.active = opts.active || "on";
-        this.inactive = opts.inactive || "off";
-        this.initialValue = this.value;
-        this.render();
-      }
-      reset() {
-        this.value = this.initialValue;
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        this.done = true;
-        this.aborted = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      deactivate() {
-        if (this.value === false) return this.bell();
-        this.value = false;
-        this.render();
-      }
-      activate() {
-        if (this.value === true) return this.bell();
-        this.value = true;
-        this.render();
-      }
-      delete() {
-        this.deactivate();
-      }
-      left() {
-        this.deactivate();
-      }
-      right() {
-        this.activate();
-      }
-      down() {
-        this.deactivate();
-      }
-      up() {
-        this.activate();
-      }
-      next() {
-        this.value = !this.value;
-        this.fire();
-        this.render();
-      }
-      _(c, key) {
-        if (c === " ") {
-          this.value = !this.value;
-        } else if (c === "1") {
-          this.value = true;
-        } else if (c === "0") {
-          this.value = false;
-        } else return this.bell();
-        this.render();
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(this.done), this.value ? this.inactive : color.cyan().underline(this.inactive), color.gray("/"), this.value ? color.cyan().underline(this.active) : this.active].join(" ");
-        this.out.write(erase.line + cursor.to(0) + this.outputText);
-      }
-    };
-    module2.exports = TogglePrompt;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/datepart.js
-var require_datepart = __commonJS({
-  "node_modules/prompts/dist/dateparts/datepart.js"(exports2, module2) {
-    "use strict";
-    var DatePart = class _DatePart {
-      constructor({
-        token,
-        date: date5,
-        parts,
-        locales
-      }) {
-        this.token = token;
-        this.date = date5 || /* @__PURE__ */ new Date();
-        this.parts = parts || [this];
-        this.locales = locales || {};
-      }
-      up() {
-      }
-      down() {
-      }
-      next() {
-        const currentIdx = this.parts.indexOf(this);
-        return this.parts.find((part, idx) => idx > currentIdx && part instanceof _DatePart);
-      }
-      setTo(val) {
-      }
-      prev() {
-        let parts = [].concat(this.parts).reverse();
-        const currentIdx = parts.indexOf(this);
-        return parts.find((part, idx) => idx > currentIdx && part instanceof _DatePart);
-      }
-      toString() {
-        return String(this.date);
-      }
-    };
-    module2.exports = DatePart;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/meridiem.js
-var require_meridiem = __commonJS({
-  "node_modules/prompts/dist/dateparts/meridiem.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart();
-    var Meridiem = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setHours((this.date.getHours() + 12) % 24);
-      }
-      down() {
-        this.up();
-      }
-      toString() {
-        let meridiem = this.date.getHours() > 12 ? "pm" : "am";
-        return /\A/.test(this.token) ? meridiem.toUpperCase() : meridiem;
-      }
-    };
-    module2.exports = Meridiem;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/day.js
-var require_day = __commonJS({
-  "node_modules/prompts/dist/dateparts/day.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart();
-    var pos = (n) => {
-      n = n % 10;
-      return n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th";
-    };
-    var Day = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setDate(this.date.getDate() + 1);
-      }
-      down() {
-        this.date.setDate(this.date.getDate() - 1);
-      }
-      setTo(val) {
-        this.date.setDate(parseInt(val.substr(-2)));
-      }
-      toString() {
-        let date5 = this.date.getDate();
-        let day = this.date.getDay();
-        return this.token === "DD" ? String(date5).padStart(2, "0") : this.token === "Do" ? date5 + pos(date5) : this.token === "d" ? day + 1 : this.token === "ddd" ? this.locales.weekdaysShort[day] : this.token === "dddd" ? this.locales.weekdays[day] : date5;
-      }
-    };
-    module2.exports = Day;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/hours.js
-var require_hours = __commonJS({
-  "node_modules/prompts/dist/dateparts/hours.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart();
-    var Hours = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setHours(this.date.getHours() + 1);
-      }
-      down() {
-        this.date.setHours(this.date.getHours() - 1);
-      }
-      setTo(val) {
-        this.date.setHours(parseInt(val.substr(-2)));
-      }
-      toString() {
-        let hours = this.date.getHours();
-        if (/h/.test(this.token)) hours = hours % 12 || 12;
-        return this.token.length > 1 ? String(hours).padStart(2, "0") : hours;
-      }
-    };
-    module2.exports = Hours;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/milliseconds.js
-var require_milliseconds = __commonJS({
-  "node_modules/prompts/dist/dateparts/milliseconds.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart();
-    var Milliseconds = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setMilliseconds(this.date.getMilliseconds() + 1);
-      }
-      down() {
-        this.date.setMilliseconds(this.date.getMilliseconds() - 1);
-      }
-      setTo(val) {
-        this.date.setMilliseconds(parseInt(val.substr(-this.token.length)));
-      }
-      toString() {
-        return String(this.date.getMilliseconds()).padStart(4, "0").substr(0, this.token.length);
-      }
-    };
-    module2.exports = Milliseconds;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/minutes.js
-var require_minutes = __commonJS({
-  "node_modules/prompts/dist/dateparts/minutes.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart();
-    var Minutes = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setMinutes(this.date.getMinutes() + 1);
-      }
-      down() {
-        this.date.setMinutes(this.date.getMinutes() - 1);
-      }
-      setTo(val) {
-        this.date.setMinutes(parseInt(val.substr(-2)));
-      }
-      toString() {
-        let m = this.date.getMinutes();
-        return this.token.length > 1 ? String(m).padStart(2, "0") : m;
-      }
-    };
-    module2.exports = Minutes;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/month.js
-var require_month = __commonJS({
-  "node_modules/prompts/dist/dateparts/month.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart();
-    var Month = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setMonth(this.date.getMonth() + 1);
-      }
-      down() {
-        this.date.setMonth(this.date.getMonth() - 1);
-      }
-      setTo(val) {
-        val = parseInt(val.substr(-2)) - 1;
-        this.date.setMonth(val < 0 ? 0 : val);
-      }
-      toString() {
-        let month = this.date.getMonth();
-        let tl = this.token.length;
-        return tl === 2 ? String(month + 1).padStart(2, "0") : tl === 3 ? this.locales.monthsShort[month] : tl === 4 ? this.locales.months[month] : String(month + 1);
-      }
-    };
-    module2.exports = Month;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/seconds.js
-var require_seconds = __commonJS({
-  "node_modules/prompts/dist/dateparts/seconds.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart();
-    var Seconds = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setSeconds(this.date.getSeconds() + 1);
-      }
-      down() {
-        this.date.setSeconds(this.date.getSeconds() - 1);
-      }
-      setTo(val) {
-        this.date.setSeconds(parseInt(val.substr(-2)));
-      }
-      toString() {
-        let s = this.date.getSeconds();
-        return this.token.length > 1 ? String(s).padStart(2, "0") : s;
-      }
-    };
-    module2.exports = Seconds;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/year.js
-var require_year = __commonJS({
-  "node_modules/prompts/dist/dateparts/year.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart();
-    var Year = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setFullYear(this.date.getFullYear() + 1);
-      }
-      down() {
-        this.date.setFullYear(this.date.getFullYear() - 1);
-      }
-      setTo(val) {
-        this.date.setFullYear(val.substr(-4));
-      }
-      toString() {
-        let year = String(this.date.getFullYear()).padStart(4, "0");
-        return this.token.length === 2 ? year.substr(-2) : year;
-      }
-    };
-    module2.exports = Year;
-  }
-});
-
-// node_modules/prompts/dist/dateparts/index.js
-var require_dateparts = __commonJS({
-  "node_modules/prompts/dist/dateparts/index.js"(exports2, module2) {
-    "use strict";
-    module2.exports = {
-      DatePart: require_datepart(),
-      Meridiem: require_meridiem(),
-      Day: require_day(),
-      Hours: require_hours(),
-      Milliseconds: require_milliseconds(),
-      Minutes: require_minutes(),
-      Month: require_month(),
-      Seconds: require_seconds(),
-      Year: require_year()
-    };
-  }
-});
-
-// node_modules/prompts/dist/elements/date.js
-var require_date = __commonJS({
-  "node_modules/prompts/dist/elements/date.js"(exports2, module2) {
-    "use strict";
-    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
-      try {
-        var info2 = gen[key](arg);
-        var value = info2.value;
-      } catch (error49) {
-        reject(error49);
-        return;
-      }
-      if (info2.done) {
-        resolve(value);
-      } else {
-        Promise.resolve(value).then(_next, _throw);
-      }
-    }
-    function _asyncToGenerator(fn) {
-      return function() {
-        var self = this, args = arguments;
-        return new Promise(function(resolve, reject) {
-          var gen = fn.apply(self, args);
-          function _next(value) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
-          }
-          function _throw(err) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
-          }
-          _next(void 0);
-        });
-      };
-    }
-    var color = require_kleur();
-    var Prompt = require_prompt();
-    var _require = require_util();
-    var style = _require.style;
-    var clear = _require.clear;
-    var figures = _require.figures;
-    var _require2 = require_src();
-    var erase = _require2.erase;
-    var cursor = _require2.cursor;
-    var _require3 = require_dateparts();
-    var DatePart = _require3.DatePart;
-    var Meridiem = _require3.Meridiem;
-    var Day = _require3.Day;
-    var Hours = _require3.Hours;
-    var Milliseconds = _require3.Milliseconds;
-    var Minutes = _require3.Minutes;
-    var Month = _require3.Month;
-    var Seconds = _require3.Seconds;
-    var Year = _require3.Year;
-    var regex2 = /\\(.)|"((?:\\["\\]|[^"])+)"|(D[Do]?|d{3,4}|d)|(M{1,4})|(YY(?:YY)?)|([aA])|([Hh]{1,2})|(m{1,2})|(s{1,2})|(S{1,4})|./g;
-    var regexGroups = {
-      1: ({
-        token
-      }) => token.replace(/\\(.)/g, "$1"),
-      2: (opts) => new Day(opts),
-      // Day // TODO
-      3: (opts) => new Month(opts),
-      // Month
-      4: (opts) => new Year(opts),
-      // Year
-      5: (opts) => new Meridiem(opts),
-      // AM/PM // TODO (special)
-      6: (opts) => new Hours(opts),
-      // Hours
-      7: (opts) => new Minutes(opts),
-      // Minutes
-      8: (opts) => new Seconds(opts),
-      // Seconds
-      9: (opts) => new Milliseconds(opts)
-      // Fractional seconds
-    };
-    var dfltLocales = {
-      months: "January,February,March,April,May,June,July,August,September,October,November,December".split(","),
-      monthsShort: "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec".split(","),
-      weekdays: "Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday".split(","),
-      weekdaysShort: "Sun,Mon,Tue,Wed,Thu,Fri,Sat".split(",")
-    };
-    var DatePrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.cursor = 0;
-        this.typed = "";
-        this.locales = Object.assign(dfltLocales, opts.locales);
-        this._date = opts.initial || /* @__PURE__ */ new Date();
-        this.errorMsg = opts.error || "Please Enter A Valid Value";
-        this.validator = opts.validate || (() => true);
-        this.mask = opts.mask || "YYYY-MM-DD HH:mm:ss";
-        this.clear = clear("", this.out.columns);
-        this.render();
-      }
-      get value() {
-        return this.date;
-      }
-      get date() {
-        return this._date;
-      }
-      set date(date5) {
-        if (date5) this._date.setTime(date5.getTime());
-      }
-      set mask(mask) {
-        let result;
-        this.parts = [];
-        while (result = regex2.exec(mask)) {
-          let match = result.shift();
-          let idx = result.findIndex((gr) => gr != null);
-          this.parts.push(idx in regexGroups ? regexGroups[idx]({
-            token: result[idx] || match,
-            date: this.date,
-            parts: this.parts,
-            locales: this.locales
-          }) : result[idx] || match);
-        }
-        let parts = this.parts.reduce((arr, i) => {
-          if (typeof i === "string" && typeof arr[arr.length - 1] === "string") arr[arr.length - 1] += i;
-          else arr.push(i);
-          return arr;
-        }, []);
-        this.parts.splice(0);
-        this.parts.push(...parts);
-        this.reset();
-      }
-      moveCursor(n) {
-        this.typed = "";
-        this.cursor = n;
-        this.fire();
-      }
-      reset() {
-        this.moveCursor(this.parts.findIndex((p) => p instanceof DatePart));
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.error = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      validate() {
-        var _this = this;
-        return _asyncToGenerator(function* () {
-          let valid = yield _this.validator(_this.value);
-          if (typeof valid === "string") {
-            _this.errorMsg = valid;
-            valid = false;
-          }
-          _this.error = !valid;
-        })();
-      }
-      submit() {
-        var _this2 = this;
-        return _asyncToGenerator(function* () {
-          yield _this2.validate();
-          if (_this2.error) {
-            _this2.color = "red";
-            _this2.fire();
-            _this2.render();
-            return;
-          }
-          _this2.done = true;
-          _this2.aborted = false;
-          _this2.fire();
-          _this2.render();
-          _this2.out.write("\n");
-          _this2.close();
-        })();
-      }
-      up() {
-        this.typed = "";
-        this.parts[this.cursor].up();
-        this.render();
-      }
-      down() {
-        this.typed = "";
-        this.parts[this.cursor].down();
-        this.render();
-      }
-      left() {
-        let prev = this.parts[this.cursor].prev();
-        if (prev == null) return this.bell();
-        this.moveCursor(this.parts.indexOf(prev));
-        this.render();
-      }
-      right() {
-        let next = this.parts[this.cursor].next();
-        if (next == null) return this.bell();
-        this.moveCursor(this.parts.indexOf(next));
-        this.render();
-      }
-      next() {
-        let next = this.parts[this.cursor].next();
-        this.moveCursor(next ? this.parts.indexOf(next) : this.parts.findIndex((part) => part instanceof DatePart));
-        this.render();
-      }
-      _(c) {
-        if (/\d/.test(c)) {
-          this.typed += c;
-          this.parts[this.cursor].setTo(this.typed);
-          this.render();
-        }
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(false), this.parts.reduce((arr, p, idx) => arr.concat(idx === this.cursor && !this.done ? color.cyan().underline(p.toString()) : p), []).join("")].join(" ");
-        if (this.error) {
-          this.outputText += this.errorMsg.split("\n").reduce((a, l, i) => a + `
-${i ? ` ` : figures.pointerSmall} ${color.red().italic(l)}`, ``);
-        }
-        this.out.write(erase.line + cursor.to(0) + this.outputText);
-      }
-    };
-    module2.exports = DatePrompt;
-  }
-});
-
-// node_modules/prompts/dist/elements/number.js
-var require_number = __commonJS({
-  "node_modules/prompts/dist/elements/number.js"(exports2, module2) {
-    "use strict";
-    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
-      try {
-        var info2 = gen[key](arg);
-        var value = info2.value;
-      } catch (error49) {
-        reject(error49);
-        return;
-      }
-      if (info2.done) {
-        resolve(value);
-      } else {
-        Promise.resolve(value).then(_next, _throw);
-      }
-    }
-    function _asyncToGenerator(fn) {
-      return function() {
-        var self = this, args = arguments;
-        return new Promise(function(resolve, reject) {
-          var gen = fn.apply(self, args);
-          function _next(value) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
-          }
-          function _throw(err) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
-          }
-          _next(void 0);
-        });
-      };
-    }
-    var color = require_kleur();
-    var Prompt = require_prompt();
-    var _require = require_src();
-    var cursor = _require.cursor;
-    var erase = _require.erase;
-    var _require2 = require_util();
-    var style = _require2.style;
-    var figures = _require2.figures;
-    var clear = _require2.clear;
-    var lines = _require2.lines;
-    var isNumber = /[0-9]/;
-    var isDef = (any2) => any2 !== void 0;
-    var round = (number4, precision) => {
-      let factor = Math.pow(10, precision);
-      return Math.round(number4 * factor) / factor;
-    };
-    var NumberPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.transform = style.render(opts.style);
-        this.msg = opts.message;
-        this.initial = isDef(opts.initial) ? opts.initial : "";
-        this.float = !!opts.float;
-        this.round = opts.round || 2;
-        this.inc = opts.increment || 1;
-        this.min = isDef(opts.min) ? opts.min : -Infinity;
-        this.max = isDef(opts.max) ? opts.max : Infinity;
-        this.errorMsg = opts.error || `Please Enter A Valid Value`;
-        this.validator = opts.validate || (() => true);
-        this.color = `cyan`;
-        this.value = ``;
-        this.typed = ``;
-        this.lastHit = 0;
-        this.render();
-      }
-      set value(v) {
-        if (!v && v !== 0) {
-          this.placeholder = true;
-          this.rendered = color.gray(this.transform.render(`${this.initial}`));
-          this._value = ``;
-        } else {
-          this.placeholder = false;
-          this.rendered = this.transform.render(`${round(v, this.round)}`);
-          this._value = round(v, this.round);
-        }
-        this.fire();
-      }
-      get value() {
-        return this._value;
-      }
-      parse(x) {
-        return this.float ? parseFloat(x) : parseInt(x);
-      }
-      valid(c) {
-        return c === `-` || c === `.` && this.float || isNumber.test(c);
-      }
-      reset() {
-        this.typed = ``;
-        this.value = ``;
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        let x = this.value;
-        this.value = x !== `` ? x : this.initial;
-        this.done = this.aborted = true;
-        this.error = false;
-        this.fire();
-        this.render();
-        this.out.write(`
-`);
-        this.close();
-      }
-      validate() {
-        var _this = this;
-        return _asyncToGenerator(function* () {
-          let valid = yield _this.validator(_this.value);
-          if (typeof valid === `string`) {
-            _this.errorMsg = valid;
-            valid = false;
-          }
-          _this.error = !valid;
-        })();
-      }
-      submit() {
-        var _this2 = this;
-        return _asyncToGenerator(function* () {
-          yield _this2.validate();
-          if (_this2.error) {
-            _this2.color = `red`;
-            _this2.fire();
-            _this2.render();
-            return;
-          }
-          let x = _this2.value;
-          _this2.value = x !== `` ? x : _this2.initial;
-          _this2.done = true;
-          _this2.aborted = false;
-          _this2.error = false;
-          _this2.fire();
-          _this2.render();
-          _this2.out.write(`
-`);
-          _this2.close();
-        })();
-      }
-      up() {
-        this.typed = ``;
-        if (this.value === "") {
-          this.value = this.min - this.inc;
-        }
-        if (this.value >= this.max) return this.bell();
-        this.value += this.inc;
-        this.color = `cyan`;
-        this.fire();
-        this.render();
-      }
-      down() {
-        this.typed = ``;
-        if (this.value === "") {
-          this.value = this.min + this.inc;
-        }
-        if (this.value <= this.min) return this.bell();
-        this.value -= this.inc;
-        this.color = `cyan`;
-        this.fire();
-        this.render();
-      }
-      delete() {
-        let val = this.value.toString();
-        if (val.length === 0) return this.bell();
-        this.value = this.parse(val = val.slice(0, -1)) || ``;
-        if (this.value !== "" && this.value < this.min) {
-          this.value = this.min;
-        }
-        this.color = `cyan`;
-        this.fire();
-        this.render();
-      }
-      next() {
-        this.value = this.initial;
-        this.fire();
-        this.render();
-      }
-      _(c, key) {
-        if (!this.valid(c)) return this.bell();
-        const now = Date.now();
-        if (now - this.lastHit > 1e3) this.typed = ``;
-        this.typed += c;
-        this.lastHit = now;
-        this.color = `cyan`;
-        if (c === `.`) return this.fire();
-        this.value = Math.min(this.parse(this.typed), this.max);
-        if (this.value > this.max) this.value = this.max;
-        if (this.value < this.min) this.value = this.min;
-        this.fire();
-        this.render();
-      }
-      render() {
-        if (this.closed) return;
-        if (!this.firstRender) {
-          if (this.outputError) this.out.write(cursor.down(lines(this.outputError, this.out.columns) - 1) + clear(this.outputError, this.out.columns));
-          this.out.write(clear(this.outputText, this.out.columns));
-        }
-        super.render();
-        this.outputError = "";
-        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(this.done), !this.done || !this.done && !this.placeholder ? color[this.color]().underline(this.rendered) : this.rendered].join(` `);
-        if (this.error) {
-          this.outputError += this.errorMsg.split(`
-`).reduce((a, l, i) => a + `
-${i ? ` ` : figures.pointerSmall} ${color.red().italic(l)}`, ``);
-        }
-        this.out.write(erase.line + cursor.to(0) + this.outputText + cursor.save + this.outputError + cursor.restore);
-      }
-    };
-    module2.exports = NumberPrompt;
-  }
-});
-
-// node_modules/prompts/dist/elements/multiselect.js
-var require_multiselect = __commonJS({
-  "node_modules/prompts/dist/elements/multiselect.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var _require = require_src();
-    var cursor = _require.cursor;
-    var Prompt = require_prompt();
-    var _require2 = require_util();
-    var clear = _require2.clear;
-    var figures = _require2.figures;
-    var style = _require2.style;
-    var wrap = _require2.wrap;
-    var entriesToDisplay = _require2.entriesToDisplay;
-    var MultiselectPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.cursor = opts.cursor || 0;
-        this.scrollIndex = opts.cursor || 0;
-        this.hint = opts.hint || "";
-        this.warn = opts.warn || "- This option is disabled -";
-        this.minSelected = opts.min;
-        this.showMinError = false;
-        this.maxChoices = opts.max;
-        this.instructions = opts.instructions;
-        this.optionsPerPage = opts.optionsPerPage || 10;
-        this.value = opts.choices.map((ch, idx) => {
-          if (typeof ch === "string") ch = {
-            title: ch,
-            value: idx
-          };
-          return {
-            title: ch && (ch.title || ch.value || ch),
-            description: ch && ch.description,
-            value: ch && (ch.value === void 0 ? idx : ch.value),
-            selected: ch && ch.selected,
-            disabled: ch && ch.disabled
-          };
-        });
-        this.clear = clear("", this.out.columns);
-        if (!opts.overrideRender) {
-          this.render();
-        }
-      }
-      reset() {
-        this.value.map((v) => !v.selected);
-        this.cursor = 0;
-        this.fire();
-        this.render();
-      }
-      selected() {
-        return this.value.filter((v) => v.selected);
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        const selected = this.value.filter((e) => e.selected);
-        if (this.minSelected && selected.length < this.minSelected) {
-          this.showMinError = true;
-          this.render();
-        } else {
-          this.done = true;
-          this.aborted = false;
-          this.fire();
-          this.render();
-          this.out.write("\n");
-          this.close();
-        }
-      }
-      first() {
-        this.cursor = 0;
-        this.render();
-      }
-      last() {
-        this.cursor = this.value.length - 1;
-        this.render();
-      }
-      next() {
-        this.cursor = (this.cursor + 1) % this.value.length;
-        this.render();
-      }
-      up() {
-        if (this.cursor === 0) {
-          this.cursor = this.value.length - 1;
-        } else {
-          this.cursor--;
-        }
-        this.render();
-      }
-      down() {
-        if (this.cursor === this.value.length - 1) {
-          this.cursor = 0;
-        } else {
-          this.cursor++;
-        }
-        this.render();
-      }
-      left() {
-        this.value[this.cursor].selected = false;
-        this.render();
-      }
-      right() {
-        if (this.value.filter((e) => e.selected).length >= this.maxChoices) return this.bell();
-        this.value[this.cursor].selected = true;
-        this.render();
-      }
-      handleSpaceToggle() {
-        const v = this.value[this.cursor];
-        if (v.selected) {
-          v.selected = false;
-          this.render();
-        } else if (v.disabled || this.value.filter((e) => e.selected).length >= this.maxChoices) {
-          return this.bell();
-        } else {
-          v.selected = true;
-          this.render();
-        }
-      }
-      toggleAll() {
-        if (this.maxChoices !== void 0 || this.value[this.cursor].disabled) {
-          return this.bell();
-        }
-        const newSelected = !this.value[this.cursor].selected;
-        this.value.filter((v) => !v.disabled).forEach((v) => v.selected = newSelected);
-        this.render();
-      }
-      _(c, key) {
-        if (c === " ") {
-          this.handleSpaceToggle();
-        } else if (c === "a") {
-          this.toggleAll();
-        } else {
-          return this.bell();
-        }
-      }
-      renderInstructions() {
-        if (this.instructions === void 0 || this.instructions) {
-          if (typeof this.instructions === "string") {
-            return this.instructions;
-          }
-          return `
-Instructions:
-    ${figures.arrowUp}/${figures.arrowDown}: Highlight option
-    ${figures.arrowLeft}/${figures.arrowRight}/[space]: Toggle selection
-` + (this.maxChoices === void 0 ? `    a: Toggle all
-` : "") + `    enter/return: Complete answer`;
-        }
-        return "";
-      }
-      renderOption(cursor2, v, i, arrowIndicator) {
-        const prefix = (v.selected ? color.green(figures.radioOn) : figures.radioOff) + " " + arrowIndicator + " ";
-        let title, desc;
-        if (v.disabled) {
-          title = cursor2 === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
-        } else {
-          title = cursor2 === i ? color.cyan().underline(v.title) : v.title;
-          if (cursor2 === i && v.description) {
-            desc = ` - ${v.description}`;
-            if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
-              desc = "\n" + wrap(v.description, {
-                margin: prefix.length,
-                width: this.out.columns
-              });
-            }
-          }
-        }
-        return prefix + title + color.gray(desc || "");
-      }
-      // shared with autocompleteMultiselect
-      paginateOptions(options) {
-        if (options.length === 0) {
-          return color.red("No matches for this query.");
-        }
-        let _entriesToDisplay = entriesToDisplay(this.cursor, options.length, this.optionsPerPage), startIndex = _entriesToDisplay.startIndex, endIndex = _entriesToDisplay.endIndex;
-        let prefix, styledOptions = [];
-        for (let i = startIndex; i < endIndex; i++) {
-          if (i === startIndex && startIndex > 0) {
-            prefix = figures.arrowUp;
-          } else if (i === endIndex - 1 && endIndex < options.length) {
-            prefix = figures.arrowDown;
-          } else {
-            prefix = " ";
-          }
-          styledOptions.push(this.renderOption(this.cursor, options[i], i, prefix));
-        }
-        return "\n" + styledOptions.join("\n");
-      }
-      // shared with autocomleteMultiselect
-      renderOptions(options) {
-        if (!this.done) {
-          return this.paginateOptions(options);
-        }
-        return "";
-      }
-      renderDoneOrInstructions() {
-        if (this.done) {
-          return this.value.filter((e) => e.selected).map((v) => v.title).join(", ");
-        }
-        const output = [color.gray(this.hint), this.renderInstructions()];
-        if (this.value[this.cursor].disabled) {
-          output.push(color.yellow(this.warn));
-        }
-        return output.join(" ");
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        super.render();
-        let prompt = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(false), this.renderDoneOrInstructions()].join(" ");
-        if (this.showMinError) {
-          prompt += color.red(`You must select a minimum of ${this.minSelected} choices.`);
-          this.showMinError = false;
-        }
-        prompt += this.renderOptions(this.value);
-        this.out.write(this.clear + prompt);
-        this.clear = clear(prompt, this.out.columns);
-      }
-    };
-    module2.exports = MultiselectPrompt;
-  }
-});
-
-// node_modules/prompts/dist/elements/autocomplete.js
-var require_autocomplete = __commonJS({
-  "node_modules/prompts/dist/elements/autocomplete.js"(exports2, module2) {
-    "use strict";
-    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
-      try {
-        var info2 = gen[key](arg);
-        var value = info2.value;
-      } catch (error49) {
-        reject(error49);
-        return;
-      }
-      if (info2.done) {
-        resolve(value);
-      } else {
-        Promise.resolve(value).then(_next, _throw);
-      }
-    }
-    function _asyncToGenerator(fn) {
-      return function() {
-        var self = this, args = arguments;
-        return new Promise(function(resolve, reject) {
-          var gen = fn.apply(self, args);
-          function _next(value) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
-          }
-          function _throw(err) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
-          }
-          _next(void 0);
-        });
-      };
-    }
-    var color = require_kleur();
-    var Prompt = require_prompt();
-    var _require = require_src();
-    var erase = _require.erase;
-    var cursor = _require.cursor;
-    var _require2 = require_util();
-    var style = _require2.style;
-    var clear = _require2.clear;
-    var figures = _require2.figures;
-    var wrap = _require2.wrap;
-    var entriesToDisplay = _require2.entriesToDisplay;
-    var getVal = (arr, i) => arr[i] && (arr[i].value || arr[i].title || arr[i]);
-    var getTitle = (arr, i) => arr[i] && (arr[i].title || arr[i].value || arr[i]);
-    var getIndex = (arr, valOrTitle) => {
-      const index = arr.findIndex((el) => el.value === valOrTitle || el.title === valOrTitle);
-      return index > -1 ? index : void 0;
-    };
-    var AutocompletePrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.suggest = opts.suggest;
-        this.choices = opts.choices;
-        this.initial = typeof opts.initial === "number" ? opts.initial : getIndex(opts.choices, opts.initial);
-        this.select = this.initial || opts.cursor || 0;
-        this.i18n = {
-          noMatches: opts.noMatches || "no matches found"
-        };
-        this.fallback = opts.fallback || this.initial;
-        this.clearFirst = opts.clearFirst || false;
-        this.suggestions = [];
-        this.input = "";
-        this.limit = opts.limit || 10;
-        this.cursor = 0;
-        this.transform = style.render(opts.style);
-        this.scale = this.transform.scale;
-        this.render = this.render.bind(this);
-        this.complete = this.complete.bind(this);
-        this.clear = clear("", this.out.columns);
-        this.complete(this.render);
-        this.render();
-      }
-      set fallback(fb) {
-        this._fb = Number.isSafeInteger(parseInt(fb)) ? parseInt(fb) : fb;
-      }
-      get fallback() {
-        let choice;
-        if (typeof this._fb === "number") choice = this.choices[this._fb];
-        else if (typeof this._fb === "string") choice = {
-          title: this._fb
-        };
-        return choice || this._fb || {
-          title: this.i18n.noMatches
-        };
-      }
-      moveSelect(i) {
-        this.select = i;
-        if (this.suggestions.length > 0) this.value = getVal(this.suggestions, i);
-        else this.value = this.fallback.value;
-        this.fire();
-      }
-      complete(cb) {
-        var _this = this;
-        return _asyncToGenerator(function* () {
-          const p = _this.completing = _this.suggest(_this.input, _this.choices);
-          const suggestions = yield p;
-          if (_this.completing !== p) return;
-          _this.suggestions = suggestions.map((s, i, arr) => ({
-            title: getTitle(arr, i),
-            value: getVal(arr, i),
-            description: s.description
-          }));
-          _this.completing = false;
-          const l = Math.max(suggestions.length - 1, 0);
-          _this.moveSelect(Math.min(l, _this.select));
-          cb && cb();
-        })();
-      }
-      reset() {
-        this.input = "";
-        this.complete(() => {
-          this.moveSelect(this.initial !== void 0 ? this.initial : 0);
-          this.render();
-        });
-        this.render();
-      }
-      exit() {
-        if (this.clearFirst && this.input.length > 0) {
-          this.reset();
-        } else {
-          this.done = this.exited = true;
-          this.aborted = false;
-          this.fire();
-          this.render();
-          this.out.write("\n");
-          this.close();
-        }
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.exited = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        this.done = true;
-        this.aborted = this.exited = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      _(c, key) {
-        let s1 = this.input.slice(0, this.cursor);
-        let s2 = this.input.slice(this.cursor);
-        this.input = `${s1}${c}${s2}`;
-        this.cursor = s1.length + 1;
-        this.complete(this.render);
-        this.render();
-      }
-      delete() {
-        if (this.cursor === 0) return this.bell();
-        let s1 = this.input.slice(0, this.cursor - 1);
-        let s2 = this.input.slice(this.cursor);
-        this.input = `${s1}${s2}`;
-        this.complete(this.render);
-        this.cursor = this.cursor - 1;
-        this.render();
-      }
-      deleteForward() {
-        if (this.cursor * this.scale >= this.rendered.length) return this.bell();
-        let s1 = this.input.slice(0, this.cursor);
-        let s2 = this.input.slice(this.cursor + 1);
-        this.input = `${s1}${s2}`;
-        this.complete(this.render);
-        this.render();
-      }
-      first() {
-        this.moveSelect(0);
-        this.render();
-      }
-      last() {
-        this.moveSelect(this.suggestions.length - 1);
-        this.render();
-      }
-      up() {
-        if (this.select === 0) {
-          this.moveSelect(this.suggestions.length - 1);
-        } else {
-          this.moveSelect(this.select - 1);
-        }
-        this.render();
-      }
-      down() {
-        if (this.select === this.suggestions.length - 1) {
-          this.moveSelect(0);
-        } else {
-          this.moveSelect(this.select + 1);
-        }
-        this.render();
-      }
-      next() {
-        if (this.select === this.suggestions.length - 1) {
-          this.moveSelect(0);
-        } else this.moveSelect(this.select + 1);
-        this.render();
-      }
-      nextPage() {
-        this.moveSelect(Math.min(this.select + this.limit, this.suggestions.length - 1));
-        this.render();
-      }
-      prevPage() {
-        this.moveSelect(Math.max(this.select - this.limit, 0));
-        this.render();
-      }
-      left() {
-        if (this.cursor <= 0) return this.bell();
-        this.cursor = this.cursor - 1;
-        this.render();
-      }
-      right() {
-        if (this.cursor * this.scale >= this.rendered.length) return this.bell();
-        this.cursor = this.cursor + 1;
-        this.render();
-      }
-      renderOption(v, hovered, isStart, isEnd) {
-        let desc;
-        let prefix = isStart ? figures.arrowUp : isEnd ? figures.arrowDown : " ";
-        let title = hovered ? color.cyan().underline(v.title) : v.title;
-        prefix = (hovered ? color.cyan(figures.pointer) + " " : "  ") + prefix;
-        if (v.description) {
-          desc = ` - ${v.description}`;
-          if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
-            desc = "\n" + wrap(v.description, {
-              margin: 3,
-              width: this.out.columns
-            });
-          }
-        }
-        return prefix + " " + title + color.gray(desc || "");
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        let _entriesToDisplay = entriesToDisplay(this.select, this.choices.length, this.limit), startIndex = _entriesToDisplay.startIndex, endIndex = _entriesToDisplay.endIndex;
-        this.outputText = [style.symbol(this.done, this.aborted, this.exited), color.bold(this.msg), style.delimiter(this.completing), this.done && this.suggestions[this.select] ? this.suggestions[this.select].title : this.rendered = this.transform.render(this.input)].join(" ");
-        if (!this.done) {
-          const suggestions = this.suggestions.slice(startIndex, endIndex).map((item, i) => this.renderOption(item, this.select === i + startIndex, i === 0 && startIndex > 0, i + startIndex === endIndex - 1 && endIndex < this.choices.length)).join("\n");
-          this.outputText += `
-` + (suggestions || color.gray(this.fallback.title));
-        }
-        this.out.write(erase.line + cursor.to(0) + this.outputText);
-      }
-    };
-    module2.exports = AutocompletePrompt;
-  }
-});
-
-// node_modules/prompts/dist/elements/autocompleteMultiselect.js
-var require_autocompleteMultiselect = __commonJS({
-  "node_modules/prompts/dist/elements/autocompleteMultiselect.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var _require = require_src();
-    var cursor = _require.cursor;
-    var MultiselectPrompt = require_multiselect();
-    var _require2 = require_util();
-    var clear = _require2.clear;
-    var style = _require2.style;
-    var figures = _require2.figures;
-    var AutocompleteMultiselectPrompt = class extends MultiselectPrompt {
-      constructor(opts = {}) {
-        opts.overrideRender = true;
-        super(opts);
-        this.inputValue = "";
-        this.clear = clear("", this.out.columns);
-        this.filteredOptions = this.value;
-        this.render();
-      }
-      last() {
-        this.cursor = this.filteredOptions.length - 1;
-        this.render();
-      }
-      next() {
-        this.cursor = (this.cursor + 1) % this.filteredOptions.length;
-        this.render();
-      }
-      up() {
-        if (this.cursor === 0) {
-          this.cursor = this.filteredOptions.length - 1;
-        } else {
-          this.cursor--;
-        }
-        this.render();
-      }
-      down() {
-        if (this.cursor === this.filteredOptions.length - 1) {
-          this.cursor = 0;
-        } else {
-          this.cursor++;
-        }
-        this.render();
-      }
-      left() {
-        this.filteredOptions[this.cursor].selected = false;
-        this.render();
-      }
-      right() {
-        if (this.value.filter((e) => e.selected).length >= this.maxChoices) return this.bell();
-        this.filteredOptions[this.cursor].selected = true;
-        this.render();
-      }
-      delete() {
-        if (this.inputValue.length) {
-          this.inputValue = this.inputValue.substr(0, this.inputValue.length - 1);
-          this.updateFilteredOptions();
-        }
-      }
-      updateFilteredOptions() {
-        const currentHighlight = this.filteredOptions[this.cursor];
-        this.filteredOptions = this.value.filter((v) => {
-          if (this.inputValue) {
-            if (typeof v.title === "string") {
-              if (v.title.toLowerCase().includes(this.inputValue.toLowerCase())) {
-                return true;
-              }
-            }
-            if (typeof v.value === "string") {
-              if (v.value.toLowerCase().includes(this.inputValue.toLowerCase())) {
-                return true;
-              }
-            }
-            return false;
-          }
-          return true;
-        });
-        const newHighlightIndex = this.filteredOptions.findIndex((v) => v === currentHighlight);
-        this.cursor = newHighlightIndex < 0 ? 0 : newHighlightIndex;
-        this.render();
-      }
-      handleSpaceToggle() {
-        const v = this.filteredOptions[this.cursor];
-        if (v.selected) {
-          v.selected = false;
-          this.render();
-        } else if (v.disabled || this.value.filter((e) => e.selected).length >= this.maxChoices) {
-          return this.bell();
-        } else {
-          v.selected = true;
-          this.render();
-        }
-      }
-      handleInputChange(c) {
-        this.inputValue = this.inputValue + c;
-        this.updateFilteredOptions();
-      }
-      _(c, key) {
-        if (c === " ") {
-          this.handleSpaceToggle();
-        } else {
-          this.handleInputChange(c);
-        }
-      }
-      renderInstructions() {
-        if (this.instructions === void 0 || this.instructions) {
-          if (typeof this.instructions === "string") {
-            return this.instructions;
-          }
-          return `
-Instructions:
-    ${figures.arrowUp}/${figures.arrowDown}: Highlight option
-    ${figures.arrowLeft}/${figures.arrowRight}/[space]: Toggle selection
-    [a,b,c]/delete: Filter choices
-    enter/return: Complete answer
-`;
-        }
-        return "";
-      }
-      renderCurrentInput() {
-        return `
-Filtered results for: ${this.inputValue ? this.inputValue : color.gray("Enter something to filter")}
-`;
-      }
-      renderOption(cursor2, v, i) {
-        let title;
-        if (v.disabled) title = cursor2 === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
-        else title = cursor2 === i ? color.cyan().underline(v.title) : v.title;
-        return (v.selected ? color.green(figures.radioOn) : figures.radioOff) + "  " + title;
-      }
-      renderDoneOrInstructions() {
-        if (this.done) {
-          return this.value.filter((e) => e.selected).map((v) => v.title).join(", ");
-        }
-        const output = [color.gray(this.hint), this.renderInstructions(), this.renderCurrentInput()];
-        if (this.filteredOptions.length && this.filteredOptions[this.cursor].disabled) {
-          output.push(color.yellow(this.warn));
-        }
-        return output.join(" ");
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        super.render();
-        let prompt = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(false), this.renderDoneOrInstructions()].join(" ");
-        if (this.showMinError) {
-          prompt += color.red(`You must select a minimum of ${this.minSelected} choices.`);
-          this.showMinError = false;
-        }
-        prompt += this.renderOptions(this.filteredOptions);
-        this.out.write(this.clear + prompt);
-        this.clear = clear(prompt, this.out.columns);
-      }
-    };
-    module2.exports = AutocompleteMultiselectPrompt;
-  }
-});
-
-// node_modules/prompts/dist/elements/confirm.js
-var require_confirm = __commonJS({
-  "node_modules/prompts/dist/elements/confirm.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt();
-    var _require = require_util();
-    var style = _require.style;
-    var clear = _require.clear;
-    var _require2 = require_src();
-    var erase = _require2.erase;
-    var cursor = _require2.cursor;
-    var ConfirmPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.value = opts.initial;
-        this.initialValue = !!opts.initial;
-        this.yesMsg = opts.yes || "yes";
-        this.yesOption = opts.yesOption || "(Y/n)";
-        this.noMsg = opts.no || "no";
-        this.noOption = opts.noOption || "(y/N)";
-        this.render();
-      }
-      reset() {
-        this.value = this.initialValue;
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        this.value = this.value || false;
-        this.done = true;
-        this.aborted = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      _(c, key) {
-        if (c.toLowerCase() === "y") {
-          this.value = true;
-          return this.submit();
-        }
-        if (c.toLowerCase() === "n") {
-          this.value = false;
-          return this.submit();
-        }
-        return this.bell();
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(this.done), this.done ? this.value ? this.yesMsg : this.noMsg : color.gray(this.initialValue ? this.yesOption : this.noOption)].join(" ");
-        this.out.write(erase.line + cursor.to(0) + this.outputText);
-      }
-    };
-    module2.exports = ConfirmPrompt;
-  }
-});
-
-// node_modules/prompts/dist/elements/index.js
-var require_elements = __commonJS({
-  "node_modules/prompts/dist/elements/index.js"(exports2, module2) {
-    "use strict";
-    module2.exports = {
-      TextPrompt: require_text(),
-      SelectPrompt: require_select(),
-      TogglePrompt: require_toggle(),
-      DatePrompt: require_date(),
-      NumberPrompt: require_number(),
-      MultiselectPrompt: require_multiselect(),
-      AutocompletePrompt: require_autocomplete(),
-      AutocompleteMultiselectPrompt: require_autocompleteMultiselect(),
-      ConfirmPrompt: require_confirm()
-    };
-  }
-});
-
-// node_modules/prompts/dist/prompts.js
-var require_prompts = __commonJS({
-  "node_modules/prompts/dist/prompts.js"(exports2) {
-    "use strict";
-    var $2 = exports2;
-    var el = require_elements();
-    var noop = (v) => v;
-    function toPrompt(type, args, opts = {}) {
-      return new Promise((res, rej) => {
-        const p = new el[type](args);
-        const onAbort = opts.onAbort || noop;
-        const onSubmit = opts.onSubmit || noop;
-        const onExit2 = opts.onExit || noop;
-        p.on("state", args.onState || noop);
-        p.on("submit", (x) => res(onSubmit(x)));
-        p.on("exit", (x) => res(onExit2(x)));
-        p.on("abort", (x) => rej(onAbort(x)));
-      });
-    }
-    $2.text = (args) => toPrompt("TextPrompt", args);
-    $2.password = (args) => {
-      args.style = "password";
-      return $2.text(args);
-    };
-    $2.invisible = (args) => {
-      args.style = "invisible";
-      return $2.text(args);
-    };
-    $2.number = (args) => toPrompt("NumberPrompt", args);
-    $2.date = (args) => toPrompt("DatePrompt", args);
-    $2.confirm = (args) => toPrompt("ConfirmPrompt", args);
-    $2.list = (args) => {
-      const sep = args.separator || ",";
-      return toPrompt("TextPrompt", args, {
-        onSubmit: (str) => str.split(sep).map((s) => s.trim())
-      });
-    };
-    $2.toggle = (args) => toPrompt("TogglePrompt", args);
-    $2.select = (args) => toPrompt("SelectPrompt", args);
-    $2.multiselect = (args) => {
-      args.choices = [].concat(args.choices || []);
-      const toSelected = (items) => items.filter((item) => item.selected).map((item) => item.value);
-      return toPrompt("MultiselectPrompt", args, {
-        onAbort: toSelected,
-        onSubmit: toSelected
-      });
-    };
-    $2.autocompleteMultiselect = (args) => {
-      args.choices = [].concat(args.choices || []);
-      const toSelected = (items) => items.filter((item) => item.selected).map((item) => item.value);
-      return toPrompt("AutocompleteMultiselectPrompt", args, {
-        onAbort: toSelected,
-        onSubmit: toSelected
-      });
-    };
-    var byTitle = (input, choices) => Promise.resolve(choices.filter((item) => item.title.slice(0, input.length).toLowerCase() === input.toLowerCase()));
-    $2.autocomplete = (args) => {
-      args.suggest = args.suggest || byTitle;
-      args.choices = [].concat(args.choices || []);
-      return toPrompt("AutocompletePrompt", args);
-    };
-  }
-});
-
-// node_modules/prompts/dist/index.js
-var require_dist = __commonJS({
-  "node_modules/prompts/dist/index.js"(exports2, module2) {
-    "use strict";
-    function ownKeys(object2, enumerableOnly) {
-      var keys = Object.keys(object2);
-      if (Object.getOwnPropertySymbols) {
-        var symbols = Object.getOwnPropertySymbols(object2);
-        if (enumerableOnly) {
-          symbols = symbols.filter(function(sym) {
-            return Object.getOwnPropertyDescriptor(object2, sym).enumerable;
-          });
-        }
-        keys.push.apply(keys, symbols);
-      }
-      return keys;
-    }
-    function _objectSpread(target) {
-      for (var i = 1; i < arguments.length; i++) {
-        var source = arguments[i] != null ? arguments[i] : {};
-        if (i % 2) {
-          ownKeys(Object(source), true).forEach(function(key) {
-            _defineProperty(target, key, source[key]);
-          });
-        } else if (Object.getOwnPropertyDescriptors) {
-          Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
-        } else {
-          ownKeys(Object(source)).forEach(function(key) {
-            Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
-          });
-        }
-      }
-      return target;
-    }
-    function _defineProperty(obj, key, value) {
-      if (key in obj) {
-        Object.defineProperty(obj, key, { value, enumerable: true, configurable: true, writable: true });
-      } else {
-        obj[key] = value;
-      }
-      return obj;
-    }
-    function _createForOfIteratorHelper(o, allowArrayLike) {
-      var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
-      if (!it) {
-        if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
-          if (it) o = it;
-          var i = 0;
-          var F = function F2() {
-          };
-          return { s: F, n: function n() {
-            if (i >= o.length) return { done: true };
-            return { done: false, value: o[i++] };
-          }, e: function e(_e) {
-            throw _e;
-          }, f: F };
-        }
-        throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
-      }
-      var normalCompletion = true, didErr = false, err;
-      return { s: function s() {
-        it = it.call(o);
-      }, n: function n() {
-        var step = it.next();
-        normalCompletion = step.done;
-        return step;
-      }, e: function e(_e2) {
-        didErr = true;
-        err = _e2;
-      }, f: function f() {
-        try {
-          if (!normalCompletion && it.return != null) it.return();
-        } finally {
-          if (didErr) throw err;
-        }
-      } };
-    }
-    function _unsupportedIterableToArray(o, minLen) {
-      if (!o) return;
-      if (typeof o === "string") return _arrayLikeToArray(o, minLen);
-      var n = Object.prototype.toString.call(o).slice(8, -1);
-      if (n === "Object" && o.constructor) n = o.constructor.name;
-      if (n === "Map" || n === "Set") return Array.from(o);
-      if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
-    }
-    function _arrayLikeToArray(arr, len) {
-      if (len == null || len > arr.length) len = arr.length;
-      for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
-      return arr2;
-    }
-    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
-      try {
-        var info2 = gen[key](arg);
-        var value = info2.value;
-      } catch (error49) {
-        reject(error49);
-        return;
-      }
-      if (info2.done) {
-        resolve(value);
-      } else {
-        Promise.resolve(value).then(_next, _throw);
-      }
-    }
-    function _asyncToGenerator(fn) {
-      return function() {
-        var self = this, args = arguments;
-        return new Promise(function(resolve, reject) {
-          var gen = fn.apply(self, args);
-          function _next(value) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
-          }
-          function _throw(err) {
-            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
-          }
-          _next(void 0);
-        });
-      };
-    }
-    var prompts3 = require_prompts();
-    var passOn = ["suggest", "format", "onState", "validate", "onRender", "type"];
-    var noop = () => {
-    };
-    function prompt() {
-      return _prompt.apply(this, arguments);
-    }
-    function _prompt() {
-      _prompt = _asyncToGenerator(function* (questions = [], {
-        onSubmit = noop,
-        onCancel = noop
-      } = {}) {
-        const answers = {};
-        const override2 = prompt._override || {};
-        questions = [].concat(questions);
-        let answer, question, quit, name, type, lastPrompt;
-        const getFormattedAnswer = /* @__PURE__ */ (function() {
-          var _ref = _asyncToGenerator(function* (question2, answer2, skipValidation = false) {
-            if (!skipValidation && question2.validate && question2.validate(answer2) !== true) {
-              return;
-            }
-            return question2.format ? yield question2.format(answer2, answers) : answer2;
-          });
-          return function getFormattedAnswer2(_x, _x2) {
-            return _ref.apply(this, arguments);
-          };
-        })();
-        var _iterator = _createForOfIteratorHelper(questions), _step;
-        try {
-          for (_iterator.s(); !(_step = _iterator.n()).done; ) {
-            question = _step.value;
-            var _question = question;
-            name = _question.name;
-            type = _question.type;
-            if (typeof type === "function") {
-              type = yield type(answer, _objectSpread({}, answers), question);
-              question["type"] = type;
-            }
-            if (!type) continue;
-            for (let key in question) {
-              if (passOn.includes(key)) continue;
-              let value = question[key];
-              question[key] = typeof value === "function" ? yield value(answer, _objectSpread({}, answers), lastPrompt) : value;
-            }
-            lastPrompt = question;
-            if (typeof question.message !== "string") {
-              throw new Error("prompt message is required");
-            }
-            var _question2 = question;
-            name = _question2.name;
-            type = _question2.type;
-            if (prompts3[type] === void 0) {
-              throw new Error(`prompt type (${type}) is not defined`);
-            }
-            if (override2[question.name] !== void 0) {
-              answer = yield getFormattedAnswer(question, override2[question.name]);
-              if (answer !== void 0) {
-                answers[name] = answer;
-                continue;
-              }
-            }
-            try {
-              answer = prompt._injected ? getInjectedAnswer(prompt._injected, question.initial) : yield prompts3[type](question);
-              answers[name] = answer = yield getFormattedAnswer(question, answer, true);
-              quit = yield onSubmit(question, answer, answers);
-            } catch (err) {
-              quit = !(yield onCancel(question, answers));
-            }
-            if (quit) return answers;
-          }
-        } catch (err) {
-          _iterator.e(err);
-        } finally {
-          _iterator.f();
-        }
-        return answers;
-      });
-      return _prompt.apply(this, arguments);
-    }
-    function getInjectedAnswer(injected, deafultValue) {
-      const answer = injected.shift();
-      if (answer instanceof Error) {
-        throw answer;
-      }
-      return answer === void 0 ? deafultValue : answer;
-    }
-    function inject(answers) {
-      prompt._injected = (prompt._injected || []).concat(answers);
-    }
-    function override(answers) {
-      prompt._override = Object.assign({}, answers);
-    }
-    module2.exports = Object.assign(prompt, {
-      prompt,
-      prompts: prompts3,
-      inject,
-      override
-    });
-  }
-});
-
-// node_modules/prompts/lib/util/action.js
-var require_action2 = __commonJS({
-  "node_modules/prompts/lib/util/action.js"(exports2, module2) {
-    "use strict";
-    module2.exports = (key, isSelect) => {
-      if (key.meta && key.name !== "escape") return;
-      if (key.ctrl) {
-        if (key.name === "a") return "first";
-        if (key.name === "c") return "abort";
-        if (key.name === "d") return "abort";
-        if (key.name === "e") return "last";
-        if (key.name === "g") return "reset";
-      }
-      if (isSelect) {
-        if (key.name === "j") return "down";
-        if (key.name === "k") return "up";
-      }
-      if (key.name === "return") return "submit";
-      if (key.name === "enter") return "submit";
-      if (key.name === "backspace") return "delete";
-      if (key.name === "delete") return "deleteForward";
-      if (key.name === "abort") return "abort";
-      if (key.name === "escape") return "exit";
-      if (key.name === "tab") return "next";
-      if (key.name === "pagedown") return "nextPage";
-      if (key.name === "pageup") return "prevPage";
-      if (key.name === "home") return "home";
-      if (key.name === "end") return "end";
-      if (key.name === "up") return "up";
-      if (key.name === "down") return "down";
-      if (key.name === "right") return "right";
-      if (key.name === "left") return "left";
-      return false;
-    };
-  }
-});
-
-// node_modules/prompts/lib/util/strip.js
-var require_strip2 = __commonJS({
-  "node_modules/prompts/lib/util/strip.js"(exports2, module2) {
-    "use strict";
-    module2.exports = (str) => {
-      const pattern = [
-        "[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)",
-        "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
-      ].join("|");
-      const RGX = new RegExp(pattern, "g");
-      return typeof str === "string" ? str.replace(RGX, "") : str;
-    };
-  }
-});
-
-// node_modules/prompts/lib/util/clear.js
-var require_clear2 = __commonJS({
-  "node_modules/prompts/lib/util/clear.js"(exports2, module2) {
-    "use strict";
-    var strip = require_strip2();
-    var { erase, cursor } = require_src();
-    var width = (str) => [...strip(str)].length;
-    module2.exports = function(prompt, perLine) {
-      if (!perLine) return erase.line + cursor.to(0);
-      let rows = 0;
-      const lines = prompt.split(/\r?\n/);
-      for (let line of lines) {
-        rows += 1 + Math.floor(Math.max(width(line) - 1, 0) / perLine);
-      }
-      return erase.lines(rows);
-    };
-  }
-});
-
-// node_modules/prompts/lib/util/figures.js
-var require_figures2 = __commonJS({
-  "node_modules/prompts/lib/util/figures.js"(exports2, module2) {
-    "use strict";
-    var main = {
-      arrowUp: "\u2191",
-      arrowDown: "\u2193",
-      arrowLeft: "\u2190",
-      arrowRight: "\u2192",
-      radioOn: "\u25C9",
-      radioOff: "\u25EF",
-      tick: "\u2714",
-      cross: "\u2716",
-      ellipsis: "\u2026",
-      pointerSmall: "\u203A",
-      line: "\u2500",
-      pointer: "\u276F"
-    };
-    var win = {
-      arrowUp: main.arrowUp,
-      arrowDown: main.arrowDown,
-      arrowLeft: main.arrowLeft,
-      arrowRight: main.arrowRight,
-      radioOn: "(*)",
-      radioOff: "( )",
-      tick: "\u221A",
-      cross: "\xD7",
-      ellipsis: "...",
-      pointerSmall: "\xBB",
-      line: "\u2500",
-      pointer: ">"
-    };
-    var figures = process.platform === "win32" ? win : main;
-    module2.exports = figures;
-  }
-});
-
-// node_modules/prompts/lib/util/style.js
-var require_style2 = __commonJS({
-  "node_modules/prompts/lib/util/style.js"(exports2, module2) {
-    "use strict";
-    var c = require_kleur();
-    var figures = require_figures2();
-    var styles3 = Object.freeze({
-      password: { scale: 1, render: (input) => "*".repeat(input.length) },
-      emoji: { scale: 2, render: (input) => "\u{1F603}".repeat(input.length) },
-      invisible: { scale: 0, render: (input) => "" },
-      default: { scale: 1, render: (input) => `${input}` }
-    });
-    var render = (type) => styles3[type] || styles3.default;
-    var symbols = Object.freeze({
-      aborted: c.red(figures.cross),
-      done: c.green(figures.tick),
-      exited: c.yellow(figures.cross),
-      default: c.cyan("?")
-    });
-    var symbol2 = (done, aborted2, exited) => aborted2 ? symbols.aborted : exited ? symbols.exited : done ? symbols.done : symbols.default;
-    var delimiter = (completing) => c.gray(completing ? figures.ellipsis : figures.pointerSmall);
-    var item = (expandable, expanded) => c.gray(expandable ? expanded ? figures.pointerSmall : "+" : figures.line);
-    module2.exports = {
-      styles: styles3,
-      render,
-      symbols,
-      symbol: symbol2,
-      delimiter,
-      item
-    };
-  }
-});
-
-// node_modules/prompts/lib/util/lines.js
-var require_lines2 = __commonJS({
-  "node_modules/prompts/lib/util/lines.js"(exports2, module2) {
-    "use strict";
-    var strip = require_strip2();
-    module2.exports = function(msg, perLine) {
-      let lines = String(strip(msg) || "").split(/\r?\n/);
-      if (!perLine) return lines.length;
-      return lines.map((l) => Math.ceil(l.length / perLine)).reduce((a, b) => a + b);
-    };
-  }
-});
-
-// node_modules/prompts/lib/util/wrap.js
-var require_wrap2 = __commonJS({
-  "node_modules/prompts/lib/util/wrap.js"(exports2, module2) {
-    "use strict";
-    module2.exports = (msg, opts = {}) => {
-      const tab = Number.isSafeInteger(parseInt(opts.margin)) ? new Array(parseInt(opts.margin)).fill(" ").join("") : opts.margin || "";
-      const width = opts.width;
-      return (msg || "").split(/\r?\n/g).map((line) => line.split(/\s+/g).reduce((arr, w) => {
-        if (w.length + tab.length >= width || arr[arr.length - 1].length + w.length + 1 < width)
-          arr[arr.length - 1] += ` ${w}`;
-        else arr.push(`${tab}${w}`);
-        return arr;
-      }, [tab]).join("\n")).join("\n");
-    };
-  }
-});
-
-// node_modules/prompts/lib/util/entriesToDisplay.js
-var require_entriesToDisplay2 = __commonJS({
-  "node_modules/prompts/lib/util/entriesToDisplay.js"(exports2, module2) {
-    "use strict";
-    module2.exports = (cursor, total, maxVisible) => {
-      maxVisible = maxVisible || total;
-      let startIndex = Math.min(total - maxVisible, cursor - Math.floor(maxVisible / 2));
-      if (startIndex < 0) startIndex = 0;
-      let endIndex = Math.min(startIndex + maxVisible, total);
-      return { startIndex, endIndex };
-    };
-  }
-});
-
-// node_modules/prompts/lib/util/index.js
-var require_util2 = __commonJS({
-  "node_modules/prompts/lib/util/index.js"(exports2, module2) {
-    "use strict";
-    module2.exports = {
-      action: require_action2(),
-      clear: require_clear2(),
-      style: require_style2(),
-      strip: require_strip2(),
-      figures: require_figures2(),
-      lines: require_lines2(),
-      wrap: require_wrap2(),
-      entriesToDisplay: require_entriesToDisplay2()
-    };
-  }
-});
-
-// node_modules/prompts/lib/elements/prompt.js
-var require_prompt2 = __commonJS({
-  "node_modules/prompts/lib/elements/prompt.js"(exports2, module2) {
-    "use strict";
-    var readline = require("readline");
-    var { action } = require_util2();
-    var EventEmitter = require("events");
-    var { beep, cursor } = require_src();
-    var color = require_kleur();
-    var Prompt = class extends EventEmitter {
-      constructor(opts = {}) {
-        super();
-        this.firstRender = true;
-        this.in = opts.stdin || process.stdin;
-        this.out = opts.stdout || process.stdout;
-        this.onRender = (opts.onRender || (() => void 0)).bind(this);
-        const rl = readline.createInterface({ input: this.in, escapeCodeTimeout: 50 });
-        readline.emitKeypressEvents(this.in, rl);
-        if (this.in.isTTY) this.in.setRawMode(true);
-        const isSelect = ["SelectPrompt", "MultiselectPrompt"].indexOf(this.constructor.name) > -1;
-        const keypress = (str, key) => {
-          let a = action(key, isSelect);
-          if (a === false) {
-            this._ && this._(str, key);
-          } else if (typeof this[a] === "function") {
-            this[a](key);
-          } else {
-            this.bell();
-          }
-        };
-        this.close = () => {
-          this.out.write(cursor.show);
-          this.in.removeListener("keypress", keypress);
-          if (this.in.isTTY) this.in.setRawMode(false);
-          rl.close();
-          this.emit(this.aborted ? "abort" : this.exited ? "exit" : "submit", this.value);
-          this.closed = true;
-        };
-        this.in.on("keypress", keypress);
-      }
-      fire() {
-        this.emit("state", {
-          value: this.value,
-          aborted: !!this.aborted,
-          exited: !!this.exited
-        });
-      }
-      bell() {
-        this.out.write(beep);
-      }
-      render() {
-        this.onRender(color);
-        if (this.firstRender) this.firstRender = false;
-      }
-    };
-    module2.exports = Prompt;
-  }
-});
-
-// node_modules/prompts/lib/elements/text.js
-var require_text2 = __commonJS({
-  "node_modules/prompts/lib/elements/text.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt2();
-    var { erase, cursor } = require_src();
-    var { style, clear, lines, figures } = require_util2();
-    var TextPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.transform = style.render(opts.style);
-        this.scale = this.transform.scale;
-        this.msg = opts.message;
-        this.initial = opts.initial || ``;
-        this.validator = opts.validate || (() => true);
-        this.value = ``;
-        this.errorMsg = opts.error || `Please Enter A Valid Value`;
-        this.cursor = Number(!!this.initial);
-        this.cursorOffset = 0;
-        this.clear = clear(``, this.out.columns);
-        this.render();
-      }
-      set value(v) {
-        if (!v && this.initial) {
-          this.placeholder = true;
-          this.rendered = color.gray(this.transform.render(this.initial));
-        } else {
-          this.placeholder = false;
-          this.rendered = this.transform.render(v);
-        }
-        this._value = v;
-        this.fire();
-      }
-      get value() {
-        return this._value;
-      }
-      reset() {
-        this.value = ``;
-        this.cursor = Number(!!this.initial);
-        this.cursorOffset = 0;
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.value = this.value || this.initial;
-        this.done = this.aborted = true;
-        this.error = false;
-        this.red = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      async validate() {
-        let valid = await this.validator(this.value);
-        if (typeof valid === `string`) {
-          this.errorMsg = valid;
-          valid = false;
-        }
-        this.error = !valid;
-      }
-      async submit() {
-        this.value = this.value || this.initial;
-        this.cursorOffset = 0;
-        this.cursor = this.rendered.length;
-        await this.validate();
-        if (this.error) {
-          this.red = true;
-          this.fire();
-          this.render();
-          return;
-        }
-        this.done = true;
-        this.aborted = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      next() {
-        if (!this.placeholder) return this.bell();
-        this.value = this.initial;
-        this.cursor = this.rendered.length;
-        this.fire();
-        this.render();
-      }
-      moveCursor(n) {
-        if (this.placeholder) return;
-        this.cursor = this.cursor + n;
-        this.cursorOffset += n;
-      }
-      _(c, key) {
-        let s1 = this.value.slice(0, this.cursor);
-        let s2 = this.value.slice(this.cursor);
-        this.value = `${s1}${c}${s2}`;
-        this.red = false;
-        this.cursor = this.placeholder ? 0 : s1.length + 1;
-        this.render();
-      }
-      delete() {
-        if (this.isCursorAtStart()) return this.bell();
-        let s1 = this.value.slice(0, this.cursor - 1);
-        let s2 = this.value.slice(this.cursor);
-        this.value = `${s1}${s2}`;
-        this.red = false;
-        if (this.isCursorAtStart()) {
-          this.cursorOffset = 0;
-        } else {
-          this.cursorOffset++;
-          this.moveCursor(-1);
-        }
-        this.render();
-      }
-      deleteForward() {
-        if (this.cursor * this.scale >= this.rendered.length || this.placeholder) return this.bell();
-        let s1 = this.value.slice(0, this.cursor);
-        let s2 = this.value.slice(this.cursor + 1);
-        this.value = `${s1}${s2}`;
-        this.red = false;
-        if (this.isCursorAtEnd()) {
-          this.cursorOffset = 0;
-        } else {
-          this.cursorOffset++;
-        }
-        this.render();
-      }
-      first() {
-        this.cursor = 0;
-        this.render();
-      }
-      last() {
-        this.cursor = this.value.length;
-        this.render();
-      }
-      left() {
-        if (this.cursor <= 0 || this.placeholder) return this.bell();
-        this.moveCursor(-1);
-        this.render();
-      }
-      right() {
-        if (this.cursor * this.scale >= this.rendered.length || this.placeholder) return this.bell();
-        this.moveCursor(1);
-        this.render();
-      }
-      isCursorAtStart() {
-        return this.cursor === 0 || this.placeholder && this.cursor === 1;
-      }
-      isCursorAtEnd() {
-        return this.cursor === this.rendered.length || this.placeholder && this.cursor === this.rendered.length + 1;
-      }
-      render() {
-        if (this.closed) return;
-        if (!this.firstRender) {
-          if (this.outputError)
-            this.out.write(cursor.down(lines(this.outputError, this.out.columns) - 1) + clear(this.outputError, this.out.columns));
-          this.out.write(clear(this.outputText, this.out.columns));
-        }
-        super.render();
-        this.outputError = "";
-        this.outputText = [
-          style.symbol(this.done, this.aborted),
-          color.bold(this.msg),
-          style.delimiter(this.done),
-          this.red ? color.red(this.rendered) : this.rendered
-        ].join(` `);
-        if (this.error) {
-          this.outputError += this.errorMsg.split(`
-`).reduce((a, l, i) => a + `
-${i ? " " : figures.pointerSmall} ${color.red().italic(l)}`, ``);
-        }
-        this.out.write(erase.line + cursor.to(0) + this.outputText + cursor.save + this.outputError + cursor.restore + cursor.move(this.cursorOffset, 0));
-      }
-    };
-    module2.exports = TextPrompt;
-  }
-});
-
-// node_modules/prompts/lib/elements/select.js
-var require_select2 = __commonJS({
-  "node_modules/prompts/lib/elements/select.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt2();
-    var { style, clear, figures, wrap, entriesToDisplay } = require_util2();
-    var { cursor } = require_src();
-    var SelectPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.hint = opts.hint || "- Use arrow-keys. Return to submit.";
-        this.warn = opts.warn || "- This option is disabled";
-        this.cursor = opts.initial || 0;
-        this.choices = opts.choices.map((ch, idx) => {
-          if (typeof ch === "string")
-            ch = { title: ch, value: idx };
-          return {
-            title: ch && (ch.title || ch.value || ch),
-            value: ch && (ch.value === void 0 ? idx : ch.value),
-            description: ch && ch.description,
-            selected: ch && ch.selected,
-            disabled: ch && ch.disabled
-          };
-        });
-        this.optionsPerPage = opts.optionsPerPage || 10;
-        this.value = (this.choices[this.cursor] || {}).value;
-        this.clear = clear("", this.out.columns);
-        this.render();
-      }
-      moveCursor(n) {
-        this.cursor = n;
-        this.value = this.choices[n].value;
-        this.fire();
-      }
-      reset() {
-        this.moveCursor(0);
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        if (!this.selection.disabled) {
-          this.done = true;
-          this.aborted = false;
-          this.fire();
-          this.render();
-          this.out.write("\n");
-          this.close();
-        } else
-          this.bell();
-      }
-      first() {
-        this.moveCursor(0);
-        this.render();
-      }
-      last() {
-        this.moveCursor(this.choices.length - 1);
-        this.render();
-      }
-      up() {
-        if (this.cursor === 0) {
-          this.moveCursor(this.choices.length - 1);
-        } else {
-          this.moveCursor(this.cursor - 1);
-        }
-        this.render();
-      }
-      down() {
-        if (this.cursor === this.choices.length - 1) {
-          this.moveCursor(0);
-        } else {
-          this.moveCursor(this.cursor + 1);
-        }
-        this.render();
-      }
-      next() {
-        this.moveCursor((this.cursor + 1) % this.choices.length);
-        this.render();
-      }
-      _(c, key) {
-        if (c === " ") return this.submit();
-      }
-      get selection() {
-        return this.choices[this.cursor];
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        let { startIndex, endIndex } = entriesToDisplay(this.cursor, this.choices.length, this.optionsPerPage);
-        this.outputText = [
-          style.symbol(this.done, this.aborted),
-          color.bold(this.msg),
-          style.delimiter(false),
-          this.done ? this.selection.title : this.selection.disabled ? color.yellow(this.warn) : color.gray(this.hint)
-        ].join(" ");
-        if (!this.done) {
-          this.outputText += "\n";
-          for (let i = startIndex; i < endIndex; i++) {
-            let title, prefix, desc = "", v = this.choices[i];
-            if (i === startIndex && startIndex > 0) {
-              prefix = figures.arrowUp;
-            } else if (i === endIndex - 1 && endIndex < this.choices.length) {
-              prefix = figures.arrowDown;
-            } else {
-              prefix = " ";
-            }
-            if (v.disabled) {
-              title = this.cursor === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
-              prefix = (this.cursor === i ? color.bold().gray(figures.pointer) + " " : "  ") + prefix;
-            } else {
-              title = this.cursor === i ? color.cyan().underline(v.title) : v.title;
-              prefix = (this.cursor === i ? color.cyan(figures.pointer) + " " : "  ") + prefix;
-              if (v.description && this.cursor === i) {
-                desc = ` - ${v.description}`;
-                if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
-                  desc = "\n" + wrap(v.description, { margin: 3, width: this.out.columns });
-                }
-              }
-            }
-            this.outputText += `${prefix} ${title}${color.gray(desc)}
-`;
-          }
-        }
-        this.out.write(this.outputText);
-      }
-    };
-    module2.exports = SelectPrompt;
-  }
-});
-
-// node_modules/prompts/lib/elements/toggle.js
-var require_toggle2 = __commonJS({
-  "node_modules/prompts/lib/elements/toggle.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt2();
-    var { style, clear } = require_util2();
-    var { cursor, erase } = require_src();
-    var TogglePrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.value = !!opts.initial;
-        this.active = opts.active || "on";
-        this.inactive = opts.inactive || "off";
-        this.initialValue = this.value;
-        this.render();
-      }
-      reset() {
-        this.value = this.initialValue;
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        this.done = true;
-        this.aborted = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      deactivate() {
-        if (this.value === false) return this.bell();
-        this.value = false;
-        this.render();
-      }
-      activate() {
-        if (this.value === true) return this.bell();
-        this.value = true;
-        this.render();
-      }
-      delete() {
-        this.deactivate();
-      }
-      left() {
-        this.deactivate();
-      }
-      right() {
-        this.activate();
-      }
-      down() {
-        this.deactivate();
-      }
-      up() {
-        this.activate();
-      }
-      next() {
-        this.value = !this.value;
-        this.fire();
-        this.render();
-      }
-      _(c, key) {
-        if (c === " ") {
-          this.value = !this.value;
-        } else if (c === "1") {
-          this.value = true;
-        } else if (c === "0") {
-          this.value = false;
-        } else return this.bell();
-        this.render();
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        this.outputText = [
-          style.symbol(this.done, this.aborted),
-          color.bold(this.msg),
-          style.delimiter(this.done),
-          this.value ? this.inactive : color.cyan().underline(this.inactive),
-          color.gray("/"),
-          this.value ? color.cyan().underline(this.active) : this.active
-        ].join(" ");
-        this.out.write(erase.line + cursor.to(0) + this.outputText);
-      }
-    };
-    module2.exports = TogglePrompt;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/datepart.js
-var require_datepart2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/datepart.js"(exports2, module2) {
-    "use strict";
-    var DatePart = class _DatePart {
-      constructor({ token, date: date5, parts, locales }) {
-        this.token = token;
-        this.date = date5 || /* @__PURE__ */ new Date();
-        this.parts = parts || [this];
-        this.locales = locales || {};
-      }
-      up() {
-      }
-      down() {
-      }
-      next() {
-        const currentIdx = this.parts.indexOf(this);
-        return this.parts.find((part, idx) => idx > currentIdx && part instanceof _DatePart);
-      }
-      setTo(val) {
-      }
-      prev() {
-        let parts = [].concat(this.parts).reverse();
-        const currentIdx = parts.indexOf(this);
-        return parts.find((part, idx) => idx > currentIdx && part instanceof _DatePart);
-      }
-      toString() {
-        return String(this.date);
-      }
-    };
-    module2.exports = DatePart;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/meridiem.js
-var require_meridiem2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/meridiem.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart2();
-    var Meridiem = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setHours((this.date.getHours() + 12) % 24);
-      }
-      down() {
-        this.up();
-      }
-      toString() {
-        let meridiem = this.date.getHours() > 12 ? "pm" : "am";
-        return /\A/.test(this.token) ? meridiem.toUpperCase() : meridiem;
-      }
-    };
-    module2.exports = Meridiem;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/day.js
-var require_day2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/day.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart2();
-    var pos = (n) => {
-      n = n % 10;
-      return n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th";
-    };
-    var Day = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setDate(this.date.getDate() + 1);
-      }
-      down() {
-        this.date.setDate(this.date.getDate() - 1);
-      }
-      setTo(val) {
-        this.date.setDate(parseInt(val.substr(-2)));
-      }
-      toString() {
-        let date5 = this.date.getDate();
-        let day = this.date.getDay();
-        return this.token === "DD" ? String(date5).padStart(2, "0") : this.token === "Do" ? date5 + pos(date5) : this.token === "d" ? day + 1 : this.token === "ddd" ? this.locales.weekdaysShort[day] : this.token === "dddd" ? this.locales.weekdays[day] : date5;
-      }
-    };
-    module2.exports = Day;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/hours.js
-var require_hours2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/hours.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart2();
-    var Hours = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setHours(this.date.getHours() + 1);
-      }
-      down() {
-        this.date.setHours(this.date.getHours() - 1);
-      }
-      setTo(val) {
-        this.date.setHours(parseInt(val.substr(-2)));
-      }
-      toString() {
-        let hours = this.date.getHours();
-        if (/h/.test(this.token))
-          hours = hours % 12 || 12;
-        return this.token.length > 1 ? String(hours).padStart(2, "0") : hours;
-      }
-    };
-    module2.exports = Hours;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/milliseconds.js
-var require_milliseconds2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/milliseconds.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart2();
-    var Milliseconds = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setMilliseconds(this.date.getMilliseconds() + 1);
-      }
-      down() {
-        this.date.setMilliseconds(this.date.getMilliseconds() - 1);
-      }
-      setTo(val) {
-        this.date.setMilliseconds(parseInt(val.substr(-this.token.length)));
-      }
-      toString() {
-        return String(this.date.getMilliseconds()).padStart(4, "0").substr(0, this.token.length);
-      }
-    };
-    module2.exports = Milliseconds;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/minutes.js
-var require_minutes2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/minutes.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart2();
-    var Minutes = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setMinutes(this.date.getMinutes() + 1);
-      }
-      down() {
-        this.date.setMinutes(this.date.getMinutes() - 1);
-      }
-      setTo(val) {
-        this.date.setMinutes(parseInt(val.substr(-2)));
-      }
-      toString() {
-        let m = this.date.getMinutes();
-        return this.token.length > 1 ? String(m).padStart(2, "0") : m;
-      }
-    };
-    module2.exports = Minutes;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/month.js
-var require_month2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/month.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart2();
-    var Month = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setMonth(this.date.getMonth() + 1);
-      }
-      down() {
-        this.date.setMonth(this.date.getMonth() - 1);
-      }
-      setTo(val) {
-        val = parseInt(val.substr(-2)) - 1;
-        this.date.setMonth(val < 0 ? 0 : val);
-      }
-      toString() {
-        let month = this.date.getMonth();
-        let tl = this.token.length;
-        return tl === 2 ? String(month + 1).padStart(2, "0") : tl === 3 ? this.locales.monthsShort[month] : tl === 4 ? this.locales.months[month] : String(month + 1);
-      }
-    };
-    module2.exports = Month;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/seconds.js
-var require_seconds2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/seconds.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart2();
-    var Seconds = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setSeconds(this.date.getSeconds() + 1);
-      }
-      down() {
-        this.date.setSeconds(this.date.getSeconds() - 1);
-      }
-      setTo(val) {
-        this.date.setSeconds(parseInt(val.substr(-2)));
-      }
-      toString() {
-        let s = this.date.getSeconds();
-        return this.token.length > 1 ? String(s).padStart(2, "0") : s;
-      }
-    };
-    module2.exports = Seconds;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/year.js
-var require_year2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/year.js"(exports2, module2) {
-    "use strict";
-    var DatePart = require_datepart2();
-    var Year = class extends DatePart {
-      constructor(opts = {}) {
-        super(opts);
-      }
-      up() {
-        this.date.setFullYear(this.date.getFullYear() + 1);
-      }
-      down() {
-        this.date.setFullYear(this.date.getFullYear() - 1);
-      }
-      setTo(val) {
-        this.date.setFullYear(val.substr(-4));
-      }
-      toString() {
-        let year = String(this.date.getFullYear()).padStart(4, "0");
-        return this.token.length === 2 ? year.substr(-2) : year;
-      }
-    };
-    module2.exports = Year;
-  }
-});
-
-// node_modules/prompts/lib/dateparts/index.js
-var require_dateparts2 = __commonJS({
-  "node_modules/prompts/lib/dateparts/index.js"(exports2, module2) {
-    "use strict";
-    module2.exports = {
-      DatePart: require_datepart2(),
-      Meridiem: require_meridiem2(),
-      Day: require_day2(),
-      Hours: require_hours2(),
-      Milliseconds: require_milliseconds2(),
-      Minutes: require_minutes2(),
-      Month: require_month2(),
-      Seconds: require_seconds2(),
-      Year: require_year2()
-    };
-  }
-});
-
-// node_modules/prompts/lib/elements/date.js
-var require_date2 = __commonJS({
-  "node_modules/prompts/lib/elements/date.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt2();
-    var { style, clear, figures } = require_util2();
-    var { erase, cursor } = require_src();
-    var { DatePart, Meridiem, Day, Hours, Milliseconds, Minutes, Month, Seconds, Year } = require_dateparts2();
-    var regex2 = /\\(.)|"((?:\\["\\]|[^"])+)"|(D[Do]?|d{3,4}|d)|(M{1,4})|(YY(?:YY)?)|([aA])|([Hh]{1,2})|(m{1,2})|(s{1,2})|(S{1,4})|./g;
-    var regexGroups = {
-      1: ({ token }) => token.replace(/\\(.)/g, "$1"),
-      2: (opts) => new Day(opts),
-      // Day // TODO
-      3: (opts) => new Month(opts),
-      // Month
-      4: (opts) => new Year(opts),
-      // Year
-      5: (opts) => new Meridiem(opts),
-      // AM/PM // TODO (special)
-      6: (opts) => new Hours(opts),
-      // Hours
-      7: (opts) => new Minutes(opts),
-      // Minutes
-      8: (opts) => new Seconds(opts),
-      // Seconds
-      9: (opts) => new Milliseconds(opts)
-      // Fractional seconds
-    };
-    var dfltLocales = {
-      months: "January,February,March,April,May,June,July,August,September,October,November,December".split(","),
-      monthsShort: "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec".split(","),
-      weekdays: "Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday".split(","),
-      weekdaysShort: "Sun,Mon,Tue,Wed,Thu,Fri,Sat".split(",")
-    };
-    var DatePrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.cursor = 0;
-        this.typed = "";
-        this.locales = Object.assign(dfltLocales, opts.locales);
-        this._date = opts.initial || /* @__PURE__ */ new Date();
-        this.errorMsg = opts.error || "Please Enter A Valid Value";
-        this.validator = opts.validate || (() => true);
-        this.mask = opts.mask || "YYYY-MM-DD HH:mm:ss";
-        this.clear = clear("", this.out.columns);
-        this.render();
-      }
-      get value() {
-        return this.date;
-      }
-      get date() {
-        return this._date;
-      }
-      set date(date5) {
-        if (date5) this._date.setTime(date5.getTime());
-      }
-      set mask(mask) {
-        let result;
-        this.parts = [];
-        while (result = regex2.exec(mask)) {
-          let match = result.shift();
-          let idx = result.findIndex((gr) => gr != null);
-          this.parts.push(idx in regexGroups ? regexGroups[idx]({ token: result[idx] || match, date: this.date, parts: this.parts, locales: this.locales }) : result[idx] || match);
-        }
-        let parts = this.parts.reduce((arr, i) => {
-          if (typeof i === "string" && typeof arr[arr.length - 1] === "string")
-            arr[arr.length - 1] += i;
-          else arr.push(i);
-          return arr;
-        }, []);
-        this.parts.splice(0);
-        this.parts.push(...parts);
-        this.reset();
-      }
-      moveCursor(n) {
-        this.typed = "";
-        this.cursor = n;
-        this.fire();
-      }
-      reset() {
-        this.moveCursor(this.parts.findIndex((p) => p instanceof DatePart));
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.error = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      async validate() {
-        let valid = await this.validator(this.value);
-        if (typeof valid === "string") {
-          this.errorMsg = valid;
-          valid = false;
-        }
-        this.error = !valid;
-      }
-      async submit() {
-        await this.validate();
-        if (this.error) {
-          this.color = "red";
-          this.fire();
-          this.render();
-          return;
-        }
-        this.done = true;
-        this.aborted = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      up() {
-        this.typed = "";
-        this.parts[this.cursor].up();
-        this.render();
-      }
-      down() {
-        this.typed = "";
-        this.parts[this.cursor].down();
-        this.render();
-      }
-      left() {
-        let prev = this.parts[this.cursor].prev();
-        if (prev == null) return this.bell();
-        this.moveCursor(this.parts.indexOf(prev));
-        this.render();
-      }
-      right() {
-        let next = this.parts[this.cursor].next();
-        if (next == null) return this.bell();
-        this.moveCursor(this.parts.indexOf(next));
-        this.render();
-      }
-      next() {
-        let next = this.parts[this.cursor].next();
-        this.moveCursor(next ? this.parts.indexOf(next) : this.parts.findIndex((part) => part instanceof DatePart));
-        this.render();
-      }
-      _(c) {
-        if (/\d/.test(c)) {
-          this.typed += c;
-          this.parts[this.cursor].setTo(this.typed);
-          this.render();
-        }
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        this.outputText = [
-          style.symbol(this.done, this.aborted),
-          color.bold(this.msg),
-          style.delimiter(false),
-          this.parts.reduce((arr, p, idx) => arr.concat(idx === this.cursor && !this.done ? color.cyan().underline(p.toString()) : p), []).join("")
-        ].join(" ");
-        if (this.error) {
-          this.outputText += this.errorMsg.split("\n").reduce(
-            (a, l, i) => a + `
-${i ? ` ` : figures.pointerSmall} ${color.red().italic(l)}`,
-            ``
-          );
-        }
-        this.out.write(erase.line + cursor.to(0) + this.outputText);
-      }
-    };
-    module2.exports = DatePrompt;
-  }
-});
-
-// node_modules/prompts/lib/elements/number.js
-var require_number2 = __commonJS({
-  "node_modules/prompts/lib/elements/number.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt2();
-    var { cursor, erase } = require_src();
-    var { style, figures, clear, lines } = require_util2();
-    var isNumber = /[0-9]/;
-    var isDef = (any2) => any2 !== void 0;
-    var round = (number4, precision) => {
-      let factor = Math.pow(10, precision);
-      return Math.round(number4 * factor) / factor;
-    };
-    var NumberPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.transform = style.render(opts.style);
-        this.msg = opts.message;
-        this.initial = isDef(opts.initial) ? opts.initial : "";
-        this.float = !!opts.float;
-        this.round = opts.round || 2;
-        this.inc = opts.increment || 1;
-        this.min = isDef(opts.min) ? opts.min : -Infinity;
-        this.max = isDef(opts.max) ? opts.max : Infinity;
-        this.errorMsg = opts.error || `Please Enter A Valid Value`;
-        this.validator = opts.validate || (() => true);
-        this.color = `cyan`;
-        this.value = ``;
-        this.typed = ``;
-        this.lastHit = 0;
-        this.render();
-      }
-      set value(v) {
-        if (!v && v !== 0) {
-          this.placeholder = true;
-          this.rendered = color.gray(this.transform.render(`${this.initial}`));
-          this._value = ``;
-        } else {
-          this.placeholder = false;
-          this.rendered = this.transform.render(`${round(v, this.round)}`);
-          this._value = round(v, this.round);
-        }
-        this.fire();
-      }
-      get value() {
-        return this._value;
-      }
-      parse(x) {
-        return this.float ? parseFloat(x) : parseInt(x);
-      }
-      valid(c) {
-        return c === `-` || c === `.` && this.float || isNumber.test(c);
-      }
-      reset() {
-        this.typed = ``;
-        this.value = ``;
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        let x = this.value;
-        this.value = x !== `` ? x : this.initial;
-        this.done = this.aborted = true;
-        this.error = false;
-        this.fire();
-        this.render();
-        this.out.write(`
-`);
-        this.close();
-      }
-      async validate() {
-        let valid = await this.validator(this.value);
-        if (typeof valid === `string`) {
-          this.errorMsg = valid;
-          valid = false;
-        }
-        this.error = !valid;
-      }
-      async submit() {
-        await this.validate();
-        if (this.error) {
-          this.color = `red`;
-          this.fire();
-          this.render();
-          return;
-        }
-        let x = this.value;
-        this.value = x !== `` ? x : this.initial;
-        this.done = true;
-        this.aborted = false;
-        this.error = false;
-        this.fire();
-        this.render();
-        this.out.write(`
-`);
-        this.close();
-      }
-      up() {
-        this.typed = ``;
-        if (this.value === "") {
-          this.value = this.min - this.inc;
-        }
-        if (this.value >= this.max) return this.bell();
-        this.value += this.inc;
-        this.color = `cyan`;
-        this.fire();
-        this.render();
-      }
-      down() {
-        this.typed = ``;
-        if (this.value === "") {
-          this.value = this.min + this.inc;
-        }
-        if (this.value <= this.min) return this.bell();
-        this.value -= this.inc;
-        this.color = `cyan`;
-        this.fire();
-        this.render();
-      }
-      delete() {
-        let val = this.value.toString();
-        if (val.length === 0) return this.bell();
-        this.value = this.parse(val = val.slice(0, -1)) || ``;
-        if (this.value !== "" && this.value < this.min) {
-          this.value = this.min;
-        }
-        this.color = `cyan`;
-        this.fire();
-        this.render();
-      }
-      next() {
-        this.value = this.initial;
-        this.fire();
-        this.render();
-      }
-      _(c, key) {
-        if (!this.valid(c)) return this.bell();
-        const now = Date.now();
-        if (now - this.lastHit > 1e3) this.typed = ``;
-        this.typed += c;
-        this.lastHit = now;
-        this.color = `cyan`;
-        if (c === `.`) return this.fire();
-        this.value = Math.min(this.parse(this.typed), this.max);
-        if (this.value > this.max) this.value = this.max;
-        if (this.value < this.min) this.value = this.min;
-        this.fire();
-        this.render();
-      }
-      render() {
-        if (this.closed) return;
-        if (!this.firstRender) {
-          if (this.outputError)
-            this.out.write(cursor.down(lines(this.outputError, this.out.columns) - 1) + clear(this.outputError, this.out.columns));
-          this.out.write(clear(this.outputText, this.out.columns));
-        }
-        super.render();
-        this.outputError = "";
-        this.outputText = [
-          style.symbol(this.done, this.aborted),
-          color.bold(this.msg),
-          style.delimiter(this.done),
-          !this.done || !this.done && !this.placeholder ? color[this.color]().underline(this.rendered) : this.rendered
-        ].join(` `);
-        if (this.error) {
-          this.outputError += this.errorMsg.split(`
-`).reduce((a, l, i) => a + `
-${i ? ` ` : figures.pointerSmall} ${color.red().italic(l)}`, ``);
-        }
-        this.out.write(erase.line + cursor.to(0) + this.outputText + cursor.save + this.outputError + cursor.restore);
-      }
-    };
-    module2.exports = NumberPrompt;
-  }
-});
-
-// node_modules/prompts/lib/elements/multiselect.js
-var require_multiselect2 = __commonJS({
-  "node_modules/prompts/lib/elements/multiselect.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var { cursor } = require_src();
-    var Prompt = require_prompt2();
-    var { clear, figures, style, wrap, entriesToDisplay } = require_util2();
-    var MultiselectPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.cursor = opts.cursor || 0;
-        this.scrollIndex = opts.cursor || 0;
-        this.hint = opts.hint || "";
-        this.warn = opts.warn || "- This option is disabled -";
-        this.minSelected = opts.min;
-        this.showMinError = false;
-        this.maxChoices = opts.max;
-        this.instructions = opts.instructions;
-        this.optionsPerPage = opts.optionsPerPage || 10;
-        this.value = opts.choices.map((ch, idx) => {
-          if (typeof ch === "string")
-            ch = { title: ch, value: idx };
-          return {
-            title: ch && (ch.title || ch.value || ch),
-            description: ch && ch.description,
-            value: ch && (ch.value === void 0 ? idx : ch.value),
-            selected: ch && ch.selected,
-            disabled: ch && ch.disabled
-          };
-        });
-        this.clear = clear("", this.out.columns);
-        if (!opts.overrideRender) {
-          this.render();
-        }
-      }
-      reset() {
-        this.value.map((v) => !v.selected);
-        this.cursor = 0;
-        this.fire();
-        this.render();
-      }
-      selected() {
-        return this.value.filter((v) => v.selected);
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        const selected = this.value.filter((e) => e.selected);
-        if (this.minSelected && selected.length < this.minSelected) {
-          this.showMinError = true;
-          this.render();
-        } else {
-          this.done = true;
-          this.aborted = false;
-          this.fire();
-          this.render();
-          this.out.write("\n");
-          this.close();
-        }
-      }
-      first() {
-        this.cursor = 0;
-        this.render();
-      }
-      last() {
-        this.cursor = this.value.length - 1;
-        this.render();
-      }
-      next() {
-        this.cursor = (this.cursor + 1) % this.value.length;
-        this.render();
-      }
-      up() {
-        if (this.cursor === 0) {
-          this.cursor = this.value.length - 1;
-        } else {
-          this.cursor--;
-        }
-        this.render();
-      }
-      down() {
-        if (this.cursor === this.value.length - 1) {
-          this.cursor = 0;
-        } else {
-          this.cursor++;
-        }
-        this.render();
-      }
-      left() {
-        this.value[this.cursor].selected = false;
-        this.render();
-      }
-      right() {
-        if (this.value.filter((e) => e.selected).length >= this.maxChoices) return this.bell();
-        this.value[this.cursor].selected = true;
-        this.render();
-      }
-      handleSpaceToggle() {
-        const v = this.value[this.cursor];
-        if (v.selected) {
-          v.selected = false;
-          this.render();
-        } else if (v.disabled || this.value.filter((e) => e.selected).length >= this.maxChoices) {
-          return this.bell();
-        } else {
-          v.selected = true;
-          this.render();
-        }
-      }
-      toggleAll() {
-        if (this.maxChoices !== void 0 || this.value[this.cursor].disabled) {
-          return this.bell();
-        }
-        const newSelected = !this.value[this.cursor].selected;
-        this.value.filter((v) => !v.disabled).forEach((v) => v.selected = newSelected);
-        this.render();
-      }
-      _(c, key) {
-        if (c === " ") {
-          this.handleSpaceToggle();
-        } else if (c === "a") {
-          this.toggleAll();
-        } else {
-          return this.bell();
-        }
-      }
-      renderInstructions() {
-        if (this.instructions === void 0 || this.instructions) {
-          if (typeof this.instructions === "string") {
-            return this.instructions;
-          }
-          return `
-Instructions:
-    ${figures.arrowUp}/${figures.arrowDown}: Highlight option
-    ${figures.arrowLeft}/${figures.arrowRight}/[space]: Toggle selection
-` + (this.maxChoices === void 0 ? `    a: Toggle all
-` : "") + `    enter/return: Complete answer`;
-        }
-        return "";
-      }
-      renderOption(cursor2, v, i, arrowIndicator) {
-        const prefix = (v.selected ? color.green(figures.radioOn) : figures.radioOff) + " " + arrowIndicator + " ";
-        let title, desc;
-        if (v.disabled) {
-          title = cursor2 === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
-        } else {
-          title = cursor2 === i ? color.cyan().underline(v.title) : v.title;
-          if (cursor2 === i && v.description) {
-            desc = ` - ${v.description}`;
-            if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
-              desc = "\n" + wrap(v.description, { margin: prefix.length, width: this.out.columns });
-            }
-          }
-        }
-        return prefix + title + color.gray(desc || "");
-      }
-      // shared with autocompleteMultiselect
-      paginateOptions(options) {
-        if (options.length === 0) {
-          return color.red("No matches for this query.");
-        }
-        let { startIndex, endIndex } = entriesToDisplay(this.cursor, options.length, this.optionsPerPage);
-        let prefix, styledOptions = [];
-        for (let i = startIndex; i < endIndex; i++) {
-          if (i === startIndex && startIndex > 0) {
-            prefix = figures.arrowUp;
-          } else if (i === endIndex - 1 && endIndex < options.length) {
-            prefix = figures.arrowDown;
-          } else {
-            prefix = " ";
-          }
-          styledOptions.push(this.renderOption(this.cursor, options[i], i, prefix));
-        }
-        return "\n" + styledOptions.join("\n");
-      }
-      // shared with autocomleteMultiselect
-      renderOptions(options) {
-        if (!this.done) {
-          return this.paginateOptions(options);
-        }
-        return "";
-      }
-      renderDoneOrInstructions() {
-        if (this.done) {
-          return this.value.filter((e) => e.selected).map((v) => v.title).join(", ");
-        }
-        const output = [color.gray(this.hint), this.renderInstructions()];
-        if (this.value[this.cursor].disabled) {
-          output.push(color.yellow(this.warn));
-        }
-        return output.join(" ");
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        super.render();
-        let prompt = [
-          style.symbol(this.done, this.aborted),
-          color.bold(this.msg),
-          style.delimiter(false),
-          this.renderDoneOrInstructions()
-        ].join(" ");
-        if (this.showMinError) {
-          prompt += color.red(`You must select a minimum of ${this.minSelected} choices.`);
-          this.showMinError = false;
-        }
-        prompt += this.renderOptions(this.value);
-        this.out.write(this.clear + prompt);
-        this.clear = clear(prompt, this.out.columns);
-      }
-    };
-    module2.exports = MultiselectPrompt;
-  }
-});
-
-// node_modules/prompts/lib/elements/autocomplete.js
-var require_autocomplete2 = __commonJS({
-  "node_modules/prompts/lib/elements/autocomplete.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt2();
-    var { erase, cursor } = require_src();
-    var { style, clear, figures, wrap, entriesToDisplay } = require_util2();
-    var getVal = (arr, i) => arr[i] && (arr[i].value || arr[i].title || arr[i]);
-    var getTitle = (arr, i) => arr[i] && (arr[i].title || arr[i].value || arr[i]);
-    var getIndex = (arr, valOrTitle) => {
-      const index = arr.findIndex((el) => el.value === valOrTitle || el.title === valOrTitle);
-      return index > -1 ? index : void 0;
-    };
-    var AutocompletePrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.suggest = opts.suggest;
-        this.choices = opts.choices;
-        this.initial = typeof opts.initial === "number" ? opts.initial : getIndex(opts.choices, opts.initial);
-        this.select = this.initial || opts.cursor || 0;
-        this.i18n = { noMatches: opts.noMatches || "no matches found" };
-        this.fallback = opts.fallback || this.initial;
-        this.clearFirst = opts.clearFirst || false;
-        this.suggestions = [];
-        this.input = "";
-        this.limit = opts.limit || 10;
-        this.cursor = 0;
-        this.transform = style.render(opts.style);
-        this.scale = this.transform.scale;
-        this.render = this.render.bind(this);
-        this.complete = this.complete.bind(this);
-        this.clear = clear("", this.out.columns);
-        this.complete(this.render);
-        this.render();
-      }
-      set fallback(fb) {
-        this._fb = Number.isSafeInteger(parseInt(fb)) ? parseInt(fb) : fb;
-      }
-      get fallback() {
-        let choice;
-        if (typeof this._fb === "number")
-          choice = this.choices[this._fb];
-        else if (typeof this._fb === "string")
-          choice = { title: this._fb };
-        return choice || this._fb || { title: this.i18n.noMatches };
-      }
-      moveSelect(i) {
-        this.select = i;
-        if (this.suggestions.length > 0)
-          this.value = getVal(this.suggestions, i);
-        else this.value = this.fallback.value;
-        this.fire();
-      }
-      async complete(cb) {
-        const p = this.completing = this.suggest(this.input, this.choices);
-        const suggestions = await p;
-        if (this.completing !== p) return;
-        this.suggestions = suggestions.map((s, i, arr) => ({ title: getTitle(arr, i), value: getVal(arr, i), description: s.description }));
-        this.completing = false;
-        const l = Math.max(suggestions.length - 1, 0);
-        this.moveSelect(Math.min(l, this.select));
-        cb && cb();
-      }
-      reset() {
-        this.input = "";
-        this.complete(() => {
-          this.moveSelect(this.initial !== void 0 ? this.initial : 0);
-          this.render();
-        });
-        this.render();
-      }
-      exit() {
-        if (this.clearFirst && this.input.length > 0) {
-          this.reset();
-        } else {
-          this.done = this.exited = true;
-          this.aborted = false;
-          this.fire();
-          this.render();
-          this.out.write("\n");
-          this.close();
-        }
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.exited = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        this.done = true;
-        this.aborted = this.exited = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      _(c, key) {
-        let s1 = this.input.slice(0, this.cursor);
-        let s2 = this.input.slice(this.cursor);
-        this.input = `${s1}${c}${s2}`;
-        this.cursor = s1.length + 1;
-        this.complete(this.render);
-        this.render();
-      }
-      delete() {
-        if (this.cursor === 0) return this.bell();
-        let s1 = this.input.slice(0, this.cursor - 1);
-        let s2 = this.input.slice(this.cursor);
-        this.input = `${s1}${s2}`;
-        this.complete(this.render);
-        this.cursor = this.cursor - 1;
-        this.render();
-      }
-      deleteForward() {
-        if (this.cursor * this.scale >= this.rendered.length) return this.bell();
-        let s1 = this.input.slice(0, this.cursor);
-        let s2 = this.input.slice(this.cursor + 1);
-        this.input = `${s1}${s2}`;
-        this.complete(this.render);
-        this.render();
-      }
-      first() {
-        this.moveSelect(0);
-        this.render();
-      }
-      last() {
-        this.moveSelect(this.suggestions.length - 1);
-        this.render();
-      }
-      up() {
-        if (this.select === 0) {
-          this.moveSelect(this.suggestions.length - 1);
-        } else {
-          this.moveSelect(this.select - 1);
-        }
-        this.render();
-      }
-      down() {
-        if (this.select === this.suggestions.length - 1) {
-          this.moveSelect(0);
-        } else {
-          this.moveSelect(this.select + 1);
-        }
-        this.render();
-      }
-      next() {
-        if (this.select === this.suggestions.length - 1) {
-          this.moveSelect(0);
-        } else this.moveSelect(this.select + 1);
-        this.render();
-      }
-      nextPage() {
-        this.moveSelect(Math.min(this.select + this.limit, this.suggestions.length - 1));
-        this.render();
-      }
-      prevPage() {
-        this.moveSelect(Math.max(this.select - this.limit, 0));
-        this.render();
-      }
-      left() {
-        if (this.cursor <= 0) return this.bell();
-        this.cursor = this.cursor - 1;
-        this.render();
-      }
-      right() {
-        if (this.cursor * this.scale >= this.rendered.length) return this.bell();
-        this.cursor = this.cursor + 1;
-        this.render();
-      }
-      renderOption(v, hovered, isStart, isEnd) {
-        let desc;
-        let prefix = isStart ? figures.arrowUp : isEnd ? figures.arrowDown : " ";
-        let title = hovered ? color.cyan().underline(v.title) : v.title;
-        prefix = (hovered ? color.cyan(figures.pointer) + " " : "  ") + prefix;
-        if (v.description) {
-          desc = ` - ${v.description}`;
-          if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
-            desc = "\n" + wrap(v.description, { margin: 3, width: this.out.columns });
-          }
-        }
-        return prefix + " " + title + color.gray(desc || "");
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        let { startIndex, endIndex } = entriesToDisplay(this.select, this.choices.length, this.limit);
-        this.outputText = [
-          style.symbol(this.done, this.aborted, this.exited),
-          color.bold(this.msg),
-          style.delimiter(this.completing),
-          this.done && this.suggestions[this.select] ? this.suggestions[this.select].title : this.rendered = this.transform.render(this.input)
-        ].join(" ");
-        if (!this.done) {
-          const suggestions = this.suggestions.slice(startIndex, endIndex).map((item, i) => this.renderOption(
-            item,
-            this.select === i + startIndex,
-            i === 0 && startIndex > 0,
-            i + startIndex === endIndex - 1 && endIndex < this.choices.length
-          )).join("\n");
-          this.outputText += `
-` + (suggestions || color.gray(this.fallback.title));
-        }
-        this.out.write(erase.line + cursor.to(0) + this.outputText);
-      }
-    };
-    module2.exports = AutocompletePrompt;
-  }
-});
-
-// node_modules/prompts/lib/elements/autocompleteMultiselect.js
-var require_autocompleteMultiselect2 = __commonJS({
-  "node_modules/prompts/lib/elements/autocompleteMultiselect.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var { cursor } = require_src();
-    var MultiselectPrompt = require_multiselect2();
-    var { clear, style, figures } = require_util2();
-    var AutocompleteMultiselectPrompt = class extends MultiselectPrompt {
-      constructor(opts = {}) {
-        opts.overrideRender = true;
-        super(opts);
-        this.inputValue = "";
-        this.clear = clear("", this.out.columns);
-        this.filteredOptions = this.value;
-        this.render();
-      }
-      last() {
-        this.cursor = this.filteredOptions.length - 1;
-        this.render();
-      }
-      next() {
-        this.cursor = (this.cursor + 1) % this.filteredOptions.length;
-        this.render();
-      }
-      up() {
-        if (this.cursor === 0) {
-          this.cursor = this.filteredOptions.length - 1;
-        } else {
-          this.cursor--;
-        }
-        this.render();
-      }
-      down() {
-        if (this.cursor === this.filteredOptions.length - 1) {
-          this.cursor = 0;
-        } else {
-          this.cursor++;
-        }
-        this.render();
-      }
-      left() {
-        this.filteredOptions[this.cursor].selected = false;
-        this.render();
-      }
-      right() {
-        if (this.value.filter((e) => e.selected).length >= this.maxChoices) return this.bell();
-        this.filteredOptions[this.cursor].selected = true;
-        this.render();
-      }
-      delete() {
-        if (this.inputValue.length) {
-          this.inputValue = this.inputValue.substr(0, this.inputValue.length - 1);
-          this.updateFilteredOptions();
-        }
-      }
-      updateFilteredOptions() {
-        const currentHighlight = this.filteredOptions[this.cursor];
-        this.filteredOptions = this.value.filter((v) => {
-          if (this.inputValue) {
-            if (typeof v.title === "string") {
-              if (v.title.toLowerCase().includes(this.inputValue.toLowerCase())) {
-                return true;
-              }
-            }
-            if (typeof v.value === "string") {
-              if (v.value.toLowerCase().includes(this.inputValue.toLowerCase())) {
-                return true;
-              }
-            }
-            return false;
-          }
-          return true;
-        });
-        const newHighlightIndex = this.filteredOptions.findIndex((v) => v === currentHighlight);
-        this.cursor = newHighlightIndex < 0 ? 0 : newHighlightIndex;
-        this.render();
-      }
-      handleSpaceToggle() {
-        const v = this.filteredOptions[this.cursor];
-        if (v.selected) {
-          v.selected = false;
-          this.render();
-        } else if (v.disabled || this.value.filter((e) => e.selected).length >= this.maxChoices) {
-          return this.bell();
-        } else {
-          v.selected = true;
-          this.render();
-        }
-      }
-      handleInputChange(c) {
-        this.inputValue = this.inputValue + c;
-        this.updateFilteredOptions();
-      }
-      _(c, key) {
-        if (c === " ") {
-          this.handleSpaceToggle();
-        } else {
-          this.handleInputChange(c);
-        }
-      }
-      renderInstructions() {
-        if (this.instructions === void 0 || this.instructions) {
-          if (typeof this.instructions === "string") {
-            return this.instructions;
-          }
-          return `
-Instructions:
-    ${figures.arrowUp}/${figures.arrowDown}: Highlight option
-    ${figures.arrowLeft}/${figures.arrowRight}/[space]: Toggle selection
-    [a,b,c]/delete: Filter choices
-    enter/return: Complete answer
-`;
-        }
-        return "";
-      }
-      renderCurrentInput() {
-        return `
-Filtered results for: ${this.inputValue ? this.inputValue : color.gray("Enter something to filter")}
-`;
-      }
-      renderOption(cursor2, v, i) {
-        let title;
-        if (v.disabled) title = cursor2 === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
-        else title = cursor2 === i ? color.cyan().underline(v.title) : v.title;
-        return (v.selected ? color.green(figures.radioOn) : figures.radioOff) + "  " + title;
-      }
-      renderDoneOrInstructions() {
-        if (this.done) {
-          return this.value.filter((e) => e.selected).map((v) => v.title).join(", ");
-        }
-        const output = [color.gray(this.hint), this.renderInstructions(), this.renderCurrentInput()];
-        if (this.filteredOptions.length && this.filteredOptions[this.cursor].disabled) {
-          output.push(color.yellow(this.warn));
-        }
-        return output.join(" ");
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        super.render();
-        let prompt = [
-          style.symbol(this.done, this.aborted),
-          color.bold(this.msg),
-          style.delimiter(false),
-          this.renderDoneOrInstructions()
-        ].join(" ");
-        if (this.showMinError) {
-          prompt += color.red(`You must select a minimum of ${this.minSelected} choices.`);
-          this.showMinError = false;
-        }
-        prompt += this.renderOptions(this.filteredOptions);
-        this.out.write(this.clear + prompt);
-        this.clear = clear(prompt, this.out.columns);
-      }
-    };
-    module2.exports = AutocompleteMultiselectPrompt;
-  }
-});
-
-// node_modules/prompts/lib/elements/confirm.js
-var require_confirm2 = __commonJS({
-  "node_modules/prompts/lib/elements/confirm.js"(exports2, module2) {
-    "use strict";
-    var color = require_kleur();
-    var Prompt = require_prompt2();
-    var { style, clear } = require_util2();
-    var { erase, cursor } = require_src();
-    var ConfirmPrompt = class extends Prompt {
-      constructor(opts = {}) {
-        super(opts);
-        this.msg = opts.message;
-        this.value = opts.initial;
-        this.initialValue = !!opts.initial;
-        this.yesMsg = opts.yes || "yes";
-        this.yesOption = opts.yesOption || "(Y/n)";
-        this.noMsg = opts.no || "no";
-        this.noOption = opts.noOption || "(y/N)";
-        this.render();
-      }
-      reset() {
-        this.value = this.initialValue;
-        this.fire();
-        this.render();
-      }
-      exit() {
-        this.abort();
-      }
-      abort() {
-        this.done = this.aborted = true;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      submit() {
-        this.value = this.value || false;
-        this.done = true;
-        this.aborted = false;
-        this.fire();
-        this.render();
-        this.out.write("\n");
-        this.close();
-      }
-      _(c, key) {
-        if (c.toLowerCase() === "y") {
-          this.value = true;
-          return this.submit();
-        }
-        if (c.toLowerCase() === "n") {
-          this.value = false;
-          return this.submit();
-        }
-        return this.bell();
-      }
-      render() {
-        if (this.closed) return;
-        if (this.firstRender) this.out.write(cursor.hide);
-        else this.out.write(clear(this.outputText, this.out.columns));
-        super.render();
-        this.outputText = [
-          style.symbol(this.done, this.aborted),
-          color.bold(this.msg),
-          style.delimiter(this.done),
-          this.done ? this.value ? this.yesMsg : this.noMsg : color.gray(this.initialValue ? this.yesOption : this.noOption)
-        ].join(" ");
-        this.out.write(erase.line + cursor.to(0) + this.outputText);
-      }
-    };
-    module2.exports = ConfirmPrompt;
-  }
-});
-
-// node_modules/prompts/lib/elements/index.js
-var require_elements2 = __commonJS({
-  "node_modules/prompts/lib/elements/index.js"(exports2, module2) {
-    "use strict";
-    module2.exports = {
-      TextPrompt: require_text2(),
-      SelectPrompt: require_select2(),
-      TogglePrompt: require_toggle2(),
-      DatePrompt: require_date2(),
-      NumberPrompt: require_number2(),
-      MultiselectPrompt: require_multiselect2(),
-      AutocompletePrompt: require_autocomplete2(),
-      AutocompleteMultiselectPrompt: require_autocompleteMultiselect2(),
-      ConfirmPrompt: require_confirm2()
-    };
-  }
-});
-
-// node_modules/prompts/lib/prompts.js
-var require_prompts2 = __commonJS({
-  "node_modules/prompts/lib/prompts.js"(exports2) {
-    "use strict";
-    var $2 = exports2;
-    var el = require_elements2();
-    var noop = (v) => v;
-    function toPrompt(type, args, opts = {}) {
-      return new Promise((res, rej) => {
-        const p = new el[type](args);
-        const onAbort = opts.onAbort || noop;
-        const onSubmit = opts.onSubmit || noop;
-        const onExit2 = opts.onExit || noop;
-        p.on("state", args.onState || noop);
-        p.on("submit", (x) => res(onSubmit(x)));
-        p.on("exit", (x) => res(onExit2(x)));
-        p.on("abort", (x) => rej(onAbort(x)));
-      });
-    }
-    $2.text = (args) => toPrompt("TextPrompt", args);
-    $2.password = (args) => {
-      args.style = "password";
-      return $2.text(args);
-    };
-    $2.invisible = (args) => {
-      args.style = "invisible";
-      return $2.text(args);
-    };
-    $2.number = (args) => toPrompt("NumberPrompt", args);
-    $2.date = (args) => toPrompt("DatePrompt", args);
-    $2.confirm = (args) => toPrompt("ConfirmPrompt", args);
-    $2.list = (args) => {
-      const sep = args.separator || ",";
-      return toPrompt("TextPrompt", args, {
-        onSubmit: (str) => str.split(sep).map((s) => s.trim())
-      });
-    };
-    $2.toggle = (args) => toPrompt("TogglePrompt", args);
-    $2.select = (args) => toPrompt("SelectPrompt", args);
-    $2.multiselect = (args) => {
-      args.choices = [].concat(args.choices || []);
-      const toSelected = (items) => items.filter((item) => item.selected).map((item) => item.value);
-      return toPrompt("MultiselectPrompt", args, {
-        onAbort: toSelected,
-        onSubmit: toSelected
-      });
-    };
-    $2.autocompleteMultiselect = (args) => {
-      args.choices = [].concat(args.choices || []);
-      const toSelected = (items) => items.filter((item) => item.selected).map((item) => item.value);
-      return toPrompt("AutocompleteMultiselectPrompt", args, {
-        onAbort: toSelected,
-        onSubmit: toSelected
-      });
-    };
-    var byTitle = (input, choices) => Promise.resolve(
-      choices.filter((item) => item.title.slice(0, input.length).toLowerCase() === input.toLowerCase())
-    );
-    $2.autocomplete = (args) => {
-      args.suggest = args.suggest || byTitle;
-      args.choices = [].concat(args.choices || []);
-      return toPrompt("AutocompletePrompt", args);
-    };
-  }
-});
-
-// node_modules/prompts/lib/index.js
-var require_lib = __commonJS({
-  "node_modules/prompts/lib/index.js"(exports2, module2) {
-    "use strict";
-    var prompts3 = require_prompts2();
-    var passOn = ["suggest", "format", "onState", "validate", "onRender", "type"];
-    var noop = () => {
-    };
-    async function prompt(questions = [], { onSubmit = noop, onCancel = noop } = {}) {
-      const answers = {};
-      const override2 = prompt._override || {};
-      questions = [].concat(questions);
-      let answer, question, quit, name, type, lastPrompt;
-      const getFormattedAnswer = async (question2, answer2, skipValidation = false) => {
-        if (!skipValidation && question2.validate && question2.validate(answer2) !== true) {
-          return;
-        }
-        return question2.format ? await question2.format(answer2, answers) : answer2;
-      };
-      for (question of questions) {
-        ({ name, type } = question);
-        if (typeof type === "function") {
-          type = await type(answer, { ...answers }, question);
-          question["type"] = type;
-        }
-        if (!type) continue;
-        for (let key in question) {
-          if (passOn.includes(key)) continue;
-          let value = question[key];
-          question[key] = typeof value === "function" ? await value(answer, { ...answers }, lastPrompt) : value;
-        }
-        lastPrompt = question;
-        if (typeof question.message !== "string") {
-          throw new Error("prompt message is required");
-        }
-        ({ name, type } = question);
-        if (prompts3[type] === void 0) {
-          throw new Error(`prompt type (${type}) is not defined`);
-        }
-        if (override2[question.name] !== void 0) {
-          answer = await getFormattedAnswer(question, override2[question.name]);
-          if (answer !== void 0) {
-            answers[name] = answer;
-            continue;
-          }
-        }
-        try {
-          answer = prompt._injected ? getInjectedAnswer(prompt._injected, question.initial) : await prompts3[type](question);
-          answers[name] = answer = await getFormattedAnswer(question, answer, true);
-          quit = await onSubmit(question, answer, answers);
-        } catch (err) {
-          quit = !await onCancel(question, answers);
-        }
-        if (quit) return answers;
-      }
-      return answers;
-    }
-    function getInjectedAnswer(injected, deafultValue) {
-      const answer = injected.shift();
-      if (answer instanceof Error) {
-        throw answer;
-      }
-      return answer === void 0 ? deafultValue : answer;
-    }
-    function inject(answers) {
-      prompt._injected = (prompt._injected || []).concat(answers);
-    }
-    function override(answers) {
-      prompt._override = Object.assign({}, answers);
-    }
-    module2.exports = Object.assign(prompt, { prompt, prompts: prompts3, inject, override });
-  }
-});
-
-// node_modules/prompts/index.js
-var require_prompts3 = __commonJS({
-  "node_modules/prompts/index.js"(exports2, module2) {
-    "use strict";
-    function isNodeLT(tar) {
-      tar = (Array.isArray(tar) ? tar : tar.split(".")).map(Number);
-      let i = 0, src = process.versions.node.split(".").map(Number);
-      for (; i < tar.length; i++) {
-        if (src[i] > tar[i]) return false;
-        if (tar[i] > src[i]) return true;
-      }
-      return false;
-    }
-    module2.exports = isNodeLT("8.6.0") ? require_dist() : require_lib();
-  }
-});
-
 // node_modules/universalify/index.js
 var require_universalify = __commonJS({
   "node_modules/universalify/index.js"(exports2) {
@@ -8478,54 +3518,54 @@ var require_polyfills = __commonJS({
     }
     var chdir;
     module2.exports = patch;
-    function patch(fs14) {
+    function patch(fs15) {
       if (constants.hasOwnProperty("O_SYMLINK") && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) {
-        patchLchmod(fs14);
+        patchLchmod(fs15);
       }
-      if (!fs14.lutimes) {
-        patchLutimes(fs14);
+      if (!fs15.lutimes) {
+        patchLutimes(fs15);
       }
-      fs14.chown = chownFix(fs14.chown);
-      fs14.fchown = chownFix(fs14.fchown);
-      fs14.lchown = chownFix(fs14.lchown);
-      fs14.chmod = chmodFix(fs14.chmod);
-      fs14.fchmod = chmodFix(fs14.fchmod);
-      fs14.lchmod = chmodFix(fs14.lchmod);
-      fs14.chownSync = chownFixSync(fs14.chownSync);
-      fs14.fchownSync = chownFixSync(fs14.fchownSync);
-      fs14.lchownSync = chownFixSync(fs14.lchownSync);
-      fs14.chmodSync = chmodFixSync(fs14.chmodSync);
-      fs14.fchmodSync = chmodFixSync(fs14.fchmodSync);
-      fs14.lchmodSync = chmodFixSync(fs14.lchmodSync);
-      fs14.stat = statFix(fs14.stat);
-      fs14.fstat = statFix(fs14.fstat);
-      fs14.lstat = statFix(fs14.lstat);
-      fs14.statSync = statFixSync(fs14.statSync);
-      fs14.fstatSync = statFixSync(fs14.fstatSync);
-      fs14.lstatSync = statFixSync(fs14.lstatSync);
-      if (fs14.chmod && !fs14.lchmod) {
-        fs14.lchmod = function(path14, mode, cb) {
+      fs15.chown = chownFix(fs15.chown);
+      fs15.fchown = chownFix(fs15.fchown);
+      fs15.lchown = chownFix(fs15.lchown);
+      fs15.chmod = chmodFix(fs15.chmod);
+      fs15.fchmod = chmodFix(fs15.fchmod);
+      fs15.lchmod = chmodFix(fs15.lchmod);
+      fs15.chownSync = chownFixSync(fs15.chownSync);
+      fs15.fchownSync = chownFixSync(fs15.fchownSync);
+      fs15.lchownSync = chownFixSync(fs15.lchownSync);
+      fs15.chmodSync = chmodFixSync(fs15.chmodSync);
+      fs15.fchmodSync = chmodFixSync(fs15.fchmodSync);
+      fs15.lchmodSync = chmodFixSync(fs15.lchmodSync);
+      fs15.stat = statFix(fs15.stat);
+      fs15.fstat = statFix(fs15.fstat);
+      fs15.lstat = statFix(fs15.lstat);
+      fs15.statSync = statFixSync(fs15.statSync);
+      fs15.fstatSync = statFixSync(fs15.fstatSync);
+      fs15.lstatSync = statFixSync(fs15.lstatSync);
+      if (fs15.chmod && !fs15.lchmod) {
+        fs15.lchmod = function(path14, mode, cb) {
           if (cb) process.nextTick(cb);
         };
-        fs14.lchmodSync = function() {
+        fs15.lchmodSync = function() {
         };
       }
-      if (fs14.chown && !fs14.lchown) {
-        fs14.lchown = function(path14, uid, gid, cb) {
+      if (fs15.chown && !fs15.lchown) {
+        fs15.lchown = function(path14, uid, gid, cb) {
           if (cb) process.nextTick(cb);
         };
-        fs14.lchownSync = function() {
+        fs15.lchownSync = function() {
         };
       }
       if (platform === "win32") {
-        fs14.rename = typeof fs14.rename !== "function" ? fs14.rename : (function(fs$rename) {
+        fs15.rename = typeof fs15.rename !== "function" ? fs15.rename : (function(fs$rename) {
           function rename(from, to, cb) {
             var start = Date.now();
             var backoff = 0;
             fs$rename(from, to, function CB(er) {
               if (er && (er.code === "EACCES" || er.code === "EPERM" || er.code === "EBUSY") && Date.now() - start < 6e4) {
                 setTimeout(function() {
-                  fs14.stat(to, function(stater, st) {
+                  fs15.stat(to, function(stater, st) {
                     if (stater && stater.code === "ENOENT")
                       fs$rename(from, to, CB);
                     else
@@ -8541,9 +3581,9 @@ var require_polyfills = __commonJS({
           }
           if (Object.setPrototypeOf) Object.setPrototypeOf(rename, fs$rename);
           return rename;
-        })(fs14.rename);
+        })(fs15.rename);
       }
-      fs14.read = typeof fs14.read !== "function" ? fs14.read : (function(fs$read) {
+      fs15.read = typeof fs15.read !== "function" ? fs15.read : (function(fs$read) {
         function read(fd, buffer, offset, length, position, callback_) {
           var callback;
           if (callback_ && typeof callback_ === "function") {
@@ -8551,22 +3591,22 @@ var require_polyfills = __commonJS({
             callback = function(er, _, __) {
               if (er && er.code === "EAGAIN" && eagCounter < 10) {
                 eagCounter++;
-                return fs$read.call(fs14, fd, buffer, offset, length, position, callback);
+                return fs$read.call(fs15, fd, buffer, offset, length, position, callback);
               }
               callback_.apply(this, arguments);
             };
           }
-          return fs$read.call(fs14, fd, buffer, offset, length, position, callback);
+          return fs$read.call(fs15, fd, buffer, offset, length, position, callback);
         }
         if (Object.setPrototypeOf) Object.setPrototypeOf(read, fs$read);
         return read;
-      })(fs14.read);
-      fs14.readSync = typeof fs14.readSync !== "function" ? fs14.readSync : /* @__PURE__ */ (function(fs$readSync) {
+      })(fs15.read);
+      fs15.readSync = typeof fs15.readSync !== "function" ? fs15.readSync : /* @__PURE__ */ (function(fs$readSync) {
         return function(fd, buffer, offset, length, position) {
           var eagCounter = 0;
           while (true) {
             try {
-              return fs$readSync.call(fs14, fd, buffer, offset, length, position);
+              return fs$readSync.call(fs15, fd, buffer, offset, length, position);
             } catch (er) {
               if (er.code === "EAGAIN" && eagCounter < 10) {
                 eagCounter++;
@@ -8576,10 +3616,10 @@ var require_polyfills = __commonJS({
             }
           }
         };
-      })(fs14.readSync);
-      function patchLchmod(fs15) {
-        fs15.lchmod = function(path14, mode, callback) {
-          fs15.open(
+      })(fs15.readSync);
+      function patchLchmod(fs16) {
+        fs16.lchmod = function(path14, mode, callback) {
+          fs16.open(
             path14,
             constants.O_WRONLY | constants.O_SYMLINK,
             mode,
@@ -8588,80 +3628,80 @@ var require_polyfills = __commonJS({
                 if (callback) callback(err);
                 return;
               }
-              fs15.fchmod(fd, mode, function(err2) {
-                fs15.close(fd, function(err22) {
+              fs16.fchmod(fd, mode, function(err2) {
+                fs16.close(fd, function(err22) {
                   if (callback) callback(err2 || err22);
                 });
               });
             }
           );
         };
-        fs15.lchmodSync = function(path14, mode) {
-          var fd = fs15.openSync(path14, constants.O_WRONLY | constants.O_SYMLINK, mode);
+        fs16.lchmodSync = function(path14, mode) {
+          var fd = fs16.openSync(path14, constants.O_WRONLY | constants.O_SYMLINK, mode);
           var threw = true;
           var ret;
           try {
-            ret = fs15.fchmodSync(fd, mode);
+            ret = fs16.fchmodSync(fd, mode);
             threw = false;
           } finally {
             if (threw) {
               try {
-                fs15.closeSync(fd);
+                fs16.closeSync(fd);
               } catch (er) {
               }
             } else {
-              fs15.closeSync(fd);
+              fs16.closeSync(fd);
             }
           }
           return ret;
         };
       }
-      function patchLutimes(fs15) {
-        if (constants.hasOwnProperty("O_SYMLINK") && fs15.futimes) {
-          fs15.lutimes = function(path14, at, mt, cb) {
-            fs15.open(path14, constants.O_SYMLINK, function(er, fd) {
+      function patchLutimes(fs16) {
+        if (constants.hasOwnProperty("O_SYMLINK") && fs16.futimes) {
+          fs16.lutimes = function(path14, at, mt, cb) {
+            fs16.open(path14, constants.O_SYMLINK, function(er, fd) {
               if (er) {
                 if (cb) cb(er);
                 return;
               }
-              fs15.futimes(fd, at, mt, function(er2) {
-                fs15.close(fd, function(er22) {
+              fs16.futimes(fd, at, mt, function(er2) {
+                fs16.close(fd, function(er22) {
                   if (cb) cb(er2 || er22);
                 });
               });
             });
           };
-          fs15.lutimesSync = function(path14, at, mt) {
-            var fd = fs15.openSync(path14, constants.O_SYMLINK);
+          fs16.lutimesSync = function(path14, at, mt) {
+            var fd = fs16.openSync(path14, constants.O_SYMLINK);
             var ret;
             var threw = true;
             try {
-              ret = fs15.futimesSync(fd, at, mt);
+              ret = fs16.futimesSync(fd, at, mt);
               threw = false;
             } finally {
               if (threw) {
                 try {
-                  fs15.closeSync(fd);
+                  fs16.closeSync(fd);
                 } catch (er) {
                 }
               } else {
-                fs15.closeSync(fd);
+                fs16.closeSync(fd);
               }
             }
             return ret;
           };
-        } else if (fs15.futimes) {
-          fs15.lutimes = function(_a2, _b, _c, cb) {
+        } else if (fs16.futimes) {
+          fs16.lutimes = function(_a2, _b, _c, cb) {
             if (cb) process.nextTick(cb);
           };
-          fs15.lutimesSync = function() {
+          fs16.lutimesSync = function() {
           };
         }
       }
       function chmodFix(orig) {
         if (!orig) return orig;
         return function(target, mode, cb) {
-          return orig.call(fs14, target, mode, function(er) {
+          return orig.call(fs15, target, mode, function(er) {
             if (chownErOk(er)) er = null;
             if (cb) cb.apply(this, arguments);
           });
@@ -8671,7 +3711,7 @@ var require_polyfills = __commonJS({
         if (!orig) return orig;
         return function(target, mode) {
           try {
-            return orig.call(fs14, target, mode);
+            return orig.call(fs15, target, mode);
           } catch (er) {
             if (!chownErOk(er)) throw er;
           }
@@ -8680,7 +3720,7 @@ var require_polyfills = __commonJS({
       function chownFix(orig) {
         if (!orig) return orig;
         return function(target, uid, gid, cb) {
-          return orig.call(fs14, target, uid, gid, function(er) {
+          return orig.call(fs15, target, uid, gid, function(er) {
             if (chownErOk(er)) er = null;
             if (cb) cb.apply(this, arguments);
           });
@@ -8690,7 +3730,7 @@ var require_polyfills = __commonJS({
         if (!orig) return orig;
         return function(target, uid, gid) {
           try {
-            return orig.call(fs14, target, uid, gid);
+            return orig.call(fs15, target, uid, gid);
           } catch (er) {
             if (!chownErOk(er)) throw er;
           }
@@ -8710,13 +3750,13 @@ var require_polyfills = __commonJS({
             }
             if (cb) cb.apply(this, arguments);
           }
-          return options ? orig.call(fs14, target, options, callback) : orig.call(fs14, target, callback);
+          return options ? orig.call(fs15, target, options, callback) : orig.call(fs15, target, callback);
         };
       }
       function statFixSync(orig) {
         if (!orig) return orig;
         return function(target, options) {
-          var stats = options ? orig.call(fs14, target, options) : orig.call(fs14, target);
+          var stats = options ? orig.call(fs15, target, options) : orig.call(fs15, target);
           if (stats) {
             if (stats.uid < 0) stats.uid += 4294967296;
             if (stats.gid < 0) stats.gid += 4294967296;
@@ -8746,7 +3786,7 @@ var require_legacy_streams = __commonJS({
     "use strict";
     var Stream = require("stream").Stream;
     module2.exports = legacy;
-    function legacy(fs14) {
+    function legacy(fs15) {
       return {
         ReadStream,
         WriteStream
@@ -8789,7 +3829,7 @@ var require_legacy_streams = __commonJS({
           });
           return;
         }
-        fs14.open(this.path, this.flags, this.mode, function(err, fd) {
+        fs15.open(this.path, this.flags, this.mode, function(err, fd) {
           if (err) {
             self.emit("error", err);
             self.readable = false;
@@ -8828,7 +3868,7 @@ var require_legacy_streams = __commonJS({
         this.busy = false;
         this._queue = [];
         if (this.fd === null) {
-          this._open = fs14.open;
+          this._open = fs15.open;
           this._queue.push([this._open, this.path, this.flags, this.mode, void 0]);
           this.flush();
         }
@@ -8864,7 +3904,7 @@ var require_clone = __commonJS({
 var require_graceful_fs = __commonJS({
   "node_modules/graceful-fs/graceful-fs.js"(exports2, module2) {
     "use strict";
-    var fs14 = require("fs");
+    var fs15 = require("fs");
     var polyfills = require_polyfills();
     var legacy = require_legacy_streams();
     var clone2 = require_clone();
@@ -8896,12 +3936,12 @@ var require_graceful_fs = __commonJS({
         m = "GFS4: " + m.split(/\n/).join("\nGFS4: ");
         console.error(m);
       };
-    if (!fs14[gracefulQueue]) {
+    if (!fs15[gracefulQueue]) {
       queue = global[gracefulQueue] || [];
-      publishQueue(fs14, queue);
-      fs14.close = (function(fs$close) {
+      publishQueue(fs15, queue);
+      fs15.close = (function(fs$close) {
         function close(fd, cb) {
-          return fs$close.call(fs14, fd, function(err) {
+          return fs$close.call(fs15, fd, function(err) {
             if (!err) {
               resetQueue();
             }
@@ -8913,40 +3953,40 @@ var require_graceful_fs = __commonJS({
           value: fs$close
         });
         return close;
-      })(fs14.close);
-      fs14.closeSync = (function(fs$closeSync) {
+      })(fs15.close);
+      fs15.closeSync = (function(fs$closeSync) {
         function closeSync(fd) {
-          fs$closeSync.apply(fs14, arguments);
+          fs$closeSync.apply(fs15, arguments);
           resetQueue();
         }
         Object.defineProperty(closeSync, previousSymbol, {
           value: fs$closeSync
         });
         return closeSync;
-      })(fs14.closeSync);
+      })(fs15.closeSync);
       if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || "")) {
         process.on("exit", function() {
-          debug(fs14[gracefulQueue]);
-          require("assert").equal(fs14[gracefulQueue].length, 0);
+          debug(fs15[gracefulQueue]);
+          require("assert").equal(fs15[gracefulQueue].length, 0);
         });
       }
     }
     var queue;
     if (!global[gracefulQueue]) {
-      publishQueue(global, fs14[gracefulQueue]);
+      publishQueue(global, fs15[gracefulQueue]);
     }
-    module2.exports = patch(clone2(fs14));
-    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs14.__patched) {
-      module2.exports = patch(fs14);
-      fs14.__patched = true;
+    module2.exports = patch(clone2(fs15));
+    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs15.__patched) {
+      module2.exports = patch(fs15);
+      fs15.__patched = true;
     }
-    function patch(fs15) {
-      polyfills(fs15);
-      fs15.gracefulify = patch;
-      fs15.createReadStream = createReadStream;
-      fs15.createWriteStream = createWriteStream2;
-      var fs$readFile = fs15.readFile;
-      fs15.readFile = readFile;
+    function patch(fs16) {
+      polyfills(fs16);
+      fs16.gracefulify = patch;
+      fs16.createReadStream = createReadStream;
+      fs16.createWriteStream = createWriteStream2;
+      var fs$readFile = fs16.readFile;
+      fs16.readFile = readFile;
       function readFile(path14, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
@@ -8962,8 +4002,8 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$writeFile = fs15.writeFile;
-      fs15.writeFile = writeFile;
+      var fs$writeFile = fs16.writeFile;
+      fs16.writeFile = writeFile;
       function writeFile(path14, data, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
@@ -8979,9 +4019,9 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$appendFile = fs15.appendFile;
+      var fs$appendFile = fs16.appendFile;
       if (fs$appendFile)
-        fs15.appendFile = appendFile;
+        fs16.appendFile = appendFile;
       function appendFile(path14, data, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
@@ -8997,9 +4037,9 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$copyFile = fs15.copyFile;
+      var fs$copyFile = fs16.copyFile;
       if (fs$copyFile)
-        fs15.copyFile = copyFile;
+        fs16.copyFile = copyFile;
       function copyFile(src, dest, flags, cb) {
         if (typeof flags === "function") {
           cb = flags;
@@ -9017,8 +4057,8 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$readdir = fs15.readdir;
-      fs15.readdir = readdir;
+      var fs$readdir = fs16.readdir;
+      fs16.readdir = readdir;
       var noReaddirOptionVersions = /^v[0-5]\./;
       function readdir(path14, options, cb) {
         if (typeof options === "function")
@@ -9059,21 +4099,21 @@ var require_graceful_fs = __commonJS({
         }
       }
       if (process.version.substr(0, 4) === "v0.8") {
-        var legStreams = legacy(fs15);
+        var legStreams = legacy(fs16);
         ReadStream = legStreams.ReadStream;
         WriteStream = legStreams.WriteStream;
       }
-      var fs$ReadStream = fs15.ReadStream;
+      var fs$ReadStream = fs16.ReadStream;
       if (fs$ReadStream) {
         ReadStream.prototype = Object.create(fs$ReadStream.prototype);
         ReadStream.prototype.open = ReadStream$open;
       }
-      var fs$WriteStream = fs15.WriteStream;
+      var fs$WriteStream = fs16.WriteStream;
       if (fs$WriteStream) {
         WriteStream.prototype = Object.create(fs$WriteStream.prototype);
         WriteStream.prototype.open = WriteStream$open;
       }
-      Object.defineProperty(fs15, "ReadStream", {
+      Object.defineProperty(fs16, "ReadStream", {
         get: function() {
           return ReadStream;
         },
@@ -9083,7 +4123,7 @@ var require_graceful_fs = __commonJS({
         enumerable: true,
         configurable: true
       });
-      Object.defineProperty(fs15, "WriteStream", {
+      Object.defineProperty(fs16, "WriteStream", {
         get: function() {
           return WriteStream;
         },
@@ -9094,7 +4134,7 @@ var require_graceful_fs = __commonJS({
         configurable: true
       });
       var FileReadStream = ReadStream;
-      Object.defineProperty(fs15, "FileReadStream", {
+      Object.defineProperty(fs16, "FileReadStream", {
         get: function() {
           return FileReadStream;
         },
@@ -9105,7 +4145,7 @@ var require_graceful_fs = __commonJS({
         configurable: true
       });
       var FileWriteStream = WriteStream;
-      Object.defineProperty(fs15, "FileWriteStream", {
+      Object.defineProperty(fs16, "FileWriteStream", {
         get: function() {
           return FileWriteStream;
         },
@@ -9154,13 +4194,13 @@ var require_graceful_fs = __commonJS({
         });
       }
       function createReadStream(path14, options) {
-        return new fs15.ReadStream(path14, options);
+        return new fs16.ReadStream(path14, options);
       }
       function createWriteStream2(path14, options) {
-        return new fs15.WriteStream(path14, options);
+        return new fs16.WriteStream(path14, options);
       }
-      var fs$open = fs15.open;
-      fs15.open = open;
+      var fs$open = fs16.open;
+      fs16.open = open;
       function open(path14, flags, mode, cb) {
         if (typeof mode === "function")
           cb = mode, mode = null;
@@ -9176,20 +4216,20 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      return fs15;
+      return fs16;
     }
     function enqueue(elem) {
       debug("ENQUEUE", elem[0].name, elem[1]);
-      fs14[gracefulQueue].push(elem);
+      fs15[gracefulQueue].push(elem);
       retry();
     }
     var retryTimer;
     function resetQueue() {
       var now = Date.now();
-      for (var i = 0; i < fs14[gracefulQueue].length; ++i) {
-        if (fs14[gracefulQueue][i].length > 2) {
-          fs14[gracefulQueue][i][3] = now;
-          fs14[gracefulQueue][i][4] = now;
+      for (var i = 0; i < fs15[gracefulQueue].length; ++i) {
+        if (fs15[gracefulQueue][i].length > 2) {
+          fs15[gracefulQueue][i][3] = now;
+          fs15[gracefulQueue][i][4] = now;
         }
       }
       retry();
@@ -9197,9 +4237,9 @@ var require_graceful_fs = __commonJS({
     function retry() {
       clearTimeout(retryTimer);
       retryTimer = void 0;
-      if (fs14[gracefulQueue].length === 0)
+      if (fs15[gracefulQueue].length === 0)
         return;
-      var elem = fs14[gracefulQueue].shift();
+      var elem = fs15[gracefulQueue].shift();
       var fn = elem[0];
       var args = elem[1];
       var err = elem[2];
@@ -9221,7 +4261,7 @@ var require_graceful_fs = __commonJS({
           debug("RETRY", fn.name, args);
           fn.apply(null, args.concat([startTime]));
         } else {
-          fs14[gracefulQueue].push(elem);
+          fs15[gracefulQueue].push(elem);
         }
       }
       if (retryTimer === void 0) {
@@ -9236,7 +4276,7 @@ var require_fs = __commonJS({
   "node_modules/fs-extra/lib/fs/index.js"(exports2) {
     "use strict";
     var u = require_universalify().fromCallback;
-    var fs14 = require_graceful_fs();
+    var fs15 = require_graceful_fs();
     var api = [
       "access",
       "appendFile",
@@ -9277,26 +4317,26 @@ var require_fs = __commonJS({
       "utimes",
       "writeFile"
     ].filter((key) => {
-      return typeof fs14[key] === "function";
+      return typeof fs15[key] === "function";
     });
-    Object.assign(exports2, fs14);
+    Object.assign(exports2, fs15);
     api.forEach((method) => {
-      exports2[method] = u(fs14[method]);
+      exports2[method] = u(fs15[method]);
     });
     exports2.exists = function(filename, callback) {
       if (typeof callback === "function") {
-        return fs14.exists(filename, callback);
+        return fs15.exists(filename, callback);
       }
       return new Promise((resolve) => {
-        return fs14.exists(filename, resolve);
+        return fs15.exists(filename, resolve);
       });
     };
     exports2.read = function(fd, buffer, offset, length, position, callback) {
       if (typeof callback === "function") {
-        return fs14.read(fd, buffer, offset, length, position, callback);
+        return fs15.read(fd, buffer, offset, length, position, callback);
       }
       return new Promise((resolve, reject) => {
-        fs14.read(fd, buffer, offset, length, position, (err, bytesRead, buffer2) => {
+        fs15.read(fd, buffer, offset, length, position, (err, bytesRead, buffer2) => {
           if (err) return reject(err);
           resolve({ bytesRead, buffer: buffer2 });
         });
@@ -9304,10 +4344,10 @@ var require_fs = __commonJS({
     };
     exports2.write = function(fd, buffer, ...args) {
       if (typeof args[args.length - 1] === "function") {
-        return fs14.write(fd, buffer, ...args);
+        return fs15.write(fd, buffer, ...args);
       }
       return new Promise((resolve, reject) => {
-        fs14.write(fd, buffer, ...args, (err, bytesWritten, buffer2) => {
+        fs15.write(fd, buffer, ...args, (err, bytesWritten, buffer2) => {
           if (err) return reject(err);
           resolve({ bytesWritten, buffer: buffer2 });
         });
@@ -9315,10 +4355,10 @@ var require_fs = __commonJS({
     };
     exports2.readv = function(fd, buffers, ...args) {
       if (typeof args[args.length - 1] === "function") {
-        return fs14.readv(fd, buffers, ...args);
+        return fs15.readv(fd, buffers, ...args);
       }
       return new Promise((resolve, reject) => {
-        fs14.readv(fd, buffers, ...args, (err, bytesRead, buffers2) => {
+        fs15.readv(fd, buffers, ...args, (err, bytesRead, buffers2) => {
           if (err) return reject(err);
           resolve({ bytesRead, buffers: buffers2 });
         });
@@ -9326,17 +4366,17 @@ var require_fs = __commonJS({
     };
     exports2.writev = function(fd, buffers, ...args) {
       if (typeof args[args.length - 1] === "function") {
-        return fs14.writev(fd, buffers, ...args);
+        return fs15.writev(fd, buffers, ...args);
       }
       return new Promise((resolve, reject) => {
-        fs14.writev(fd, buffers, ...args, (err, bytesWritten, buffers2) => {
+        fs15.writev(fd, buffers, ...args, (err, bytesWritten, buffers2) => {
           if (err) return reject(err);
           resolve({ bytesWritten, buffers: buffers2 });
         });
       });
     };
-    if (typeof fs14.realpath.native === "function") {
-      exports2.realpath.native = u(fs14.realpath.native);
+    if (typeof fs15.realpath.native === "function") {
+      exports2.realpath.native = u(fs15.realpath.native);
     } else {
       process.emitWarning(
         "fs.realpath.native is not a function. Is fs being monkey-patched?",
@@ -9369,7 +4409,7 @@ var require_utils = __commonJS({
 var require_make_dir = __commonJS({
   "node_modules/fs-extra/lib/mkdirs/make-dir.js"(exports2, module2) {
     "use strict";
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var { checkPath } = require_utils();
     var getMode = (options) => {
       const defaults = { mode: 511 };
@@ -9378,14 +4418,14 @@ var require_make_dir = __commonJS({
     };
     module2.exports.makeDir = async (dir, options) => {
       checkPath(dir);
-      return fs14.mkdir(dir, {
+      return fs15.mkdir(dir, {
         mode: getMode(options),
         recursive: true
       });
     };
     module2.exports.makeDirSync = (dir, options) => {
       checkPath(dir);
-      return fs14.mkdirSync(dir, {
+      return fs15.mkdirSync(dir, {
         mode: getMode(options),
         recursive: true
       });
@@ -9417,13 +4457,13 @@ var require_path_exists = __commonJS({
   "node_modules/fs-extra/lib/path-exists/index.js"(exports2, module2) {
     "use strict";
     var u = require_universalify().fromPromise;
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     function pathExists(path14) {
-      return fs14.access(path14).then(() => true).catch(() => false);
+      return fs15.access(path14).then(() => true).catch(() => false);
     }
     module2.exports = {
       pathExists: u(pathExists),
-      pathExistsSync: fs14.existsSync
+      pathExistsSync: fs15.existsSync
     };
   }
 });
@@ -9432,16 +4472,16 @@ var require_path_exists = __commonJS({
 var require_utimes = __commonJS({
   "node_modules/fs-extra/lib/util/utimes.js"(exports2, module2) {
     "use strict";
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var u = require_universalify().fromPromise;
     async function utimesMillis(path14, atime, mtime) {
-      const fd = await fs14.open(path14, "r+");
+      const fd = await fs15.open(path14, "r+");
       let closeErr = null;
       try {
-        await fs14.futimes(fd, atime, mtime);
+        await fs15.futimes(fd, atime, mtime);
       } finally {
         try {
-          await fs14.close(fd);
+          await fs15.close(fd);
         } catch (e) {
           closeErr = e;
         }
@@ -9451,9 +4491,9 @@ var require_utimes = __commonJS({
       }
     }
     function utimesMillisSync(path14, atime, mtime) {
-      const fd = fs14.openSync(path14, "r+");
-      fs14.futimesSync(fd, atime, mtime);
-      return fs14.closeSync(fd);
+      const fd = fs15.openSync(path14, "r+");
+      fs15.futimesSync(fd, atime, mtime);
+      return fs15.closeSync(fd);
     }
     module2.exports = {
       utimesMillis: u(utimesMillis),
@@ -9466,11 +4506,11 @@ var require_utimes = __commonJS({
 var require_stat = __commonJS({
   "node_modules/fs-extra/lib/util/stat.js"(exports2, module2) {
     "use strict";
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var path14 = require("path");
     var u = require_universalify().fromPromise;
     function getStats(src, dest, opts) {
-      const statFunc = opts.dereference ? (file2) => fs14.stat(file2, { bigint: true }) : (file2) => fs14.lstat(file2, { bigint: true });
+      const statFunc = opts.dereference ? (file2) => fs15.stat(file2, { bigint: true }) : (file2) => fs15.lstat(file2, { bigint: true });
       return Promise.all([
         statFunc(src),
         statFunc(dest).catch((err) => {
@@ -9481,7 +4521,7 @@ var require_stat = __commonJS({
     }
     function getStatsSync(src, dest, opts) {
       let destStat;
-      const statFunc = opts.dereference ? (file2) => fs14.statSync(file2, { bigint: true }) : (file2) => fs14.lstatSync(file2, { bigint: true });
+      const statFunc = opts.dereference ? (file2) => fs15.statSync(file2, { bigint: true }) : (file2) => fs15.lstatSync(file2, { bigint: true });
       const srcStat = statFunc(src);
       try {
         destStat = statFunc(dest);
@@ -9543,7 +4583,7 @@ var require_stat = __commonJS({
       if (destParent === srcParent || destParent === path14.parse(destParent).root) return;
       let destStat;
       try {
-        destStat = await fs14.stat(destParent, { bigint: true });
+        destStat = await fs15.stat(destParent, { bigint: true });
       } catch (err) {
         if (err.code === "ENOENT") return;
         throw err;
@@ -9559,7 +4599,7 @@ var require_stat = __commonJS({
       if (destParent === srcParent || destParent === path14.parse(destParent).root) return;
       let destStat;
       try {
-        destStat = fs14.statSync(destParent, { bigint: true });
+        destStat = fs15.statSync(destParent, { bigint: true });
       } catch (err) {
         if (err.code === "ENOENT") return;
         throw err;
@@ -9626,7 +4666,7 @@ var require_async = __commonJS({
 var require_copy = __commonJS({
   "node_modules/fs-extra/lib/copy/copy.js"(exports2, module2) {
     "use strict";
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var path14 = require("path");
     var { mkdirs } = require_mkdirs();
     var { pathExists } = require_path_exists();
@@ -9662,7 +4702,7 @@ var require_copy = __commonJS({
       return opts.filter(src, dest);
     }
     async function getStatsAndPerformCopy(destStat, src, dest, opts) {
-      const statFn = opts.dereference ? fs14.stat : fs14.lstat;
+      const statFn = opts.dereference ? fs15.stat : fs15.lstat;
       const srcStat = await statFn(src);
       if (srcStat.isDirectory()) return onDir(srcStat, destStat, src, dest, opts);
       if (srcStat.isFile() || srcStat.isCharacterDevice() || srcStat.isBlockDevice()) return onFile(srcStat, destStat, src, dest, opts);
@@ -9674,7 +4714,7 @@ var require_copy = __commonJS({
     async function onFile(srcStat, destStat, src, dest, opts) {
       if (!destStat) return copyFile(srcStat, src, dest, opts);
       if (opts.overwrite) {
-        await fs14.unlink(dest);
+        await fs15.unlink(dest);
         return copyFile(srcStat, src, dest, opts);
       }
       if (opts.errorOnExist) {
@@ -9682,27 +4722,27 @@ var require_copy = __commonJS({
       }
     }
     async function copyFile(srcStat, src, dest, opts) {
-      await fs14.copyFile(src, dest);
+      await fs15.copyFile(src, dest);
       if (opts.preserveTimestamps) {
         if (fileIsNotWritable(srcStat.mode)) {
           await makeFileWritable(dest, srcStat.mode);
         }
-        const updatedSrcStat = await fs14.stat(src);
+        const updatedSrcStat = await fs15.stat(src);
         await utimesMillis(dest, updatedSrcStat.atime, updatedSrcStat.mtime);
       }
-      return fs14.chmod(dest, srcStat.mode);
+      return fs15.chmod(dest, srcStat.mode);
     }
     function fileIsNotWritable(srcMode) {
       return (srcMode & 128) === 0;
     }
     function makeFileWritable(dest, srcMode) {
-      return fs14.chmod(dest, srcMode | 128);
+      return fs15.chmod(dest, srcMode | 128);
     }
     async function onDir(srcStat, destStat, src, dest, opts) {
       if (!destStat) {
-        await fs14.mkdir(dest);
+        await fs15.mkdir(dest);
       }
-      await asyncIteratorConcurrentProcess(await fs14.opendir(src), async (item) => {
+      await asyncIteratorConcurrentProcess(await fs15.opendir(src), async (item) => {
         const srcItem = path14.join(src, item.name);
         const destItem = path14.join(dest, item.name);
         const include = await runFilter(srcItem, destItem, opts);
@@ -9712,22 +4752,22 @@ var require_copy = __commonJS({
         }
       });
       if (!destStat) {
-        await fs14.chmod(dest, srcStat.mode);
+        await fs15.chmod(dest, srcStat.mode);
       }
     }
     async function onLink(destStat, src, dest, opts) {
-      let resolvedSrc = await fs14.readlink(src);
+      let resolvedSrc = await fs15.readlink(src);
       if (opts.dereference) {
         resolvedSrc = path14.resolve(process.cwd(), resolvedSrc);
       }
       if (!destStat) {
-        return fs14.symlink(resolvedSrc, dest);
+        return fs15.symlink(resolvedSrc, dest);
       }
       let resolvedDest = null;
       try {
-        resolvedDest = await fs14.readlink(dest);
+        resolvedDest = await fs15.readlink(dest);
       } catch (e) {
-        if (e.code === "EINVAL" || e.code === "UNKNOWN") return fs14.symlink(resolvedSrc, dest);
+        if (e.code === "EINVAL" || e.code === "UNKNOWN") return fs15.symlink(resolvedSrc, dest);
         throw e;
       }
       if (opts.dereference) {
@@ -9741,8 +4781,8 @@ var require_copy = __commonJS({
           throw new Error(`Cannot overwrite '${resolvedDest}' with '${resolvedSrc}'.`);
         }
       }
-      await fs14.unlink(dest);
-      return fs14.symlink(resolvedSrc, dest);
+      await fs15.unlink(dest);
+      return fs15.symlink(resolvedSrc, dest);
     }
     module2.exports = copy;
   }
@@ -9752,7 +4792,7 @@ var require_copy = __commonJS({
 var require_copy_sync = __commonJS({
   "node_modules/fs-extra/lib/copy/copy-sync.js"(exports2, module2) {
     "use strict";
-    var fs14 = require_graceful_fs();
+    var fs15 = require_graceful_fs();
     var path14 = require("path");
     var mkdirsSync = require_mkdirs().mkdirsSync;
     var utimesMillisSync = require_utimes().utimesMillisSync;
@@ -9775,11 +4815,11 @@ var require_copy_sync = __commonJS({
       stat.checkParentPathsSync(src, srcStat, dest, "copy");
       if (opts.filter && !opts.filter(src, dest)) return;
       const destParent = path14.dirname(dest);
-      if (!fs14.existsSync(destParent)) mkdirsSync(destParent);
+      if (!fs15.existsSync(destParent)) mkdirsSync(destParent);
       return getStats(destStat, src, dest, opts);
     }
     function getStats(destStat, src, dest, opts) {
-      const statSync = opts.dereference ? fs14.statSync : fs14.lstatSync;
+      const statSync = opts.dereference ? fs15.statSync : fs15.lstatSync;
       const srcStat = statSync(src);
       if (srcStat.isDirectory()) return onDir(srcStat, destStat, src, dest, opts);
       else if (srcStat.isFile() || srcStat.isCharacterDevice() || srcStat.isBlockDevice()) return onFile(srcStat, destStat, src, dest, opts);
@@ -9794,14 +4834,14 @@ var require_copy_sync = __commonJS({
     }
     function mayCopyFile(srcStat, src, dest, opts) {
       if (opts.overwrite) {
-        fs14.unlinkSync(dest);
+        fs15.unlinkSync(dest);
         return copyFile(srcStat, src, dest, opts);
       } else if (opts.errorOnExist) {
         throw new Error(`'${dest}' already exists`);
       }
     }
     function copyFile(srcStat, src, dest, opts) {
-      fs14.copyFileSync(src, dest);
+      fs15.copyFileSync(src, dest);
       if (opts.preserveTimestamps) handleTimestamps(srcStat.mode, src, dest);
       return setDestMode(dest, srcStat.mode);
     }
@@ -9816,10 +4856,10 @@ var require_copy_sync = __commonJS({
       return setDestMode(dest, srcMode | 128);
     }
     function setDestMode(dest, srcMode) {
-      return fs14.chmodSync(dest, srcMode);
+      return fs15.chmodSync(dest, srcMode);
     }
     function setDestTimestamps(src, dest) {
-      const updatedSrcStat = fs14.statSync(src);
+      const updatedSrcStat = fs15.statSync(src);
       return utimesMillisSync(dest, updatedSrcStat.atime, updatedSrcStat.mtime);
     }
     function onDir(srcStat, destStat, src, dest, opts) {
@@ -9827,12 +4867,12 @@ var require_copy_sync = __commonJS({
       return copyDir(src, dest, opts);
     }
     function mkDirAndCopy(srcMode, src, dest, opts) {
-      fs14.mkdirSync(dest);
+      fs15.mkdirSync(dest);
       copyDir(src, dest, opts);
       return setDestMode(dest, srcMode);
     }
     function copyDir(src, dest, opts) {
-      const dir = fs14.opendirSync(src);
+      const dir = fs15.opendirSync(src);
       try {
         let dirent;
         while ((dirent = dir.readSync()) !== null) {
@@ -9850,18 +4890,18 @@ var require_copy_sync = __commonJS({
       return getStats(destStat, srcItem, destItem, opts);
     }
     function onLink(destStat, src, dest, opts) {
-      let resolvedSrc = fs14.readlinkSync(src);
+      let resolvedSrc = fs15.readlinkSync(src);
       if (opts.dereference) {
         resolvedSrc = path14.resolve(process.cwd(), resolvedSrc);
       }
       if (!destStat) {
-        return fs14.symlinkSync(resolvedSrc, dest);
+        return fs15.symlinkSync(resolvedSrc, dest);
       } else {
         let resolvedDest;
         try {
-          resolvedDest = fs14.readlinkSync(dest);
+          resolvedDest = fs15.readlinkSync(dest);
         } catch (err) {
-          if (err.code === "EINVAL" || err.code === "UNKNOWN") return fs14.symlinkSync(resolvedSrc, dest);
+          if (err.code === "EINVAL" || err.code === "UNKNOWN") return fs15.symlinkSync(resolvedSrc, dest);
           throw err;
         }
         if (opts.dereference) {
@@ -9879,8 +4919,8 @@ var require_copy_sync = __commonJS({
       }
     }
     function copyLink(resolvedSrc, dest) {
-      fs14.unlinkSync(dest);
-      return fs14.symlinkSync(resolvedSrc, dest);
+      fs15.unlinkSync(dest);
+      return fs15.symlinkSync(resolvedSrc, dest);
     }
     module2.exports = copySync;
   }
@@ -9902,13 +4942,13 @@ var require_copy2 = __commonJS({
 var require_remove = __commonJS({
   "node_modules/fs-extra/lib/remove/index.js"(exports2, module2) {
     "use strict";
-    var fs14 = require_graceful_fs();
+    var fs15 = require_graceful_fs();
     var u = require_universalify().fromCallback;
     function remove(path14, callback) {
-      fs14.rm(path14, { recursive: true, force: true }, callback);
+      fs15.rm(path14, { recursive: true, force: true }, callback);
     }
     function removeSync(path14) {
-      fs14.rmSync(path14, { recursive: true, force: true });
+      fs15.rmSync(path14, { recursive: true, force: true });
     }
     module2.exports = {
       remove: u(remove),
@@ -9922,14 +4962,14 @@ var require_empty = __commonJS({
   "node_modules/fs-extra/lib/empty/index.js"(exports2, module2) {
     "use strict";
     var u = require_universalify().fromPromise;
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var path14 = require("path");
     var mkdir = require_mkdirs();
     var remove = require_remove();
     var emptyDir = u(async function emptyDir2(dir) {
       let items;
       try {
-        items = await fs14.readdir(dir);
+        items = await fs15.readdir(dir);
       } catch {
         return mkdir.mkdirs(dir);
       }
@@ -9938,7 +4978,7 @@ var require_empty = __commonJS({
     function emptyDirSync(dir) {
       let items;
       try {
-        items = fs14.readdirSync(dir);
+        items = fs15.readdirSync(dir);
       } catch {
         return mkdir.mkdirsSync(dir);
       }
@@ -9962,51 +5002,51 @@ var require_file = __commonJS({
     "use strict";
     var u = require_universalify().fromPromise;
     var path14 = require("path");
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var mkdir = require_mkdirs();
     async function createFile(file2) {
       let stats;
       try {
-        stats = await fs14.stat(file2);
+        stats = await fs15.stat(file2);
       } catch {
       }
       if (stats && stats.isFile()) return;
       const dir = path14.dirname(file2);
       let dirStats = null;
       try {
-        dirStats = await fs14.stat(dir);
+        dirStats = await fs15.stat(dir);
       } catch (err) {
         if (err.code === "ENOENT") {
           await mkdir.mkdirs(dir);
-          await fs14.writeFile(file2, "");
+          await fs15.writeFile(file2, "");
           return;
         } else {
           throw err;
         }
       }
       if (dirStats.isDirectory()) {
-        await fs14.writeFile(file2, "");
+        await fs15.writeFile(file2, "");
       } else {
-        await fs14.readdir(dir);
+        await fs15.readdir(dir);
       }
     }
     function createFileSync(file2) {
       let stats;
       try {
-        stats = fs14.statSync(file2);
+        stats = fs15.statSync(file2);
       } catch {
       }
       if (stats && stats.isFile()) return;
       const dir = path14.dirname(file2);
       try {
-        if (!fs14.statSync(dir).isDirectory()) {
-          fs14.readdirSync(dir);
+        if (!fs15.statSync(dir).isDirectory()) {
+          fs15.readdirSync(dir);
         }
       } catch (err) {
         if (err && err.code === "ENOENT") mkdir.mkdirsSync(dir);
         else throw err;
       }
-      fs14.writeFileSync(file2, "");
+      fs15.writeFileSync(file2, "");
     }
     module2.exports = {
       createFile: u(createFile),
@@ -10021,19 +5061,19 @@ var require_link = __commonJS({
     "use strict";
     var u = require_universalify().fromPromise;
     var path14 = require("path");
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var mkdir = require_mkdirs();
     var { pathExists } = require_path_exists();
     var { areIdentical } = require_stat();
     async function createLink(srcpath, dstpath) {
       let dstStat;
       try {
-        dstStat = await fs14.lstat(dstpath);
+        dstStat = await fs15.lstat(dstpath);
       } catch {
       }
       let srcStat;
       try {
-        srcStat = await fs14.lstat(srcpath);
+        srcStat = await fs15.lstat(srcpath);
       } catch (err) {
         err.message = err.message.replace("lstat", "ensureLink");
         throw err;
@@ -10044,26 +5084,26 @@ var require_link = __commonJS({
       if (!dirExists) {
         await mkdir.mkdirs(dir);
       }
-      await fs14.link(srcpath, dstpath);
+      await fs15.link(srcpath, dstpath);
     }
     function createLinkSync(srcpath, dstpath) {
       let dstStat;
       try {
-        dstStat = fs14.lstatSync(dstpath);
+        dstStat = fs15.lstatSync(dstpath);
       } catch {
       }
       try {
-        const srcStat = fs14.lstatSync(srcpath);
+        const srcStat = fs15.lstatSync(srcpath);
         if (dstStat && areIdentical(srcStat, dstStat)) return;
       } catch (err) {
         err.message = err.message.replace("lstat", "ensureLink");
         throw err;
       }
       const dir = path14.dirname(dstpath);
-      const dirExists = fs14.existsSync(dir);
-      if (dirExists) return fs14.linkSync(srcpath, dstpath);
+      const dirExists = fs15.existsSync(dir);
+      if (dirExists) return fs15.linkSync(srcpath, dstpath);
       mkdir.mkdirsSync(dir);
-      return fs14.linkSync(srcpath, dstpath);
+      return fs15.linkSync(srcpath, dstpath);
     }
     module2.exports = {
       createLink: u(createLink),
@@ -10077,13 +5117,13 @@ var require_symlink_paths = __commonJS({
   "node_modules/fs-extra/lib/ensure/symlink-paths.js"(exports2, module2) {
     "use strict";
     var path14 = require("path");
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var { pathExists } = require_path_exists();
     var u = require_universalify().fromPromise;
     async function symlinkPaths(srcpath, dstpath) {
       if (path14.isAbsolute(srcpath)) {
         try {
-          await fs14.lstat(srcpath);
+          await fs15.lstat(srcpath);
         } catch (err) {
           err.message = err.message.replace("lstat", "ensureSymlink");
           throw err;
@@ -10103,7 +5143,7 @@ var require_symlink_paths = __commonJS({
         };
       }
       try {
-        await fs14.lstat(srcpath);
+        await fs15.lstat(srcpath);
       } catch (err) {
         err.message = err.message.replace("lstat", "ensureSymlink");
         throw err;
@@ -10115,7 +5155,7 @@ var require_symlink_paths = __commonJS({
     }
     function symlinkPathsSync(srcpath, dstpath) {
       if (path14.isAbsolute(srcpath)) {
-        const exists2 = fs14.existsSync(srcpath);
+        const exists2 = fs15.existsSync(srcpath);
         if (!exists2) throw new Error("absolute srcpath does not exist");
         return {
           toCwd: srcpath,
@@ -10124,14 +5164,14 @@ var require_symlink_paths = __commonJS({
       }
       const dstdir = path14.dirname(dstpath);
       const relativeToDst = path14.join(dstdir, srcpath);
-      const exists = fs14.existsSync(relativeToDst);
+      const exists = fs15.existsSync(relativeToDst);
       if (exists) {
         return {
           toCwd: relativeToDst,
           toDst: srcpath
         };
       }
-      const srcExists = fs14.existsSync(srcpath);
+      const srcExists = fs15.existsSync(srcpath);
       if (!srcExists) throw new Error("relative srcpath does not exist");
       return {
         toCwd: srcpath,
@@ -10149,13 +5189,13 @@ var require_symlink_paths = __commonJS({
 var require_symlink_type = __commonJS({
   "node_modules/fs-extra/lib/ensure/symlink-type.js"(exports2, module2) {
     "use strict";
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var u = require_universalify().fromPromise;
     async function symlinkType(srcpath, type) {
       if (type) return type;
       let stats;
       try {
-        stats = await fs14.lstat(srcpath);
+        stats = await fs15.lstat(srcpath);
       } catch {
         return "file";
       }
@@ -10165,7 +5205,7 @@ var require_symlink_type = __commonJS({
       if (type) return type;
       let stats;
       try {
-        stats = fs14.lstatSync(srcpath);
+        stats = fs15.lstatSync(srcpath);
       } catch {
         return "file";
       }
@@ -10184,7 +5224,7 @@ var require_symlink = __commonJS({
     "use strict";
     var u = require_universalify().fromPromise;
     var path14 = require("path");
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var { mkdirs, mkdirsSync } = require_mkdirs();
     var { symlinkPaths, symlinkPathsSync } = require_symlink_paths();
     var { symlinkType, symlinkTypeSync } = require_symlink_type();
@@ -10193,13 +5233,13 @@ var require_symlink = __commonJS({
     async function createSymlink(srcpath, dstpath, type) {
       let stats;
       try {
-        stats = await fs14.lstat(dstpath);
+        stats = await fs15.lstat(dstpath);
       } catch {
       }
       if (stats && stats.isSymbolicLink()) {
         const [srcStat, dstStat] = await Promise.all([
-          fs14.stat(srcpath),
-          fs14.stat(dstpath)
+          fs15.stat(srcpath),
+          fs15.stat(dstpath)
         ]);
         if (areIdentical(srcStat, dstStat)) return;
       }
@@ -10210,27 +5250,27 @@ var require_symlink = __commonJS({
       if (!await pathExists(dir)) {
         await mkdirs(dir);
       }
-      return fs14.symlink(srcpath, dstpath, toType);
+      return fs15.symlink(srcpath, dstpath, toType);
     }
     function createSymlinkSync(srcpath, dstpath, type) {
       let stats;
       try {
-        stats = fs14.lstatSync(dstpath);
+        stats = fs15.lstatSync(dstpath);
       } catch {
       }
       if (stats && stats.isSymbolicLink()) {
-        const srcStat = fs14.statSync(srcpath);
-        const dstStat = fs14.statSync(dstpath);
+        const srcStat = fs15.statSync(srcpath);
+        const dstStat = fs15.statSync(dstpath);
         if (areIdentical(srcStat, dstStat)) return;
       }
       const relative = symlinkPathsSync(srcpath, dstpath);
       srcpath = relative.toDst;
       type = symlinkTypeSync(relative.toCwd, type);
       const dir = path14.dirname(dstpath);
-      const exists = fs14.existsSync(dir);
-      if (exists) return fs14.symlinkSync(srcpath, dstpath, type);
+      const exists = fs15.existsSync(dir);
+      if (exists) return fs15.symlinkSync(srcpath, dstpath, type);
       mkdirsSync(dir);
-      return fs14.symlinkSync(srcpath, dstpath, type);
+      return fs15.symlinkSync(srcpath, dstpath, type);
     }
     module2.exports = {
       createSymlink: u(createSymlink),
@@ -10299,9 +5339,9 @@ var require_jsonfile = __commonJS({
       if (typeof options === "string") {
         options = { encoding: options };
       }
-      const fs14 = options.fs || _fs;
+      const fs15 = options.fs || _fs;
       const shouldThrow = "throws" in options ? options.throws : true;
-      let data = await universalify.fromCallback(fs14.readFile)(file2, options);
+      let data = await universalify.fromCallback(fs15.readFile)(file2, options);
       data = stripBom(data);
       let obj;
       try {
@@ -10321,10 +5361,10 @@ var require_jsonfile = __commonJS({
       if (typeof options === "string") {
         options = { encoding: options };
       }
-      const fs14 = options.fs || _fs;
+      const fs15 = options.fs || _fs;
       const shouldThrow = "throws" in options ? options.throws : true;
       try {
-        let content = fs14.readFileSync(file2, options);
+        let content = fs15.readFileSync(file2, options);
         content = stripBom(content);
         return JSON.parse(content, options.reviver);
       } catch (err) {
@@ -10337,15 +5377,15 @@ var require_jsonfile = __commonJS({
       }
     }
     async function _writeFile(file2, obj, options = {}) {
-      const fs14 = options.fs || _fs;
+      const fs15 = options.fs || _fs;
       const str = stringify2(obj, options);
-      await universalify.fromCallback(fs14.writeFile)(file2, str, options);
+      await universalify.fromCallback(fs15.writeFile)(file2, str, options);
     }
     var writeFile = universalify.fromPromise(_writeFile);
     function writeFileSync2(file2, obj, options = {}) {
-      const fs14 = options.fs || _fs;
+      const fs15 = options.fs || _fs;
       const str = stringify2(obj, options);
-      return fs14.writeFileSync(file2, str, options);
+      return fs15.writeFileSync(file2, str, options);
     }
     module2.exports = {
       readFile,
@@ -10376,7 +5416,7 @@ var require_output_file = __commonJS({
   "node_modules/fs-extra/lib/output-file/index.js"(exports2, module2) {
     "use strict";
     var u = require_universalify().fromPromise;
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var path14 = require("path");
     var mkdir = require_mkdirs();
     var pathExists = require_path_exists().pathExists;
@@ -10385,14 +5425,14 @@ var require_output_file = __commonJS({
       if (!await pathExists(dir)) {
         await mkdir.mkdirs(dir);
       }
-      return fs14.writeFile(file2, data, encoding);
+      return fs15.writeFile(file2, data, encoding);
     }
     function outputFileSync(file2, ...args) {
       const dir = path14.dirname(file2);
-      if (!fs14.existsSync(dir)) {
+      if (!fs15.existsSync(dir)) {
         mkdir.mkdirsSync(dir);
       }
-      fs14.writeFileSync(file2, ...args);
+      fs15.writeFileSync(file2, ...args);
     }
     module2.exports = {
       outputFile: u(outputFile),
@@ -10451,7 +5491,7 @@ var require_json = __commonJS({
 var require_move = __commonJS({
   "node_modules/fs-extra/lib/move/move.js"(exports2, module2) {
     "use strict";
-    var fs14 = require_fs();
+    var fs15 = require_fs();
     var path14 = require("path");
     var { copy } = require_copy2();
     var { remove } = require_remove();
@@ -10478,7 +5518,7 @@ var require_move = __commonJS({
         }
       }
       try {
-        await fs14.rename(src, dest);
+        await fs15.rename(src, dest);
       } catch (err) {
         if (err.code !== "EXDEV") {
           throw err;
@@ -10503,7 +5543,7 @@ var require_move = __commonJS({
 var require_move_sync = __commonJS({
   "node_modules/fs-extra/lib/move/move-sync.js"(exports2, module2) {
     "use strict";
-    var fs14 = require_graceful_fs();
+    var fs15 = require_graceful_fs();
     var path14 = require("path");
     var copySync = require_copy2().copySync;
     var removeSync = require_remove().removeSync;
@@ -10528,12 +5568,12 @@ var require_move_sync = __commonJS({
         removeSync(dest);
         return rename(src, dest, overwrite);
       }
-      if (fs14.existsSync(dest)) throw new Error("dest already exists.");
+      if (fs15.existsSync(dest)) throw new Error("dest already exists.");
       return rename(src, dest, overwrite);
     }
     function rename(src, dest, overwrite) {
       try {
-        fs14.renameSync(src, dest);
+        fs15.renameSync(src, dest);
       } catch (err) {
         if (err.code !== "EXDEV") throw err;
         return moveAcrossDevice(src, dest, overwrite);
@@ -10565,7 +5605,7 @@ var require_move2 = __commonJS({
 });
 
 // node_modules/fs-extra/lib/index.js
-var require_lib2 = __commonJS({
+var require_lib = __commonJS({
   "node_modules/fs-extra/lib/index.js"(exports2, module2) {
     "use strict";
     module2.exports = {
@@ -10582,811 +5622,6 @@ var require_lib2 = __commonJS({
       ...require_path_exists(),
       ...require_remove()
     };
-  }
-});
-
-// node_modules/dot-prop/index.js
-function getPathSegments(path14) {
-  const parts = [];
-  let currentSegment = "";
-  let currentPart = "start";
-  let isIgnoring = false;
-  for (const character of path14) {
-    switch (character) {
-      case "\\": {
-        if (currentPart === "index") {
-          throw new Error("Invalid character in an index");
-        }
-        if (currentPart === "indexEnd") {
-          throw new Error("Invalid character after an index");
-        }
-        if (isIgnoring) {
-          currentSegment += character;
-        }
-        currentPart = "property";
-        isIgnoring = !isIgnoring;
-        break;
-      }
-      case ".": {
-        if (currentPart === "index") {
-          throw new Error("Invalid character in an index");
-        }
-        if (currentPart === "indexEnd") {
-          currentPart = "property";
-          break;
-        }
-        if (isIgnoring) {
-          isIgnoring = false;
-          currentSegment += character;
-          break;
-        }
-        if (disallowedKeys.has(currentSegment)) {
-          return [];
-        }
-        parts.push(currentSegment);
-        currentSegment = "";
-        currentPart = "property";
-        break;
-      }
-      case "[": {
-        if (currentPart === "index") {
-          throw new Error("Invalid character in an index");
-        }
-        if (currentPart === "indexEnd") {
-          currentPart = "index";
-          break;
-        }
-        if (isIgnoring) {
-          isIgnoring = false;
-          currentSegment += character;
-          break;
-        }
-        if (currentPart === "property") {
-          if (disallowedKeys.has(currentSegment)) {
-            return [];
-          }
-          parts.push(currentSegment);
-          currentSegment = "";
-        }
-        currentPart = "index";
-        break;
-      }
-      case "]": {
-        if (currentPart === "index") {
-          parts.push(Number.parseInt(currentSegment, 10));
-          currentSegment = "";
-          currentPart = "indexEnd";
-          break;
-        }
-        if (currentPart === "indexEnd") {
-          throw new Error("Invalid character after an index");
-        }
-      }
-      default: {
-        if (currentPart === "index" && !digits.has(character)) {
-          throw new Error("Invalid character in an index");
-        }
-        if (currentPart === "indexEnd") {
-          throw new Error("Invalid character after an index");
-        }
-        if (currentPart === "start") {
-          currentPart = "property";
-        }
-        if (isIgnoring) {
-          isIgnoring = false;
-          currentSegment += "\\";
-        }
-        currentSegment += character;
-      }
-    }
-  }
-  if (isIgnoring) {
-    currentSegment += "\\";
-  }
-  switch (currentPart) {
-    case "property": {
-      if (disallowedKeys.has(currentSegment)) {
-        return [];
-      }
-      parts.push(currentSegment);
-      break;
-    }
-    case "index": {
-      throw new Error("Index was not closed");
-    }
-    case "start": {
-      parts.push("");
-      break;
-    }
-  }
-  return parts;
-}
-function isStringIndex(object2, key) {
-  if (typeof key !== "number" && Array.isArray(object2)) {
-    const index = Number.parseInt(key, 10);
-    return Number.isInteger(index) && object2[index] === object2[key];
-  }
-  return false;
-}
-function assertNotStringIndex(object2, key) {
-  if (isStringIndex(object2, key)) {
-    throw new Error("Cannot use string index");
-  }
-}
-function getProperty(object2, path14, value) {
-  if (!isObject(object2) || typeof path14 !== "string") {
-    return value === void 0 ? object2 : value;
-  }
-  const pathArray = getPathSegments(path14);
-  if (pathArray.length === 0) {
-    return value;
-  }
-  for (let index = 0; index < pathArray.length; index++) {
-    const key = pathArray[index];
-    if (isStringIndex(object2, key)) {
-      object2 = index === pathArray.length - 1 ? void 0 : null;
-    } else {
-      object2 = object2[key];
-    }
-    if (object2 === void 0 || object2 === null) {
-      if (index !== pathArray.length - 1) {
-        return value;
-      }
-      break;
-    }
-  }
-  return object2 === void 0 ? value : object2;
-}
-function setProperty(object2, path14, value) {
-  if (!isObject(object2) || typeof path14 !== "string") {
-    return object2;
-  }
-  const root = object2;
-  const pathArray = getPathSegments(path14);
-  for (let index = 0; index < pathArray.length; index++) {
-    const key = pathArray[index];
-    assertNotStringIndex(object2, key);
-    if (index === pathArray.length - 1) {
-      object2[key] = value;
-    } else if (!isObject(object2[key])) {
-      object2[key] = typeof pathArray[index + 1] === "number" ? [] : {};
-    }
-    object2 = object2[key];
-  }
-  return root;
-}
-function deleteProperty(object2, path14) {
-  if (!isObject(object2) || typeof path14 !== "string") {
-    return false;
-  }
-  const pathArray = getPathSegments(path14);
-  for (let index = 0; index < pathArray.length; index++) {
-    const key = pathArray[index];
-    assertNotStringIndex(object2, key);
-    if (index === pathArray.length - 1) {
-      delete object2[key];
-      return true;
-    }
-    object2 = object2[key];
-    if (!isObject(object2)) {
-      return false;
-    }
-  }
-}
-function hasProperty(object2, path14) {
-  if (!isObject(object2) || typeof path14 !== "string") {
-    return false;
-  }
-  const pathArray = getPathSegments(path14);
-  if (pathArray.length === 0) {
-    return false;
-  }
-  for (const key of pathArray) {
-    if (!isObject(object2) || !(key in object2) || isStringIndex(object2, key)) {
-      return false;
-    }
-    object2 = object2[key];
-  }
-  return true;
-}
-var isObject, disallowedKeys, digits;
-var init_dot_prop = __esm({
-  "node_modules/dot-prop/index.js"() {
-    "use strict";
-    isObject = (value) => {
-      const type = typeof value;
-      return value !== null && (type === "object" || type === "function");
-    };
-    disallowedKeys = /* @__PURE__ */ new Set([
-      "__proto__",
-      "prototype",
-      "constructor"
-    ]);
-    digits = new Set("0123456789");
-  }
-});
-
-// node_modules/env-paths/index.js
-function envPaths(name, { suffix = "nodejs" } = {}) {
-  if (typeof name !== "string") {
-    throw new TypeError(`Expected a string, got ${typeof name}`);
-  }
-  if (suffix) {
-    name += `-${suffix}`;
-  }
-  if (import_node_process7.default.platform === "darwin") {
-    return macos(name);
-  }
-  if (import_node_process7.default.platform === "win32") {
-    return windows(name);
-  }
-  return linux(name);
-}
-var import_node_path, import_node_os2, import_node_process7, homedir, tmpdir, env2, macos, windows, linux;
-var init_env_paths = __esm({
-  "node_modules/env-paths/index.js"() {
-    "use strict";
-    import_node_path = __toESM(require("path"), 1);
-    import_node_os2 = __toESM(require("os"), 1);
-    import_node_process7 = __toESM(require("process"), 1);
-    homedir = import_node_os2.default.homedir();
-    tmpdir = import_node_os2.default.tmpdir();
-    ({ env: env2 } = import_node_process7.default);
-    macos = (name) => {
-      const library = import_node_path.default.join(homedir, "Library");
-      return {
-        data: import_node_path.default.join(library, "Application Support", name),
-        config: import_node_path.default.join(library, "Preferences", name),
-        cache: import_node_path.default.join(library, "Caches", name),
-        log: import_node_path.default.join(library, "Logs", name),
-        temp: import_node_path.default.join(tmpdir, name)
-      };
-    };
-    windows = (name) => {
-      const appData = env2.APPDATA || import_node_path.default.join(homedir, "AppData", "Roaming");
-      const localAppData = env2.LOCALAPPDATA || import_node_path.default.join(homedir, "AppData", "Local");
-      return {
-        // Data/config/cache/log are invented by me as Windows isn't opinionated about this
-        data: import_node_path.default.join(localAppData, name, "Data"),
-        config: import_node_path.default.join(appData, name, "Config"),
-        cache: import_node_path.default.join(localAppData, name, "Cache"),
-        log: import_node_path.default.join(localAppData, name, "Log"),
-        temp: import_node_path.default.join(tmpdir, name)
-      };
-    };
-    linux = (name) => {
-      const username = import_node_path.default.basename(homedir);
-      return {
-        data: import_node_path.default.join(env2.XDG_DATA_HOME || import_node_path.default.join(homedir, ".local", "share"), name),
-        config: import_node_path.default.join(env2.XDG_CONFIG_HOME || import_node_path.default.join(homedir, ".config"), name),
-        cache: import_node_path.default.join(env2.XDG_CACHE_HOME || import_node_path.default.join(homedir, ".cache"), name),
-        // https://wiki.debian.org/XDGBaseDirectorySpecification#state
-        log: import_node_path.default.join(env2.XDG_STATE_HOME || import_node_path.default.join(homedir, ".local", "state"), name),
-        temp: import_node_path.default.join(tmpdir, username, name)
-      };
-    };
-  }
-});
-
-// node_modules/stubborn-utils/dist/attemptify_async.js
-var attemptifyAsync, attemptify_async_default;
-var init_attemptify_async = __esm({
-  "node_modules/stubborn-utils/dist/attemptify_async.js"() {
-    "use strict";
-    attemptifyAsync = (fn, options) => {
-      const { onError } = options;
-      return function attemptified(...args) {
-        return fn.apply(void 0, args).catch(onError);
-      };
-    };
-    attemptify_async_default = attemptifyAsync;
-  }
-});
-
-// node_modules/stubborn-utils/dist/attemptify_sync.js
-var attemptifySync, attemptify_sync_default;
-var init_attemptify_sync = __esm({
-  "node_modules/stubborn-utils/dist/attemptify_sync.js"() {
-    "use strict";
-    attemptifySync = (fn, options) => {
-      const { onError } = options;
-      return function attemptified(...args) {
-        try {
-          return fn.apply(void 0, args);
-        } catch (error49) {
-          return onError(error49);
-        }
-      };
-    };
-    attemptify_sync_default = attemptifySync;
-  }
-});
-
-// node_modules/stubborn-utils/dist/constants.js
-var RETRY_INTERVAL;
-var init_constants = __esm({
-  "node_modules/stubborn-utils/dist/constants.js"() {
-    "use strict";
-    RETRY_INTERVAL = 250;
-  }
-});
-
-// node_modules/stubborn-utils/dist/retryify_async.js
-var retryifyAsync, retryify_async_default;
-var init_retryify_async = __esm({
-  "node_modules/stubborn-utils/dist/retryify_async.js"() {
-    "use strict";
-    init_constants();
-    retryifyAsync = (fn, options) => {
-      const { isRetriable } = options;
-      return function retryified(options2) {
-        const { timeout } = options2;
-        const interval = options2.interval ?? RETRY_INTERVAL;
-        const timestamp = Date.now() + timeout;
-        return function attempt(...args) {
-          return fn.apply(void 0, args).catch((error49) => {
-            if (!isRetriable(error49))
-              throw error49;
-            if (Date.now() >= timestamp)
-              throw error49;
-            const delay = Math.round(interval * Math.random());
-            if (delay > 0) {
-              const delayPromise = new Promise((resolve) => setTimeout(resolve, delay));
-              return delayPromise.then(() => attempt.apply(void 0, args));
-            } else {
-              return attempt.apply(void 0, args);
-            }
-          });
-        };
-      };
-    };
-    retryify_async_default = retryifyAsync;
-  }
-});
-
-// node_modules/stubborn-utils/dist/retryify_sync.js
-var retryifySync, retryify_sync_default;
-var init_retryify_sync = __esm({
-  "node_modules/stubborn-utils/dist/retryify_sync.js"() {
-    "use strict";
-    retryifySync = (fn, options) => {
-      const { isRetriable } = options;
-      return function retryified(options2) {
-        const { timeout } = options2;
-        const timestamp = Date.now() + timeout;
-        return function attempt(...args) {
-          while (true) {
-            try {
-              return fn.apply(void 0, args);
-            } catch (error49) {
-              if (!isRetriable(error49))
-                throw error49;
-              if (Date.now() >= timestamp)
-                throw error49;
-              continue;
-            }
-          }
-        };
-      };
-    };
-    retryify_sync_default = retryifySync;
-  }
-});
-
-// node_modules/stubborn-utils/dist/index.js
-var init_dist = __esm({
-  "node_modules/stubborn-utils/dist/index.js"() {
-    "use strict";
-    init_attemptify_async();
-    init_attemptify_sync();
-    init_retryify_async();
-    init_retryify_sync();
-  }
-});
-
-// node_modules/stubborn-fs/dist/handlers.js
-var Handlers, handlers_default;
-var init_handlers = __esm({
-  "node_modules/stubborn-fs/dist/handlers.js"() {
-    "use strict";
-    init_constants2();
-    Handlers = {
-      /* API */
-      isChangeErrorOk: (error49) => {
-        if (!Handlers.isNodeError(error49))
-          return false;
-        const { code } = error49;
-        if (code === "ENOSYS")
-          return true;
-        if (!IS_USER_ROOT && (code === "EINVAL" || code === "EPERM"))
-          return true;
-        return false;
-      },
-      isNodeError: (error49) => {
-        return error49 instanceof Error;
-      },
-      isRetriableError: (error49) => {
-        if (!Handlers.isNodeError(error49))
-          return false;
-        const { code } = error49;
-        if (code === "EMFILE" || code === "ENFILE" || code === "EAGAIN" || code === "EBUSY" || code === "EACCESS" || code === "EACCES" || code === "EACCS" || code === "EPERM")
-          return true;
-        return false;
-      },
-      onChangeError: (error49) => {
-        if (!Handlers.isNodeError(error49))
-          throw error49;
-        if (Handlers.isChangeErrorOk(error49))
-          return;
-        throw error49;
-      }
-    };
-    handlers_default = Handlers;
-  }
-});
-
-// node_modules/stubborn-fs/dist/constants.js
-var import_node_process8, ATTEMPTIFY_CHANGE_ERROR_OPTIONS, ATTEMPTIFY_NOOP_OPTIONS, IS_USER_ROOT, RETRYIFY_OPTIONS;
-var init_constants2 = __esm({
-  "node_modules/stubborn-fs/dist/constants.js"() {
-    "use strict";
-    import_node_process8 = __toESM(require("process"), 1);
-    init_handlers();
-    ATTEMPTIFY_CHANGE_ERROR_OPTIONS = {
-      onError: handlers_default.onChangeError
-    };
-    ATTEMPTIFY_NOOP_OPTIONS = {
-      onError: () => void 0
-    };
-    IS_USER_ROOT = import_node_process8.default.getuid ? !import_node_process8.default.getuid() : false;
-    RETRYIFY_OPTIONS = {
-      isRetriable: handlers_default.isRetriableError
-    };
-  }
-});
-
-// node_modules/stubborn-fs/dist/index.js
-var import_node_fs, import_node_util2, FS, dist_default;
-var init_dist2 = __esm({
-  "node_modules/stubborn-fs/dist/index.js"() {
-    "use strict";
-    import_node_fs = __toESM(require("fs"), 1);
-    import_node_util2 = require("util");
-    init_dist();
-    init_dist();
-    init_constants2();
-    FS = {
-      attempt: {
-        /* ASYNC */
-        chmod: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.chmod), ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
-        chown: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.chown), ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
-        close: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.close), ATTEMPTIFY_NOOP_OPTIONS),
-        fsync: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.fsync), ATTEMPTIFY_NOOP_OPTIONS),
-        mkdir: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.mkdir), ATTEMPTIFY_NOOP_OPTIONS),
-        realpath: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.realpath), ATTEMPTIFY_NOOP_OPTIONS),
-        stat: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.stat), ATTEMPTIFY_NOOP_OPTIONS),
-        unlink: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.unlink), ATTEMPTIFY_NOOP_OPTIONS),
-        /* SYNC */
-        chmodSync: attemptify_sync_default(import_node_fs.default.chmodSync, ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
-        chownSync: attemptify_sync_default(import_node_fs.default.chownSync, ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
-        closeSync: attemptify_sync_default(import_node_fs.default.closeSync, ATTEMPTIFY_NOOP_OPTIONS),
-        existsSync: attemptify_sync_default(import_node_fs.default.existsSync, ATTEMPTIFY_NOOP_OPTIONS),
-        fsyncSync: attemptify_sync_default(import_node_fs.default.fsync, ATTEMPTIFY_NOOP_OPTIONS),
-        mkdirSync: attemptify_sync_default(import_node_fs.default.mkdirSync, ATTEMPTIFY_NOOP_OPTIONS),
-        realpathSync: attemptify_sync_default(import_node_fs.default.realpathSync, ATTEMPTIFY_NOOP_OPTIONS),
-        statSync: attemptify_sync_default(import_node_fs.default.statSync, ATTEMPTIFY_NOOP_OPTIONS),
-        unlinkSync: attemptify_sync_default(import_node_fs.default.unlinkSync, ATTEMPTIFY_NOOP_OPTIONS)
-      },
-      retry: {
-        /* ASYNC */
-        close: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.close), RETRYIFY_OPTIONS),
-        fsync: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.fsync), RETRYIFY_OPTIONS),
-        open: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.open), RETRYIFY_OPTIONS),
-        readFile: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.readFile), RETRYIFY_OPTIONS),
-        rename: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.rename), RETRYIFY_OPTIONS),
-        stat: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.stat), RETRYIFY_OPTIONS),
-        write: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.write), RETRYIFY_OPTIONS),
-        writeFile: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.writeFile), RETRYIFY_OPTIONS),
-        /* SYNC */
-        closeSync: retryify_sync_default(import_node_fs.default.closeSync, RETRYIFY_OPTIONS),
-        fsyncSync: retryify_sync_default(import_node_fs.default.fsyncSync, RETRYIFY_OPTIONS),
-        openSync: retryify_sync_default(import_node_fs.default.openSync, RETRYIFY_OPTIONS),
-        readFileSync: retryify_sync_default(import_node_fs.default.readFileSync, RETRYIFY_OPTIONS),
-        renameSync: retryify_sync_default(import_node_fs.default.renameSync, RETRYIFY_OPTIONS),
-        statSync: retryify_sync_default(import_node_fs.default.statSync, RETRYIFY_OPTIONS),
-        writeSync: retryify_sync_default(import_node_fs.default.writeSync, RETRYIFY_OPTIONS),
-        writeFileSync: retryify_sync_default(import_node_fs.default.writeFileSync, RETRYIFY_OPTIONS)
-      }
-    };
-    dist_default = FS;
-  }
-});
-
-// node_modules/atomically/dist/constants.js
-var import_node_process9, DEFAULT_ENCODING, DEFAULT_FILE_MODE, DEFAULT_FOLDER_MODE, DEFAULT_WRITE_OPTIONS, DEFAULT_USER_UID, DEFAULT_USER_GID, DEFAULT_TIMEOUT_SYNC, IS_POSIX, IS_USER_ROOT2, LIMIT_BASENAME_LENGTH;
-var init_constants3 = __esm({
-  "node_modules/atomically/dist/constants.js"() {
-    "use strict";
-    import_node_process9 = __toESM(require("process"), 1);
-    DEFAULT_ENCODING = "utf8";
-    DEFAULT_FILE_MODE = 438;
-    DEFAULT_FOLDER_MODE = 511;
-    DEFAULT_WRITE_OPTIONS = {};
-    DEFAULT_USER_UID = import_node_process9.default.geteuid ? import_node_process9.default.geteuid() : -1;
-    DEFAULT_USER_GID = import_node_process9.default.getegid ? import_node_process9.default.getegid() : -1;
-    DEFAULT_TIMEOUT_SYNC = 1e3;
-    IS_POSIX = !!import_node_process9.default.getuid;
-    IS_USER_ROOT2 = import_node_process9.default.getuid ? !import_node_process9.default.getuid() : false;
-    LIMIT_BASENAME_LENGTH = 128;
-  }
-});
-
-// node_modules/atomically/dist/utils/lang.js
-var isException, isString, isUndefined;
-var init_lang = __esm({
-  "node_modules/atomically/dist/utils/lang.js"() {
-    "use strict";
-    isException = (value) => {
-      return value instanceof Error && "code" in value;
-    };
-    isString = (value) => {
-      return typeof value === "string";
-    };
-    isUndefined = (value) => {
-      return value === void 0;
-    };
-  }
-});
-
-// node_modules/atomically/dist/utils/scheduler.js
-var init_scheduler = __esm({
-  "node_modules/atomically/dist/utils/scheduler.js"() {
-    "use strict";
-  }
-});
-
-// node_modules/when-exit/dist/node/constants.js
-var import_node_process10, IS_LINUX, IS_WINDOWS;
-var init_constants4 = __esm({
-  "node_modules/when-exit/dist/node/constants.js"() {
-    "use strict";
-    import_node_process10 = __toESM(require("process"), 1);
-    IS_LINUX = import_node_process10.default.platform === "linux";
-    IS_WINDOWS = import_node_process10.default.platform === "win32";
-  }
-});
-
-// node_modules/when-exit/dist/node/signals.js
-var Signals, signals_default;
-var init_signals = __esm({
-  "node_modules/when-exit/dist/node/signals.js"() {
-    "use strict";
-    init_constants4();
-    Signals = ["SIGHUP", "SIGINT", "SIGTERM"];
-    if (!IS_WINDOWS) {
-      Signals.push("SIGALRM", "SIGABRT", "SIGVTALRM", "SIGXCPU", "SIGXFSZ", "SIGUSR2", "SIGTRAP", "SIGSYS", "SIGQUIT", "SIGIOT");
-    }
-    if (IS_LINUX) {
-      Signals.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT");
-    }
-    signals_default = Signals;
-  }
-});
-
-// node_modules/when-exit/dist/node/interceptor.js
-var import_node_process11, Interceptor, interceptor_default;
-var init_interceptor = __esm({
-  "node_modules/when-exit/dist/node/interceptor.js"() {
-    "use strict";
-    import_node_process11 = __toESM(require("process"), 1);
-    init_constants4();
-    init_signals();
-    Interceptor = class {
-      /* CONSTRUCTOR */
-      constructor() {
-        this.callbacks = /* @__PURE__ */ new Set();
-        this.exited = false;
-        this.exit = (signal) => {
-          if (this.exited)
-            return;
-          this.exited = true;
-          for (const callback of this.callbacks) {
-            callback();
-          }
-          if (signal) {
-            if (IS_WINDOWS && (signal !== "SIGINT" && signal !== "SIGTERM" && signal !== "SIGKILL")) {
-              import_node_process11.default.kill(import_node_process11.default.pid, "SIGTERM");
-            } else {
-              import_node_process11.default.kill(import_node_process11.default.pid, signal);
-            }
-          }
-        };
-        this.hook = () => {
-          import_node_process11.default.once("exit", () => this.exit());
-          for (const signal of signals_default) {
-            try {
-              import_node_process11.default.once(signal, () => this.exit(signal));
-            } catch {
-            }
-          }
-        };
-        this.register = (callback) => {
-          this.callbacks.add(callback);
-          return () => {
-            this.callbacks.delete(callback);
-          };
-        };
-        this.hook();
-      }
-    };
-    interceptor_default = new Interceptor();
-  }
-});
-
-// node_modules/when-exit/dist/node/index.js
-var whenExit, node_default;
-var init_node = __esm({
-  "node_modules/when-exit/dist/node/index.js"() {
-    "use strict";
-    init_interceptor();
-    whenExit = interceptor_default.register;
-    node_default = whenExit;
-  }
-});
-
-// node_modules/atomically/dist/utils/temp.js
-var import_node_path2, Temp, temp_default;
-var init_temp = __esm({
-  "node_modules/atomically/dist/utils/temp.js"() {
-    "use strict";
-    import_node_path2 = __toESM(require("path"), 1);
-    init_dist2();
-    init_node();
-    init_constants3();
-    Temp = {
-      /* VARIABLES */
-      store: {},
-      // filePath => purge
-      /* API */
-      create: (filePath) => {
-        const randomness = `000000${Math.floor(Math.random() * 16777215).toString(16)}`.slice(-6);
-        const timestamp = Date.now().toString().slice(-10);
-        const prefix = "tmp-";
-        const suffix = `.${prefix}${timestamp}${randomness}`;
-        const tempPath = `${filePath}${suffix}`;
-        return tempPath;
-      },
-      get: (filePath, creator, purge = true) => {
-        const tempPath = Temp.truncate(creator(filePath));
-        if (tempPath in Temp.store)
-          return Temp.get(filePath, creator, purge);
-        Temp.store[tempPath] = purge;
-        const disposer = () => delete Temp.store[tempPath];
-        return [tempPath, disposer];
-      },
-      purge: (filePath) => {
-        if (!Temp.store[filePath])
-          return;
-        delete Temp.store[filePath];
-        dist_default.attempt.unlink(filePath);
-      },
-      purgeSync: (filePath) => {
-        if (!Temp.store[filePath])
-          return;
-        delete Temp.store[filePath];
-        dist_default.attempt.unlinkSync(filePath);
-      },
-      purgeSyncAll: () => {
-        for (const filePath in Temp.store) {
-          Temp.purgeSync(filePath);
-        }
-      },
-      truncate: (filePath) => {
-        const basename = import_node_path2.default.basename(filePath);
-        if (basename.length <= LIMIT_BASENAME_LENGTH)
-          return filePath;
-        const truncable = /^(\.?)(.*?)((?:\.[^.]+)?(?:\.tmp-\d{10}[a-f0-9]{6})?)$/.exec(basename);
-        if (!truncable)
-          return filePath;
-        const truncationLength = basename.length - LIMIT_BASENAME_LENGTH;
-        return `${filePath.slice(0, -basename.length)}${truncable[1]}${truncable[2].slice(0, -truncationLength)}${truncable[3]}`;
-      }
-    };
-    node_default(Temp.purgeSyncAll);
-    temp_default = Temp;
-  }
-});
-
-// node_modules/atomically/dist/index.js
-function writeFileSync(filePath, data, options = DEFAULT_WRITE_OPTIONS) {
-  if (isString(options))
-    return writeFileSync(filePath, data, { encoding: options });
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_SYNC;
-  const retryOptions = { timeout };
-  let tempDisposer = null;
-  let tempPath = null;
-  let fd = null;
-  try {
-    const filePathReal = dist_default.attempt.realpathSync(filePath);
-    const filePathExists = !!filePathReal;
-    filePath = filePathReal || filePath;
-    [tempPath, tempDisposer] = temp_default.get(filePath, options.tmpCreate || temp_default.create, !(options.tmpPurge === false));
-    const useStatChown = IS_POSIX && isUndefined(options.chown);
-    const useStatMode = isUndefined(options.mode);
-    if (filePathExists && (useStatChown || useStatMode)) {
-      const stats = dist_default.attempt.statSync(filePath);
-      if (stats) {
-        options = { ...options };
-        if (useStatChown) {
-          options.chown = { uid: stats.uid, gid: stats.gid };
-        }
-        if (useStatMode) {
-          options.mode = stats.mode;
-        }
-      }
-    }
-    if (!filePathExists) {
-      const parentPath = import_node_path3.default.dirname(filePath);
-      dist_default.attempt.mkdirSync(parentPath, {
-        mode: DEFAULT_FOLDER_MODE,
-        recursive: true
-      });
-    }
-    fd = dist_default.retry.openSync(retryOptions)(tempPath, "w", options.mode || DEFAULT_FILE_MODE);
-    if (options.tmpCreated) {
-      options.tmpCreated(tempPath);
-    }
-    if (isString(data)) {
-      dist_default.retry.writeSync(retryOptions)(fd, data, 0, options.encoding || DEFAULT_ENCODING);
-    } else if (!isUndefined(data)) {
-      dist_default.retry.writeSync(retryOptions)(fd, data, 0, data.length, 0);
-    }
-    if (options.fsync !== false) {
-      if (options.fsyncWait !== false) {
-        dist_default.retry.fsyncSync(retryOptions)(fd);
-      } else {
-        dist_default.attempt.fsync(fd);
-      }
-    }
-    dist_default.retry.closeSync(retryOptions)(fd);
-    fd = null;
-    if (options.chown && (options.chown.uid !== DEFAULT_USER_UID || options.chown.gid !== DEFAULT_USER_GID)) {
-      dist_default.attempt.chownSync(tempPath, options.chown.uid, options.chown.gid);
-    }
-    if (options.mode && options.mode !== DEFAULT_FILE_MODE) {
-      dist_default.attempt.chmodSync(tempPath, options.mode);
-    }
-    try {
-      dist_default.retry.renameSync(retryOptions)(tempPath, filePath);
-    } catch (error49) {
-      if (!isException(error49))
-        throw error49;
-      if (error49.code !== "ENAMETOOLONG")
-        throw error49;
-      dist_default.retry.renameSync(retryOptions)(tempPath, temp_default.truncate(filePath));
-    }
-    tempDisposer();
-    tempPath = null;
-  } finally {
-    if (fd)
-      dist_default.attempt.closeSync(fd);
-    if (tempPath)
-      temp_default.purge(tempPath);
-  }
-}
-var import_node_events, import_node_fs2, import_node_path3, import_node_stream;
-var init_dist3 = __esm({
-  "node_modules/atomically/dist/index.js"() {
-    "use strict";
-    import_node_events = require("events");
-    import_node_fs2 = require("fs");
-    import_node_path3 = __toESM(require("path"), 1);
-    import_node_stream = require("stream");
-    init_dist2();
-    init_constants3();
-    init_lang();
-    init_scheduler();
-    init_temp();
   }
 });
 
@@ -12410,7 +6645,7 @@ var require_codegen = __commonJS({
 });
 
 // node_modules/ajv/dist/compile/util.js
-var require_util3 = __commonJS({
+var require_util = __commonJS({
   "node_modules/ajv/dist/compile/util.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -12622,7 +6857,7 @@ var require_errors = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.extendErrors = exports2.resetErrorsCount = exports2.reportExtraError = exports2.reportError = exports2.keyword$DataError = exports2.keywordError = void 0;
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var names_1 = require_names();
     exports2.keywordError = {
       message: ({ keyword }) => (0, codegen_1.str)`must pass "${keyword}" keyword validation`
@@ -12852,7 +7087,7 @@ var require_dataType = __commonJS({
     var applicability_1 = require_applicability();
     var errors_1 = require_errors();
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var DataType;
     (function(DataType2) {
       DataType2[DataType2["Correct"] = 0] = "Correct";
@@ -13033,7 +7268,7 @@ var require_defaults = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.assignDefaults = void 0;
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     function assignDefaults(it, ty) {
       const { properties, items } = it.schema;
       if (ty === "object" && properties) {
@@ -13070,9 +7305,9 @@ var require_code2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.validateUnion = exports2.validateArray = exports2.usePattern = exports2.callValidateCode = exports2.schemaProperties = exports2.allSchemaProperties = exports2.noPropertyInData = exports2.propertyInData = exports2.isOwnProperty = exports2.hasPropFunc = exports2.reportMissingProp = exports2.checkMissingProp = exports2.checkReportMissingProp = void 0;
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var names_1 = require_names();
-    var util_2 = require_util3();
+    var util_2 = require_util();
     function checkReportMissingProp(cxt, prop) {
       const { gen, data, it } = cxt;
       gen.if(noPropertyInData(gen, data, prop, it.opts.ownProperties), () => {
@@ -13321,7 +7556,7 @@ var require_subschema = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.extendSubschemaMode = exports2.extendSubschemaData = exports2.getSubschema = void 0;
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     function getSubschema(it, { keyword, schemaProp, schema, schemaPath, errSchemaPath, topSchemaRef }) {
       if (keyword !== void 0 && schema !== void 0) {
         throw new Error('both "keyword" and "schema" passed, only one allowed');
@@ -13526,7 +7761,7 @@ var require_resolve = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getSchemaRefs = exports2.resolveUrl = exports2.normalizeId = exports2._getFullPath = exports2.getFullPath = exports2.inlineRef = void 0;
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var equal = require_fast_deep_equal();
     var traverse = require_json_schema_traverse();
     var SIMPLE_INLINED = /* @__PURE__ */ new Set([
@@ -13692,7 +7927,7 @@ var require_validate = __commonJS({
     var codegen_1 = require_codegen();
     var names_1 = require_names();
     var resolve_1 = require_resolve();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var errors_1 = require_errors();
     function validateFunctionCode(it) {
       if (isSchemaObj(it)) {
@@ -14227,7 +8462,7 @@ var require_compile = __commonJS({
     var validation_error_1 = require_validation_error();
     var names_1 = require_names();
     var resolve_1 = require_resolve();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var validate_1 = require_validate();
     var SchemaEnv = class {
       constructor(env3) {
@@ -15229,7 +9464,7 @@ var require_core = __commonJS({
     var codegen_2 = require_codegen();
     var resolve_1 = require_resolve();
     var dataType_1 = require_dataType();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var $dataRefSchema = require_data();
     var uri_1 = require_uri();
     var defaultRegExp = (str, flags) => new RegExp(str, flags);
@@ -15830,7 +10065,7 @@ var require_ref = __commonJS({
     var codegen_1 = require_codegen();
     var names_1 = require_names();
     var compile_1 = require_compile();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var def = {
       keyword: "$ref",
       schemaType: "string",
@@ -16054,7 +10289,7 @@ var require_limitLength = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var ucs2length_1 = require_ucs2length();
     var error49 = {
       message({ keyword, schemaCode }) {
@@ -16144,7 +10379,7 @@ var require_required = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     var code_1 = require_code2();
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var error49 = {
       message: ({ params: { missingProperty } }) => (0, codegen_1.str)`must have required property '${missingProperty}'`,
       params: ({ params: { missingProperty } }) => (0, codegen_1._)`{missingProperty: ${missingProperty}}`
@@ -16266,7 +10501,7 @@ var require_uniqueItems = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     var dataType_1 = require_dataType();
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var equal_1 = require_equal();
     var error49 = {
       message: ({ params: { i, j } }) => (0, codegen_1.str)`must NOT have duplicate items (items ## ${j} and ${i} are identical)`,
@@ -16332,7 +10567,7 @@ var require_const = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var equal_1 = require_equal();
     var error49 = {
       message: "must be equal to constant",
@@ -16361,7 +10596,7 @@ var require_enum = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var equal_1 = require_equal();
     var error49 = {
       message: "must be equal to one of the allowed values",
@@ -16449,7 +10684,7 @@ var require_additionalItems = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.validateAdditionalItems = void 0;
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var error49 = {
       message: ({ params: { len } }) => (0, codegen_1.str)`must NOT have more than ${len} items`,
       params: ({ params: { len } }) => (0, codegen_1._)`{limit: ${len}}`
@@ -16502,7 +10737,7 @@ var require_items = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.validateTuple = void 0;
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var code_1 = require_code2();
     var def = {
       keyword: "items",
@@ -16575,7 +10810,7 @@ var require_items2020 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var code_1 = require_code2();
     var additionalItems_1 = require_additionalItems();
     var error49 = {
@@ -16610,7 +10845,7 @@ var require_contains = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var error49 = {
       message: ({ params: { min, max } }) => max === void 0 ? (0, codegen_1.str)`must contain at least ${min} valid item(s)` : (0, codegen_1.str)`must contain at least ${min} and no more than ${max} valid item(s)`,
       params: ({ params: { min, max } }) => max === void 0 ? (0, codegen_1._)`{minContains: ${min}}` : (0, codegen_1._)`{minContains: ${min}, maxContains: ${max}}`
@@ -16705,7 +10940,7 @@ var require_dependencies = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.validateSchemaDeps = exports2.validatePropertyDeps = exports2.error = void 0;
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var code_1 = require_code2();
     exports2.error = {
       message: ({ params: { property, depsCount, deps } }) => {
@@ -16798,7 +11033,7 @@ var require_propertyNames = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var error49 = {
       message: "property name must be valid",
       params: ({ params }) => (0, codegen_1._)`{propertyName: ${params.propertyName}}`
@@ -16843,7 +11078,7 @@ var require_additionalProperties = __commonJS({
     var code_1 = require_code2();
     var codegen_1 = require_codegen();
     var names_1 = require_names();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var error49 = {
       message: "must NOT have additional properties",
       params: ({ params }) => (0, codegen_1._)`{additionalProperty: ${params.additionalProperty}}`
@@ -16948,7 +11183,7 @@ var require_properties = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     var validate_1 = require_validate();
     var code_1 = require_code2();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var additionalProperties_1 = require_additionalProperties();
     var def = {
       keyword: "properties",
@@ -17006,8 +11241,8 @@ var require_patternProperties = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     var code_1 = require_code2();
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
-    var util_2 = require_util3();
+    var util_1 = require_util();
+    var util_2 = require_util();
     var def = {
       keyword: "patternProperties",
       type: "object",
@@ -17078,7 +11313,7 @@ var require_not = __commonJS({
   "node_modules/ajv/dist/vocabularies/applicator/not.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var def = {
       keyword: "not",
       schemaType: ["object", "boolean"],
@@ -17127,7 +11362,7 @@ var require_oneOf = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var error49 = {
       message: "must match exactly one schema in oneOf",
       params: ({ params }) => (0, codegen_1._)`{passingSchemas: ${params.passing}}`
@@ -17184,7 +11419,7 @@ var require_allOf = __commonJS({
   "node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var def = {
       keyword: "allOf",
       schemaType: "array",
@@ -17212,7 +11447,7 @@ var require_if = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var error49 = {
       message: ({ params }) => (0, codegen_1.str)`must match "${params.ifClause}" schema`,
       params: ({ params }) => (0, codegen_1._)`{failingKeyword: ${params.ifClause}}`
@@ -17280,7 +11515,7 @@ var require_thenElse = __commonJS({
   "node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var def = {
       keyword: ["then", "else"],
       schemaType: ["object", "boolean"],
@@ -17510,7 +11745,7 @@ var require_discriminator = __commonJS({
     var types_1 = require_types();
     var compile_1 = require_compile();
     var ref_error_1 = require_ref_error();
-    var util_1 = require_util3();
+    var util_1 = require_util();
     var error49 = {
       message: ({ params: { discrError, tagName } }) => discrError === types_1.DiscrError.Tag ? `tag "${tagName}" must be string` : `value of tag "${tagName}" must be in oneOf`,
       params: ({ params: { discrError, tag, tagName } }) => (0, codegen_1._)`{error: ${discrError}, tag: ${tagName}, tagValue: ${tag}}`
@@ -18073,7 +12308,7 @@ var require_limit = __commonJS({
 });
 
 // node_modules/ajv-formats/dist/index.js
-var require_dist2 = __commonJS({
+var require_dist = __commonJS({
   "node_modules/ajv-formats/dist/index.js"(exports2, module2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -18101,139 +12336,16 @@ var require_dist2 = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs14, exportName) {
+    function addFormats(ajv, list, fs15, exportName) {
       var _a2;
       var _b;
       (_a2 = (_b = ajv.opts.code).formats) !== null && _a2 !== void 0 ? _a2 : _b.formats = codegen_1._`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs14[f]);
+        ajv.addFormat(f, fs15[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.default = formatsPlugin;
-  }
-});
-
-// node_modules/mimic-fn/index.js
-function mimicFunction2(to, from, { ignoreNonConfigurable = false } = {}) {
-  const { name } = to;
-  for (const property of Reflect.ownKeys(from)) {
-    copyProperty2(to, from, property, ignoreNonConfigurable);
-  }
-  changePrototype2(to, from);
-  changeToString2(to, from, name);
-  return to;
-}
-var copyProperty2, canCopyProperty2, changePrototype2, wrappedToString2, toStringDescriptor2, toStringName2, changeToString2;
-var init_mimic_fn = __esm({
-  "node_modules/mimic-fn/index.js"() {
-    "use strict";
-    copyProperty2 = (to, from, property, ignoreNonConfigurable) => {
-      if (property === "length" || property === "prototype") {
-        return;
-      }
-      if (property === "arguments" || property === "caller") {
-        return;
-      }
-      const toDescriptor = Object.getOwnPropertyDescriptor(to, property);
-      const fromDescriptor = Object.getOwnPropertyDescriptor(from, property);
-      if (!canCopyProperty2(toDescriptor, fromDescriptor) && ignoreNonConfigurable) {
-        return;
-      }
-      Object.defineProperty(to, property, fromDescriptor);
-    };
-    canCopyProperty2 = function(toDescriptor, fromDescriptor) {
-      return toDescriptor === void 0 || toDescriptor.configurable || toDescriptor.writable === fromDescriptor.writable && toDescriptor.enumerable === fromDescriptor.enumerable && toDescriptor.configurable === fromDescriptor.configurable && (toDescriptor.writable || toDescriptor.value === fromDescriptor.value);
-    };
-    changePrototype2 = (to, from) => {
-      const fromPrototype = Object.getPrototypeOf(from);
-      if (fromPrototype === Object.getPrototypeOf(to)) {
-        return;
-      }
-      Object.setPrototypeOf(to, fromPrototype);
-    };
-    wrappedToString2 = (withName, fromBody) => `/* Wrapped ${withName}*/
-${fromBody}`;
-    toStringDescriptor2 = Object.getOwnPropertyDescriptor(Function.prototype, "toString");
-    toStringName2 = Object.getOwnPropertyDescriptor(Function.prototype.toString, "name");
-    changeToString2 = (to, from, name) => {
-      const withName = name === "" ? "" : `with ${name.trim()}() `;
-      const newToString = wrappedToString2.bind(null, withName, from.toString());
-      Object.defineProperty(newToString, "name", toStringName2);
-      Object.defineProperty(to, "toString", { ...toStringDescriptor2, value: newToString });
-    };
-  }
-});
-
-// node_modules/debounce-fn/index.js
-var debounceFn, debounce_fn_default;
-var init_debounce_fn = __esm({
-  "node_modules/debounce-fn/index.js"() {
-    "use strict";
-    init_mimic_fn();
-    debounceFn = (inputFunction, options = {}) => {
-      if (typeof inputFunction !== "function") {
-        throw new TypeError(`Expected the first argument to be a function, got \`${typeof inputFunction}\``);
-      }
-      const {
-        wait = 0,
-        maxWait = Number.POSITIVE_INFINITY,
-        before = false,
-        after = true
-      } = options;
-      if (!before && !after) {
-        throw new Error("Both `before` and `after` are false, function wouldn't be called.");
-      }
-      let timeout;
-      let maxTimeout;
-      let result;
-      const debouncedFunction = function(...arguments_) {
-        const context = this;
-        const later = () => {
-          timeout = void 0;
-          if (maxTimeout) {
-            clearTimeout(maxTimeout);
-            maxTimeout = void 0;
-          }
-          if (after) {
-            result = inputFunction.apply(context, arguments_);
-          }
-        };
-        const maxLater = () => {
-          maxTimeout = void 0;
-          if (timeout) {
-            clearTimeout(timeout);
-            timeout = void 0;
-          }
-          if (after) {
-            result = inputFunction.apply(context, arguments_);
-          }
-        };
-        const shouldCallNow = before && !timeout;
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-        if (maxWait > 0 && maxWait !== Number.POSITIVE_INFINITY && !maxTimeout) {
-          maxTimeout = setTimeout(maxLater, maxWait);
-        }
-        if (shouldCallNow) {
-          result = inputFunction.apply(context, arguments_);
-        }
-        return result;
-      };
-      mimicFunction2(debouncedFunction, inputFunction);
-      debouncedFunction.cancel = () => {
-        if (timeout) {
-          clearTimeout(timeout);
-          timeout = void 0;
-        }
-        if (maxTimeout) {
-          clearTimeout(maxTimeout);
-          maxTimeout = void 0;
-        }
-      };
-      return debouncedFunction;
-    };
-    debounce_fn_default = debounceFn;
   }
 });
 
@@ -20167,544 +14279,5217 @@ var require_semver2 = __commonJS({
   }
 });
 
-// node_modules/uint8array-extras/index.js
-function isUint8Array(value) {
-  return value && objectToString.call(value) === "[object Uint8Array]";
-}
-function assertUint8Array(value) {
-  if (!isUint8Array(value)) {
-    throw new TypeError(`Expected \`Uint8Array\`, got \`${typeof value}\``);
-  }
-}
-function concatUint8Arrays(arrays, totalLength) {
-  if (arrays.length === 0) {
-    return new Uint8Array(0);
-  }
-  totalLength ??= arrays.reduce((accumulator, currentValue) => accumulator + currentValue.length, 0);
-  const returnValue = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const array2 of arrays) {
-    assertUint8Array(array2);
-    returnValue.set(array2, offset);
-    offset += array2.length;
-  }
-  return returnValue;
-}
-function uint8ArrayToString(array2) {
-  assertUint8Array(array2);
-  return new globalThis.TextDecoder().decode(array2);
-}
-function assertString(value) {
-  if (typeof value !== "string") {
-    throw new TypeError(`Expected \`string\`, got \`${typeof value}\``);
-  }
-}
-function stringToUint8Array(string4) {
-  assertString(string4);
-  return new globalThis.TextEncoder().encode(string4);
-}
-var objectToString, byteToHexLookupTable;
-var init_uint8array_extras = __esm({
-  "node_modules/uint8array-extras/index.js"() {
+// node_modules/prompts/node_modules/kleur/index.js
+var require_kleur = __commonJS({
+  "node_modules/prompts/node_modules/kleur/index.js"(exports2, module2) {
     "use strict";
-    objectToString = Object.prototype.toString;
-    byteToHexLookupTable = Array.from({ length: 256 }, (_, index) => index.toString(16).padStart(2, "0"));
+    var { FORCE_COLOR: FORCE_COLOR2, NODE_DISABLE_COLORS: NODE_DISABLE_COLORS2, TERM: TERM2 } = process.env;
+    var $2 = {
+      enabled: !NODE_DISABLE_COLORS2 && TERM2 !== "dumb" && FORCE_COLOR2 !== "0",
+      // modifiers
+      reset: init2(0, 0),
+      bold: init2(1, 22),
+      dim: init2(2, 22),
+      italic: init2(3, 23),
+      underline: init2(4, 24),
+      inverse: init2(7, 27),
+      hidden: init2(8, 28),
+      strikethrough: init2(9, 29),
+      // colors
+      black: init2(30, 39),
+      red: init2(31, 39),
+      green: init2(32, 39),
+      yellow: init2(33, 39),
+      blue: init2(34, 39),
+      magenta: init2(35, 39),
+      cyan: init2(36, 39),
+      white: init2(37, 39),
+      gray: init2(90, 39),
+      grey: init2(90, 39),
+      // background colors
+      bgBlack: init2(40, 49),
+      bgRed: init2(41, 49),
+      bgGreen: init2(42, 49),
+      bgYellow: init2(43, 49),
+      bgBlue: init2(44, 49),
+      bgMagenta: init2(45, 49),
+      bgCyan: init2(46, 49),
+      bgWhite: init2(47, 49)
+    };
+    function run2(arr, str) {
+      let i = 0, tmp, beg = "", end = "";
+      for (; i < arr.length; i++) {
+        tmp = arr[i];
+        beg += tmp.open;
+        end += tmp.close;
+        if (str.includes(tmp.close)) {
+          str = str.replace(tmp.rgx, tmp.close + tmp.open);
+        }
+      }
+      return beg + str + end;
+    }
+    function chain2(has, keys) {
+      let ctx = { has, keys };
+      ctx.reset = $2.reset.bind(ctx);
+      ctx.bold = $2.bold.bind(ctx);
+      ctx.dim = $2.dim.bind(ctx);
+      ctx.italic = $2.italic.bind(ctx);
+      ctx.underline = $2.underline.bind(ctx);
+      ctx.inverse = $2.inverse.bind(ctx);
+      ctx.hidden = $2.hidden.bind(ctx);
+      ctx.strikethrough = $2.strikethrough.bind(ctx);
+      ctx.black = $2.black.bind(ctx);
+      ctx.red = $2.red.bind(ctx);
+      ctx.green = $2.green.bind(ctx);
+      ctx.yellow = $2.yellow.bind(ctx);
+      ctx.blue = $2.blue.bind(ctx);
+      ctx.magenta = $2.magenta.bind(ctx);
+      ctx.cyan = $2.cyan.bind(ctx);
+      ctx.white = $2.white.bind(ctx);
+      ctx.gray = $2.gray.bind(ctx);
+      ctx.grey = $2.grey.bind(ctx);
+      ctx.bgBlack = $2.bgBlack.bind(ctx);
+      ctx.bgRed = $2.bgRed.bind(ctx);
+      ctx.bgGreen = $2.bgGreen.bind(ctx);
+      ctx.bgYellow = $2.bgYellow.bind(ctx);
+      ctx.bgBlue = $2.bgBlue.bind(ctx);
+      ctx.bgMagenta = $2.bgMagenta.bind(ctx);
+      ctx.bgCyan = $2.bgCyan.bind(ctx);
+      ctx.bgWhite = $2.bgWhite.bind(ctx);
+      return ctx;
+    }
+    function init2(open, close) {
+      let blk = {
+        open: `\x1B[${open}m`,
+        close: `\x1B[${close}m`,
+        rgx: new RegExp(`\\x1b\\[${close}m`, "g")
+      };
+      return function(txt) {
+        if (this !== void 0 && this.has !== void 0) {
+          this.has.includes(open) || (this.has.push(open), this.keys.push(blk));
+          return txt === void 0 ? this : $2.enabled ? run2(this.keys, txt + "") : txt + "";
+        }
+        return txt === void 0 ? chain2([open], [blk]) : $2.enabled ? run2([blk], txt + "") : txt + "";
+      };
+    }
+    module2.exports = $2;
   }
 });
 
-// node_modules/conf/dist/source/index.js
-var import_node_util3, import_node_process12, import_node_fs3, import_node_path4, import_node_crypto, import_node_assert, import_ajv, import_ajv_formats, import_semver, Ajv, ajvFormats, encryptionAlgorithm, createPlainObject, isExist, checkValueType, INTERNAL_KEY, MIGRATION_KEY, Conf;
-var init_source = __esm({
-  "node_modules/conf/dist/source/index.js"() {
+// node_modules/prompts/dist/util/action.js
+var require_action = __commonJS({
+  "node_modules/prompts/dist/util/action.js"(exports2, module2) {
     "use strict";
-    import_node_util3 = require("util");
-    import_node_process12 = __toESM(require("process"), 1);
-    import_node_fs3 = __toESM(require("fs"), 1);
-    import_node_path4 = __toESM(require("path"), 1);
-    import_node_crypto = __toESM(require("crypto"), 1);
-    import_node_assert = __toESM(require("assert"), 1);
-    init_dot_prop();
-    init_env_paths();
-    init_dist3();
-    import_ajv = __toESM(require_ajv(), 1);
-    import_ajv_formats = __toESM(require_dist2(), 1);
-    init_debounce_fn();
-    import_semver = __toESM(require_semver2(), 1);
-    init_uint8array_extras();
-    Ajv = import_ajv.default.default;
-    ajvFormats = import_ajv_formats.default.default;
-    encryptionAlgorithm = "aes-256-cbc";
-    createPlainObject = () => /* @__PURE__ */ Object.create(null);
-    isExist = (data) => data !== void 0 && data !== null;
-    checkValueType = (key, value) => {
-      const nonJsonTypes = /* @__PURE__ */ new Set([
-        "undefined",
-        "symbol",
-        "function"
-      ]);
-      const type = typeof value;
-      if (nonJsonTypes.has(type)) {
-        throw new TypeError(`Setting a value of type \`${type}\` for key \`${key}\` is not allowed as it's not supported by JSON`);
+    module2.exports = (key, isSelect) => {
+      if (key.meta && key.name !== "escape") return;
+      if (key.ctrl) {
+        if (key.name === "a") return "first";
+        if (key.name === "c") return "abort";
+        if (key.name === "d") return "abort";
+        if (key.name === "e") return "last";
+        if (key.name === "g") return "reset";
+      }
+      if (isSelect) {
+        if (key.name === "j") return "down";
+        if (key.name === "k") return "up";
+      }
+      if (key.name === "return") return "submit";
+      if (key.name === "enter") return "submit";
+      if (key.name === "backspace") return "delete";
+      if (key.name === "delete") return "deleteForward";
+      if (key.name === "abort") return "abort";
+      if (key.name === "escape") return "exit";
+      if (key.name === "tab") return "next";
+      if (key.name === "pagedown") return "nextPage";
+      if (key.name === "pageup") return "prevPage";
+      if (key.name === "home") return "home";
+      if (key.name === "end") return "end";
+      if (key.name === "up") return "up";
+      if (key.name === "down") return "down";
+      if (key.name === "right") return "right";
+      if (key.name === "left") return "left";
+      return false;
+    };
+  }
+});
+
+// node_modules/prompts/dist/util/strip.js
+var require_strip = __commonJS({
+  "node_modules/prompts/dist/util/strip.js"(exports2, module2) {
+    "use strict";
+    module2.exports = (str) => {
+      const pattern = ["[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)", "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"].join("|");
+      const RGX = new RegExp(pattern, "g");
+      return typeof str === "string" ? str.replace(RGX, "") : str;
+    };
+  }
+});
+
+// node_modules/sisteransi/src/index.js
+var require_src = __commonJS({
+  "node_modules/sisteransi/src/index.js"(exports2, module2) {
+    "use strict";
+    var ESC = "\x1B";
+    var CSI = `${ESC}[`;
+    var beep = "\x07";
+    var cursor = {
+      to(x, y) {
+        if (!y) return `${CSI}${x + 1}G`;
+        return `${CSI}${y + 1};${x + 1}H`;
+      },
+      move(x, y) {
+        let ret = "";
+        if (x < 0) ret += `${CSI}${-x}D`;
+        else if (x > 0) ret += `${CSI}${x}C`;
+        if (y < 0) ret += `${CSI}${-y}A`;
+        else if (y > 0) ret += `${CSI}${y}B`;
+        return ret;
+      },
+      up: (count = 1) => `${CSI}${count}A`,
+      down: (count = 1) => `${CSI}${count}B`,
+      forward: (count = 1) => `${CSI}${count}C`,
+      backward: (count = 1) => `${CSI}${count}D`,
+      nextLine: (count = 1) => `${CSI}E`.repeat(count),
+      prevLine: (count = 1) => `${CSI}F`.repeat(count),
+      left: `${CSI}G`,
+      hide: `${CSI}?25l`,
+      show: `${CSI}?25h`,
+      save: `${ESC}7`,
+      restore: `${ESC}8`
+    };
+    var scroll = {
+      up: (count = 1) => `${CSI}S`.repeat(count),
+      down: (count = 1) => `${CSI}T`.repeat(count)
+    };
+    var erase = {
+      screen: `${CSI}2J`,
+      up: (count = 1) => `${CSI}1J`.repeat(count),
+      down: (count = 1) => `${CSI}J`.repeat(count),
+      line: `${CSI}2K`,
+      lineEnd: `${CSI}K`,
+      lineStart: `${CSI}1K`,
+      lines(count) {
+        let clear = "";
+        for (let i = 0; i < count; i++)
+          clear += this.line + (i < count - 1 ? cursor.up() : "");
+        if (count)
+          clear += cursor.left;
+        return clear;
       }
     };
-    INTERNAL_KEY = "__internal__";
-    MIGRATION_KEY = `${INTERNAL_KEY}.migrations.version`;
-    Conf = class {
-      path;
-      events;
-      #validator;
-      #encryptionKey;
-      #options;
-      #defaultValues = {};
-      constructor(partialOptions = {}) {
-        const options = {
-          configName: "config",
-          fileExtension: "json",
-          projectSuffix: "nodejs",
-          clearInvalidConfig: false,
-          accessPropertiesByDotNotation: true,
-          configFileMode: 438,
-          ...partialOptions
-        };
-        if (!options.cwd) {
-          if (!options.projectName) {
-            throw new Error("Please specify the `projectName` option.");
-          }
-          options.cwd = envPaths(options.projectName, { suffix: options.projectSuffix }).config;
-        }
-        this.#options = options;
-        if (options.schema) {
-          if (typeof options.schema !== "object") {
-            throw new TypeError("The `schema` option must be an object.");
-          }
-          const ajv = new Ajv({
-            allErrors: true,
-            useDefaults: true
-          });
-          ajvFormats(ajv);
-          const schema = {
-            type: "object",
-            properties: options.schema
+    module2.exports = { cursor, scroll, erase, beep };
+  }
+});
+
+// node_modules/prompts/dist/util/clear.js
+var require_clear = __commonJS({
+  "node_modules/prompts/dist/util/clear.js"(exports2, module2) {
+    "use strict";
+    function _createForOfIteratorHelper(o, allowArrayLike) {
+      var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
+      if (!it) {
+        if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+          if (it) o = it;
+          var i = 0;
+          var F = function F2() {
           };
-          this.#validator = ajv.compile(schema);
-          for (const [key, value] of Object.entries(options.schema)) {
-            if (value?.default) {
-              this.#defaultValues[key] = value.default;
-            }
-          }
+          return { s: F, n: function n() {
+            if (i >= o.length) return { done: true };
+            return { done: false, value: o[i++] };
+          }, e: function e(_e) {
+            throw _e;
+          }, f: F };
         }
-        if (options.defaults) {
-          this.#defaultValues = {
-            ...this.#defaultValues,
-            ...options.defaults
-          };
-        }
-        if (options.serialize) {
-          this._serialize = options.serialize;
-        }
-        if (options.deserialize) {
-          this._deserialize = options.deserialize;
-        }
-        this.events = new EventTarget();
-        this.#encryptionKey = options.encryptionKey;
-        const fileExtension = options.fileExtension ? `.${options.fileExtension}` : "";
-        this.path = import_node_path4.default.resolve(options.cwd, `${options.configName ?? "config"}${fileExtension}`);
-        const fileStore = this.store;
-        const store = Object.assign(createPlainObject(), options.defaults, fileStore);
-        this._validate(store);
+        throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+      }
+      var normalCompletion = true, didErr = false, err;
+      return { s: function s() {
+        it = it.call(o);
+      }, n: function n() {
+        var step = it.next();
+        normalCompletion = step.done;
+        return step;
+      }, e: function e(_e2) {
+        didErr = true;
+        err = _e2;
+      }, f: function f() {
         try {
-          import_node_assert.default.deepEqual(fileStore, store);
-        } catch {
-          this.store = store;
+          if (!normalCompletion && it.return != null) it.return();
+        } finally {
+          if (didErr) throw err;
         }
-        if (options.watch) {
-          this._watch();
+      } };
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o) return;
+      if (typeof o === "string") return _arrayLikeToArray(o, minLen);
+      var n = Object.prototype.toString.call(o).slice(8, -1);
+      if (n === "Object" && o.constructor) n = o.constructor.name;
+      if (n === "Map" || n === "Set") return Array.from(o);
+      if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length) len = arr.length;
+      for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
+      return arr2;
+    }
+    var strip = require_strip();
+    var _require = require_src();
+    var erase = _require.erase;
+    var cursor = _require.cursor;
+    var width = (str) => [...strip(str)].length;
+    module2.exports = function(prompt, perLine) {
+      if (!perLine) return erase.line + cursor.to(0);
+      let rows = 0;
+      const lines = prompt.split(/\r?\n/);
+      var _iterator = _createForOfIteratorHelper(lines), _step;
+      try {
+        for (_iterator.s(); !(_step = _iterator.n()).done; ) {
+          let line = _step.value;
+          rows += 1 + Math.floor(Math.max(width(line) - 1, 0) / perLine);
         }
-        if (options.migrations) {
-          if (!options.projectVersion) {
-            throw new Error("Please specify the `projectVersion` option.");
-          }
-          this._migrate(options.migrations, options.projectVersion, options.beforeEachMigration);
-        }
+      } catch (err) {
+        _iterator.e(err);
+      } finally {
+        _iterator.f();
       }
-      get(key, defaultValue) {
-        if (this.#options.accessPropertiesByDotNotation) {
-          return this._get(key, defaultValue);
-        }
-        const { store } = this;
-        return key in store ? store[key] : defaultValue;
+      return erase.lines(rows);
+    };
+  }
+});
+
+// node_modules/prompts/dist/util/figures.js
+var require_figures = __commonJS({
+  "node_modules/prompts/dist/util/figures.js"(exports2, module2) {
+    "use strict";
+    var main = {
+      arrowUp: "\u2191",
+      arrowDown: "\u2193",
+      arrowLeft: "\u2190",
+      arrowRight: "\u2192",
+      radioOn: "\u25C9",
+      radioOff: "\u25EF",
+      tick: "\u2714",
+      cross: "\u2716",
+      ellipsis: "\u2026",
+      pointerSmall: "\u203A",
+      line: "\u2500",
+      pointer: "\u276F"
+    };
+    var win = {
+      arrowUp: main.arrowUp,
+      arrowDown: main.arrowDown,
+      arrowLeft: main.arrowLeft,
+      arrowRight: main.arrowRight,
+      radioOn: "(*)",
+      radioOff: "( )",
+      tick: "\u221A",
+      cross: "\xD7",
+      ellipsis: "...",
+      pointerSmall: "\xBB",
+      line: "\u2500",
+      pointer: ">"
+    };
+    var figures = process.platform === "win32" ? win : main;
+    module2.exports = figures;
+  }
+});
+
+// node_modules/prompts/dist/util/style.js
+var require_style = __commonJS({
+  "node_modules/prompts/dist/util/style.js"(exports2, module2) {
+    "use strict";
+    var c = require_kleur();
+    var figures = require_figures();
+    var styles3 = Object.freeze({
+      password: {
+        scale: 1,
+        render: (input) => "*".repeat(input.length)
+      },
+      emoji: {
+        scale: 2,
+        render: (input) => "\u{1F603}".repeat(input.length)
+      },
+      invisible: {
+        scale: 0,
+        render: (input) => ""
+      },
+      default: {
+        scale: 1,
+        render: (input) => `${input}`
       }
-      set(key, value) {
-        if (typeof key !== "string" && typeof key !== "object") {
-          throw new TypeError(`Expected \`key\` to be of type \`string\` or \`object\`, got ${typeof key}`);
-        }
-        if (typeof key !== "object" && value === void 0) {
-          throw new TypeError("Use `delete()` to clear values");
-        }
-        if (this._containsReservedKey(key)) {
-          throw new TypeError(`Please don't use the ${INTERNAL_KEY} key, as it's used to manage this module internal operations.`);
-        }
-        const { store } = this;
-        const set2 = (key2, value2) => {
-          checkValueType(key2, value2);
-          if (this.#options.accessPropertiesByDotNotation) {
-            setProperty(store, key2, value2);
+    });
+    var render = (type) => styles3[type] || styles3.default;
+    var symbols = Object.freeze({
+      aborted: c.red(figures.cross),
+      done: c.green(figures.tick),
+      exited: c.yellow(figures.cross),
+      default: c.cyan("?")
+    });
+    var symbol2 = (done, aborted2, exited) => aborted2 ? symbols.aborted : exited ? symbols.exited : done ? symbols.done : symbols.default;
+    var delimiter = (completing) => c.gray(completing ? figures.ellipsis : figures.pointerSmall);
+    var item = (expandable, expanded) => c.gray(expandable ? expanded ? figures.pointerSmall : "+" : figures.line);
+    module2.exports = {
+      styles: styles3,
+      render,
+      symbols,
+      symbol: symbol2,
+      delimiter,
+      item
+    };
+  }
+});
+
+// node_modules/prompts/dist/util/lines.js
+var require_lines = __commonJS({
+  "node_modules/prompts/dist/util/lines.js"(exports2, module2) {
+    "use strict";
+    var strip = require_strip();
+    module2.exports = function(msg, perLine) {
+      let lines = String(strip(msg) || "").split(/\r?\n/);
+      if (!perLine) return lines.length;
+      return lines.map((l) => Math.ceil(l.length / perLine)).reduce((a, b) => a + b);
+    };
+  }
+});
+
+// node_modules/prompts/dist/util/wrap.js
+var require_wrap = __commonJS({
+  "node_modules/prompts/dist/util/wrap.js"(exports2, module2) {
+    "use strict";
+    module2.exports = (msg, opts = {}) => {
+      const tab = Number.isSafeInteger(parseInt(opts.margin)) ? new Array(parseInt(opts.margin)).fill(" ").join("") : opts.margin || "";
+      const width = opts.width;
+      return (msg || "").split(/\r?\n/g).map((line) => line.split(/\s+/g).reduce((arr, w) => {
+        if (w.length + tab.length >= width || arr[arr.length - 1].length + w.length + 1 < width) arr[arr.length - 1] += ` ${w}`;
+        else arr.push(`${tab}${w}`);
+        return arr;
+      }, [tab]).join("\n")).join("\n");
+    };
+  }
+});
+
+// node_modules/prompts/dist/util/entriesToDisplay.js
+var require_entriesToDisplay = __commonJS({
+  "node_modules/prompts/dist/util/entriesToDisplay.js"(exports2, module2) {
+    "use strict";
+    module2.exports = (cursor, total, maxVisible) => {
+      maxVisible = maxVisible || total;
+      let startIndex = Math.min(total - maxVisible, cursor - Math.floor(maxVisible / 2));
+      if (startIndex < 0) startIndex = 0;
+      let endIndex = Math.min(startIndex + maxVisible, total);
+      return {
+        startIndex,
+        endIndex
+      };
+    };
+  }
+});
+
+// node_modules/prompts/dist/util/index.js
+var require_util2 = __commonJS({
+  "node_modules/prompts/dist/util/index.js"(exports2, module2) {
+    "use strict";
+    module2.exports = {
+      action: require_action(),
+      clear: require_clear(),
+      style: require_style(),
+      strip: require_strip(),
+      figures: require_figures(),
+      lines: require_lines(),
+      wrap: require_wrap(),
+      entriesToDisplay: require_entriesToDisplay()
+    };
+  }
+});
+
+// node_modules/prompts/dist/elements/prompt.js
+var require_prompt = __commonJS({
+  "node_modules/prompts/dist/elements/prompt.js"(exports2, module2) {
+    "use strict";
+    var readline = require("readline");
+    var _require = require_util2();
+    var action = _require.action;
+    var EventEmitter = require("events");
+    var _require2 = require_src();
+    var beep = _require2.beep;
+    var cursor = _require2.cursor;
+    var color = require_kleur();
+    var Prompt = class extends EventEmitter {
+      constructor(opts = {}) {
+        super();
+        this.firstRender = true;
+        this.in = opts.stdin || process.stdin;
+        this.out = opts.stdout || process.stdout;
+        this.onRender = (opts.onRender || (() => void 0)).bind(this);
+        const rl = readline.createInterface({
+          input: this.in,
+          escapeCodeTimeout: 50
+        });
+        readline.emitKeypressEvents(this.in, rl);
+        if (this.in.isTTY) this.in.setRawMode(true);
+        const isSelect = ["SelectPrompt", "MultiselectPrompt"].indexOf(this.constructor.name) > -1;
+        const keypress = (str, key) => {
+          let a = action(key, isSelect);
+          if (a === false) {
+            this._ && this._(str, key);
+          } else if (typeof this[a] === "function") {
+            this[a](key);
           } else {
-            store[key2] = value2;
+            this.bell();
           }
         };
-        if (typeof key === "object") {
-          const object2 = key;
-          for (const [key2, value2] of Object.entries(object2)) {
-            set2(key2, value2);
+        this.close = () => {
+          this.out.write(cursor.show);
+          this.in.removeListener("keypress", keypress);
+          if (this.in.isTTY) this.in.setRawMode(false);
+          rl.close();
+          this.emit(this.aborted ? "abort" : this.exited ? "exit" : "submit", this.value);
+          this.closed = true;
+        };
+        this.in.on("keypress", keypress);
+      }
+      fire() {
+        this.emit("state", {
+          value: this.value,
+          aborted: !!this.aborted,
+          exited: !!this.exited
+        });
+      }
+      bell() {
+        this.out.write(beep);
+      }
+      render() {
+        this.onRender(color);
+        if (this.firstRender) this.firstRender = false;
+      }
+    };
+    module2.exports = Prompt;
+  }
+});
+
+// node_modules/prompts/dist/elements/text.js
+var require_text = __commonJS({
+  "node_modules/prompts/dist/elements/text.js"(exports2, module2) {
+    "use strict";
+    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
+      try {
+        var info2 = gen[key](arg);
+        var value = info2.value;
+      } catch (error49) {
+        reject(error49);
+        return;
+      }
+      if (info2.done) {
+        resolve(value);
+      } else {
+        Promise.resolve(value).then(_next, _throw);
+      }
+    }
+    function _asyncToGenerator(fn) {
+      return function() {
+        var self = this, args = arguments;
+        return new Promise(function(resolve, reject) {
+          var gen = fn.apply(self, args);
+          function _next(value) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
           }
+          function _throw(err) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
+          }
+          _next(void 0);
+        });
+      };
+    }
+    var color = require_kleur();
+    var Prompt = require_prompt();
+    var _require = require_src();
+    var erase = _require.erase;
+    var cursor = _require.cursor;
+    var _require2 = require_util2();
+    var style = _require2.style;
+    var clear = _require2.clear;
+    var lines = _require2.lines;
+    var figures = _require2.figures;
+    var TextPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.transform = style.render(opts.style);
+        this.scale = this.transform.scale;
+        this.msg = opts.message;
+        this.initial = opts.initial || ``;
+        this.validator = opts.validate || (() => true);
+        this.value = ``;
+        this.errorMsg = opts.error || `Please Enter A Valid Value`;
+        this.cursor = Number(!!this.initial);
+        this.cursorOffset = 0;
+        this.clear = clear(``, this.out.columns);
+        this.render();
+      }
+      set value(v) {
+        if (!v && this.initial) {
+          this.placeholder = true;
+          this.rendered = color.gray(this.transform.render(this.initial));
         } else {
-          set2(key, value);
+          this.placeholder = false;
+          this.rendered = this.transform.render(v);
         }
-        this.store = store;
+        this._value = v;
+        this.fire();
       }
-      /**
-          Check if an item exists.
-      
-          @param key - The key of the item to check.
-          */
-      has(key) {
-        if (this.#options.accessPropertiesByDotNotation) {
-          return hasProperty(this.store, key);
-        }
-        return key in this.store;
+      get value() {
+        return this._value;
       }
-      /**
-          Reset items to their default values, as defined by the `defaults` or `schema` option.
-      
-          @see `clear()` to reset all items.
-      
-          @param keys - The keys of the items to reset.
-          */
-      reset(...keys) {
-        for (const key of keys) {
-          if (isExist(this.#defaultValues[key])) {
-            this.set(key, this.#defaultValues[key]);
+      reset() {
+        this.value = ``;
+        this.cursor = Number(!!this.initial);
+        this.cursorOffset = 0;
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.value = this.value || this.initial;
+        this.done = this.aborted = true;
+        this.error = false;
+        this.red = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      validate() {
+        var _this = this;
+        return _asyncToGenerator(function* () {
+          let valid = yield _this.validator(_this.value);
+          if (typeof valid === `string`) {
+            _this.errorMsg = valid;
+            valid = false;
           }
-        }
+          _this.error = !valid;
+        })();
       }
-      delete(key) {
-        const { store } = this;
-        if (this.#options.accessPropertiesByDotNotation) {
-          deleteProperty(store, key);
-        } else {
-          delete store[key];
-        }
-        this.store = store;
-      }
-      /**
-          Delete all items.
-      
-          This resets known items to their default values, if defined by the `defaults` or `schema` option.
-          */
-      clear() {
-        this.store = createPlainObject();
-        for (const key of Object.keys(this.#defaultValues)) {
-          this.reset(key);
-        }
-      }
-      /**
-          Watches the given `key`, calling `callback` on any changes.
-      
-          @param key - The key wo watch.
-          @param callback - A callback function that is called on any changes. When a `key` is first set `oldValue` will be `undefined`, and when a key is deleted `newValue` will be `undefined`.
-          @returns A function, that when called, will unsubscribe.
-          */
-      onDidChange(key, callback) {
-        if (typeof key !== "string") {
-          throw new TypeError(`Expected \`key\` to be of type \`string\`, got ${typeof key}`);
-        }
-        if (typeof callback !== "function") {
-          throw new TypeError(`Expected \`callback\` to be of type \`function\`, got ${typeof callback}`);
-        }
-        return this._handleChange(() => this.get(key), callback);
-      }
-      /**
-          Watches the whole config object, calling `callback` on any changes.
-      
-          @param callback - A callback function that is called on any changes. When a `key` is first set `oldValue` will be `undefined`, and when a key is deleted `newValue` will be `undefined`.
-          @returns A function, that when called, will unsubscribe.
-          */
-      onDidAnyChange(callback) {
-        if (typeof callback !== "function") {
-          throw new TypeError(`Expected \`callback\` to be of type \`function\`, got ${typeof callback}`);
-        }
-        return this._handleChange(() => this.store, callback);
-      }
-      get size() {
-        return Object.keys(this.store).length;
-      }
-      get store() {
-        try {
-          const data = import_node_fs3.default.readFileSync(this.path, this.#encryptionKey ? null : "utf8");
-          const dataString = this._encryptData(data);
-          const deserializedData = this._deserialize(dataString);
-          this._validate(deserializedData);
-          return Object.assign(createPlainObject(), deserializedData);
-        } catch (error49) {
-          if (error49?.code === "ENOENT") {
-            this._ensureDirectory();
-            return createPlainObject();
-          }
-          if (this.#options.clearInvalidConfig && error49.name === "SyntaxError") {
-            return createPlainObject();
-          }
-          throw error49;
-        }
-      }
-      set store(value) {
-        this._ensureDirectory();
-        this._validate(value);
-        this._write(value);
-        this.events.dispatchEvent(new Event("change"));
-      }
-      *[Symbol.iterator]() {
-        for (const [key, value] of Object.entries(this.store)) {
-          yield [key, value];
-        }
-      }
-      _encryptData(data) {
-        if (!this.#encryptionKey) {
-          return typeof data === "string" ? data : uint8ArrayToString(data);
-        }
-        try {
-          const initializationVector = data.slice(0, 16);
-          const password = import_node_crypto.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
-          const decipher = import_node_crypto.default.createDecipheriv(encryptionAlgorithm, password, initializationVector);
-          const slice = data.slice(17);
-          const dataUpdate = typeof slice === "string" ? stringToUint8Array(slice) : slice;
-          return uint8ArrayToString(concatUint8Arrays([decipher.update(dataUpdate), decipher.final()]));
-        } catch {
-        }
-        return data.toString();
-      }
-      _handleChange(getter, callback) {
-        let currentValue = getter();
-        const onChange = () => {
-          const oldValue = currentValue;
-          const newValue = getter();
-          if ((0, import_node_util3.isDeepStrictEqual)(newValue, oldValue)) {
+      submit() {
+        var _this2 = this;
+        return _asyncToGenerator(function* () {
+          _this2.value = _this2.value || _this2.initial;
+          _this2.cursorOffset = 0;
+          _this2.cursor = _this2.rendered.length;
+          yield _this2.validate();
+          if (_this2.error) {
+            _this2.red = true;
+            _this2.fire();
+            _this2.render();
             return;
           }
-          currentValue = newValue;
-          callback.call(this, newValue, oldValue);
-        };
-        this.events.addEventListener("change", onChange);
-        return () => {
-          this.events.removeEventListener("change", onChange);
-        };
+          _this2.done = true;
+          _this2.aborted = false;
+          _this2.fire();
+          _this2.render();
+          _this2.out.write("\n");
+          _this2.close();
+        })();
       }
-      _deserialize = (value) => JSON.parse(value);
-      _serialize = (value) => JSON.stringify(value, void 0, "	");
-      _validate(data) {
-        if (!this.#validator) {
-          return;
-        }
-        const valid = this.#validator(data);
-        if (valid || !this.#validator.errors) {
-          return;
-        }
-        const errors = this.#validator.errors.map(({ instancePath, message = "" }) => `\`${instancePath.slice(1)}\` ${message}`);
-        throw new Error("Config schema violation: " + errors.join("; "));
+      next() {
+        if (!this.placeholder) return this.bell();
+        this.value = this.initial;
+        this.cursor = this.rendered.length;
+        this.fire();
+        this.render();
       }
-      _ensureDirectory() {
-        import_node_fs3.default.mkdirSync(import_node_path4.default.dirname(this.path), { recursive: true });
+      moveCursor(n) {
+        if (this.placeholder) return;
+        this.cursor = this.cursor + n;
+        this.cursorOffset += n;
       }
-      _write(value) {
-        let data = this._serialize(value);
-        if (this.#encryptionKey) {
-          const initializationVector = import_node_crypto.default.randomBytes(16);
-          const password = import_node_crypto.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
-          const cipher = import_node_crypto.default.createCipheriv(encryptionAlgorithm, password, initializationVector);
-          data = concatUint8Arrays([initializationVector, stringToUint8Array(":"), cipher.update(stringToUint8Array(data)), cipher.final()]);
-        }
-        if (import_node_process12.default.env.SNAP) {
-          import_node_fs3.default.writeFileSync(this.path, data, { mode: this.#options.configFileMode });
+      _(c, key) {
+        let s1 = this.value.slice(0, this.cursor);
+        let s2 = this.value.slice(this.cursor);
+        this.value = `${s1}${c}${s2}`;
+        this.red = false;
+        this.cursor = this.placeholder ? 0 : s1.length + 1;
+        this.render();
+      }
+      delete() {
+        if (this.isCursorAtStart()) return this.bell();
+        let s1 = this.value.slice(0, this.cursor - 1);
+        let s2 = this.value.slice(this.cursor);
+        this.value = `${s1}${s2}`;
+        this.red = false;
+        if (this.isCursorAtStart()) {
+          this.cursorOffset = 0;
         } else {
-          try {
-            writeFileSync(this.path, data, { mode: this.#options.configFileMode });
-          } catch (error49) {
-            if (error49?.code === "EXDEV") {
-              import_node_fs3.default.writeFileSync(this.path, data, { mode: this.#options.configFileMode });
+          this.cursorOffset++;
+          this.moveCursor(-1);
+        }
+        this.render();
+      }
+      deleteForward() {
+        if (this.cursor * this.scale >= this.rendered.length || this.placeholder) return this.bell();
+        let s1 = this.value.slice(0, this.cursor);
+        let s2 = this.value.slice(this.cursor + 1);
+        this.value = `${s1}${s2}`;
+        this.red = false;
+        if (this.isCursorAtEnd()) {
+          this.cursorOffset = 0;
+        } else {
+          this.cursorOffset++;
+        }
+        this.render();
+      }
+      first() {
+        this.cursor = 0;
+        this.render();
+      }
+      last() {
+        this.cursor = this.value.length;
+        this.render();
+      }
+      left() {
+        if (this.cursor <= 0 || this.placeholder) return this.bell();
+        this.moveCursor(-1);
+        this.render();
+      }
+      right() {
+        if (this.cursor * this.scale >= this.rendered.length || this.placeholder) return this.bell();
+        this.moveCursor(1);
+        this.render();
+      }
+      isCursorAtStart() {
+        return this.cursor === 0 || this.placeholder && this.cursor === 1;
+      }
+      isCursorAtEnd() {
+        return this.cursor === this.rendered.length || this.placeholder && this.cursor === this.rendered.length + 1;
+      }
+      render() {
+        if (this.closed) return;
+        if (!this.firstRender) {
+          if (this.outputError) this.out.write(cursor.down(lines(this.outputError, this.out.columns) - 1) + clear(this.outputError, this.out.columns));
+          this.out.write(clear(this.outputText, this.out.columns));
+        }
+        super.render();
+        this.outputError = "";
+        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(this.done), this.red ? color.red(this.rendered) : this.rendered].join(` `);
+        if (this.error) {
+          this.outputError += this.errorMsg.split(`
+`).reduce((a, l, i) => a + `
+${i ? " " : figures.pointerSmall} ${color.red().italic(l)}`, ``);
+        }
+        this.out.write(erase.line + cursor.to(0) + this.outputText + cursor.save + this.outputError + cursor.restore + cursor.move(this.cursorOffset, 0));
+      }
+    };
+    module2.exports = TextPrompt;
+  }
+});
+
+// node_modules/prompts/dist/elements/select.js
+var require_select = __commonJS({
+  "node_modules/prompts/dist/elements/select.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt();
+    var _require = require_util2();
+    var style = _require.style;
+    var clear = _require.clear;
+    var figures = _require.figures;
+    var wrap = _require.wrap;
+    var entriesToDisplay = _require.entriesToDisplay;
+    var _require2 = require_src();
+    var cursor = _require2.cursor;
+    var SelectPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.hint = opts.hint || "- Use arrow-keys. Return to submit.";
+        this.warn = opts.warn || "- This option is disabled";
+        this.cursor = opts.initial || 0;
+        this.choices = opts.choices.map((ch, idx) => {
+          if (typeof ch === "string") ch = {
+            title: ch,
+            value: idx
+          };
+          return {
+            title: ch && (ch.title || ch.value || ch),
+            value: ch && (ch.value === void 0 ? idx : ch.value),
+            description: ch && ch.description,
+            selected: ch && ch.selected,
+            disabled: ch && ch.disabled
+          };
+        });
+        this.optionsPerPage = opts.optionsPerPage || 10;
+        this.value = (this.choices[this.cursor] || {}).value;
+        this.clear = clear("", this.out.columns);
+        this.render();
+      }
+      moveCursor(n) {
+        this.cursor = n;
+        this.value = this.choices[n].value;
+        this.fire();
+      }
+      reset() {
+        this.moveCursor(0);
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        if (!this.selection.disabled) {
+          this.done = true;
+          this.aborted = false;
+          this.fire();
+          this.render();
+          this.out.write("\n");
+          this.close();
+        } else this.bell();
+      }
+      first() {
+        this.moveCursor(0);
+        this.render();
+      }
+      last() {
+        this.moveCursor(this.choices.length - 1);
+        this.render();
+      }
+      up() {
+        if (this.cursor === 0) {
+          this.moveCursor(this.choices.length - 1);
+        } else {
+          this.moveCursor(this.cursor - 1);
+        }
+        this.render();
+      }
+      down() {
+        if (this.cursor === this.choices.length - 1) {
+          this.moveCursor(0);
+        } else {
+          this.moveCursor(this.cursor + 1);
+        }
+        this.render();
+      }
+      next() {
+        this.moveCursor((this.cursor + 1) % this.choices.length);
+        this.render();
+      }
+      _(c, key) {
+        if (c === " ") return this.submit();
+      }
+      get selection() {
+        return this.choices[this.cursor];
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        let _entriesToDisplay = entriesToDisplay(this.cursor, this.choices.length, this.optionsPerPage), startIndex = _entriesToDisplay.startIndex, endIndex = _entriesToDisplay.endIndex;
+        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(false), this.done ? this.selection.title : this.selection.disabled ? color.yellow(this.warn) : color.gray(this.hint)].join(" ");
+        if (!this.done) {
+          this.outputText += "\n";
+          for (let i = startIndex; i < endIndex; i++) {
+            let title, prefix, desc = "", v = this.choices[i];
+            if (i === startIndex && startIndex > 0) {
+              prefix = figures.arrowUp;
+            } else if (i === endIndex - 1 && endIndex < this.choices.length) {
+              prefix = figures.arrowDown;
+            } else {
+              prefix = " ";
+            }
+            if (v.disabled) {
+              title = this.cursor === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
+              prefix = (this.cursor === i ? color.bold().gray(figures.pointer) + " " : "  ") + prefix;
+            } else {
+              title = this.cursor === i ? color.cyan().underline(v.title) : v.title;
+              prefix = (this.cursor === i ? color.cyan(figures.pointer) + " " : "  ") + prefix;
+              if (v.description && this.cursor === i) {
+                desc = ` - ${v.description}`;
+                if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
+                  desc = "\n" + wrap(v.description, {
+                    margin: 3,
+                    width: this.out.columns
+                  });
+                }
+              }
+            }
+            this.outputText += `${prefix} ${title}${color.gray(desc)}
+`;
+          }
+        }
+        this.out.write(this.outputText);
+      }
+    };
+    module2.exports = SelectPrompt;
+  }
+});
+
+// node_modules/prompts/dist/elements/toggle.js
+var require_toggle = __commonJS({
+  "node_modules/prompts/dist/elements/toggle.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt();
+    var _require = require_util2();
+    var style = _require.style;
+    var clear = _require.clear;
+    var _require2 = require_src();
+    var cursor = _require2.cursor;
+    var erase = _require2.erase;
+    var TogglePrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.value = !!opts.initial;
+        this.active = opts.active || "on";
+        this.inactive = opts.inactive || "off";
+        this.initialValue = this.value;
+        this.render();
+      }
+      reset() {
+        this.value = this.initialValue;
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        this.done = true;
+        this.aborted = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      deactivate() {
+        if (this.value === false) return this.bell();
+        this.value = false;
+        this.render();
+      }
+      activate() {
+        if (this.value === true) return this.bell();
+        this.value = true;
+        this.render();
+      }
+      delete() {
+        this.deactivate();
+      }
+      left() {
+        this.deactivate();
+      }
+      right() {
+        this.activate();
+      }
+      down() {
+        this.deactivate();
+      }
+      up() {
+        this.activate();
+      }
+      next() {
+        this.value = !this.value;
+        this.fire();
+        this.render();
+      }
+      _(c, key) {
+        if (c === " ") {
+          this.value = !this.value;
+        } else if (c === "1") {
+          this.value = true;
+        } else if (c === "0") {
+          this.value = false;
+        } else return this.bell();
+        this.render();
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(this.done), this.value ? this.inactive : color.cyan().underline(this.inactive), color.gray("/"), this.value ? color.cyan().underline(this.active) : this.active].join(" ");
+        this.out.write(erase.line + cursor.to(0) + this.outputText);
+      }
+    };
+    module2.exports = TogglePrompt;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/datepart.js
+var require_datepart = __commonJS({
+  "node_modules/prompts/dist/dateparts/datepart.js"(exports2, module2) {
+    "use strict";
+    var DatePart = class _DatePart {
+      constructor({
+        token,
+        date: date5,
+        parts,
+        locales
+      }) {
+        this.token = token;
+        this.date = date5 || /* @__PURE__ */ new Date();
+        this.parts = parts || [this];
+        this.locales = locales || {};
+      }
+      up() {
+      }
+      down() {
+      }
+      next() {
+        const currentIdx = this.parts.indexOf(this);
+        return this.parts.find((part, idx) => idx > currentIdx && part instanceof _DatePart);
+      }
+      setTo(val) {
+      }
+      prev() {
+        let parts = [].concat(this.parts).reverse();
+        const currentIdx = parts.indexOf(this);
+        return parts.find((part, idx) => idx > currentIdx && part instanceof _DatePart);
+      }
+      toString() {
+        return String(this.date);
+      }
+    };
+    module2.exports = DatePart;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/meridiem.js
+var require_meridiem = __commonJS({
+  "node_modules/prompts/dist/dateparts/meridiem.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart();
+    var Meridiem = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setHours((this.date.getHours() + 12) % 24);
+      }
+      down() {
+        this.up();
+      }
+      toString() {
+        let meridiem = this.date.getHours() > 12 ? "pm" : "am";
+        return /\A/.test(this.token) ? meridiem.toUpperCase() : meridiem;
+      }
+    };
+    module2.exports = Meridiem;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/day.js
+var require_day = __commonJS({
+  "node_modules/prompts/dist/dateparts/day.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart();
+    var pos = (n) => {
+      n = n % 10;
+      return n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th";
+    };
+    var Day = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setDate(this.date.getDate() + 1);
+      }
+      down() {
+        this.date.setDate(this.date.getDate() - 1);
+      }
+      setTo(val) {
+        this.date.setDate(parseInt(val.substr(-2)));
+      }
+      toString() {
+        let date5 = this.date.getDate();
+        let day = this.date.getDay();
+        return this.token === "DD" ? String(date5).padStart(2, "0") : this.token === "Do" ? date5 + pos(date5) : this.token === "d" ? day + 1 : this.token === "ddd" ? this.locales.weekdaysShort[day] : this.token === "dddd" ? this.locales.weekdays[day] : date5;
+      }
+    };
+    module2.exports = Day;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/hours.js
+var require_hours = __commonJS({
+  "node_modules/prompts/dist/dateparts/hours.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart();
+    var Hours = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setHours(this.date.getHours() + 1);
+      }
+      down() {
+        this.date.setHours(this.date.getHours() - 1);
+      }
+      setTo(val) {
+        this.date.setHours(parseInt(val.substr(-2)));
+      }
+      toString() {
+        let hours = this.date.getHours();
+        if (/h/.test(this.token)) hours = hours % 12 || 12;
+        return this.token.length > 1 ? String(hours).padStart(2, "0") : hours;
+      }
+    };
+    module2.exports = Hours;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/milliseconds.js
+var require_milliseconds = __commonJS({
+  "node_modules/prompts/dist/dateparts/milliseconds.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart();
+    var Milliseconds = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setMilliseconds(this.date.getMilliseconds() + 1);
+      }
+      down() {
+        this.date.setMilliseconds(this.date.getMilliseconds() - 1);
+      }
+      setTo(val) {
+        this.date.setMilliseconds(parseInt(val.substr(-this.token.length)));
+      }
+      toString() {
+        return String(this.date.getMilliseconds()).padStart(4, "0").substr(0, this.token.length);
+      }
+    };
+    module2.exports = Milliseconds;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/minutes.js
+var require_minutes = __commonJS({
+  "node_modules/prompts/dist/dateparts/minutes.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart();
+    var Minutes = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setMinutes(this.date.getMinutes() + 1);
+      }
+      down() {
+        this.date.setMinutes(this.date.getMinutes() - 1);
+      }
+      setTo(val) {
+        this.date.setMinutes(parseInt(val.substr(-2)));
+      }
+      toString() {
+        let m = this.date.getMinutes();
+        return this.token.length > 1 ? String(m).padStart(2, "0") : m;
+      }
+    };
+    module2.exports = Minutes;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/month.js
+var require_month = __commonJS({
+  "node_modules/prompts/dist/dateparts/month.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart();
+    var Month = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setMonth(this.date.getMonth() + 1);
+      }
+      down() {
+        this.date.setMonth(this.date.getMonth() - 1);
+      }
+      setTo(val) {
+        val = parseInt(val.substr(-2)) - 1;
+        this.date.setMonth(val < 0 ? 0 : val);
+      }
+      toString() {
+        let month = this.date.getMonth();
+        let tl = this.token.length;
+        return tl === 2 ? String(month + 1).padStart(2, "0") : tl === 3 ? this.locales.monthsShort[month] : tl === 4 ? this.locales.months[month] : String(month + 1);
+      }
+    };
+    module2.exports = Month;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/seconds.js
+var require_seconds = __commonJS({
+  "node_modules/prompts/dist/dateparts/seconds.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart();
+    var Seconds = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setSeconds(this.date.getSeconds() + 1);
+      }
+      down() {
+        this.date.setSeconds(this.date.getSeconds() - 1);
+      }
+      setTo(val) {
+        this.date.setSeconds(parseInt(val.substr(-2)));
+      }
+      toString() {
+        let s = this.date.getSeconds();
+        return this.token.length > 1 ? String(s).padStart(2, "0") : s;
+      }
+    };
+    module2.exports = Seconds;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/year.js
+var require_year = __commonJS({
+  "node_modules/prompts/dist/dateparts/year.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart();
+    var Year = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setFullYear(this.date.getFullYear() + 1);
+      }
+      down() {
+        this.date.setFullYear(this.date.getFullYear() - 1);
+      }
+      setTo(val) {
+        this.date.setFullYear(val.substr(-4));
+      }
+      toString() {
+        let year = String(this.date.getFullYear()).padStart(4, "0");
+        return this.token.length === 2 ? year.substr(-2) : year;
+      }
+    };
+    module2.exports = Year;
+  }
+});
+
+// node_modules/prompts/dist/dateparts/index.js
+var require_dateparts = __commonJS({
+  "node_modules/prompts/dist/dateparts/index.js"(exports2, module2) {
+    "use strict";
+    module2.exports = {
+      DatePart: require_datepart(),
+      Meridiem: require_meridiem(),
+      Day: require_day(),
+      Hours: require_hours(),
+      Milliseconds: require_milliseconds(),
+      Minutes: require_minutes(),
+      Month: require_month(),
+      Seconds: require_seconds(),
+      Year: require_year()
+    };
+  }
+});
+
+// node_modules/prompts/dist/elements/date.js
+var require_date = __commonJS({
+  "node_modules/prompts/dist/elements/date.js"(exports2, module2) {
+    "use strict";
+    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
+      try {
+        var info2 = gen[key](arg);
+        var value = info2.value;
+      } catch (error49) {
+        reject(error49);
+        return;
+      }
+      if (info2.done) {
+        resolve(value);
+      } else {
+        Promise.resolve(value).then(_next, _throw);
+      }
+    }
+    function _asyncToGenerator(fn) {
+      return function() {
+        var self = this, args = arguments;
+        return new Promise(function(resolve, reject) {
+          var gen = fn.apply(self, args);
+          function _next(value) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
+          }
+          function _throw(err) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
+          }
+          _next(void 0);
+        });
+      };
+    }
+    var color = require_kleur();
+    var Prompt = require_prompt();
+    var _require = require_util2();
+    var style = _require.style;
+    var clear = _require.clear;
+    var figures = _require.figures;
+    var _require2 = require_src();
+    var erase = _require2.erase;
+    var cursor = _require2.cursor;
+    var _require3 = require_dateparts();
+    var DatePart = _require3.DatePart;
+    var Meridiem = _require3.Meridiem;
+    var Day = _require3.Day;
+    var Hours = _require3.Hours;
+    var Milliseconds = _require3.Milliseconds;
+    var Minutes = _require3.Minutes;
+    var Month = _require3.Month;
+    var Seconds = _require3.Seconds;
+    var Year = _require3.Year;
+    var regex2 = /\\(.)|"((?:\\["\\]|[^"])+)"|(D[Do]?|d{3,4}|d)|(M{1,4})|(YY(?:YY)?)|([aA])|([Hh]{1,2})|(m{1,2})|(s{1,2})|(S{1,4})|./g;
+    var regexGroups = {
+      1: ({
+        token
+      }) => token.replace(/\\(.)/g, "$1"),
+      2: (opts) => new Day(opts),
+      // Day // TODO
+      3: (opts) => new Month(opts),
+      // Month
+      4: (opts) => new Year(opts),
+      // Year
+      5: (opts) => new Meridiem(opts),
+      // AM/PM // TODO (special)
+      6: (opts) => new Hours(opts),
+      // Hours
+      7: (opts) => new Minutes(opts),
+      // Minutes
+      8: (opts) => new Seconds(opts),
+      // Seconds
+      9: (opts) => new Milliseconds(opts)
+      // Fractional seconds
+    };
+    var dfltLocales = {
+      months: "January,February,March,April,May,June,July,August,September,October,November,December".split(","),
+      monthsShort: "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec".split(","),
+      weekdays: "Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday".split(","),
+      weekdaysShort: "Sun,Mon,Tue,Wed,Thu,Fri,Sat".split(",")
+    };
+    var DatePrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.cursor = 0;
+        this.typed = "";
+        this.locales = Object.assign(dfltLocales, opts.locales);
+        this._date = opts.initial || /* @__PURE__ */ new Date();
+        this.errorMsg = opts.error || "Please Enter A Valid Value";
+        this.validator = opts.validate || (() => true);
+        this.mask = opts.mask || "YYYY-MM-DD HH:mm:ss";
+        this.clear = clear("", this.out.columns);
+        this.render();
+      }
+      get value() {
+        return this.date;
+      }
+      get date() {
+        return this._date;
+      }
+      set date(date5) {
+        if (date5) this._date.setTime(date5.getTime());
+      }
+      set mask(mask) {
+        let result;
+        this.parts = [];
+        while (result = regex2.exec(mask)) {
+          let match = result.shift();
+          let idx = result.findIndex((gr) => gr != null);
+          this.parts.push(idx in regexGroups ? regexGroups[idx]({
+            token: result[idx] || match,
+            date: this.date,
+            parts: this.parts,
+            locales: this.locales
+          }) : result[idx] || match);
+        }
+        let parts = this.parts.reduce((arr, i) => {
+          if (typeof i === "string" && typeof arr[arr.length - 1] === "string") arr[arr.length - 1] += i;
+          else arr.push(i);
+          return arr;
+        }, []);
+        this.parts.splice(0);
+        this.parts.push(...parts);
+        this.reset();
+      }
+      moveCursor(n) {
+        this.typed = "";
+        this.cursor = n;
+        this.fire();
+      }
+      reset() {
+        this.moveCursor(this.parts.findIndex((p) => p instanceof DatePart));
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.error = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      validate() {
+        var _this = this;
+        return _asyncToGenerator(function* () {
+          let valid = yield _this.validator(_this.value);
+          if (typeof valid === "string") {
+            _this.errorMsg = valid;
+            valid = false;
+          }
+          _this.error = !valid;
+        })();
+      }
+      submit() {
+        var _this2 = this;
+        return _asyncToGenerator(function* () {
+          yield _this2.validate();
+          if (_this2.error) {
+            _this2.color = "red";
+            _this2.fire();
+            _this2.render();
+            return;
+          }
+          _this2.done = true;
+          _this2.aborted = false;
+          _this2.fire();
+          _this2.render();
+          _this2.out.write("\n");
+          _this2.close();
+        })();
+      }
+      up() {
+        this.typed = "";
+        this.parts[this.cursor].up();
+        this.render();
+      }
+      down() {
+        this.typed = "";
+        this.parts[this.cursor].down();
+        this.render();
+      }
+      left() {
+        let prev = this.parts[this.cursor].prev();
+        if (prev == null) return this.bell();
+        this.moveCursor(this.parts.indexOf(prev));
+        this.render();
+      }
+      right() {
+        let next = this.parts[this.cursor].next();
+        if (next == null) return this.bell();
+        this.moveCursor(this.parts.indexOf(next));
+        this.render();
+      }
+      next() {
+        let next = this.parts[this.cursor].next();
+        this.moveCursor(next ? this.parts.indexOf(next) : this.parts.findIndex((part) => part instanceof DatePart));
+        this.render();
+      }
+      _(c) {
+        if (/\d/.test(c)) {
+          this.typed += c;
+          this.parts[this.cursor].setTo(this.typed);
+          this.render();
+        }
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(false), this.parts.reduce((arr, p, idx) => arr.concat(idx === this.cursor && !this.done ? color.cyan().underline(p.toString()) : p), []).join("")].join(" ");
+        if (this.error) {
+          this.outputText += this.errorMsg.split("\n").reduce((a, l, i) => a + `
+${i ? ` ` : figures.pointerSmall} ${color.red().italic(l)}`, ``);
+        }
+        this.out.write(erase.line + cursor.to(0) + this.outputText);
+      }
+    };
+    module2.exports = DatePrompt;
+  }
+});
+
+// node_modules/prompts/dist/elements/number.js
+var require_number = __commonJS({
+  "node_modules/prompts/dist/elements/number.js"(exports2, module2) {
+    "use strict";
+    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
+      try {
+        var info2 = gen[key](arg);
+        var value = info2.value;
+      } catch (error49) {
+        reject(error49);
+        return;
+      }
+      if (info2.done) {
+        resolve(value);
+      } else {
+        Promise.resolve(value).then(_next, _throw);
+      }
+    }
+    function _asyncToGenerator(fn) {
+      return function() {
+        var self = this, args = arguments;
+        return new Promise(function(resolve, reject) {
+          var gen = fn.apply(self, args);
+          function _next(value) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
+          }
+          function _throw(err) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
+          }
+          _next(void 0);
+        });
+      };
+    }
+    var color = require_kleur();
+    var Prompt = require_prompt();
+    var _require = require_src();
+    var cursor = _require.cursor;
+    var erase = _require.erase;
+    var _require2 = require_util2();
+    var style = _require2.style;
+    var figures = _require2.figures;
+    var clear = _require2.clear;
+    var lines = _require2.lines;
+    var isNumber = /[0-9]/;
+    var isDef = (any2) => any2 !== void 0;
+    var round = (number4, precision) => {
+      let factor = Math.pow(10, precision);
+      return Math.round(number4 * factor) / factor;
+    };
+    var NumberPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.transform = style.render(opts.style);
+        this.msg = opts.message;
+        this.initial = isDef(opts.initial) ? opts.initial : "";
+        this.float = !!opts.float;
+        this.round = opts.round || 2;
+        this.inc = opts.increment || 1;
+        this.min = isDef(opts.min) ? opts.min : -Infinity;
+        this.max = isDef(opts.max) ? opts.max : Infinity;
+        this.errorMsg = opts.error || `Please Enter A Valid Value`;
+        this.validator = opts.validate || (() => true);
+        this.color = `cyan`;
+        this.value = ``;
+        this.typed = ``;
+        this.lastHit = 0;
+        this.render();
+      }
+      set value(v) {
+        if (!v && v !== 0) {
+          this.placeholder = true;
+          this.rendered = color.gray(this.transform.render(`${this.initial}`));
+          this._value = ``;
+        } else {
+          this.placeholder = false;
+          this.rendered = this.transform.render(`${round(v, this.round)}`);
+          this._value = round(v, this.round);
+        }
+        this.fire();
+      }
+      get value() {
+        return this._value;
+      }
+      parse(x) {
+        return this.float ? parseFloat(x) : parseInt(x);
+      }
+      valid(c) {
+        return c === `-` || c === `.` && this.float || isNumber.test(c);
+      }
+      reset() {
+        this.typed = ``;
+        this.value = ``;
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        let x = this.value;
+        this.value = x !== `` ? x : this.initial;
+        this.done = this.aborted = true;
+        this.error = false;
+        this.fire();
+        this.render();
+        this.out.write(`
+`);
+        this.close();
+      }
+      validate() {
+        var _this = this;
+        return _asyncToGenerator(function* () {
+          let valid = yield _this.validator(_this.value);
+          if (typeof valid === `string`) {
+            _this.errorMsg = valid;
+            valid = false;
+          }
+          _this.error = !valid;
+        })();
+      }
+      submit() {
+        var _this2 = this;
+        return _asyncToGenerator(function* () {
+          yield _this2.validate();
+          if (_this2.error) {
+            _this2.color = `red`;
+            _this2.fire();
+            _this2.render();
+            return;
+          }
+          let x = _this2.value;
+          _this2.value = x !== `` ? x : _this2.initial;
+          _this2.done = true;
+          _this2.aborted = false;
+          _this2.error = false;
+          _this2.fire();
+          _this2.render();
+          _this2.out.write(`
+`);
+          _this2.close();
+        })();
+      }
+      up() {
+        this.typed = ``;
+        if (this.value === "") {
+          this.value = this.min - this.inc;
+        }
+        if (this.value >= this.max) return this.bell();
+        this.value += this.inc;
+        this.color = `cyan`;
+        this.fire();
+        this.render();
+      }
+      down() {
+        this.typed = ``;
+        if (this.value === "") {
+          this.value = this.min + this.inc;
+        }
+        if (this.value <= this.min) return this.bell();
+        this.value -= this.inc;
+        this.color = `cyan`;
+        this.fire();
+        this.render();
+      }
+      delete() {
+        let val = this.value.toString();
+        if (val.length === 0) return this.bell();
+        this.value = this.parse(val = val.slice(0, -1)) || ``;
+        if (this.value !== "" && this.value < this.min) {
+          this.value = this.min;
+        }
+        this.color = `cyan`;
+        this.fire();
+        this.render();
+      }
+      next() {
+        this.value = this.initial;
+        this.fire();
+        this.render();
+      }
+      _(c, key) {
+        if (!this.valid(c)) return this.bell();
+        const now = Date.now();
+        if (now - this.lastHit > 1e3) this.typed = ``;
+        this.typed += c;
+        this.lastHit = now;
+        this.color = `cyan`;
+        if (c === `.`) return this.fire();
+        this.value = Math.min(this.parse(this.typed), this.max);
+        if (this.value > this.max) this.value = this.max;
+        if (this.value < this.min) this.value = this.min;
+        this.fire();
+        this.render();
+      }
+      render() {
+        if (this.closed) return;
+        if (!this.firstRender) {
+          if (this.outputError) this.out.write(cursor.down(lines(this.outputError, this.out.columns) - 1) + clear(this.outputError, this.out.columns));
+          this.out.write(clear(this.outputText, this.out.columns));
+        }
+        super.render();
+        this.outputError = "";
+        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(this.done), !this.done || !this.done && !this.placeholder ? color[this.color]().underline(this.rendered) : this.rendered].join(` `);
+        if (this.error) {
+          this.outputError += this.errorMsg.split(`
+`).reduce((a, l, i) => a + `
+${i ? ` ` : figures.pointerSmall} ${color.red().italic(l)}`, ``);
+        }
+        this.out.write(erase.line + cursor.to(0) + this.outputText + cursor.save + this.outputError + cursor.restore);
+      }
+    };
+    module2.exports = NumberPrompt;
+  }
+});
+
+// node_modules/prompts/dist/elements/multiselect.js
+var require_multiselect = __commonJS({
+  "node_modules/prompts/dist/elements/multiselect.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var _require = require_src();
+    var cursor = _require.cursor;
+    var Prompt = require_prompt();
+    var _require2 = require_util2();
+    var clear = _require2.clear;
+    var figures = _require2.figures;
+    var style = _require2.style;
+    var wrap = _require2.wrap;
+    var entriesToDisplay = _require2.entriesToDisplay;
+    var MultiselectPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.cursor = opts.cursor || 0;
+        this.scrollIndex = opts.cursor || 0;
+        this.hint = opts.hint || "";
+        this.warn = opts.warn || "- This option is disabled -";
+        this.minSelected = opts.min;
+        this.showMinError = false;
+        this.maxChoices = opts.max;
+        this.instructions = opts.instructions;
+        this.optionsPerPage = opts.optionsPerPage || 10;
+        this.value = opts.choices.map((ch, idx) => {
+          if (typeof ch === "string") ch = {
+            title: ch,
+            value: idx
+          };
+          return {
+            title: ch && (ch.title || ch.value || ch),
+            description: ch && ch.description,
+            value: ch && (ch.value === void 0 ? idx : ch.value),
+            selected: ch && ch.selected,
+            disabled: ch && ch.disabled
+          };
+        });
+        this.clear = clear("", this.out.columns);
+        if (!opts.overrideRender) {
+          this.render();
+        }
+      }
+      reset() {
+        this.value.map((v) => !v.selected);
+        this.cursor = 0;
+        this.fire();
+        this.render();
+      }
+      selected() {
+        return this.value.filter((v) => v.selected);
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        const selected = this.value.filter((e) => e.selected);
+        if (this.minSelected && selected.length < this.minSelected) {
+          this.showMinError = true;
+          this.render();
+        } else {
+          this.done = true;
+          this.aborted = false;
+          this.fire();
+          this.render();
+          this.out.write("\n");
+          this.close();
+        }
+      }
+      first() {
+        this.cursor = 0;
+        this.render();
+      }
+      last() {
+        this.cursor = this.value.length - 1;
+        this.render();
+      }
+      next() {
+        this.cursor = (this.cursor + 1) % this.value.length;
+        this.render();
+      }
+      up() {
+        if (this.cursor === 0) {
+          this.cursor = this.value.length - 1;
+        } else {
+          this.cursor--;
+        }
+        this.render();
+      }
+      down() {
+        if (this.cursor === this.value.length - 1) {
+          this.cursor = 0;
+        } else {
+          this.cursor++;
+        }
+        this.render();
+      }
+      left() {
+        this.value[this.cursor].selected = false;
+        this.render();
+      }
+      right() {
+        if (this.value.filter((e) => e.selected).length >= this.maxChoices) return this.bell();
+        this.value[this.cursor].selected = true;
+        this.render();
+      }
+      handleSpaceToggle() {
+        const v = this.value[this.cursor];
+        if (v.selected) {
+          v.selected = false;
+          this.render();
+        } else if (v.disabled || this.value.filter((e) => e.selected).length >= this.maxChoices) {
+          return this.bell();
+        } else {
+          v.selected = true;
+          this.render();
+        }
+      }
+      toggleAll() {
+        if (this.maxChoices !== void 0 || this.value[this.cursor].disabled) {
+          return this.bell();
+        }
+        const newSelected = !this.value[this.cursor].selected;
+        this.value.filter((v) => !v.disabled).forEach((v) => v.selected = newSelected);
+        this.render();
+      }
+      _(c, key) {
+        if (c === " ") {
+          this.handleSpaceToggle();
+        } else if (c === "a") {
+          this.toggleAll();
+        } else {
+          return this.bell();
+        }
+      }
+      renderInstructions() {
+        if (this.instructions === void 0 || this.instructions) {
+          if (typeof this.instructions === "string") {
+            return this.instructions;
+          }
+          return `
+Instructions:
+    ${figures.arrowUp}/${figures.arrowDown}: Highlight option
+    ${figures.arrowLeft}/${figures.arrowRight}/[space]: Toggle selection
+` + (this.maxChoices === void 0 ? `    a: Toggle all
+` : "") + `    enter/return: Complete answer`;
+        }
+        return "";
+      }
+      renderOption(cursor2, v, i, arrowIndicator) {
+        const prefix = (v.selected ? color.green(figures.radioOn) : figures.radioOff) + " " + arrowIndicator + " ";
+        let title, desc;
+        if (v.disabled) {
+          title = cursor2 === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
+        } else {
+          title = cursor2 === i ? color.cyan().underline(v.title) : v.title;
+          if (cursor2 === i && v.description) {
+            desc = ` - ${v.description}`;
+            if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
+              desc = "\n" + wrap(v.description, {
+                margin: prefix.length,
+                width: this.out.columns
+              });
+            }
+          }
+        }
+        return prefix + title + color.gray(desc || "");
+      }
+      // shared with autocompleteMultiselect
+      paginateOptions(options) {
+        if (options.length === 0) {
+          return color.red("No matches for this query.");
+        }
+        let _entriesToDisplay = entriesToDisplay(this.cursor, options.length, this.optionsPerPage), startIndex = _entriesToDisplay.startIndex, endIndex = _entriesToDisplay.endIndex;
+        let prefix, styledOptions = [];
+        for (let i = startIndex; i < endIndex; i++) {
+          if (i === startIndex && startIndex > 0) {
+            prefix = figures.arrowUp;
+          } else if (i === endIndex - 1 && endIndex < options.length) {
+            prefix = figures.arrowDown;
+          } else {
+            prefix = " ";
+          }
+          styledOptions.push(this.renderOption(this.cursor, options[i], i, prefix));
+        }
+        return "\n" + styledOptions.join("\n");
+      }
+      // shared with autocomleteMultiselect
+      renderOptions(options) {
+        if (!this.done) {
+          return this.paginateOptions(options);
+        }
+        return "";
+      }
+      renderDoneOrInstructions() {
+        if (this.done) {
+          return this.value.filter((e) => e.selected).map((v) => v.title).join(", ");
+        }
+        const output = [color.gray(this.hint), this.renderInstructions()];
+        if (this.value[this.cursor].disabled) {
+          output.push(color.yellow(this.warn));
+        }
+        return output.join(" ");
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        super.render();
+        let prompt = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(false), this.renderDoneOrInstructions()].join(" ");
+        if (this.showMinError) {
+          prompt += color.red(`You must select a minimum of ${this.minSelected} choices.`);
+          this.showMinError = false;
+        }
+        prompt += this.renderOptions(this.value);
+        this.out.write(this.clear + prompt);
+        this.clear = clear(prompt, this.out.columns);
+      }
+    };
+    module2.exports = MultiselectPrompt;
+  }
+});
+
+// node_modules/prompts/dist/elements/autocomplete.js
+var require_autocomplete = __commonJS({
+  "node_modules/prompts/dist/elements/autocomplete.js"(exports2, module2) {
+    "use strict";
+    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
+      try {
+        var info2 = gen[key](arg);
+        var value = info2.value;
+      } catch (error49) {
+        reject(error49);
+        return;
+      }
+      if (info2.done) {
+        resolve(value);
+      } else {
+        Promise.resolve(value).then(_next, _throw);
+      }
+    }
+    function _asyncToGenerator(fn) {
+      return function() {
+        var self = this, args = arguments;
+        return new Promise(function(resolve, reject) {
+          var gen = fn.apply(self, args);
+          function _next(value) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
+          }
+          function _throw(err) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
+          }
+          _next(void 0);
+        });
+      };
+    }
+    var color = require_kleur();
+    var Prompt = require_prompt();
+    var _require = require_src();
+    var erase = _require.erase;
+    var cursor = _require.cursor;
+    var _require2 = require_util2();
+    var style = _require2.style;
+    var clear = _require2.clear;
+    var figures = _require2.figures;
+    var wrap = _require2.wrap;
+    var entriesToDisplay = _require2.entriesToDisplay;
+    var getVal = (arr, i) => arr[i] && (arr[i].value || arr[i].title || arr[i]);
+    var getTitle = (arr, i) => arr[i] && (arr[i].title || arr[i].value || arr[i]);
+    var getIndex = (arr, valOrTitle) => {
+      const index = arr.findIndex((el) => el.value === valOrTitle || el.title === valOrTitle);
+      return index > -1 ? index : void 0;
+    };
+    var AutocompletePrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.suggest = opts.suggest;
+        this.choices = opts.choices;
+        this.initial = typeof opts.initial === "number" ? opts.initial : getIndex(opts.choices, opts.initial);
+        this.select = this.initial || opts.cursor || 0;
+        this.i18n = {
+          noMatches: opts.noMatches || "no matches found"
+        };
+        this.fallback = opts.fallback || this.initial;
+        this.clearFirst = opts.clearFirst || false;
+        this.suggestions = [];
+        this.input = "";
+        this.limit = opts.limit || 10;
+        this.cursor = 0;
+        this.transform = style.render(opts.style);
+        this.scale = this.transform.scale;
+        this.render = this.render.bind(this);
+        this.complete = this.complete.bind(this);
+        this.clear = clear("", this.out.columns);
+        this.complete(this.render);
+        this.render();
+      }
+      set fallback(fb) {
+        this._fb = Number.isSafeInteger(parseInt(fb)) ? parseInt(fb) : fb;
+      }
+      get fallback() {
+        let choice;
+        if (typeof this._fb === "number") choice = this.choices[this._fb];
+        else if (typeof this._fb === "string") choice = {
+          title: this._fb
+        };
+        return choice || this._fb || {
+          title: this.i18n.noMatches
+        };
+      }
+      moveSelect(i) {
+        this.select = i;
+        if (this.suggestions.length > 0) this.value = getVal(this.suggestions, i);
+        else this.value = this.fallback.value;
+        this.fire();
+      }
+      complete(cb) {
+        var _this = this;
+        return _asyncToGenerator(function* () {
+          const p = _this.completing = _this.suggest(_this.input, _this.choices);
+          const suggestions = yield p;
+          if (_this.completing !== p) return;
+          _this.suggestions = suggestions.map((s, i, arr) => ({
+            title: getTitle(arr, i),
+            value: getVal(arr, i),
+            description: s.description
+          }));
+          _this.completing = false;
+          const l = Math.max(suggestions.length - 1, 0);
+          _this.moveSelect(Math.min(l, _this.select));
+          cb && cb();
+        })();
+      }
+      reset() {
+        this.input = "";
+        this.complete(() => {
+          this.moveSelect(this.initial !== void 0 ? this.initial : 0);
+          this.render();
+        });
+        this.render();
+      }
+      exit() {
+        if (this.clearFirst && this.input.length > 0) {
+          this.reset();
+        } else {
+          this.done = this.exited = true;
+          this.aborted = false;
+          this.fire();
+          this.render();
+          this.out.write("\n");
+          this.close();
+        }
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.exited = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        this.done = true;
+        this.aborted = this.exited = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      _(c, key) {
+        let s1 = this.input.slice(0, this.cursor);
+        let s2 = this.input.slice(this.cursor);
+        this.input = `${s1}${c}${s2}`;
+        this.cursor = s1.length + 1;
+        this.complete(this.render);
+        this.render();
+      }
+      delete() {
+        if (this.cursor === 0) return this.bell();
+        let s1 = this.input.slice(0, this.cursor - 1);
+        let s2 = this.input.slice(this.cursor);
+        this.input = `${s1}${s2}`;
+        this.complete(this.render);
+        this.cursor = this.cursor - 1;
+        this.render();
+      }
+      deleteForward() {
+        if (this.cursor * this.scale >= this.rendered.length) return this.bell();
+        let s1 = this.input.slice(0, this.cursor);
+        let s2 = this.input.slice(this.cursor + 1);
+        this.input = `${s1}${s2}`;
+        this.complete(this.render);
+        this.render();
+      }
+      first() {
+        this.moveSelect(0);
+        this.render();
+      }
+      last() {
+        this.moveSelect(this.suggestions.length - 1);
+        this.render();
+      }
+      up() {
+        if (this.select === 0) {
+          this.moveSelect(this.suggestions.length - 1);
+        } else {
+          this.moveSelect(this.select - 1);
+        }
+        this.render();
+      }
+      down() {
+        if (this.select === this.suggestions.length - 1) {
+          this.moveSelect(0);
+        } else {
+          this.moveSelect(this.select + 1);
+        }
+        this.render();
+      }
+      next() {
+        if (this.select === this.suggestions.length - 1) {
+          this.moveSelect(0);
+        } else this.moveSelect(this.select + 1);
+        this.render();
+      }
+      nextPage() {
+        this.moveSelect(Math.min(this.select + this.limit, this.suggestions.length - 1));
+        this.render();
+      }
+      prevPage() {
+        this.moveSelect(Math.max(this.select - this.limit, 0));
+        this.render();
+      }
+      left() {
+        if (this.cursor <= 0) return this.bell();
+        this.cursor = this.cursor - 1;
+        this.render();
+      }
+      right() {
+        if (this.cursor * this.scale >= this.rendered.length) return this.bell();
+        this.cursor = this.cursor + 1;
+        this.render();
+      }
+      renderOption(v, hovered, isStart, isEnd) {
+        let desc;
+        let prefix = isStart ? figures.arrowUp : isEnd ? figures.arrowDown : " ";
+        let title = hovered ? color.cyan().underline(v.title) : v.title;
+        prefix = (hovered ? color.cyan(figures.pointer) + " " : "  ") + prefix;
+        if (v.description) {
+          desc = ` - ${v.description}`;
+          if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
+            desc = "\n" + wrap(v.description, {
+              margin: 3,
+              width: this.out.columns
+            });
+          }
+        }
+        return prefix + " " + title + color.gray(desc || "");
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        let _entriesToDisplay = entriesToDisplay(this.select, this.choices.length, this.limit), startIndex = _entriesToDisplay.startIndex, endIndex = _entriesToDisplay.endIndex;
+        this.outputText = [style.symbol(this.done, this.aborted, this.exited), color.bold(this.msg), style.delimiter(this.completing), this.done && this.suggestions[this.select] ? this.suggestions[this.select].title : this.rendered = this.transform.render(this.input)].join(" ");
+        if (!this.done) {
+          const suggestions = this.suggestions.slice(startIndex, endIndex).map((item, i) => this.renderOption(item, this.select === i + startIndex, i === 0 && startIndex > 0, i + startIndex === endIndex - 1 && endIndex < this.choices.length)).join("\n");
+          this.outputText += `
+` + (suggestions || color.gray(this.fallback.title));
+        }
+        this.out.write(erase.line + cursor.to(0) + this.outputText);
+      }
+    };
+    module2.exports = AutocompletePrompt;
+  }
+});
+
+// node_modules/prompts/dist/elements/autocompleteMultiselect.js
+var require_autocompleteMultiselect = __commonJS({
+  "node_modules/prompts/dist/elements/autocompleteMultiselect.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var _require = require_src();
+    var cursor = _require.cursor;
+    var MultiselectPrompt = require_multiselect();
+    var _require2 = require_util2();
+    var clear = _require2.clear;
+    var style = _require2.style;
+    var figures = _require2.figures;
+    var AutocompleteMultiselectPrompt = class extends MultiselectPrompt {
+      constructor(opts = {}) {
+        opts.overrideRender = true;
+        super(opts);
+        this.inputValue = "";
+        this.clear = clear("", this.out.columns);
+        this.filteredOptions = this.value;
+        this.render();
+      }
+      last() {
+        this.cursor = this.filteredOptions.length - 1;
+        this.render();
+      }
+      next() {
+        this.cursor = (this.cursor + 1) % this.filteredOptions.length;
+        this.render();
+      }
+      up() {
+        if (this.cursor === 0) {
+          this.cursor = this.filteredOptions.length - 1;
+        } else {
+          this.cursor--;
+        }
+        this.render();
+      }
+      down() {
+        if (this.cursor === this.filteredOptions.length - 1) {
+          this.cursor = 0;
+        } else {
+          this.cursor++;
+        }
+        this.render();
+      }
+      left() {
+        this.filteredOptions[this.cursor].selected = false;
+        this.render();
+      }
+      right() {
+        if (this.value.filter((e) => e.selected).length >= this.maxChoices) return this.bell();
+        this.filteredOptions[this.cursor].selected = true;
+        this.render();
+      }
+      delete() {
+        if (this.inputValue.length) {
+          this.inputValue = this.inputValue.substr(0, this.inputValue.length - 1);
+          this.updateFilteredOptions();
+        }
+      }
+      updateFilteredOptions() {
+        const currentHighlight = this.filteredOptions[this.cursor];
+        this.filteredOptions = this.value.filter((v) => {
+          if (this.inputValue) {
+            if (typeof v.title === "string") {
+              if (v.title.toLowerCase().includes(this.inputValue.toLowerCase())) {
+                return true;
+              }
+            }
+            if (typeof v.value === "string") {
+              if (v.value.toLowerCase().includes(this.inputValue.toLowerCase())) {
+                return true;
+              }
+            }
+            return false;
+          }
+          return true;
+        });
+        const newHighlightIndex = this.filteredOptions.findIndex((v) => v === currentHighlight);
+        this.cursor = newHighlightIndex < 0 ? 0 : newHighlightIndex;
+        this.render();
+      }
+      handleSpaceToggle() {
+        const v = this.filteredOptions[this.cursor];
+        if (v.selected) {
+          v.selected = false;
+          this.render();
+        } else if (v.disabled || this.value.filter((e) => e.selected).length >= this.maxChoices) {
+          return this.bell();
+        } else {
+          v.selected = true;
+          this.render();
+        }
+      }
+      handleInputChange(c) {
+        this.inputValue = this.inputValue + c;
+        this.updateFilteredOptions();
+      }
+      _(c, key) {
+        if (c === " ") {
+          this.handleSpaceToggle();
+        } else {
+          this.handleInputChange(c);
+        }
+      }
+      renderInstructions() {
+        if (this.instructions === void 0 || this.instructions) {
+          if (typeof this.instructions === "string") {
+            return this.instructions;
+          }
+          return `
+Instructions:
+    ${figures.arrowUp}/${figures.arrowDown}: Highlight option
+    ${figures.arrowLeft}/${figures.arrowRight}/[space]: Toggle selection
+    [a,b,c]/delete: Filter choices
+    enter/return: Complete answer
+`;
+        }
+        return "";
+      }
+      renderCurrentInput() {
+        return `
+Filtered results for: ${this.inputValue ? this.inputValue : color.gray("Enter something to filter")}
+`;
+      }
+      renderOption(cursor2, v, i) {
+        let title;
+        if (v.disabled) title = cursor2 === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
+        else title = cursor2 === i ? color.cyan().underline(v.title) : v.title;
+        return (v.selected ? color.green(figures.radioOn) : figures.radioOff) + "  " + title;
+      }
+      renderDoneOrInstructions() {
+        if (this.done) {
+          return this.value.filter((e) => e.selected).map((v) => v.title).join(", ");
+        }
+        const output = [color.gray(this.hint), this.renderInstructions(), this.renderCurrentInput()];
+        if (this.filteredOptions.length && this.filteredOptions[this.cursor].disabled) {
+          output.push(color.yellow(this.warn));
+        }
+        return output.join(" ");
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        super.render();
+        let prompt = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(false), this.renderDoneOrInstructions()].join(" ");
+        if (this.showMinError) {
+          prompt += color.red(`You must select a minimum of ${this.minSelected} choices.`);
+          this.showMinError = false;
+        }
+        prompt += this.renderOptions(this.filteredOptions);
+        this.out.write(this.clear + prompt);
+        this.clear = clear(prompt, this.out.columns);
+      }
+    };
+    module2.exports = AutocompleteMultiselectPrompt;
+  }
+});
+
+// node_modules/prompts/dist/elements/confirm.js
+var require_confirm = __commonJS({
+  "node_modules/prompts/dist/elements/confirm.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt();
+    var _require = require_util2();
+    var style = _require.style;
+    var clear = _require.clear;
+    var _require2 = require_src();
+    var erase = _require2.erase;
+    var cursor = _require2.cursor;
+    var ConfirmPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.value = opts.initial;
+        this.initialValue = !!opts.initial;
+        this.yesMsg = opts.yes || "yes";
+        this.yesOption = opts.yesOption || "(Y/n)";
+        this.noMsg = opts.no || "no";
+        this.noOption = opts.noOption || "(y/N)";
+        this.render();
+      }
+      reset() {
+        this.value = this.initialValue;
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        this.value = this.value || false;
+        this.done = true;
+        this.aborted = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      _(c, key) {
+        if (c.toLowerCase() === "y") {
+          this.value = true;
+          return this.submit();
+        }
+        if (c.toLowerCase() === "n") {
+          this.value = false;
+          return this.submit();
+        }
+        return this.bell();
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        this.outputText = [style.symbol(this.done, this.aborted), color.bold(this.msg), style.delimiter(this.done), this.done ? this.value ? this.yesMsg : this.noMsg : color.gray(this.initialValue ? this.yesOption : this.noOption)].join(" ");
+        this.out.write(erase.line + cursor.to(0) + this.outputText);
+      }
+    };
+    module2.exports = ConfirmPrompt;
+  }
+});
+
+// node_modules/prompts/dist/elements/index.js
+var require_elements = __commonJS({
+  "node_modules/prompts/dist/elements/index.js"(exports2, module2) {
+    "use strict";
+    module2.exports = {
+      TextPrompt: require_text(),
+      SelectPrompt: require_select(),
+      TogglePrompt: require_toggle(),
+      DatePrompt: require_date(),
+      NumberPrompt: require_number(),
+      MultiselectPrompt: require_multiselect(),
+      AutocompletePrompt: require_autocomplete(),
+      AutocompleteMultiselectPrompt: require_autocompleteMultiselect(),
+      ConfirmPrompt: require_confirm()
+    };
+  }
+});
+
+// node_modules/prompts/dist/prompts.js
+var require_prompts = __commonJS({
+  "node_modules/prompts/dist/prompts.js"(exports2) {
+    "use strict";
+    var $2 = exports2;
+    var el = require_elements();
+    var noop = (v) => v;
+    function toPrompt(type, args, opts = {}) {
+      return new Promise((res, rej) => {
+        const p = new el[type](args);
+        const onAbort = opts.onAbort || noop;
+        const onSubmit = opts.onSubmit || noop;
+        const onExit2 = opts.onExit || noop;
+        p.on("state", args.onState || noop);
+        p.on("submit", (x) => res(onSubmit(x)));
+        p.on("exit", (x) => res(onExit2(x)));
+        p.on("abort", (x) => rej(onAbort(x)));
+      });
+    }
+    $2.text = (args) => toPrompt("TextPrompt", args);
+    $2.password = (args) => {
+      args.style = "password";
+      return $2.text(args);
+    };
+    $2.invisible = (args) => {
+      args.style = "invisible";
+      return $2.text(args);
+    };
+    $2.number = (args) => toPrompt("NumberPrompt", args);
+    $2.date = (args) => toPrompt("DatePrompt", args);
+    $2.confirm = (args) => toPrompt("ConfirmPrompt", args);
+    $2.list = (args) => {
+      const sep = args.separator || ",";
+      return toPrompt("TextPrompt", args, {
+        onSubmit: (str) => str.split(sep).map((s) => s.trim())
+      });
+    };
+    $2.toggle = (args) => toPrompt("TogglePrompt", args);
+    $2.select = (args) => toPrompt("SelectPrompt", args);
+    $2.multiselect = (args) => {
+      args.choices = [].concat(args.choices || []);
+      const toSelected = (items) => items.filter((item) => item.selected).map((item) => item.value);
+      return toPrompt("MultiselectPrompt", args, {
+        onAbort: toSelected,
+        onSubmit: toSelected
+      });
+    };
+    $2.autocompleteMultiselect = (args) => {
+      args.choices = [].concat(args.choices || []);
+      const toSelected = (items) => items.filter((item) => item.selected).map((item) => item.value);
+      return toPrompt("AutocompleteMultiselectPrompt", args, {
+        onAbort: toSelected,
+        onSubmit: toSelected
+      });
+    };
+    var byTitle = (input, choices) => Promise.resolve(choices.filter((item) => item.title.slice(0, input.length).toLowerCase() === input.toLowerCase()));
+    $2.autocomplete = (args) => {
+      args.suggest = args.suggest || byTitle;
+      args.choices = [].concat(args.choices || []);
+      return toPrompt("AutocompletePrompt", args);
+    };
+  }
+});
+
+// node_modules/prompts/dist/index.js
+var require_dist2 = __commonJS({
+  "node_modules/prompts/dist/index.js"(exports2, module2) {
+    "use strict";
+    function ownKeys(object2, enumerableOnly) {
+      var keys = Object.keys(object2);
+      if (Object.getOwnPropertySymbols) {
+        var symbols = Object.getOwnPropertySymbols(object2);
+        if (enumerableOnly) {
+          symbols = symbols.filter(function(sym) {
+            return Object.getOwnPropertyDescriptor(object2, sym).enumerable;
+          });
+        }
+        keys.push.apply(keys, symbols);
+      }
+      return keys;
+    }
+    function _objectSpread(target) {
+      for (var i = 1; i < arguments.length; i++) {
+        var source = arguments[i] != null ? arguments[i] : {};
+        if (i % 2) {
+          ownKeys(Object(source), true).forEach(function(key) {
+            _defineProperty(target, key, source[key]);
+          });
+        } else if (Object.getOwnPropertyDescriptors) {
+          Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
+        } else {
+          ownKeys(Object(source)).forEach(function(key) {
+            Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+          });
+        }
+      }
+      return target;
+    }
+    function _defineProperty(obj, key, value) {
+      if (key in obj) {
+        Object.defineProperty(obj, key, { value, enumerable: true, configurable: true, writable: true });
+      } else {
+        obj[key] = value;
+      }
+      return obj;
+    }
+    function _createForOfIteratorHelper(o, allowArrayLike) {
+      var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
+      if (!it) {
+        if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+          if (it) o = it;
+          var i = 0;
+          var F = function F2() {
+          };
+          return { s: F, n: function n() {
+            if (i >= o.length) return { done: true };
+            return { done: false, value: o[i++] };
+          }, e: function e(_e) {
+            throw _e;
+          }, f: F };
+        }
+        throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+      }
+      var normalCompletion = true, didErr = false, err;
+      return { s: function s() {
+        it = it.call(o);
+      }, n: function n() {
+        var step = it.next();
+        normalCompletion = step.done;
+        return step;
+      }, e: function e(_e2) {
+        didErr = true;
+        err = _e2;
+      }, f: function f() {
+        try {
+          if (!normalCompletion && it.return != null) it.return();
+        } finally {
+          if (didErr) throw err;
+        }
+      } };
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o) return;
+      if (typeof o === "string") return _arrayLikeToArray(o, minLen);
+      var n = Object.prototype.toString.call(o).slice(8, -1);
+      if (n === "Object" && o.constructor) n = o.constructor.name;
+      if (n === "Map" || n === "Set") return Array.from(o);
+      if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length) len = arr.length;
+      for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
+      return arr2;
+    }
+    function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
+      try {
+        var info2 = gen[key](arg);
+        var value = info2.value;
+      } catch (error49) {
+        reject(error49);
+        return;
+      }
+      if (info2.done) {
+        resolve(value);
+      } else {
+        Promise.resolve(value).then(_next, _throw);
+      }
+    }
+    function _asyncToGenerator(fn) {
+      return function() {
+        var self = this, args = arguments;
+        return new Promise(function(resolve, reject) {
+          var gen = fn.apply(self, args);
+          function _next(value) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
+          }
+          function _throw(err) {
+            asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
+          }
+          _next(void 0);
+        });
+      };
+    }
+    var prompts3 = require_prompts();
+    var passOn = ["suggest", "format", "onState", "validate", "onRender", "type"];
+    var noop = () => {
+    };
+    function prompt() {
+      return _prompt.apply(this, arguments);
+    }
+    function _prompt() {
+      _prompt = _asyncToGenerator(function* (questions = [], {
+        onSubmit = noop,
+        onCancel = noop
+      } = {}) {
+        const answers = {};
+        const override2 = prompt._override || {};
+        questions = [].concat(questions);
+        let answer, question, quit, name, type, lastPrompt;
+        const getFormattedAnswer = /* @__PURE__ */ (function() {
+          var _ref = _asyncToGenerator(function* (question2, answer2, skipValidation = false) {
+            if (!skipValidation && question2.validate && question2.validate(answer2) !== true) {
               return;
             }
+            return question2.format ? yield question2.format(answer2, answers) : answer2;
+          });
+          return function getFormattedAnswer2(_x, _x2) {
+            return _ref.apply(this, arguments);
+          };
+        })();
+        var _iterator = _createForOfIteratorHelper(questions), _step;
+        try {
+          for (_iterator.s(); !(_step = _iterator.n()).done; ) {
+            question = _step.value;
+            var _question = question;
+            name = _question.name;
+            type = _question.type;
+            if (typeof type === "function") {
+              type = yield type(answer, _objectSpread({}, answers), question);
+              question["type"] = type;
+            }
+            if (!type) continue;
+            for (let key in question) {
+              if (passOn.includes(key)) continue;
+              let value = question[key];
+              question[key] = typeof value === "function" ? yield value(answer, _objectSpread({}, answers), lastPrompt) : value;
+            }
+            lastPrompt = question;
+            if (typeof question.message !== "string") {
+              throw new Error("prompt message is required");
+            }
+            var _question2 = question;
+            name = _question2.name;
+            type = _question2.type;
+            if (prompts3[type] === void 0) {
+              throw new Error(`prompt type (${type}) is not defined`);
+            }
+            if (override2[question.name] !== void 0) {
+              answer = yield getFormattedAnswer(question, override2[question.name]);
+              if (answer !== void 0) {
+                answers[name] = answer;
+                continue;
+              }
+            }
+            try {
+              answer = prompt._injected ? getInjectedAnswer(prompt._injected, question.initial) : yield prompts3[type](question);
+              answers[name] = answer = yield getFormattedAnswer(question, answer, true);
+              quit = yield onSubmit(question, answer, answers);
+            } catch (err) {
+              quit = !(yield onCancel(question, answers));
+            }
+            if (quit) return answers;
+          }
+        } catch (err) {
+          _iterator.e(err);
+        } finally {
+          _iterator.f();
+        }
+        return answers;
+      });
+      return _prompt.apply(this, arguments);
+    }
+    function getInjectedAnswer(injected, deafultValue) {
+      const answer = injected.shift();
+      if (answer instanceof Error) {
+        throw answer;
+      }
+      return answer === void 0 ? deafultValue : answer;
+    }
+    function inject(answers) {
+      prompt._injected = (prompt._injected || []).concat(answers);
+    }
+    function override(answers) {
+      prompt._override = Object.assign({}, answers);
+    }
+    module2.exports = Object.assign(prompt, {
+      prompt,
+      prompts: prompts3,
+      inject,
+      override
+    });
+  }
+});
+
+// node_modules/prompts/lib/util/action.js
+var require_action2 = __commonJS({
+  "node_modules/prompts/lib/util/action.js"(exports2, module2) {
+    "use strict";
+    module2.exports = (key, isSelect) => {
+      if (key.meta && key.name !== "escape") return;
+      if (key.ctrl) {
+        if (key.name === "a") return "first";
+        if (key.name === "c") return "abort";
+        if (key.name === "d") return "abort";
+        if (key.name === "e") return "last";
+        if (key.name === "g") return "reset";
+      }
+      if (isSelect) {
+        if (key.name === "j") return "down";
+        if (key.name === "k") return "up";
+      }
+      if (key.name === "return") return "submit";
+      if (key.name === "enter") return "submit";
+      if (key.name === "backspace") return "delete";
+      if (key.name === "delete") return "deleteForward";
+      if (key.name === "abort") return "abort";
+      if (key.name === "escape") return "exit";
+      if (key.name === "tab") return "next";
+      if (key.name === "pagedown") return "nextPage";
+      if (key.name === "pageup") return "prevPage";
+      if (key.name === "home") return "home";
+      if (key.name === "end") return "end";
+      if (key.name === "up") return "up";
+      if (key.name === "down") return "down";
+      if (key.name === "right") return "right";
+      if (key.name === "left") return "left";
+      return false;
+    };
+  }
+});
+
+// node_modules/prompts/lib/util/strip.js
+var require_strip2 = __commonJS({
+  "node_modules/prompts/lib/util/strip.js"(exports2, module2) {
+    "use strict";
+    module2.exports = (str) => {
+      const pattern = [
+        "[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)",
+        "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
+      ].join("|");
+      const RGX = new RegExp(pattern, "g");
+      return typeof str === "string" ? str.replace(RGX, "") : str;
+    };
+  }
+});
+
+// node_modules/prompts/lib/util/clear.js
+var require_clear2 = __commonJS({
+  "node_modules/prompts/lib/util/clear.js"(exports2, module2) {
+    "use strict";
+    var strip = require_strip2();
+    var { erase, cursor } = require_src();
+    var width = (str) => [...strip(str)].length;
+    module2.exports = function(prompt, perLine) {
+      if (!perLine) return erase.line + cursor.to(0);
+      let rows = 0;
+      const lines = prompt.split(/\r?\n/);
+      for (let line of lines) {
+        rows += 1 + Math.floor(Math.max(width(line) - 1, 0) / perLine);
+      }
+      return erase.lines(rows);
+    };
+  }
+});
+
+// node_modules/prompts/lib/util/figures.js
+var require_figures2 = __commonJS({
+  "node_modules/prompts/lib/util/figures.js"(exports2, module2) {
+    "use strict";
+    var main = {
+      arrowUp: "\u2191",
+      arrowDown: "\u2193",
+      arrowLeft: "\u2190",
+      arrowRight: "\u2192",
+      radioOn: "\u25C9",
+      radioOff: "\u25EF",
+      tick: "\u2714",
+      cross: "\u2716",
+      ellipsis: "\u2026",
+      pointerSmall: "\u203A",
+      line: "\u2500",
+      pointer: "\u276F"
+    };
+    var win = {
+      arrowUp: main.arrowUp,
+      arrowDown: main.arrowDown,
+      arrowLeft: main.arrowLeft,
+      arrowRight: main.arrowRight,
+      radioOn: "(*)",
+      radioOff: "( )",
+      tick: "\u221A",
+      cross: "\xD7",
+      ellipsis: "...",
+      pointerSmall: "\xBB",
+      line: "\u2500",
+      pointer: ">"
+    };
+    var figures = process.platform === "win32" ? win : main;
+    module2.exports = figures;
+  }
+});
+
+// node_modules/prompts/lib/util/style.js
+var require_style2 = __commonJS({
+  "node_modules/prompts/lib/util/style.js"(exports2, module2) {
+    "use strict";
+    var c = require_kleur();
+    var figures = require_figures2();
+    var styles3 = Object.freeze({
+      password: { scale: 1, render: (input) => "*".repeat(input.length) },
+      emoji: { scale: 2, render: (input) => "\u{1F603}".repeat(input.length) },
+      invisible: { scale: 0, render: (input) => "" },
+      default: { scale: 1, render: (input) => `${input}` }
+    });
+    var render = (type) => styles3[type] || styles3.default;
+    var symbols = Object.freeze({
+      aborted: c.red(figures.cross),
+      done: c.green(figures.tick),
+      exited: c.yellow(figures.cross),
+      default: c.cyan("?")
+    });
+    var symbol2 = (done, aborted2, exited) => aborted2 ? symbols.aborted : exited ? symbols.exited : done ? symbols.done : symbols.default;
+    var delimiter = (completing) => c.gray(completing ? figures.ellipsis : figures.pointerSmall);
+    var item = (expandable, expanded) => c.gray(expandable ? expanded ? figures.pointerSmall : "+" : figures.line);
+    module2.exports = {
+      styles: styles3,
+      render,
+      symbols,
+      symbol: symbol2,
+      delimiter,
+      item
+    };
+  }
+});
+
+// node_modules/prompts/lib/util/lines.js
+var require_lines2 = __commonJS({
+  "node_modules/prompts/lib/util/lines.js"(exports2, module2) {
+    "use strict";
+    var strip = require_strip2();
+    module2.exports = function(msg, perLine) {
+      let lines = String(strip(msg) || "").split(/\r?\n/);
+      if (!perLine) return lines.length;
+      return lines.map((l) => Math.ceil(l.length / perLine)).reduce((a, b) => a + b);
+    };
+  }
+});
+
+// node_modules/prompts/lib/util/wrap.js
+var require_wrap2 = __commonJS({
+  "node_modules/prompts/lib/util/wrap.js"(exports2, module2) {
+    "use strict";
+    module2.exports = (msg, opts = {}) => {
+      const tab = Number.isSafeInteger(parseInt(opts.margin)) ? new Array(parseInt(opts.margin)).fill(" ").join("") : opts.margin || "";
+      const width = opts.width;
+      return (msg || "").split(/\r?\n/g).map((line) => line.split(/\s+/g).reduce((arr, w) => {
+        if (w.length + tab.length >= width || arr[arr.length - 1].length + w.length + 1 < width)
+          arr[arr.length - 1] += ` ${w}`;
+        else arr.push(`${tab}${w}`);
+        return arr;
+      }, [tab]).join("\n")).join("\n");
+    };
+  }
+});
+
+// node_modules/prompts/lib/util/entriesToDisplay.js
+var require_entriesToDisplay2 = __commonJS({
+  "node_modules/prompts/lib/util/entriesToDisplay.js"(exports2, module2) {
+    "use strict";
+    module2.exports = (cursor, total, maxVisible) => {
+      maxVisible = maxVisible || total;
+      let startIndex = Math.min(total - maxVisible, cursor - Math.floor(maxVisible / 2));
+      if (startIndex < 0) startIndex = 0;
+      let endIndex = Math.min(startIndex + maxVisible, total);
+      return { startIndex, endIndex };
+    };
+  }
+});
+
+// node_modules/prompts/lib/util/index.js
+var require_util3 = __commonJS({
+  "node_modules/prompts/lib/util/index.js"(exports2, module2) {
+    "use strict";
+    module2.exports = {
+      action: require_action2(),
+      clear: require_clear2(),
+      style: require_style2(),
+      strip: require_strip2(),
+      figures: require_figures2(),
+      lines: require_lines2(),
+      wrap: require_wrap2(),
+      entriesToDisplay: require_entriesToDisplay2()
+    };
+  }
+});
+
+// node_modules/prompts/lib/elements/prompt.js
+var require_prompt2 = __commonJS({
+  "node_modules/prompts/lib/elements/prompt.js"(exports2, module2) {
+    "use strict";
+    var readline = require("readline");
+    var { action } = require_util3();
+    var EventEmitter = require("events");
+    var { beep, cursor } = require_src();
+    var color = require_kleur();
+    var Prompt = class extends EventEmitter {
+      constructor(opts = {}) {
+        super();
+        this.firstRender = true;
+        this.in = opts.stdin || process.stdin;
+        this.out = opts.stdout || process.stdout;
+        this.onRender = (opts.onRender || (() => void 0)).bind(this);
+        const rl = readline.createInterface({ input: this.in, escapeCodeTimeout: 50 });
+        readline.emitKeypressEvents(this.in, rl);
+        if (this.in.isTTY) this.in.setRawMode(true);
+        const isSelect = ["SelectPrompt", "MultiselectPrompt"].indexOf(this.constructor.name) > -1;
+        const keypress = (str, key) => {
+          let a = action(key, isSelect);
+          if (a === false) {
+            this._ && this._(str, key);
+          } else if (typeof this[a] === "function") {
+            this[a](key);
+          } else {
+            this.bell();
+          }
+        };
+        this.close = () => {
+          this.out.write(cursor.show);
+          this.in.removeListener("keypress", keypress);
+          if (this.in.isTTY) this.in.setRawMode(false);
+          rl.close();
+          this.emit(this.aborted ? "abort" : this.exited ? "exit" : "submit", this.value);
+          this.closed = true;
+        };
+        this.in.on("keypress", keypress);
+      }
+      fire() {
+        this.emit("state", {
+          value: this.value,
+          aborted: !!this.aborted,
+          exited: !!this.exited
+        });
+      }
+      bell() {
+        this.out.write(beep);
+      }
+      render() {
+        this.onRender(color);
+        if (this.firstRender) this.firstRender = false;
+      }
+    };
+    module2.exports = Prompt;
+  }
+});
+
+// node_modules/prompts/lib/elements/text.js
+var require_text2 = __commonJS({
+  "node_modules/prompts/lib/elements/text.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt2();
+    var { erase, cursor } = require_src();
+    var { style, clear, lines, figures } = require_util3();
+    var TextPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.transform = style.render(opts.style);
+        this.scale = this.transform.scale;
+        this.msg = opts.message;
+        this.initial = opts.initial || ``;
+        this.validator = opts.validate || (() => true);
+        this.value = ``;
+        this.errorMsg = opts.error || `Please Enter A Valid Value`;
+        this.cursor = Number(!!this.initial);
+        this.cursorOffset = 0;
+        this.clear = clear(``, this.out.columns);
+        this.render();
+      }
+      set value(v) {
+        if (!v && this.initial) {
+          this.placeholder = true;
+          this.rendered = color.gray(this.transform.render(this.initial));
+        } else {
+          this.placeholder = false;
+          this.rendered = this.transform.render(v);
+        }
+        this._value = v;
+        this.fire();
+      }
+      get value() {
+        return this._value;
+      }
+      reset() {
+        this.value = ``;
+        this.cursor = Number(!!this.initial);
+        this.cursorOffset = 0;
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.value = this.value || this.initial;
+        this.done = this.aborted = true;
+        this.error = false;
+        this.red = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      async validate() {
+        let valid = await this.validator(this.value);
+        if (typeof valid === `string`) {
+          this.errorMsg = valid;
+          valid = false;
+        }
+        this.error = !valid;
+      }
+      async submit() {
+        this.value = this.value || this.initial;
+        this.cursorOffset = 0;
+        this.cursor = this.rendered.length;
+        await this.validate();
+        if (this.error) {
+          this.red = true;
+          this.fire();
+          this.render();
+          return;
+        }
+        this.done = true;
+        this.aborted = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      next() {
+        if (!this.placeholder) return this.bell();
+        this.value = this.initial;
+        this.cursor = this.rendered.length;
+        this.fire();
+        this.render();
+      }
+      moveCursor(n) {
+        if (this.placeholder) return;
+        this.cursor = this.cursor + n;
+        this.cursorOffset += n;
+      }
+      _(c, key) {
+        let s1 = this.value.slice(0, this.cursor);
+        let s2 = this.value.slice(this.cursor);
+        this.value = `${s1}${c}${s2}`;
+        this.red = false;
+        this.cursor = this.placeholder ? 0 : s1.length + 1;
+        this.render();
+      }
+      delete() {
+        if (this.isCursorAtStart()) return this.bell();
+        let s1 = this.value.slice(0, this.cursor - 1);
+        let s2 = this.value.slice(this.cursor);
+        this.value = `${s1}${s2}`;
+        this.red = false;
+        if (this.isCursorAtStart()) {
+          this.cursorOffset = 0;
+        } else {
+          this.cursorOffset++;
+          this.moveCursor(-1);
+        }
+        this.render();
+      }
+      deleteForward() {
+        if (this.cursor * this.scale >= this.rendered.length || this.placeholder) return this.bell();
+        let s1 = this.value.slice(0, this.cursor);
+        let s2 = this.value.slice(this.cursor + 1);
+        this.value = `${s1}${s2}`;
+        this.red = false;
+        if (this.isCursorAtEnd()) {
+          this.cursorOffset = 0;
+        } else {
+          this.cursorOffset++;
+        }
+        this.render();
+      }
+      first() {
+        this.cursor = 0;
+        this.render();
+      }
+      last() {
+        this.cursor = this.value.length;
+        this.render();
+      }
+      left() {
+        if (this.cursor <= 0 || this.placeholder) return this.bell();
+        this.moveCursor(-1);
+        this.render();
+      }
+      right() {
+        if (this.cursor * this.scale >= this.rendered.length || this.placeholder) return this.bell();
+        this.moveCursor(1);
+        this.render();
+      }
+      isCursorAtStart() {
+        return this.cursor === 0 || this.placeholder && this.cursor === 1;
+      }
+      isCursorAtEnd() {
+        return this.cursor === this.rendered.length || this.placeholder && this.cursor === this.rendered.length + 1;
+      }
+      render() {
+        if (this.closed) return;
+        if (!this.firstRender) {
+          if (this.outputError)
+            this.out.write(cursor.down(lines(this.outputError, this.out.columns) - 1) + clear(this.outputError, this.out.columns));
+          this.out.write(clear(this.outputText, this.out.columns));
+        }
+        super.render();
+        this.outputError = "";
+        this.outputText = [
+          style.symbol(this.done, this.aborted),
+          color.bold(this.msg),
+          style.delimiter(this.done),
+          this.red ? color.red(this.rendered) : this.rendered
+        ].join(` `);
+        if (this.error) {
+          this.outputError += this.errorMsg.split(`
+`).reduce((a, l, i) => a + `
+${i ? " " : figures.pointerSmall} ${color.red().italic(l)}`, ``);
+        }
+        this.out.write(erase.line + cursor.to(0) + this.outputText + cursor.save + this.outputError + cursor.restore + cursor.move(this.cursorOffset, 0));
+      }
+    };
+    module2.exports = TextPrompt;
+  }
+});
+
+// node_modules/prompts/lib/elements/select.js
+var require_select2 = __commonJS({
+  "node_modules/prompts/lib/elements/select.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt2();
+    var { style, clear, figures, wrap, entriesToDisplay } = require_util3();
+    var { cursor } = require_src();
+    var SelectPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.hint = opts.hint || "- Use arrow-keys. Return to submit.";
+        this.warn = opts.warn || "- This option is disabled";
+        this.cursor = opts.initial || 0;
+        this.choices = opts.choices.map((ch, idx) => {
+          if (typeof ch === "string")
+            ch = { title: ch, value: idx };
+          return {
+            title: ch && (ch.title || ch.value || ch),
+            value: ch && (ch.value === void 0 ? idx : ch.value),
+            description: ch && ch.description,
+            selected: ch && ch.selected,
+            disabled: ch && ch.disabled
+          };
+        });
+        this.optionsPerPage = opts.optionsPerPage || 10;
+        this.value = (this.choices[this.cursor] || {}).value;
+        this.clear = clear("", this.out.columns);
+        this.render();
+      }
+      moveCursor(n) {
+        this.cursor = n;
+        this.value = this.choices[n].value;
+        this.fire();
+      }
+      reset() {
+        this.moveCursor(0);
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        if (!this.selection.disabled) {
+          this.done = true;
+          this.aborted = false;
+          this.fire();
+          this.render();
+          this.out.write("\n");
+          this.close();
+        } else
+          this.bell();
+      }
+      first() {
+        this.moveCursor(0);
+        this.render();
+      }
+      last() {
+        this.moveCursor(this.choices.length - 1);
+        this.render();
+      }
+      up() {
+        if (this.cursor === 0) {
+          this.moveCursor(this.choices.length - 1);
+        } else {
+          this.moveCursor(this.cursor - 1);
+        }
+        this.render();
+      }
+      down() {
+        if (this.cursor === this.choices.length - 1) {
+          this.moveCursor(0);
+        } else {
+          this.moveCursor(this.cursor + 1);
+        }
+        this.render();
+      }
+      next() {
+        this.moveCursor((this.cursor + 1) % this.choices.length);
+        this.render();
+      }
+      _(c, key) {
+        if (c === " ") return this.submit();
+      }
+      get selection() {
+        return this.choices[this.cursor];
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        let { startIndex, endIndex } = entriesToDisplay(this.cursor, this.choices.length, this.optionsPerPage);
+        this.outputText = [
+          style.symbol(this.done, this.aborted),
+          color.bold(this.msg),
+          style.delimiter(false),
+          this.done ? this.selection.title : this.selection.disabled ? color.yellow(this.warn) : color.gray(this.hint)
+        ].join(" ");
+        if (!this.done) {
+          this.outputText += "\n";
+          for (let i = startIndex; i < endIndex; i++) {
+            let title, prefix, desc = "", v = this.choices[i];
+            if (i === startIndex && startIndex > 0) {
+              prefix = figures.arrowUp;
+            } else if (i === endIndex - 1 && endIndex < this.choices.length) {
+              prefix = figures.arrowDown;
+            } else {
+              prefix = " ";
+            }
+            if (v.disabled) {
+              title = this.cursor === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
+              prefix = (this.cursor === i ? color.bold().gray(figures.pointer) + " " : "  ") + prefix;
+            } else {
+              title = this.cursor === i ? color.cyan().underline(v.title) : v.title;
+              prefix = (this.cursor === i ? color.cyan(figures.pointer) + " " : "  ") + prefix;
+              if (v.description && this.cursor === i) {
+                desc = ` - ${v.description}`;
+                if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
+                  desc = "\n" + wrap(v.description, { margin: 3, width: this.out.columns });
+                }
+              }
+            }
+            this.outputText += `${prefix} ${title}${color.gray(desc)}
+`;
+          }
+        }
+        this.out.write(this.outputText);
+      }
+    };
+    module2.exports = SelectPrompt;
+  }
+});
+
+// node_modules/prompts/lib/elements/toggle.js
+var require_toggle2 = __commonJS({
+  "node_modules/prompts/lib/elements/toggle.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt2();
+    var { style, clear } = require_util3();
+    var { cursor, erase } = require_src();
+    var TogglePrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.value = !!opts.initial;
+        this.active = opts.active || "on";
+        this.inactive = opts.inactive || "off";
+        this.initialValue = this.value;
+        this.render();
+      }
+      reset() {
+        this.value = this.initialValue;
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        this.done = true;
+        this.aborted = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      deactivate() {
+        if (this.value === false) return this.bell();
+        this.value = false;
+        this.render();
+      }
+      activate() {
+        if (this.value === true) return this.bell();
+        this.value = true;
+        this.render();
+      }
+      delete() {
+        this.deactivate();
+      }
+      left() {
+        this.deactivate();
+      }
+      right() {
+        this.activate();
+      }
+      down() {
+        this.deactivate();
+      }
+      up() {
+        this.activate();
+      }
+      next() {
+        this.value = !this.value;
+        this.fire();
+        this.render();
+      }
+      _(c, key) {
+        if (c === " ") {
+          this.value = !this.value;
+        } else if (c === "1") {
+          this.value = true;
+        } else if (c === "0") {
+          this.value = false;
+        } else return this.bell();
+        this.render();
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        this.outputText = [
+          style.symbol(this.done, this.aborted),
+          color.bold(this.msg),
+          style.delimiter(this.done),
+          this.value ? this.inactive : color.cyan().underline(this.inactive),
+          color.gray("/"),
+          this.value ? color.cyan().underline(this.active) : this.active
+        ].join(" ");
+        this.out.write(erase.line + cursor.to(0) + this.outputText);
+      }
+    };
+    module2.exports = TogglePrompt;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/datepart.js
+var require_datepart2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/datepart.js"(exports2, module2) {
+    "use strict";
+    var DatePart = class _DatePart {
+      constructor({ token, date: date5, parts, locales }) {
+        this.token = token;
+        this.date = date5 || /* @__PURE__ */ new Date();
+        this.parts = parts || [this];
+        this.locales = locales || {};
+      }
+      up() {
+      }
+      down() {
+      }
+      next() {
+        const currentIdx = this.parts.indexOf(this);
+        return this.parts.find((part, idx) => idx > currentIdx && part instanceof _DatePart);
+      }
+      setTo(val) {
+      }
+      prev() {
+        let parts = [].concat(this.parts).reverse();
+        const currentIdx = parts.indexOf(this);
+        return parts.find((part, idx) => idx > currentIdx && part instanceof _DatePart);
+      }
+      toString() {
+        return String(this.date);
+      }
+    };
+    module2.exports = DatePart;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/meridiem.js
+var require_meridiem2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/meridiem.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart2();
+    var Meridiem = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setHours((this.date.getHours() + 12) % 24);
+      }
+      down() {
+        this.up();
+      }
+      toString() {
+        let meridiem = this.date.getHours() > 12 ? "pm" : "am";
+        return /\A/.test(this.token) ? meridiem.toUpperCase() : meridiem;
+      }
+    };
+    module2.exports = Meridiem;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/day.js
+var require_day2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/day.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart2();
+    var pos = (n) => {
+      n = n % 10;
+      return n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th";
+    };
+    var Day = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setDate(this.date.getDate() + 1);
+      }
+      down() {
+        this.date.setDate(this.date.getDate() - 1);
+      }
+      setTo(val) {
+        this.date.setDate(parseInt(val.substr(-2)));
+      }
+      toString() {
+        let date5 = this.date.getDate();
+        let day = this.date.getDay();
+        return this.token === "DD" ? String(date5).padStart(2, "0") : this.token === "Do" ? date5 + pos(date5) : this.token === "d" ? day + 1 : this.token === "ddd" ? this.locales.weekdaysShort[day] : this.token === "dddd" ? this.locales.weekdays[day] : date5;
+      }
+    };
+    module2.exports = Day;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/hours.js
+var require_hours2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/hours.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart2();
+    var Hours = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setHours(this.date.getHours() + 1);
+      }
+      down() {
+        this.date.setHours(this.date.getHours() - 1);
+      }
+      setTo(val) {
+        this.date.setHours(parseInt(val.substr(-2)));
+      }
+      toString() {
+        let hours = this.date.getHours();
+        if (/h/.test(this.token))
+          hours = hours % 12 || 12;
+        return this.token.length > 1 ? String(hours).padStart(2, "0") : hours;
+      }
+    };
+    module2.exports = Hours;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/milliseconds.js
+var require_milliseconds2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/milliseconds.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart2();
+    var Milliseconds = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setMilliseconds(this.date.getMilliseconds() + 1);
+      }
+      down() {
+        this.date.setMilliseconds(this.date.getMilliseconds() - 1);
+      }
+      setTo(val) {
+        this.date.setMilliseconds(parseInt(val.substr(-this.token.length)));
+      }
+      toString() {
+        return String(this.date.getMilliseconds()).padStart(4, "0").substr(0, this.token.length);
+      }
+    };
+    module2.exports = Milliseconds;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/minutes.js
+var require_minutes2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/minutes.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart2();
+    var Minutes = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setMinutes(this.date.getMinutes() + 1);
+      }
+      down() {
+        this.date.setMinutes(this.date.getMinutes() - 1);
+      }
+      setTo(val) {
+        this.date.setMinutes(parseInt(val.substr(-2)));
+      }
+      toString() {
+        let m = this.date.getMinutes();
+        return this.token.length > 1 ? String(m).padStart(2, "0") : m;
+      }
+    };
+    module2.exports = Minutes;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/month.js
+var require_month2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/month.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart2();
+    var Month = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setMonth(this.date.getMonth() + 1);
+      }
+      down() {
+        this.date.setMonth(this.date.getMonth() - 1);
+      }
+      setTo(val) {
+        val = parseInt(val.substr(-2)) - 1;
+        this.date.setMonth(val < 0 ? 0 : val);
+      }
+      toString() {
+        let month = this.date.getMonth();
+        let tl = this.token.length;
+        return tl === 2 ? String(month + 1).padStart(2, "0") : tl === 3 ? this.locales.monthsShort[month] : tl === 4 ? this.locales.months[month] : String(month + 1);
+      }
+    };
+    module2.exports = Month;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/seconds.js
+var require_seconds2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/seconds.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart2();
+    var Seconds = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setSeconds(this.date.getSeconds() + 1);
+      }
+      down() {
+        this.date.setSeconds(this.date.getSeconds() - 1);
+      }
+      setTo(val) {
+        this.date.setSeconds(parseInt(val.substr(-2)));
+      }
+      toString() {
+        let s = this.date.getSeconds();
+        return this.token.length > 1 ? String(s).padStart(2, "0") : s;
+      }
+    };
+    module2.exports = Seconds;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/year.js
+var require_year2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/year.js"(exports2, module2) {
+    "use strict";
+    var DatePart = require_datepart2();
+    var Year = class extends DatePart {
+      constructor(opts = {}) {
+        super(opts);
+      }
+      up() {
+        this.date.setFullYear(this.date.getFullYear() + 1);
+      }
+      down() {
+        this.date.setFullYear(this.date.getFullYear() - 1);
+      }
+      setTo(val) {
+        this.date.setFullYear(val.substr(-4));
+      }
+      toString() {
+        let year = String(this.date.getFullYear()).padStart(4, "0");
+        return this.token.length === 2 ? year.substr(-2) : year;
+      }
+    };
+    module2.exports = Year;
+  }
+});
+
+// node_modules/prompts/lib/dateparts/index.js
+var require_dateparts2 = __commonJS({
+  "node_modules/prompts/lib/dateparts/index.js"(exports2, module2) {
+    "use strict";
+    module2.exports = {
+      DatePart: require_datepart2(),
+      Meridiem: require_meridiem2(),
+      Day: require_day2(),
+      Hours: require_hours2(),
+      Milliseconds: require_milliseconds2(),
+      Minutes: require_minutes2(),
+      Month: require_month2(),
+      Seconds: require_seconds2(),
+      Year: require_year2()
+    };
+  }
+});
+
+// node_modules/prompts/lib/elements/date.js
+var require_date2 = __commonJS({
+  "node_modules/prompts/lib/elements/date.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt2();
+    var { style, clear, figures } = require_util3();
+    var { erase, cursor } = require_src();
+    var { DatePart, Meridiem, Day, Hours, Milliseconds, Minutes, Month, Seconds, Year } = require_dateparts2();
+    var regex2 = /\\(.)|"((?:\\["\\]|[^"])+)"|(D[Do]?|d{3,4}|d)|(M{1,4})|(YY(?:YY)?)|([aA])|([Hh]{1,2})|(m{1,2})|(s{1,2})|(S{1,4})|./g;
+    var regexGroups = {
+      1: ({ token }) => token.replace(/\\(.)/g, "$1"),
+      2: (opts) => new Day(opts),
+      // Day // TODO
+      3: (opts) => new Month(opts),
+      // Month
+      4: (opts) => new Year(opts),
+      // Year
+      5: (opts) => new Meridiem(opts),
+      // AM/PM // TODO (special)
+      6: (opts) => new Hours(opts),
+      // Hours
+      7: (opts) => new Minutes(opts),
+      // Minutes
+      8: (opts) => new Seconds(opts),
+      // Seconds
+      9: (opts) => new Milliseconds(opts)
+      // Fractional seconds
+    };
+    var dfltLocales = {
+      months: "January,February,March,April,May,June,July,August,September,October,November,December".split(","),
+      monthsShort: "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec".split(","),
+      weekdays: "Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday".split(","),
+      weekdaysShort: "Sun,Mon,Tue,Wed,Thu,Fri,Sat".split(",")
+    };
+    var DatePrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.cursor = 0;
+        this.typed = "";
+        this.locales = Object.assign(dfltLocales, opts.locales);
+        this._date = opts.initial || /* @__PURE__ */ new Date();
+        this.errorMsg = opts.error || "Please Enter A Valid Value";
+        this.validator = opts.validate || (() => true);
+        this.mask = opts.mask || "YYYY-MM-DD HH:mm:ss";
+        this.clear = clear("", this.out.columns);
+        this.render();
+      }
+      get value() {
+        return this.date;
+      }
+      get date() {
+        return this._date;
+      }
+      set date(date5) {
+        if (date5) this._date.setTime(date5.getTime());
+      }
+      set mask(mask) {
+        let result;
+        this.parts = [];
+        while (result = regex2.exec(mask)) {
+          let match = result.shift();
+          let idx = result.findIndex((gr) => gr != null);
+          this.parts.push(idx in regexGroups ? regexGroups[idx]({ token: result[idx] || match, date: this.date, parts: this.parts, locales: this.locales }) : result[idx] || match);
+        }
+        let parts = this.parts.reduce((arr, i) => {
+          if (typeof i === "string" && typeof arr[arr.length - 1] === "string")
+            arr[arr.length - 1] += i;
+          else arr.push(i);
+          return arr;
+        }, []);
+        this.parts.splice(0);
+        this.parts.push(...parts);
+        this.reset();
+      }
+      moveCursor(n) {
+        this.typed = "";
+        this.cursor = n;
+        this.fire();
+      }
+      reset() {
+        this.moveCursor(this.parts.findIndex((p) => p instanceof DatePart));
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.error = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      async validate() {
+        let valid = await this.validator(this.value);
+        if (typeof valid === "string") {
+          this.errorMsg = valid;
+          valid = false;
+        }
+        this.error = !valid;
+      }
+      async submit() {
+        await this.validate();
+        if (this.error) {
+          this.color = "red";
+          this.fire();
+          this.render();
+          return;
+        }
+        this.done = true;
+        this.aborted = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      up() {
+        this.typed = "";
+        this.parts[this.cursor].up();
+        this.render();
+      }
+      down() {
+        this.typed = "";
+        this.parts[this.cursor].down();
+        this.render();
+      }
+      left() {
+        let prev = this.parts[this.cursor].prev();
+        if (prev == null) return this.bell();
+        this.moveCursor(this.parts.indexOf(prev));
+        this.render();
+      }
+      right() {
+        let next = this.parts[this.cursor].next();
+        if (next == null) return this.bell();
+        this.moveCursor(this.parts.indexOf(next));
+        this.render();
+      }
+      next() {
+        let next = this.parts[this.cursor].next();
+        this.moveCursor(next ? this.parts.indexOf(next) : this.parts.findIndex((part) => part instanceof DatePart));
+        this.render();
+      }
+      _(c) {
+        if (/\d/.test(c)) {
+          this.typed += c;
+          this.parts[this.cursor].setTo(this.typed);
+          this.render();
+        }
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        this.outputText = [
+          style.symbol(this.done, this.aborted),
+          color.bold(this.msg),
+          style.delimiter(false),
+          this.parts.reduce((arr, p, idx) => arr.concat(idx === this.cursor && !this.done ? color.cyan().underline(p.toString()) : p), []).join("")
+        ].join(" ");
+        if (this.error) {
+          this.outputText += this.errorMsg.split("\n").reduce(
+            (a, l, i) => a + `
+${i ? ` ` : figures.pointerSmall} ${color.red().italic(l)}`,
+            ``
+          );
+        }
+        this.out.write(erase.line + cursor.to(0) + this.outputText);
+      }
+    };
+    module2.exports = DatePrompt;
+  }
+});
+
+// node_modules/prompts/lib/elements/number.js
+var require_number2 = __commonJS({
+  "node_modules/prompts/lib/elements/number.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt2();
+    var { cursor, erase } = require_src();
+    var { style, figures, clear, lines } = require_util3();
+    var isNumber = /[0-9]/;
+    var isDef = (any2) => any2 !== void 0;
+    var round = (number4, precision) => {
+      let factor = Math.pow(10, precision);
+      return Math.round(number4 * factor) / factor;
+    };
+    var NumberPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.transform = style.render(opts.style);
+        this.msg = opts.message;
+        this.initial = isDef(opts.initial) ? opts.initial : "";
+        this.float = !!opts.float;
+        this.round = opts.round || 2;
+        this.inc = opts.increment || 1;
+        this.min = isDef(opts.min) ? opts.min : -Infinity;
+        this.max = isDef(opts.max) ? opts.max : Infinity;
+        this.errorMsg = opts.error || `Please Enter A Valid Value`;
+        this.validator = opts.validate || (() => true);
+        this.color = `cyan`;
+        this.value = ``;
+        this.typed = ``;
+        this.lastHit = 0;
+        this.render();
+      }
+      set value(v) {
+        if (!v && v !== 0) {
+          this.placeholder = true;
+          this.rendered = color.gray(this.transform.render(`${this.initial}`));
+          this._value = ``;
+        } else {
+          this.placeholder = false;
+          this.rendered = this.transform.render(`${round(v, this.round)}`);
+          this._value = round(v, this.round);
+        }
+        this.fire();
+      }
+      get value() {
+        return this._value;
+      }
+      parse(x) {
+        return this.float ? parseFloat(x) : parseInt(x);
+      }
+      valid(c) {
+        return c === `-` || c === `.` && this.float || isNumber.test(c);
+      }
+      reset() {
+        this.typed = ``;
+        this.value = ``;
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        let x = this.value;
+        this.value = x !== `` ? x : this.initial;
+        this.done = this.aborted = true;
+        this.error = false;
+        this.fire();
+        this.render();
+        this.out.write(`
+`);
+        this.close();
+      }
+      async validate() {
+        let valid = await this.validator(this.value);
+        if (typeof valid === `string`) {
+          this.errorMsg = valid;
+          valid = false;
+        }
+        this.error = !valid;
+      }
+      async submit() {
+        await this.validate();
+        if (this.error) {
+          this.color = `red`;
+          this.fire();
+          this.render();
+          return;
+        }
+        let x = this.value;
+        this.value = x !== `` ? x : this.initial;
+        this.done = true;
+        this.aborted = false;
+        this.error = false;
+        this.fire();
+        this.render();
+        this.out.write(`
+`);
+        this.close();
+      }
+      up() {
+        this.typed = ``;
+        if (this.value === "") {
+          this.value = this.min - this.inc;
+        }
+        if (this.value >= this.max) return this.bell();
+        this.value += this.inc;
+        this.color = `cyan`;
+        this.fire();
+        this.render();
+      }
+      down() {
+        this.typed = ``;
+        if (this.value === "") {
+          this.value = this.min + this.inc;
+        }
+        if (this.value <= this.min) return this.bell();
+        this.value -= this.inc;
+        this.color = `cyan`;
+        this.fire();
+        this.render();
+      }
+      delete() {
+        let val = this.value.toString();
+        if (val.length === 0) return this.bell();
+        this.value = this.parse(val = val.slice(0, -1)) || ``;
+        if (this.value !== "" && this.value < this.min) {
+          this.value = this.min;
+        }
+        this.color = `cyan`;
+        this.fire();
+        this.render();
+      }
+      next() {
+        this.value = this.initial;
+        this.fire();
+        this.render();
+      }
+      _(c, key) {
+        if (!this.valid(c)) return this.bell();
+        const now = Date.now();
+        if (now - this.lastHit > 1e3) this.typed = ``;
+        this.typed += c;
+        this.lastHit = now;
+        this.color = `cyan`;
+        if (c === `.`) return this.fire();
+        this.value = Math.min(this.parse(this.typed), this.max);
+        if (this.value > this.max) this.value = this.max;
+        if (this.value < this.min) this.value = this.min;
+        this.fire();
+        this.render();
+      }
+      render() {
+        if (this.closed) return;
+        if (!this.firstRender) {
+          if (this.outputError)
+            this.out.write(cursor.down(lines(this.outputError, this.out.columns) - 1) + clear(this.outputError, this.out.columns));
+          this.out.write(clear(this.outputText, this.out.columns));
+        }
+        super.render();
+        this.outputError = "";
+        this.outputText = [
+          style.symbol(this.done, this.aborted),
+          color.bold(this.msg),
+          style.delimiter(this.done),
+          !this.done || !this.done && !this.placeholder ? color[this.color]().underline(this.rendered) : this.rendered
+        ].join(` `);
+        if (this.error) {
+          this.outputError += this.errorMsg.split(`
+`).reduce((a, l, i) => a + `
+${i ? ` ` : figures.pointerSmall} ${color.red().italic(l)}`, ``);
+        }
+        this.out.write(erase.line + cursor.to(0) + this.outputText + cursor.save + this.outputError + cursor.restore);
+      }
+    };
+    module2.exports = NumberPrompt;
+  }
+});
+
+// node_modules/prompts/lib/elements/multiselect.js
+var require_multiselect2 = __commonJS({
+  "node_modules/prompts/lib/elements/multiselect.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var { cursor } = require_src();
+    var Prompt = require_prompt2();
+    var { clear, figures, style, wrap, entriesToDisplay } = require_util3();
+    var MultiselectPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.cursor = opts.cursor || 0;
+        this.scrollIndex = opts.cursor || 0;
+        this.hint = opts.hint || "";
+        this.warn = opts.warn || "- This option is disabled -";
+        this.minSelected = opts.min;
+        this.showMinError = false;
+        this.maxChoices = opts.max;
+        this.instructions = opts.instructions;
+        this.optionsPerPage = opts.optionsPerPage || 10;
+        this.value = opts.choices.map((ch, idx) => {
+          if (typeof ch === "string")
+            ch = { title: ch, value: idx };
+          return {
+            title: ch && (ch.title || ch.value || ch),
+            description: ch && ch.description,
+            value: ch && (ch.value === void 0 ? idx : ch.value),
+            selected: ch && ch.selected,
+            disabled: ch && ch.disabled
+          };
+        });
+        this.clear = clear("", this.out.columns);
+        if (!opts.overrideRender) {
+          this.render();
+        }
+      }
+      reset() {
+        this.value.map((v) => !v.selected);
+        this.cursor = 0;
+        this.fire();
+        this.render();
+      }
+      selected() {
+        return this.value.filter((v) => v.selected);
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        const selected = this.value.filter((e) => e.selected);
+        if (this.minSelected && selected.length < this.minSelected) {
+          this.showMinError = true;
+          this.render();
+        } else {
+          this.done = true;
+          this.aborted = false;
+          this.fire();
+          this.render();
+          this.out.write("\n");
+          this.close();
+        }
+      }
+      first() {
+        this.cursor = 0;
+        this.render();
+      }
+      last() {
+        this.cursor = this.value.length - 1;
+        this.render();
+      }
+      next() {
+        this.cursor = (this.cursor + 1) % this.value.length;
+        this.render();
+      }
+      up() {
+        if (this.cursor === 0) {
+          this.cursor = this.value.length - 1;
+        } else {
+          this.cursor--;
+        }
+        this.render();
+      }
+      down() {
+        if (this.cursor === this.value.length - 1) {
+          this.cursor = 0;
+        } else {
+          this.cursor++;
+        }
+        this.render();
+      }
+      left() {
+        this.value[this.cursor].selected = false;
+        this.render();
+      }
+      right() {
+        if (this.value.filter((e) => e.selected).length >= this.maxChoices) return this.bell();
+        this.value[this.cursor].selected = true;
+        this.render();
+      }
+      handleSpaceToggle() {
+        const v = this.value[this.cursor];
+        if (v.selected) {
+          v.selected = false;
+          this.render();
+        } else if (v.disabled || this.value.filter((e) => e.selected).length >= this.maxChoices) {
+          return this.bell();
+        } else {
+          v.selected = true;
+          this.render();
+        }
+      }
+      toggleAll() {
+        if (this.maxChoices !== void 0 || this.value[this.cursor].disabled) {
+          return this.bell();
+        }
+        const newSelected = !this.value[this.cursor].selected;
+        this.value.filter((v) => !v.disabled).forEach((v) => v.selected = newSelected);
+        this.render();
+      }
+      _(c, key) {
+        if (c === " ") {
+          this.handleSpaceToggle();
+        } else if (c === "a") {
+          this.toggleAll();
+        } else {
+          return this.bell();
+        }
+      }
+      renderInstructions() {
+        if (this.instructions === void 0 || this.instructions) {
+          if (typeof this.instructions === "string") {
+            return this.instructions;
+          }
+          return `
+Instructions:
+    ${figures.arrowUp}/${figures.arrowDown}: Highlight option
+    ${figures.arrowLeft}/${figures.arrowRight}/[space]: Toggle selection
+` + (this.maxChoices === void 0 ? `    a: Toggle all
+` : "") + `    enter/return: Complete answer`;
+        }
+        return "";
+      }
+      renderOption(cursor2, v, i, arrowIndicator) {
+        const prefix = (v.selected ? color.green(figures.radioOn) : figures.radioOff) + " " + arrowIndicator + " ";
+        let title, desc;
+        if (v.disabled) {
+          title = cursor2 === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
+        } else {
+          title = cursor2 === i ? color.cyan().underline(v.title) : v.title;
+          if (cursor2 === i && v.description) {
+            desc = ` - ${v.description}`;
+            if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
+              desc = "\n" + wrap(v.description, { margin: prefix.length, width: this.out.columns });
+            }
+          }
+        }
+        return prefix + title + color.gray(desc || "");
+      }
+      // shared with autocompleteMultiselect
+      paginateOptions(options) {
+        if (options.length === 0) {
+          return color.red("No matches for this query.");
+        }
+        let { startIndex, endIndex } = entriesToDisplay(this.cursor, options.length, this.optionsPerPage);
+        let prefix, styledOptions = [];
+        for (let i = startIndex; i < endIndex; i++) {
+          if (i === startIndex && startIndex > 0) {
+            prefix = figures.arrowUp;
+          } else if (i === endIndex - 1 && endIndex < options.length) {
+            prefix = figures.arrowDown;
+          } else {
+            prefix = " ";
+          }
+          styledOptions.push(this.renderOption(this.cursor, options[i], i, prefix));
+        }
+        return "\n" + styledOptions.join("\n");
+      }
+      // shared with autocomleteMultiselect
+      renderOptions(options) {
+        if (!this.done) {
+          return this.paginateOptions(options);
+        }
+        return "";
+      }
+      renderDoneOrInstructions() {
+        if (this.done) {
+          return this.value.filter((e) => e.selected).map((v) => v.title).join(", ");
+        }
+        const output = [color.gray(this.hint), this.renderInstructions()];
+        if (this.value[this.cursor].disabled) {
+          output.push(color.yellow(this.warn));
+        }
+        return output.join(" ");
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        super.render();
+        let prompt = [
+          style.symbol(this.done, this.aborted),
+          color.bold(this.msg),
+          style.delimiter(false),
+          this.renderDoneOrInstructions()
+        ].join(" ");
+        if (this.showMinError) {
+          prompt += color.red(`You must select a minimum of ${this.minSelected} choices.`);
+          this.showMinError = false;
+        }
+        prompt += this.renderOptions(this.value);
+        this.out.write(this.clear + prompt);
+        this.clear = clear(prompt, this.out.columns);
+      }
+    };
+    module2.exports = MultiselectPrompt;
+  }
+});
+
+// node_modules/prompts/lib/elements/autocomplete.js
+var require_autocomplete2 = __commonJS({
+  "node_modules/prompts/lib/elements/autocomplete.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt2();
+    var { erase, cursor } = require_src();
+    var { style, clear, figures, wrap, entriesToDisplay } = require_util3();
+    var getVal = (arr, i) => arr[i] && (arr[i].value || arr[i].title || arr[i]);
+    var getTitle = (arr, i) => arr[i] && (arr[i].title || arr[i].value || arr[i]);
+    var getIndex = (arr, valOrTitle) => {
+      const index = arr.findIndex((el) => el.value === valOrTitle || el.title === valOrTitle);
+      return index > -1 ? index : void 0;
+    };
+    var AutocompletePrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.suggest = opts.suggest;
+        this.choices = opts.choices;
+        this.initial = typeof opts.initial === "number" ? opts.initial : getIndex(opts.choices, opts.initial);
+        this.select = this.initial || opts.cursor || 0;
+        this.i18n = { noMatches: opts.noMatches || "no matches found" };
+        this.fallback = opts.fallback || this.initial;
+        this.clearFirst = opts.clearFirst || false;
+        this.suggestions = [];
+        this.input = "";
+        this.limit = opts.limit || 10;
+        this.cursor = 0;
+        this.transform = style.render(opts.style);
+        this.scale = this.transform.scale;
+        this.render = this.render.bind(this);
+        this.complete = this.complete.bind(this);
+        this.clear = clear("", this.out.columns);
+        this.complete(this.render);
+        this.render();
+      }
+      set fallback(fb) {
+        this._fb = Number.isSafeInteger(parseInt(fb)) ? parseInt(fb) : fb;
+      }
+      get fallback() {
+        let choice;
+        if (typeof this._fb === "number")
+          choice = this.choices[this._fb];
+        else if (typeof this._fb === "string")
+          choice = { title: this._fb };
+        return choice || this._fb || { title: this.i18n.noMatches };
+      }
+      moveSelect(i) {
+        this.select = i;
+        if (this.suggestions.length > 0)
+          this.value = getVal(this.suggestions, i);
+        else this.value = this.fallback.value;
+        this.fire();
+      }
+      async complete(cb) {
+        const p = this.completing = this.suggest(this.input, this.choices);
+        const suggestions = await p;
+        if (this.completing !== p) return;
+        this.suggestions = suggestions.map((s, i, arr) => ({ title: getTitle(arr, i), value: getVal(arr, i), description: s.description }));
+        this.completing = false;
+        const l = Math.max(suggestions.length - 1, 0);
+        this.moveSelect(Math.min(l, this.select));
+        cb && cb();
+      }
+      reset() {
+        this.input = "";
+        this.complete(() => {
+          this.moveSelect(this.initial !== void 0 ? this.initial : 0);
+          this.render();
+        });
+        this.render();
+      }
+      exit() {
+        if (this.clearFirst && this.input.length > 0) {
+          this.reset();
+        } else {
+          this.done = this.exited = true;
+          this.aborted = false;
+          this.fire();
+          this.render();
+          this.out.write("\n");
+          this.close();
+        }
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.exited = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        this.done = true;
+        this.aborted = this.exited = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      _(c, key) {
+        let s1 = this.input.slice(0, this.cursor);
+        let s2 = this.input.slice(this.cursor);
+        this.input = `${s1}${c}${s2}`;
+        this.cursor = s1.length + 1;
+        this.complete(this.render);
+        this.render();
+      }
+      delete() {
+        if (this.cursor === 0) return this.bell();
+        let s1 = this.input.slice(0, this.cursor - 1);
+        let s2 = this.input.slice(this.cursor);
+        this.input = `${s1}${s2}`;
+        this.complete(this.render);
+        this.cursor = this.cursor - 1;
+        this.render();
+      }
+      deleteForward() {
+        if (this.cursor * this.scale >= this.rendered.length) return this.bell();
+        let s1 = this.input.slice(0, this.cursor);
+        let s2 = this.input.slice(this.cursor + 1);
+        this.input = `${s1}${s2}`;
+        this.complete(this.render);
+        this.render();
+      }
+      first() {
+        this.moveSelect(0);
+        this.render();
+      }
+      last() {
+        this.moveSelect(this.suggestions.length - 1);
+        this.render();
+      }
+      up() {
+        if (this.select === 0) {
+          this.moveSelect(this.suggestions.length - 1);
+        } else {
+          this.moveSelect(this.select - 1);
+        }
+        this.render();
+      }
+      down() {
+        if (this.select === this.suggestions.length - 1) {
+          this.moveSelect(0);
+        } else {
+          this.moveSelect(this.select + 1);
+        }
+        this.render();
+      }
+      next() {
+        if (this.select === this.suggestions.length - 1) {
+          this.moveSelect(0);
+        } else this.moveSelect(this.select + 1);
+        this.render();
+      }
+      nextPage() {
+        this.moveSelect(Math.min(this.select + this.limit, this.suggestions.length - 1));
+        this.render();
+      }
+      prevPage() {
+        this.moveSelect(Math.max(this.select - this.limit, 0));
+        this.render();
+      }
+      left() {
+        if (this.cursor <= 0) return this.bell();
+        this.cursor = this.cursor - 1;
+        this.render();
+      }
+      right() {
+        if (this.cursor * this.scale >= this.rendered.length) return this.bell();
+        this.cursor = this.cursor + 1;
+        this.render();
+      }
+      renderOption(v, hovered, isStart, isEnd) {
+        let desc;
+        let prefix = isStart ? figures.arrowUp : isEnd ? figures.arrowDown : " ";
+        let title = hovered ? color.cyan().underline(v.title) : v.title;
+        prefix = (hovered ? color.cyan(figures.pointer) + " " : "  ") + prefix;
+        if (v.description) {
+          desc = ` - ${v.description}`;
+          if (prefix.length + title.length + desc.length >= this.out.columns || v.description.split(/\r?\n/).length > 1) {
+            desc = "\n" + wrap(v.description, { margin: 3, width: this.out.columns });
+          }
+        }
+        return prefix + " " + title + color.gray(desc || "");
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        let { startIndex, endIndex } = entriesToDisplay(this.select, this.choices.length, this.limit);
+        this.outputText = [
+          style.symbol(this.done, this.aborted, this.exited),
+          color.bold(this.msg),
+          style.delimiter(this.completing),
+          this.done && this.suggestions[this.select] ? this.suggestions[this.select].title : this.rendered = this.transform.render(this.input)
+        ].join(" ");
+        if (!this.done) {
+          const suggestions = this.suggestions.slice(startIndex, endIndex).map((item, i) => this.renderOption(
+            item,
+            this.select === i + startIndex,
+            i === 0 && startIndex > 0,
+            i + startIndex === endIndex - 1 && endIndex < this.choices.length
+          )).join("\n");
+          this.outputText += `
+` + (suggestions || color.gray(this.fallback.title));
+        }
+        this.out.write(erase.line + cursor.to(0) + this.outputText);
+      }
+    };
+    module2.exports = AutocompletePrompt;
+  }
+});
+
+// node_modules/prompts/lib/elements/autocompleteMultiselect.js
+var require_autocompleteMultiselect2 = __commonJS({
+  "node_modules/prompts/lib/elements/autocompleteMultiselect.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var { cursor } = require_src();
+    var MultiselectPrompt = require_multiselect2();
+    var { clear, style, figures } = require_util3();
+    var AutocompleteMultiselectPrompt = class extends MultiselectPrompt {
+      constructor(opts = {}) {
+        opts.overrideRender = true;
+        super(opts);
+        this.inputValue = "";
+        this.clear = clear("", this.out.columns);
+        this.filteredOptions = this.value;
+        this.render();
+      }
+      last() {
+        this.cursor = this.filteredOptions.length - 1;
+        this.render();
+      }
+      next() {
+        this.cursor = (this.cursor + 1) % this.filteredOptions.length;
+        this.render();
+      }
+      up() {
+        if (this.cursor === 0) {
+          this.cursor = this.filteredOptions.length - 1;
+        } else {
+          this.cursor--;
+        }
+        this.render();
+      }
+      down() {
+        if (this.cursor === this.filteredOptions.length - 1) {
+          this.cursor = 0;
+        } else {
+          this.cursor++;
+        }
+        this.render();
+      }
+      left() {
+        this.filteredOptions[this.cursor].selected = false;
+        this.render();
+      }
+      right() {
+        if (this.value.filter((e) => e.selected).length >= this.maxChoices) return this.bell();
+        this.filteredOptions[this.cursor].selected = true;
+        this.render();
+      }
+      delete() {
+        if (this.inputValue.length) {
+          this.inputValue = this.inputValue.substr(0, this.inputValue.length - 1);
+          this.updateFilteredOptions();
+        }
+      }
+      updateFilteredOptions() {
+        const currentHighlight = this.filteredOptions[this.cursor];
+        this.filteredOptions = this.value.filter((v) => {
+          if (this.inputValue) {
+            if (typeof v.title === "string") {
+              if (v.title.toLowerCase().includes(this.inputValue.toLowerCase())) {
+                return true;
+              }
+            }
+            if (typeof v.value === "string") {
+              if (v.value.toLowerCase().includes(this.inputValue.toLowerCase())) {
+                return true;
+              }
+            }
+            return false;
+          }
+          return true;
+        });
+        const newHighlightIndex = this.filteredOptions.findIndex((v) => v === currentHighlight);
+        this.cursor = newHighlightIndex < 0 ? 0 : newHighlightIndex;
+        this.render();
+      }
+      handleSpaceToggle() {
+        const v = this.filteredOptions[this.cursor];
+        if (v.selected) {
+          v.selected = false;
+          this.render();
+        } else if (v.disabled || this.value.filter((e) => e.selected).length >= this.maxChoices) {
+          return this.bell();
+        } else {
+          v.selected = true;
+          this.render();
+        }
+      }
+      handleInputChange(c) {
+        this.inputValue = this.inputValue + c;
+        this.updateFilteredOptions();
+      }
+      _(c, key) {
+        if (c === " ") {
+          this.handleSpaceToggle();
+        } else {
+          this.handleInputChange(c);
+        }
+      }
+      renderInstructions() {
+        if (this.instructions === void 0 || this.instructions) {
+          if (typeof this.instructions === "string") {
+            return this.instructions;
+          }
+          return `
+Instructions:
+    ${figures.arrowUp}/${figures.arrowDown}: Highlight option
+    ${figures.arrowLeft}/${figures.arrowRight}/[space]: Toggle selection
+    [a,b,c]/delete: Filter choices
+    enter/return: Complete answer
+`;
+        }
+        return "";
+      }
+      renderCurrentInput() {
+        return `
+Filtered results for: ${this.inputValue ? this.inputValue : color.gray("Enter something to filter")}
+`;
+      }
+      renderOption(cursor2, v, i) {
+        let title;
+        if (v.disabled) title = cursor2 === i ? color.gray().underline(v.title) : color.strikethrough().gray(v.title);
+        else title = cursor2 === i ? color.cyan().underline(v.title) : v.title;
+        return (v.selected ? color.green(figures.radioOn) : figures.radioOff) + "  " + title;
+      }
+      renderDoneOrInstructions() {
+        if (this.done) {
+          return this.value.filter((e) => e.selected).map((v) => v.title).join(", ");
+        }
+        const output = [color.gray(this.hint), this.renderInstructions(), this.renderCurrentInput()];
+        if (this.filteredOptions.length && this.filteredOptions[this.cursor].disabled) {
+          output.push(color.yellow(this.warn));
+        }
+        return output.join(" ");
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        super.render();
+        let prompt = [
+          style.symbol(this.done, this.aborted),
+          color.bold(this.msg),
+          style.delimiter(false),
+          this.renderDoneOrInstructions()
+        ].join(" ");
+        if (this.showMinError) {
+          prompt += color.red(`You must select a minimum of ${this.minSelected} choices.`);
+          this.showMinError = false;
+        }
+        prompt += this.renderOptions(this.filteredOptions);
+        this.out.write(this.clear + prompt);
+        this.clear = clear(prompt, this.out.columns);
+      }
+    };
+    module2.exports = AutocompleteMultiselectPrompt;
+  }
+});
+
+// node_modules/prompts/lib/elements/confirm.js
+var require_confirm2 = __commonJS({
+  "node_modules/prompts/lib/elements/confirm.js"(exports2, module2) {
+    "use strict";
+    var color = require_kleur();
+    var Prompt = require_prompt2();
+    var { style, clear } = require_util3();
+    var { erase, cursor } = require_src();
+    var ConfirmPrompt = class extends Prompt {
+      constructor(opts = {}) {
+        super(opts);
+        this.msg = opts.message;
+        this.value = opts.initial;
+        this.initialValue = !!opts.initial;
+        this.yesMsg = opts.yes || "yes";
+        this.yesOption = opts.yesOption || "(Y/n)";
+        this.noMsg = opts.no || "no";
+        this.noOption = opts.noOption || "(y/N)";
+        this.render();
+      }
+      reset() {
+        this.value = this.initialValue;
+        this.fire();
+        this.render();
+      }
+      exit() {
+        this.abort();
+      }
+      abort() {
+        this.done = this.aborted = true;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      submit() {
+        this.value = this.value || false;
+        this.done = true;
+        this.aborted = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+      }
+      _(c, key) {
+        if (c.toLowerCase() === "y") {
+          this.value = true;
+          return this.submit();
+        }
+        if (c.toLowerCase() === "n") {
+          this.value = false;
+          return this.submit();
+        }
+        return this.bell();
+      }
+      render() {
+        if (this.closed) return;
+        if (this.firstRender) this.out.write(cursor.hide);
+        else this.out.write(clear(this.outputText, this.out.columns));
+        super.render();
+        this.outputText = [
+          style.symbol(this.done, this.aborted),
+          color.bold(this.msg),
+          style.delimiter(this.done),
+          this.done ? this.value ? this.yesMsg : this.noMsg : color.gray(this.initialValue ? this.yesOption : this.noOption)
+        ].join(" ");
+        this.out.write(erase.line + cursor.to(0) + this.outputText);
+      }
+    };
+    module2.exports = ConfirmPrompt;
+  }
+});
+
+// node_modules/prompts/lib/elements/index.js
+var require_elements2 = __commonJS({
+  "node_modules/prompts/lib/elements/index.js"(exports2, module2) {
+    "use strict";
+    module2.exports = {
+      TextPrompt: require_text2(),
+      SelectPrompt: require_select2(),
+      TogglePrompt: require_toggle2(),
+      DatePrompt: require_date2(),
+      NumberPrompt: require_number2(),
+      MultiselectPrompt: require_multiselect2(),
+      AutocompletePrompt: require_autocomplete2(),
+      AutocompleteMultiselectPrompt: require_autocompleteMultiselect2(),
+      ConfirmPrompt: require_confirm2()
+    };
+  }
+});
+
+// node_modules/prompts/lib/prompts.js
+var require_prompts2 = __commonJS({
+  "node_modules/prompts/lib/prompts.js"(exports2) {
+    "use strict";
+    var $2 = exports2;
+    var el = require_elements2();
+    var noop = (v) => v;
+    function toPrompt(type, args, opts = {}) {
+      return new Promise((res, rej) => {
+        const p = new el[type](args);
+        const onAbort = opts.onAbort || noop;
+        const onSubmit = opts.onSubmit || noop;
+        const onExit2 = opts.onExit || noop;
+        p.on("state", args.onState || noop);
+        p.on("submit", (x) => res(onSubmit(x)));
+        p.on("exit", (x) => res(onExit2(x)));
+        p.on("abort", (x) => rej(onAbort(x)));
+      });
+    }
+    $2.text = (args) => toPrompt("TextPrompt", args);
+    $2.password = (args) => {
+      args.style = "password";
+      return $2.text(args);
+    };
+    $2.invisible = (args) => {
+      args.style = "invisible";
+      return $2.text(args);
+    };
+    $2.number = (args) => toPrompt("NumberPrompt", args);
+    $2.date = (args) => toPrompt("DatePrompt", args);
+    $2.confirm = (args) => toPrompt("ConfirmPrompt", args);
+    $2.list = (args) => {
+      const sep = args.separator || ",";
+      return toPrompt("TextPrompt", args, {
+        onSubmit: (str) => str.split(sep).map((s) => s.trim())
+      });
+    };
+    $2.toggle = (args) => toPrompt("TogglePrompt", args);
+    $2.select = (args) => toPrompt("SelectPrompt", args);
+    $2.multiselect = (args) => {
+      args.choices = [].concat(args.choices || []);
+      const toSelected = (items) => items.filter((item) => item.selected).map((item) => item.value);
+      return toPrompt("MultiselectPrompt", args, {
+        onAbort: toSelected,
+        onSubmit: toSelected
+      });
+    };
+    $2.autocompleteMultiselect = (args) => {
+      args.choices = [].concat(args.choices || []);
+      const toSelected = (items) => items.filter((item) => item.selected).map((item) => item.value);
+      return toPrompt("AutocompleteMultiselectPrompt", args, {
+        onAbort: toSelected,
+        onSubmit: toSelected
+      });
+    };
+    var byTitle = (input, choices) => Promise.resolve(
+      choices.filter((item) => item.title.slice(0, input.length).toLowerCase() === input.toLowerCase())
+    );
+    $2.autocomplete = (args) => {
+      args.suggest = args.suggest || byTitle;
+      args.choices = [].concat(args.choices || []);
+      return toPrompt("AutocompletePrompt", args);
+    };
+  }
+});
+
+// node_modules/prompts/lib/index.js
+var require_lib2 = __commonJS({
+  "node_modules/prompts/lib/index.js"(exports2, module2) {
+    "use strict";
+    var prompts3 = require_prompts2();
+    var passOn = ["suggest", "format", "onState", "validate", "onRender", "type"];
+    var noop = () => {
+    };
+    async function prompt(questions = [], { onSubmit = noop, onCancel = noop } = {}) {
+      const answers = {};
+      const override2 = prompt._override || {};
+      questions = [].concat(questions);
+      let answer, question, quit, name, type, lastPrompt;
+      const getFormattedAnswer = async (question2, answer2, skipValidation = false) => {
+        if (!skipValidation && question2.validate && question2.validate(answer2) !== true) {
+          return;
+        }
+        return question2.format ? await question2.format(answer2, answers) : answer2;
+      };
+      for (question of questions) {
+        ({ name, type } = question);
+        if (typeof type === "function") {
+          type = await type(answer, { ...answers }, question);
+          question["type"] = type;
+        }
+        if (!type) continue;
+        for (let key in question) {
+          if (passOn.includes(key)) continue;
+          let value = question[key];
+          question[key] = typeof value === "function" ? await value(answer, { ...answers }, lastPrompt) : value;
+        }
+        lastPrompt = question;
+        if (typeof question.message !== "string") {
+          throw new Error("prompt message is required");
+        }
+        ({ name, type } = question);
+        if (prompts3[type] === void 0) {
+          throw new Error(`prompt type (${type}) is not defined`);
+        }
+        if (override2[question.name] !== void 0) {
+          answer = await getFormattedAnswer(question, override2[question.name]);
+          if (answer !== void 0) {
+            answers[name] = answer;
+            continue;
+          }
+        }
+        try {
+          answer = prompt._injected ? getInjectedAnswer(prompt._injected, question.initial) : await prompts3[type](question);
+          answers[name] = answer = await getFormattedAnswer(question, answer, true);
+          quit = await onSubmit(question, answer, answers);
+        } catch (err) {
+          quit = !await onCancel(question, answers);
+        }
+        if (quit) return answers;
+      }
+      return answers;
+    }
+    function getInjectedAnswer(injected, deafultValue) {
+      const answer = injected.shift();
+      if (answer instanceof Error) {
+        throw answer;
+      }
+      return answer === void 0 ? deafultValue : answer;
+    }
+    function inject(answers) {
+      prompt._injected = (prompt._injected || []).concat(answers);
+    }
+    function override(answers) {
+      prompt._override = Object.assign({}, answers);
+    }
+    module2.exports = Object.assign(prompt, { prompt, prompts: prompts3, inject, override });
+  }
+});
+
+// node_modules/prompts/index.js
+var require_prompts3 = __commonJS({
+  "node_modules/prompts/index.js"(exports2, module2) {
+    "use strict";
+    function isNodeLT(tar) {
+      tar = (Array.isArray(tar) ? tar : tar.split(".")).map(Number);
+      let i = 0, src = process.versions.node.split(".").map(Number);
+      for (; i < tar.length; i++) {
+        if (src[i] > tar[i]) return false;
+        if (tar[i] > src[i]) return true;
+      }
+      return false;
+    }
+    module2.exports = isNodeLT("8.6.0") ? require_dist2() : require_lib2();
+  }
+});
+
+// node_modules/dotenv/package.json
+var require_package = __commonJS({
+  "node_modules/dotenv/package.json"(exports2, module2) {
+    module2.exports = {
+      name: "dotenv",
+      version: "16.6.1",
+      description: "Loads environment variables from .env file",
+      main: "lib/main.js",
+      types: "lib/main.d.ts",
+      exports: {
+        ".": {
+          types: "./lib/main.d.ts",
+          require: "./lib/main.js",
+          default: "./lib/main.js"
+        },
+        "./config": "./config.js",
+        "./config.js": "./config.js",
+        "./lib/env-options": "./lib/env-options.js",
+        "./lib/env-options.js": "./lib/env-options.js",
+        "./lib/cli-options": "./lib/cli-options.js",
+        "./lib/cli-options.js": "./lib/cli-options.js",
+        "./package.json": "./package.json"
+      },
+      scripts: {
+        "dts-check": "tsc --project tests/types/tsconfig.json",
+        lint: "standard",
+        pretest: "npm run lint && npm run dts-check",
+        test: "tap run --allow-empty-coverage --disable-coverage --timeout=60000",
+        "test:coverage": "tap run --show-full-coverage --timeout=60000 --coverage-report=text --coverage-report=lcov",
+        prerelease: "npm test",
+        release: "standard-version"
+      },
+      repository: {
+        type: "git",
+        url: "git://github.com/motdotla/dotenv.git"
+      },
+      homepage: "https://github.com/motdotla/dotenv#readme",
+      funding: "https://dotenvx.com",
+      keywords: [
+        "dotenv",
+        "env",
+        ".env",
+        "environment",
+        "variables",
+        "config",
+        "settings"
+      ],
+      readmeFilename: "README.md",
+      license: "BSD-2-Clause",
+      devDependencies: {
+        "@types/node": "^18.11.3",
+        decache: "^4.6.2",
+        sinon: "^14.0.1",
+        standard: "^17.0.0",
+        "standard-version": "^9.5.0",
+        tap: "^19.2.0",
+        typescript: "^4.8.4"
+      },
+      engines: {
+        node: ">=12"
+      },
+      browser: {
+        fs: false
+      }
+    };
+  }
+});
+
+// node_modules/dotenv/lib/main.js
+var require_main = __commonJS({
+  "node_modules/dotenv/lib/main.js"(exports2, module2) {
+    "use strict";
+    var fs15 = require("fs");
+    var path14 = require("path");
+    var os7 = require("os");
+    var crypto2 = require("crypto");
+    var packageJson = require_package();
+    var version2 = packageJson.version;
+    var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
+    function parse4(src) {
+      const obj = {};
+      let lines = src.toString();
+      lines = lines.replace(/\r\n?/mg, "\n");
+      let match;
+      while ((match = LINE.exec(lines)) != null) {
+        const key = match[1];
+        let value = match[2] || "";
+        value = value.trim();
+        const maybeQuote = value[0];
+        value = value.replace(/^(['"`])([\s\S]*)\1$/mg, "$2");
+        if (maybeQuote === '"') {
+          value = value.replace(/\\n/g, "\n");
+          value = value.replace(/\\r/g, "\r");
+        }
+        obj[key] = value;
+      }
+      return obj;
+    }
+    function _parseVault(options) {
+      options = options || {};
+      const vaultPath = _vaultPath(options);
+      options.path = vaultPath;
+      const result = DotenvModule.configDotenv(options);
+      if (!result.parsed) {
+        const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`);
+        err.code = "MISSING_DATA";
+        throw err;
+      }
+      const keys = _dotenvKey(options).split(",");
+      const length = keys.length;
+      let decrypted;
+      for (let i = 0; i < length; i++) {
+        try {
+          const key = keys[i].trim();
+          const attrs = _instructions(result, key);
+          decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key);
+          break;
+        } catch (error49) {
+          if (i + 1 >= length) {
             throw error49;
           }
         }
       }
-      _watch() {
-        this._ensureDirectory();
-        if (!import_node_fs3.default.existsSync(this.path)) {
-          this._write(createPlainObject());
-        }
-        if (import_node_process12.default.platform === "win32") {
-          import_node_fs3.default.watch(this.path, { persistent: false }, debounce_fn_default(() => {
-            this.events.dispatchEvent(new Event("change"));
-          }, { wait: 100 }));
-        } else {
-          import_node_fs3.default.watchFile(this.path, { persistent: false }, debounce_fn_default(() => {
-            this.events.dispatchEvent(new Event("change"));
-          }, { wait: 5e3 }));
-        }
+      return DotenvModule.parse(decrypted);
+    }
+    function _warn(message) {
+      console.log(`[dotenv@${version2}][WARN] ${message}`);
+    }
+    function _debug(message) {
+      console.log(`[dotenv@${version2}][DEBUG] ${message}`);
+    }
+    function _log(message) {
+      console.log(`[dotenv@${version2}] ${message}`);
+    }
+    function _dotenvKey(options) {
+      if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
+        return options.DOTENV_KEY;
       }
-      _migrate(migrations, versionToMigrate, beforeEachMigration) {
-        let previousMigratedVersion = this._get(MIGRATION_KEY, "0.0.0");
-        const newerVersions = Object.keys(migrations).filter((candidateVersion) => this._shouldPerformMigration(candidateVersion, previousMigratedVersion, versionToMigrate));
-        let storeBackup = { ...this.store };
-        for (const version2 of newerVersions) {
-          try {
-            if (beforeEachMigration) {
-              beforeEachMigration(this, {
-                fromVersion: previousMigratedVersion,
-                toVersion: version2,
-                finalVersion: versionToMigrate,
-                versions: newerVersions
-              });
+      if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
+        return process.env.DOTENV_KEY;
+      }
+      return "";
+    }
+    function _instructions(result, dotenvKey) {
+      let uri;
+      try {
+        uri = new URL(dotenvKey);
+      } catch (error49) {
+        if (error49.code === "ERR_INVALID_URL") {
+          const err = new Error("INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development");
+          err.code = "INVALID_DOTENV_KEY";
+          throw err;
+        }
+        throw error49;
+      }
+      const key = uri.password;
+      if (!key) {
+        const err = new Error("INVALID_DOTENV_KEY: Missing key part");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      }
+      const environment = uri.searchParams.get("environment");
+      if (!environment) {
+        const err = new Error("INVALID_DOTENV_KEY: Missing environment part");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      }
+      const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`;
+      const ciphertext = result.parsed[environmentKey];
+      if (!ciphertext) {
+        const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`);
+        err.code = "NOT_FOUND_DOTENV_ENVIRONMENT";
+        throw err;
+      }
+      return { ciphertext, key };
+    }
+    function _vaultPath(options) {
+      let possibleVaultPath = null;
+      if (options && options.path && options.path.length > 0) {
+        if (Array.isArray(options.path)) {
+          for (const filepath of options.path) {
+            if (fs15.existsSync(filepath)) {
+              possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
             }
-            const migration = migrations[version2];
-            migration?.(this);
-            this._set(MIGRATION_KEY, version2);
-            previousMigratedVersion = version2;
-            storeBackup = { ...this.store };
-          } catch (error49) {
-            this.store = storeBackup;
-            throw new Error(`Something went wrong during the migration! Changes applied to the store until this failed migration will be restored. ${error49}`);
+          }
+        } else {
+          possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
+        }
+      } else {
+        possibleVaultPath = path14.resolve(process.cwd(), ".env.vault");
+      }
+      if (fs15.existsSync(possibleVaultPath)) {
+        return possibleVaultPath;
+      }
+      return null;
+    }
+    function _resolveHome(envPath) {
+      return envPath[0] === "~" ? path14.join(os7.homedir(), envPath.slice(1)) : envPath;
+    }
+    function _configVault(options) {
+      const debug = Boolean(options && options.debug);
+      const quiet = options && "quiet" in options ? options.quiet : true;
+      if (debug || !quiet) {
+        _log("Loading env from encrypted .env.vault");
+      }
+      const parsed = DotenvModule._parseVault(options);
+      let processEnv = process.env;
+      if (options && options.processEnv != null) {
+        processEnv = options.processEnv;
+      }
+      DotenvModule.populate(processEnv, parsed, options);
+      return { parsed };
+    }
+    function configDotenv(options) {
+      const dotenvPath = path14.resolve(process.cwd(), ".env");
+      let encoding = "utf8";
+      const debug = Boolean(options && options.debug);
+      const quiet = options && "quiet" in options ? options.quiet : true;
+      if (options && options.encoding) {
+        encoding = options.encoding;
+      } else {
+        if (debug) {
+          _debug("No encoding is specified. UTF-8 is used by default");
+        }
+      }
+      let optionPaths = [dotenvPath];
+      if (options && options.path) {
+        if (!Array.isArray(options.path)) {
+          optionPaths = [_resolveHome(options.path)];
+        } else {
+          optionPaths = [];
+          for (const filepath of options.path) {
+            optionPaths.push(_resolveHome(filepath));
           }
         }
-        if (this._isVersionInRangeFormat(previousMigratedVersion) || !import_semver.default.eq(previousMigratedVersion, versionToMigrate)) {
-          this._set(MIGRATION_KEY, versionToMigrate);
+      }
+      let lastError;
+      const parsedAll = {};
+      for (const path15 of optionPaths) {
+        try {
+          const parsed = DotenvModule.parse(fs15.readFileSync(path15, { encoding }));
+          DotenvModule.populate(parsedAll, parsed, options);
+        } catch (e) {
+          if (debug) {
+            _debug(`Failed to load ${path15} ${e.message}`);
+          }
+          lastError = e;
         }
       }
-      _containsReservedKey(key) {
-        if (typeof key === "object") {
-          const firsKey = Object.keys(key)[0];
-          if (firsKey === INTERNAL_KEY) {
-            return true;
+      let processEnv = process.env;
+      if (options && options.processEnv != null) {
+        processEnv = options.processEnv;
+      }
+      DotenvModule.populate(processEnv, parsedAll, options);
+      if (debug || !quiet) {
+        const keysCount = Object.keys(parsedAll).length;
+        const shortPaths = [];
+        for (const filePath of optionPaths) {
+          try {
+            const relative = path14.relative(process.cwd(), filePath);
+            shortPaths.push(relative);
+          } catch (e) {
+            if (debug) {
+              _debug(`Failed to load ${filePath} ${e.message}`);
+            }
+            lastError = e;
           }
         }
-        if (typeof key !== "string") {
-          return false;
+        _log(`injecting env (${keysCount}) from ${shortPaths.join(",")}`);
+      }
+      if (lastError) {
+        return { parsed: parsedAll, error: lastError };
+      } else {
+        return { parsed: parsedAll };
+      }
+    }
+    function config3(options) {
+      if (_dotenvKey(options).length === 0) {
+        return DotenvModule.configDotenv(options);
+      }
+      const vaultPath = _vaultPath(options);
+      if (!vaultPath) {
+        _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`);
+        return DotenvModule.configDotenv(options);
+      }
+      return DotenvModule._configVault(options);
+    }
+    function decrypt(encrypted, keyStr) {
+      const key = Buffer.from(keyStr.slice(-64), "hex");
+      let ciphertext = Buffer.from(encrypted, "base64");
+      const nonce = ciphertext.subarray(0, 12);
+      const authTag = ciphertext.subarray(-16);
+      ciphertext = ciphertext.subarray(12, -16);
+      try {
+        const aesgcm = crypto2.createDecipheriv("aes-256-gcm", key, nonce);
+        aesgcm.setAuthTag(authTag);
+        return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
+      } catch (error49) {
+        const isRange = error49 instanceof RangeError;
+        const invalidKeyLength = error49.message === "Invalid key length";
+        const decryptionFailed = error49.message === "Unsupported state or unable to authenticate data";
+        if (isRange || invalidKeyLength) {
+          const err = new Error("INVALID_DOTENV_KEY: It must be 64 characters long (or more)");
+          err.code = "INVALID_DOTENV_KEY";
+          throw err;
+        } else if (decryptionFailed) {
+          const err = new Error("DECRYPTION_FAILED: Please check your DOTENV_KEY");
+          err.code = "DECRYPTION_FAILED";
+          throw err;
+        } else {
+          throw error49;
         }
-        if (this.#options.accessPropertiesByDotNotation) {
-          if (key.startsWith(`${INTERNAL_KEY}.`)) {
-            return true;
+      }
+    }
+    function populate(processEnv, parsed, options = {}) {
+      const debug = Boolean(options && options.debug);
+      const override = Boolean(options && options.override);
+      if (typeof parsed !== "object") {
+        const err = new Error("OBJECT_REQUIRED: Please check the processEnv argument being passed to populate");
+        err.code = "OBJECT_REQUIRED";
+        throw err;
+      }
+      for (const key of Object.keys(parsed)) {
+        if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
+          if (override === true) {
+            processEnv[key] = parsed[key];
           }
-          return false;
-        }
-        return false;
-      }
-      _isVersionInRangeFormat(version2) {
-        return import_semver.default.clean(version2) === null;
-      }
-      _shouldPerformMigration(candidateVersion, previousMigratedVersion, versionToMigrate) {
-        if (this._isVersionInRangeFormat(candidateVersion)) {
-          if (previousMigratedVersion !== "0.0.0" && import_semver.default.satisfies(previousMigratedVersion, candidateVersion)) {
-            return false;
+          if (debug) {
+            if (override === true) {
+              _debug(`"${key}" is already defined and WAS overwritten`);
+            } else {
+              _debug(`"${key}" is already defined and was NOT overwritten`);
+            }
           }
-          return import_semver.default.satisfies(versionToMigrate, candidateVersion);
+        } else {
+          processEnv[key] = parsed[key];
         }
-        if (import_semver.default.lte(candidateVersion, previousMigratedVersion)) {
-          return false;
-        }
-        if (import_semver.default.gt(candidateVersion, versionToMigrate)) {
-          return false;
-        }
-        return true;
       }
-      _get(key, defaultValue) {
-        return getProperty(this.store, key, defaultValue);
-      }
-      _set(key, value) {
-        const { store } = this;
-        setProperty(store, key, value);
-        this.store = store;
-      }
+    }
+    var DotenvModule = {
+      configDotenv,
+      _configVault,
+      _parseVault,
+      config: config3,
+      decrypt,
+      parse: parse4,
+      populate
     };
-  }
-});
-
-// src/core/context.ts
-var context_exports = {};
-__export(context_exports, {
-  getContext: () => getContext,
-  resetContext: () => resetContext
-});
-function getCandidatePaths() {
-  const home = import_os.default.homedir();
-  const appData = process.env.APPDATA;
-  const isWindows = process.platform === "win32";
-  const paths = [
-    { label: ".claude", path: import_path.default.join(home, ".claude") },
-    { label: ".gemini", path: import_path.default.join(home, ".gemini") },
-    { label: ".qwen", path: import_path.default.join(home, ".qwen") },
-    { label: "~/.gemini/antigravity", path: import_path.default.join(home, ".gemini", "antigravity") }
-  ];
-  if (isWindows && appData) {
-    paths.push({ label: "Claude (AppData)", path: import_path.default.join(appData, "Claude") });
-  }
-  return paths;
-}
-async function getContext() {
-  const choices = [];
-  const candidates = getCandidatePaths();
-  for (const c of candidates) {
-    const exists = await import_fs_extra.default.pathExists(c.path);
-    const icon = exists ? "[X]" : "[ ]";
-    const desc = exists ? "Found" : "Not found (will create)";
-    choices.push({
-      title: `${icon} ${c.label} (${c.path})`,
-      description: desc,
-      value: c.path,
-      selected: exists
-      // Pre-select existing environments
-    });
-  }
-  const response = await (0, import_prompts.default)({
-    type: "multiselect",
-    name: "targets",
-    message: "Select target environment(s):",
-    choices,
-    hint: "- Space to select. Return to submit",
-    instructions: false
-  });
-  if (!response.targets || response.targets.length === 0) {
-    console.log(kleur_default.gray("No targets selected. Exiting."));
-    process.exit(0);
-  }
-  for (const target of response.targets) {
-    await import_fs_extra.default.ensureDir(target);
-  }
-  return {
-    targets: response.targets,
-    syncMode: config.get("syncMode"),
-    config
-  };
-}
-function resetContext() {
-  config.clear();
-  console.log(kleur_default.yellow("Configuration cleared."));
-}
-var import_os, import_path, import_fs_extra, import_prompts, config;
-var init_context = __esm({
-  "src/core/context.ts"() {
-    "use strict";
-    import_os = __toESM(require("os"), 1);
-    import_path = __toESM(require("path"), 1);
-    import_fs_extra = __toESM(require_lib2(), 1);
-    init_source();
-    import_prompts = __toESM(require_prompts3(), 1);
-    init_kleur();
-    config = new Conf({
-      projectName: "jaggers-config-manager",
-      defaults: {
-        syncMode: "copy"
-      }
-    });
+    module2.exports.configDotenv = DotenvModule.configDotenv;
+    module2.exports._configVault = DotenvModule._configVault;
+    module2.exports._parseVault = DotenvModule._parseVault;
+    module2.exports.config = DotenvModule.config;
+    module2.exports.decrypt = DotenvModule.decrypt;
+    module2.exports.parse = DotenvModule.parse;
+    module2.exports.populate = DotenvModule.populate;
+    module2.exports = DotenvModule;
   }
 });
 
@@ -28780,365 +27565,6 @@ var require_src3 = __commonJS({
   }
 });
 
-// node_modules/dotenv/package.json
-var require_package = __commonJS({
-  "node_modules/dotenv/package.json"(exports2, module2) {
-    module2.exports = {
-      name: "dotenv",
-      version: "16.6.1",
-      description: "Loads environment variables from .env file",
-      main: "lib/main.js",
-      types: "lib/main.d.ts",
-      exports: {
-        ".": {
-          types: "./lib/main.d.ts",
-          require: "./lib/main.js",
-          default: "./lib/main.js"
-        },
-        "./config": "./config.js",
-        "./config.js": "./config.js",
-        "./lib/env-options": "./lib/env-options.js",
-        "./lib/env-options.js": "./lib/env-options.js",
-        "./lib/cli-options": "./lib/cli-options.js",
-        "./lib/cli-options.js": "./lib/cli-options.js",
-        "./package.json": "./package.json"
-      },
-      scripts: {
-        "dts-check": "tsc --project tests/types/tsconfig.json",
-        lint: "standard",
-        pretest: "npm run lint && npm run dts-check",
-        test: "tap run --allow-empty-coverage --disable-coverage --timeout=60000",
-        "test:coverage": "tap run --show-full-coverage --timeout=60000 --coverage-report=text --coverage-report=lcov",
-        prerelease: "npm test",
-        release: "standard-version"
-      },
-      repository: {
-        type: "git",
-        url: "git://github.com/motdotla/dotenv.git"
-      },
-      homepage: "https://github.com/motdotla/dotenv#readme",
-      funding: "https://dotenvx.com",
-      keywords: [
-        "dotenv",
-        "env",
-        ".env",
-        "environment",
-        "variables",
-        "config",
-        "settings"
-      ],
-      readmeFilename: "README.md",
-      license: "BSD-2-Clause",
-      devDependencies: {
-        "@types/node": "^18.11.3",
-        decache: "^4.6.2",
-        sinon: "^14.0.1",
-        standard: "^17.0.0",
-        "standard-version": "^9.5.0",
-        tap: "^19.2.0",
-        typescript: "^4.8.4"
-      },
-      engines: {
-        node: ">=12"
-      },
-      browser: {
-        fs: false
-      }
-    };
-  }
-});
-
-// node_modules/dotenv/lib/main.js
-var require_main = __commonJS({
-  "node_modules/dotenv/lib/main.js"(exports2, module2) {
-    "use strict";
-    var fs14 = require("fs");
-    var path14 = require("path");
-    var os6 = require("os");
-    var crypto2 = require("crypto");
-    var packageJson = require_package();
-    var version2 = packageJson.version;
-    var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
-    function parse4(src) {
-      const obj = {};
-      let lines = src.toString();
-      lines = lines.replace(/\r\n?/mg, "\n");
-      let match;
-      while ((match = LINE.exec(lines)) != null) {
-        const key = match[1];
-        let value = match[2] || "";
-        value = value.trim();
-        const maybeQuote = value[0];
-        value = value.replace(/^(['"`])([\s\S]*)\1$/mg, "$2");
-        if (maybeQuote === '"') {
-          value = value.replace(/\\n/g, "\n");
-          value = value.replace(/\\r/g, "\r");
-        }
-        obj[key] = value;
-      }
-      return obj;
-    }
-    function _parseVault(options) {
-      options = options || {};
-      const vaultPath = _vaultPath(options);
-      options.path = vaultPath;
-      const result = DotenvModule.configDotenv(options);
-      if (!result.parsed) {
-        const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`);
-        err.code = "MISSING_DATA";
-        throw err;
-      }
-      const keys = _dotenvKey(options).split(",");
-      const length = keys.length;
-      let decrypted;
-      for (let i = 0; i < length; i++) {
-        try {
-          const key = keys[i].trim();
-          const attrs = _instructions(result, key);
-          decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key);
-          break;
-        } catch (error49) {
-          if (i + 1 >= length) {
-            throw error49;
-          }
-        }
-      }
-      return DotenvModule.parse(decrypted);
-    }
-    function _warn(message) {
-      console.log(`[dotenv@${version2}][WARN] ${message}`);
-    }
-    function _debug(message) {
-      console.log(`[dotenv@${version2}][DEBUG] ${message}`);
-    }
-    function _log(message) {
-      console.log(`[dotenv@${version2}] ${message}`);
-    }
-    function _dotenvKey(options) {
-      if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
-        return options.DOTENV_KEY;
-      }
-      if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
-        return process.env.DOTENV_KEY;
-      }
-      return "";
-    }
-    function _instructions(result, dotenvKey) {
-      let uri;
-      try {
-        uri = new URL(dotenvKey);
-      } catch (error49) {
-        if (error49.code === "ERR_INVALID_URL") {
-          const err = new Error("INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development");
-          err.code = "INVALID_DOTENV_KEY";
-          throw err;
-        }
-        throw error49;
-      }
-      const key = uri.password;
-      if (!key) {
-        const err = new Error("INVALID_DOTENV_KEY: Missing key part");
-        err.code = "INVALID_DOTENV_KEY";
-        throw err;
-      }
-      const environment = uri.searchParams.get("environment");
-      if (!environment) {
-        const err = new Error("INVALID_DOTENV_KEY: Missing environment part");
-        err.code = "INVALID_DOTENV_KEY";
-        throw err;
-      }
-      const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`;
-      const ciphertext = result.parsed[environmentKey];
-      if (!ciphertext) {
-        const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`);
-        err.code = "NOT_FOUND_DOTENV_ENVIRONMENT";
-        throw err;
-      }
-      return { ciphertext, key };
-    }
-    function _vaultPath(options) {
-      let possibleVaultPath = null;
-      if (options && options.path && options.path.length > 0) {
-        if (Array.isArray(options.path)) {
-          for (const filepath of options.path) {
-            if (fs14.existsSync(filepath)) {
-              possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
-            }
-          }
-        } else {
-          possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
-        }
-      } else {
-        possibleVaultPath = path14.resolve(process.cwd(), ".env.vault");
-      }
-      if (fs14.existsSync(possibleVaultPath)) {
-        return possibleVaultPath;
-      }
-      return null;
-    }
-    function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path14.join(os6.homedir(), envPath.slice(1)) : envPath;
-    }
-    function _configVault(options) {
-      const debug = Boolean(options && options.debug);
-      const quiet = options && "quiet" in options ? options.quiet : true;
-      if (debug || !quiet) {
-        _log("Loading env from encrypted .env.vault");
-      }
-      const parsed = DotenvModule._parseVault(options);
-      let processEnv = process.env;
-      if (options && options.processEnv != null) {
-        processEnv = options.processEnv;
-      }
-      DotenvModule.populate(processEnv, parsed, options);
-      return { parsed };
-    }
-    function configDotenv(options) {
-      const dotenvPath = path14.resolve(process.cwd(), ".env");
-      let encoding = "utf8";
-      const debug = Boolean(options && options.debug);
-      const quiet = options && "quiet" in options ? options.quiet : true;
-      if (options && options.encoding) {
-        encoding = options.encoding;
-      } else {
-        if (debug) {
-          _debug("No encoding is specified. UTF-8 is used by default");
-        }
-      }
-      let optionPaths = [dotenvPath];
-      if (options && options.path) {
-        if (!Array.isArray(options.path)) {
-          optionPaths = [_resolveHome(options.path)];
-        } else {
-          optionPaths = [];
-          for (const filepath of options.path) {
-            optionPaths.push(_resolveHome(filepath));
-          }
-        }
-      }
-      let lastError;
-      const parsedAll = {};
-      for (const path15 of optionPaths) {
-        try {
-          const parsed = DotenvModule.parse(fs14.readFileSync(path15, { encoding }));
-          DotenvModule.populate(parsedAll, parsed, options);
-        } catch (e) {
-          if (debug) {
-            _debug(`Failed to load ${path15} ${e.message}`);
-          }
-          lastError = e;
-        }
-      }
-      let processEnv = process.env;
-      if (options && options.processEnv != null) {
-        processEnv = options.processEnv;
-      }
-      DotenvModule.populate(processEnv, parsedAll, options);
-      if (debug || !quiet) {
-        const keysCount = Object.keys(parsedAll).length;
-        const shortPaths = [];
-        for (const filePath of optionPaths) {
-          try {
-            const relative = path14.relative(process.cwd(), filePath);
-            shortPaths.push(relative);
-          } catch (e) {
-            if (debug) {
-              _debug(`Failed to load ${filePath} ${e.message}`);
-            }
-            lastError = e;
-          }
-        }
-        _log(`injecting env (${keysCount}) from ${shortPaths.join(",")}`);
-      }
-      if (lastError) {
-        return { parsed: parsedAll, error: lastError };
-      } else {
-        return { parsed: parsedAll };
-      }
-    }
-    function config3(options) {
-      if (_dotenvKey(options).length === 0) {
-        return DotenvModule.configDotenv(options);
-      }
-      const vaultPath = _vaultPath(options);
-      if (!vaultPath) {
-        _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`);
-        return DotenvModule.configDotenv(options);
-      }
-      return DotenvModule._configVault(options);
-    }
-    function decrypt(encrypted, keyStr) {
-      const key = Buffer.from(keyStr.slice(-64), "hex");
-      let ciphertext = Buffer.from(encrypted, "base64");
-      const nonce = ciphertext.subarray(0, 12);
-      const authTag = ciphertext.subarray(-16);
-      ciphertext = ciphertext.subarray(12, -16);
-      try {
-        const aesgcm = crypto2.createDecipheriv("aes-256-gcm", key, nonce);
-        aesgcm.setAuthTag(authTag);
-        return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
-      } catch (error49) {
-        const isRange = error49 instanceof RangeError;
-        const invalidKeyLength = error49.message === "Invalid key length";
-        const decryptionFailed = error49.message === "Unsupported state or unable to authenticate data";
-        if (isRange || invalidKeyLength) {
-          const err = new Error("INVALID_DOTENV_KEY: It must be 64 characters long (or more)");
-          err.code = "INVALID_DOTENV_KEY";
-          throw err;
-        } else if (decryptionFailed) {
-          const err = new Error("DECRYPTION_FAILED: Please check your DOTENV_KEY");
-          err.code = "DECRYPTION_FAILED";
-          throw err;
-        } else {
-          throw error49;
-        }
-      }
-    }
-    function populate(processEnv, parsed, options = {}) {
-      const debug = Boolean(options && options.debug);
-      const override = Boolean(options && options.override);
-      if (typeof parsed !== "object") {
-        const err = new Error("OBJECT_REQUIRED: Please check the processEnv argument being passed to populate");
-        err.code = "OBJECT_REQUIRED";
-        throw err;
-      }
-      for (const key of Object.keys(parsed)) {
-        if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
-          if (override === true) {
-            processEnv[key] = parsed[key];
-          }
-          if (debug) {
-            if (override === true) {
-              _debug(`"${key}" is already defined and WAS overwritten`);
-            } else {
-              _debug(`"${key}" is already defined and was NOT overwritten`);
-            }
-          }
-        } else {
-          processEnv[key] = parsed[key];
-        }
-      }
-    }
-    var DotenvModule = {
-      configDotenv,
-      _configVault,
-      _parseVault,
-      config: config3,
-      decrypt,
-      parse: parse4,
-      populate
-    };
-    module2.exports.configDotenv = DotenvModule.configDotenv;
-    module2.exports._configVault = DotenvModule._configVault;
-    module2.exports._parseVault = DotenvModule._parseVault;
-    module2.exports.config = DotenvModule.config;
-    module2.exports.decrypt = DotenvModule.decrypt;
-    module2.exports.parse = DotenvModule.parse;
-    module2.exports.populate = DotenvModule.populate;
-    module2.exports = DotenvModule;
-  }
-});
-
 // node_modules/commander/esm.mjs
 var import_index = __toESM(require_commander(), 1);
 var {
@@ -29156,12 +27582,105 @@ var {
   Help
 } = import_index.default;
 
-// src/index.ts
-init_kleur();
-
-// src/commands/sync.ts
-init_kleur();
-var import_prompts2 = __toESM(require_prompts3(), 1);
+// node_modules/kleur/index.mjs
+var FORCE_COLOR;
+var NODE_DISABLE_COLORS;
+var NO_COLOR;
+var TERM;
+var isTTY = true;
+if (typeof process !== "undefined") {
+  ({ FORCE_COLOR, NODE_DISABLE_COLORS, NO_COLOR, TERM } = process.env || {});
+  isTTY = process.stdout && process.stdout.isTTY;
+}
+var $ = {
+  enabled: !NODE_DISABLE_COLORS && NO_COLOR == null && TERM !== "dumb" && (FORCE_COLOR != null && FORCE_COLOR !== "0" || isTTY),
+  // modifiers
+  reset: init(0, 0),
+  bold: init(1, 22),
+  dim: init(2, 22),
+  italic: init(3, 23),
+  underline: init(4, 24),
+  inverse: init(7, 27),
+  hidden: init(8, 28),
+  strikethrough: init(9, 29),
+  // colors
+  black: init(30, 39),
+  red: init(31, 39),
+  green: init(32, 39),
+  yellow: init(33, 39),
+  blue: init(34, 39),
+  magenta: init(35, 39),
+  cyan: init(36, 39),
+  white: init(37, 39),
+  gray: init(90, 39),
+  grey: init(90, 39),
+  // background colors
+  bgBlack: init(40, 49),
+  bgRed: init(41, 49),
+  bgGreen: init(42, 49),
+  bgYellow: init(43, 49),
+  bgBlue: init(44, 49),
+  bgMagenta: init(45, 49),
+  bgCyan: init(46, 49),
+  bgWhite: init(47, 49)
+};
+function run(arr, str) {
+  let i = 0, tmp, beg = "", end = "";
+  for (; i < arr.length; i++) {
+    tmp = arr[i];
+    beg += tmp.open;
+    end += tmp.close;
+    if (!!~str.indexOf(tmp.close)) {
+      str = str.replace(tmp.rgx, tmp.close + tmp.open);
+    }
+  }
+  return beg + str + end;
+}
+function chain(has, keys) {
+  let ctx = { has, keys };
+  ctx.reset = $.reset.bind(ctx);
+  ctx.bold = $.bold.bind(ctx);
+  ctx.dim = $.dim.bind(ctx);
+  ctx.italic = $.italic.bind(ctx);
+  ctx.underline = $.underline.bind(ctx);
+  ctx.inverse = $.inverse.bind(ctx);
+  ctx.hidden = $.hidden.bind(ctx);
+  ctx.strikethrough = $.strikethrough.bind(ctx);
+  ctx.black = $.black.bind(ctx);
+  ctx.red = $.red.bind(ctx);
+  ctx.green = $.green.bind(ctx);
+  ctx.yellow = $.yellow.bind(ctx);
+  ctx.blue = $.blue.bind(ctx);
+  ctx.magenta = $.magenta.bind(ctx);
+  ctx.cyan = $.cyan.bind(ctx);
+  ctx.white = $.white.bind(ctx);
+  ctx.gray = $.gray.bind(ctx);
+  ctx.grey = $.grey.bind(ctx);
+  ctx.bgBlack = $.bgBlack.bind(ctx);
+  ctx.bgRed = $.bgRed.bind(ctx);
+  ctx.bgGreen = $.bgGreen.bind(ctx);
+  ctx.bgYellow = $.bgYellow.bind(ctx);
+  ctx.bgBlue = $.bgBlue.bind(ctx);
+  ctx.bgMagenta = $.bgMagenta.bind(ctx);
+  ctx.bgCyan = $.bgCyan.bind(ctx);
+  ctx.bgWhite = $.bgWhite.bind(ctx);
+  return ctx;
+}
+function init(open, close) {
+  let blk = {
+    open: `\x1B[${open}m`,
+    close: `\x1B[${close}m`,
+    rgx: new RegExp(`\\x1b\\[${close}m`, "g")
+  };
+  return function(txt) {
+    if (this !== void 0 && this.has !== void 0) {
+      !!~this.has.indexOf(open) || (this.has.push(open), this.keys.push(blk));
+      return txt === void 0 ? this : $.enabled ? run(this.keys, txt + "") : txt + "";
+    }
+    return txt === void 0 ? chain([open], [blk]) : $.enabled ? run([blk], txt + "") : txt + "";
+  };
+}
+var kleur_default = $;
 
 // node_modules/ora/index.js
 var import_node_process6 = __toESM(require("process"), 1);
@@ -32542,43 +31061,1367 @@ function ora(options) {
 }
 
 // src/commands/sync.ts
-init_context();
+var import_child_process2 = require("child_process");
+
+// src/utils/repo-root.ts
+var import_fs_extra = __toESM(require_lib(), 1);
+var import_path = __toESM(require("path"), 1);
+async function findRepoRoot(startDir = process.cwd()) {
+  let dir = import_path.default.resolve(startDir);
+  while (true) {
+    const skillsPath = import_path.default.join(dir, "skills");
+    const hooksPath = import_path.default.join(dir, "hooks");
+    if (await import_fs_extra.default.pathExists(skillsPath) && await import_fs_extra.default.pathExists(hooksPath)) {
+      return dir;
+    }
+    const parent = import_path.default.dirname(dir);
+    if (parent === dir) {
+      throw new Error("Could not locate jaggers-agent-tools repo root. Run from within the cloned repository.");
+    }
+    dir = parent;
+  }
+}
+
+// src/core/context.ts
+var import_os = __toESM(require("os"), 1);
+var import_path2 = __toESM(require("path"), 1);
+var import_fs_extra2 = __toESM(require_lib(), 1);
+
+// node_modules/conf/dist/source/index.js
+var import_node_util3 = require("util");
+var import_node_process12 = __toESM(require("process"), 1);
+var import_node_fs3 = __toESM(require("fs"), 1);
+var import_node_path4 = __toESM(require("path"), 1);
+var import_node_crypto = __toESM(require("crypto"), 1);
+var import_node_assert = __toESM(require("assert"), 1);
+
+// node_modules/dot-prop/index.js
+var isObject = (value) => {
+  const type = typeof value;
+  return value !== null && (type === "object" || type === "function");
+};
+var disallowedKeys = /* @__PURE__ */ new Set([
+  "__proto__",
+  "prototype",
+  "constructor"
+]);
+var digits = new Set("0123456789");
+function getPathSegments(path14) {
+  const parts = [];
+  let currentSegment = "";
+  let currentPart = "start";
+  let isIgnoring = false;
+  for (const character of path14) {
+    switch (character) {
+      case "\\": {
+        if (currentPart === "index") {
+          throw new Error("Invalid character in an index");
+        }
+        if (currentPart === "indexEnd") {
+          throw new Error("Invalid character after an index");
+        }
+        if (isIgnoring) {
+          currentSegment += character;
+        }
+        currentPart = "property";
+        isIgnoring = !isIgnoring;
+        break;
+      }
+      case ".": {
+        if (currentPart === "index") {
+          throw new Error("Invalid character in an index");
+        }
+        if (currentPart === "indexEnd") {
+          currentPart = "property";
+          break;
+        }
+        if (isIgnoring) {
+          isIgnoring = false;
+          currentSegment += character;
+          break;
+        }
+        if (disallowedKeys.has(currentSegment)) {
+          return [];
+        }
+        parts.push(currentSegment);
+        currentSegment = "";
+        currentPart = "property";
+        break;
+      }
+      case "[": {
+        if (currentPart === "index") {
+          throw new Error("Invalid character in an index");
+        }
+        if (currentPart === "indexEnd") {
+          currentPart = "index";
+          break;
+        }
+        if (isIgnoring) {
+          isIgnoring = false;
+          currentSegment += character;
+          break;
+        }
+        if (currentPart === "property") {
+          if (disallowedKeys.has(currentSegment)) {
+            return [];
+          }
+          parts.push(currentSegment);
+          currentSegment = "";
+        }
+        currentPart = "index";
+        break;
+      }
+      case "]": {
+        if (currentPart === "index") {
+          parts.push(Number.parseInt(currentSegment, 10));
+          currentSegment = "";
+          currentPart = "indexEnd";
+          break;
+        }
+        if (currentPart === "indexEnd") {
+          throw new Error("Invalid character after an index");
+        }
+      }
+      default: {
+        if (currentPart === "index" && !digits.has(character)) {
+          throw new Error("Invalid character in an index");
+        }
+        if (currentPart === "indexEnd") {
+          throw new Error("Invalid character after an index");
+        }
+        if (currentPart === "start") {
+          currentPart = "property";
+        }
+        if (isIgnoring) {
+          isIgnoring = false;
+          currentSegment += "\\";
+        }
+        currentSegment += character;
+      }
+    }
+  }
+  if (isIgnoring) {
+    currentSegment += "\\";
+  }
+  switch (currentPart) {
+    case "property": {
+      if (disallowedKeys.has(currentSegment)) {
+        return [];
+      }
+      parts.push(currentSegment);
+      break;
+    }
+    case "index": {
+      throw new Error("Index was not closed");
+    }
+    case "start": {
+      parts.push("");
+      break;
+    }
+  }
+  return parts;
+}
+function isStringIndex(object2, key) {
+  if (typeof key !== "number" && Array.isArray(object2)) {
+    const index = Number.parseInt(key, 10);
+    return Number.isInteger(index) && object2[index] === object2[key];
+  }
+  return false;
+}
+function assertNotStringIndex(object2, key) {
+  if (isStringIndex(object2, key)) {
+    throw new Error("Cannot use string index");
+  }
+}
+function getProperty(object2, path14, value) {
+  if (!isObject(object2) || typeof path14 !== "string") {
+    return value === void 0 ? object2 : value;
+  }
+  const pathArray = getPathSegments(path14);
+  if (pathArray.length === 0) {
+    return value;
+  }
+  for (let index = 0; index < pathArray.length; index++) {
+    const key = pathArray[index];
+    if (isStringIndex(object2, key)) {
+      object2 = index === pathArray.length - 1 ? void 0 : null;
+    } else {
+      object2 = object2[key];
+    }
+    if (object2 === void 0 || object2 === null) {
+      if (index !== pathArray.length - 1) {
+        return value;
+      }
+      break;
+    }
+  }
+  return object2 === void 0 ? value : object2;
+}
+function setProperty(object2, path14, value) {
+  if (!isObject(object2) || typeof path14 !== "string") {
+    return object2;
+  }
+  const root = object2;
+  const pathArray = getPathSegments(path14);
+  for (let index = 0; index < pathArray.length; index++) {
+    const key = pathArray[index];
+    assertNotStringIndex(object2, key);
+    if (index === pathArray.length - 1) {
+      object2[key] = value;
+    } else if (!isObject(object2[key])) {
+      object2[key] = typeof pathArray[index + 1] === "number" ? [] : {};
+    }
+    object2 = object2[key];
+  }
+  return root;
+}
+function deleteProperty(object2, path14) {
+  if (!isObject(object2) || typeof path14 !== "string") {
+    return false;
+  }
+  const pathArray = getPathSegments(path14);
+  for (let index = 0; index < pathArray.length; index++) {
+    const key = pathArray[index];
+    assertNotStringIndex(object2, key);
+    if (index === pathArray.length - 1) {
+      delete object2[key];
+      return true;
+    }
+    object2 = object2[key];
+    if (!isObject(object2)) {
+      return false;
+    }
+  }
+}
+function hasProperty(object2, path14) {
+  if (!isObject(object2) || typeof path14 !== "string") {
+    return false;
+  }
+  const pathArray = getPathSegments(path14);
+  if (pathArray.length === 0) {
+    return false;
+  }
+  for (const key of pathArray) {
+    if (!isObject(object2) || !(key in object2) || isStringIndex(object2, key)) {
+      return false;
+    }
+    object2 = object2[key];
+  }
+  return true;
+}
+
+// node_modules/env-paths/index.js
+var import_node_path = __toESM(require("path"), 1);
+var import_node_os2 = __toESM(require("os"), 1);
+var import_node_process7 = __toESM(require("process"), 1);
+var homedir = import_node_os2.default.homedir();
+var tmpdir = import_node_os2.default.tmpdir();
+var { env: env2 } = import_node_process7.default;
+var macos = (name) => {
+  const library = import_node_path.default.join(homedir, "Library");
+  return {
+    data: import_node_path.default.join(library, "Application Support", name),
+    config: import_node_path.default.join(library, "Preferences", name),
+    cache: import_node_path.default.join(library, "Caches", name),
+    log: import_node_path.default.join(library, "Logs", name),
+    temp: import_node_path.default.join(tmpdir, name)
+  };
+};
+var windows = (name) => {
+  const appData = env2.APPDATA || import_node_path.default.join(homedir, "AppData", "Roaming");
+  const localAppData = env2.LOCALAPPDATA || import_node_path.default.join(homedir, "AppData", "Local");
+  return {
+    // Data/config/cache/log are invented by me as Windows isn't opinionated about this
+    data: import_node_path.default.join(localAppData, name, "Data"),
+    config: import_node_path.default.join(appData, name, "Config"),
+    cache: import_node_path.default.join(localAppData, name, "Cache"),
+    log: import_node_path.default.join(localAppData, name, "Log"),
+    temp: import_node_path.default.join(tmpdir, name)
+  };
+};
+var linux = (name) => {
+  const username = import_node_path.default.basename(homedir);
+  return {
+    data: import_node_path.default.join(env2.XDG_DATA_HOME || import_node_path.default.join(homedir, ".local", "share"), name),
+    config: import_node_path.default.join(env2.XDG_CONFIG_HOME || import_node_path.default.join(homedir, ".config"), name),
+    cache: import_node_path.default.join(env2.XDG_CACHE_HOME || import_node_path.default.join(homedir, ".cache"), name),
+    // https://wiki.debian.org/XDGBaseDirectorySpecification#state
+    log: import_node_path.default.join(env2.XDG_STATE_HOME || import_node_path.default.join(homedir, ".local", "state"), name),
+    temp: import_node_path.default.join(tmpdir, username, name)
+  };
+};
+function envPaths(name, { suffix = "nodejs" } = {}) {
+  if (typeof name !== "string") {
+    throw new TypeError(`Expected a string, got ${typeof name}`);
+  }
+  if (suffix) {
+    name += `-${suffix}`;
+  }
+  if (import_node_process7.default.platform === "darwin") {
+    return macos(name);
+  }
+  if (import_node_process7.default.platform === "win32") {
+    return windows(name);
+  }
+  return linux(name);
+}
+
+// node_modules/atomically/dist/index.js
+var import_node_events = require("events");
+var import_node_fs2 = require("fs");
+var import_node_path3 = __toESM(require("path"), 1);
+var import_node_stream = require("stream");
+
+// node_modules/stubborn-fs/dist/index.js
+var import_node_fs = __toESM(require("fs"), 1);
+var import_node_util2 = require("util");
+
+// node_modules/stubborn-utils/dist/attemptify_async.js
+var attemptifyAsync = (fn, options) => {
+  const { onError } = options;
+  return function attemptified(...args) {
+    return fn.apply(void 0, args).catch(onError);
+  };
+};
+var attemptify_async_default = attemptifyAsync;
+
+// node_modules/stubborn-utils/dist/attemptify_sync.js
+var attemptifySync = (fn, options) => {
+  const { onError } = options;
+  return function attemptified(...args) {
+    try {
+      return fn.apply(void 0, args);
+    } catch (error49) {
+      return onError(error49);
+    }
+  };
+};
+var attemptify_sync_default = attemptifySync;
+
+// node_modules/stubborn-utils/dist/constants.js
+var RETRY_INTERVAL = 250;
+
+// node_modules/stubborn-utils/dist/retryify_async.js
+var retryifyAsync = (fn, options) => {
+  const { isRetriable } = options;
+  return function retryified(options2) {
+    const { timeout } = options2;
+    const interval = options2.interval ?? RETRY_INTERVAL;
+    const timestamp = Date.now() + timeout;
+    return function attempt(...args) {
+      return fn.apply(void 0, args).catch((error49) => {
+        if (!isRetriable(error49))
+          throw error49;
+        if (Date.now() >= timestamp)
+          throw error49;
+        const delay = Math.round(interval * Math.random());
+        if (delay > 0) {
+          const delayPromise = new Promise((resolve) => setTimeout(resolve, delay));
+          return delayPromise.then(() => attempt.apply(void 0, args));
+        } else {
+          return attempt.apply(void 0, args);
+        }
+      });
+    };
+  };
+};
+var retryify_async_default = retryifyAsync;
+
+// node_modules/stubborn-utils/dist/retryify_sync.js
+var retryifySync = (fn, options) => {
+  const { isRetriable } = options;
+  return function retryified(options2) {
+    const { timeout } = options2;
+    const timestamp = Date.now() + timeout;
+    return function attempt(...args) {
+      while (true) {
+        try {
+          return fn.apply(void 0, args);
+        } catch (error49) {
+          if (!isRetriable(error49))
+            throw error49;
+          if (Date.now() >= timestamp)
+            throw error49;
+          continue;
+        }
+      }
+    };
+  };
+};
+var retryify_sync_default = retryifySync;
+
+// node_modules/stubborn-fs/dist/constants.js
+var import_node_process8 = __toESM(require("process"), 1);
+
+// node_modules/stubborn-fs/dist/handlers.js
+var Handlers = {
+  /* API */
+  isChangeErrorOk: (error49) => {
+    if (!Handlers.isNodeError(error49))
+      return false;
+    const { code } = error49;
+    if (code === "ENOSYS")
+      return true;
+    if (!IS_USER_ROOT && (code === "EINVAL" || code === "EPERM"))
+      return true;
+    return false;
+  },
+  isNodeError: (error49) => {
+    return error49 instanceof Error;
+  },
+  isRetriableError: (error49) => {
+    if (!Handlers.isNodeError(error49))
+      return false;
+    const { code } = error49;
+    if (code === "EMFILE" || code === "ENFILE" || code === "EAGAIN" || code === "EBUSY" || code === "EACCESS" || code === "EACCES" || code === "EACCS" || code === "EPERM")
+      return true;
+    return false;
+  },
+  onChangeError: (error49) => {
+    if (!Handlers.isNodeError(error49))
+      throw error49;
+    if (Handlers.isChangeErrorOk(error49))
+      return;
+    throw error49;
+  }
+};
+var handlers_default = Handlers;
+
+// node_modules/stubborn-fs/dist/constants.js
+var ATTEMPTIFY_CHANGE_ERROR_OPTIONS = {
+  onError: handlers_default.onChangeError
+};
+var ATTEMPTIFY_NOOP_OPTIONS = {
+  onError: () => void 0
+};
+var IS_USER_ROOT = import_node_process8.default.getuid ? !import_node_process8.default.getuid() : false;
+var RETRYIFY_OPTIONS = {
+  isRetriable: handlers_default.isRetriableError
+};
+
+// node_modules/stubborn-fs/dist/index.js
+var FS = {
+  attempt: {
+    /* ASYNC */
+    chmod: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.chmod), ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
+    chown: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.chown), ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
+    close: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.close), ATTEMPTIFY_NOOP_OPTIONS),
+    fsync: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.fsync), ATTEMPTIFY_NOOP_OPTIONS),
+    mkdir: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.mkdir), ATTEMPTIFY_NOOP_OPTIONS),
+    realpath: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.realpath), ATTEMPTIFY_NOOP_OPTIONS),
+    stat: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.stat), ATTEMPTIFY_NOOP_OPTIONS),
+    unlink: attemptify_async_default((0, import_node_util2.promisify)(import_node_fs.default.unlink), ATTEMPTIFY_NOOP_OPTIONS),
+    /* SYNC */
+    chmodSync: attemptify_sync_default(import_node_fs.default.chmodSync, ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
+    chownSync: attemptify_sync_default(import_node_fs.default.chownSync, ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
+    closeSync: attemptify_sync_default(import_node_fs.default.closeSync, ATTEMPTIFY_NOOP_OPTIONS),
+    existsSync: attemptify_sync_default(import_node_fs.default.existsSync, ATTEMPTIFY_NOOP_OPTIONS),
+    fsyncSync: attemptify_sync_default(import_node_fs.default.fsync, ATTEMPTIFY_NOOP_OPTIONS),
+    mkdirSync: attemptify_sync_default(import_node_fs.default.mkdirSync, ATTEMPTIFY_NOOP_OPTIONS),
+    realpathSync: attemptify_sync_default(import_node_fs.default.realpathSync, ATTEMPTIFY_NOOP_OPTIONS),
+    statSync: attemptify_sync_default(import_node_fs.default.statSync, ATTEMPTIFY_NOOP_OPTIONS),
+    unlinkSync: attemptify_sync_default(import_node_fs.default.unlinkSync, ATTEMPTIFY_NOOP_OPTIONS)
+  },
+  retry: {
+    /* ASYNC */
+    close: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.close), RETRYIFY_OPTIONS),
+    fsync: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.fsync), RETRYIFY_OPTIONS),
+    open: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.open), RETRYIFY_OPTIONS),
+    readFile: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.readFile), RETRYIFY_OPTIONS),
+    rename: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.rename), RETRYIFY_OPTIONS),
+    stat: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.stat), RETRYIFY_OPTIONS),
+    write: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.write), RETRYIFY_OPTIONS),
+    writeFile: retryify_async_default((0, import_node_util2.promisify)(import_node_fs.default.writeFile), RETRYIFY_OPTIONS),
+    /* SYNC */
+    closeSync: retryify_sync_default(import_node_fs.default.closeSync, RETRYIFY_OPTIONS),
+    fsyncSync: retryify_sync_default(import_node_fs.default.fsyncSync, RETRYIFY_OPTIONS),
+    openSync: retryify_sync_default(import_node_fs.default.openSync, RETRYIFY_OPTIONS),
+    readFileSync: retryify_sync_default(import_node_fs.default.readFileSync, RETRYIFY_OPTIONS),
+    renameSync: retryify_sync_default(import_node_fs.default.renameSync, RETRYIFY_OPTIONS),
+    statSync: retryify_sync_default(import_node_fs.default.statSync, RETRYIFY_OPTIONS),
+    writeSync: retryify_sync_default(import_node_fs.default.writeSync, RETRYIFY_OPTIONS),
+    writeFileSync: retryify_sync_default(import_node_fs.default.writeFileSync, RETRYIFY_OPTIONS)
+  }
+};
+var dist_default = FS;
+
+// node_modules/atomically/dist/constants.js
+var import_node_process9 = __toESM(require("process"), 1);
+var DEFAULT_ENCODING = "utf8";
+var DEFAULT_FILE_MODE = 438;
+var DEFAULT_FOLDER_MODE = 511;
+var DEFAULT_WRITE_OPTIONS = {};
+var DEFAULT_USER_UID = import_node_process9.default.geteuid ? import_node_process9.default.geteuid() : -1;
+var DEFAULT_USER_GID = import_node_process9.default.getegid ? import_node_process9.default.getegid() : -1;
+var DEFAULT_TIMEOUT_SYNC = 1e3;
+var IS_POSIX = !!import_node_process9.default.getuid;
+var IS_USER_ROOT2 = import_node_process9.default.getuid ? !import_node_process9.default.getuid() : false;
+var LIMIT_BASENAME_LENGTH = 128;
+
+// node_modules/atomically/dist/utils/lang.js
+var isException = (value) => {
+  return value instanceof Error && "code" in value;
+};
+var isString = (value) => {
+  return typeof value === "string";
+};
+var isUndefined = (value) => {
+  return value === void 0;
+};
+
+// node_modules/atomically/dist/utils/temp.js
+var import_node_path2 = __toESM(require("path"), 1);
+
+// node_modules/when-exit/dist/node/interceptor.js
+var import_node_process11 = __toESM(require("process"), 1);
+
+// node_modules/when-exit/dist/node/constants.js
+var import_node_process10 = __toESM(require("process"), 1);
+var IS_LINUX = import_node_process10.default.platform === "linux";
+var IS_WINDOWS = import_node_process10.default.platform === "win32";
+
+// node_modules/when-exit/dist/node/signals.js
+var Signals = ["SIGHUP", "SIGINT", "SIGTERM"];
+if (!IS_WINDOWS) {
+  Signals.push("SIGALRM", "SIGABRT", "SIGVTALRM", "SIGXCPU", "SIGXFSZ", "SIGUSR2", "SIGTRAP", "SIGSYS", "SIGQUIT", "SIGIOT");
+}
+if (IS_LINUX) {
+  Signals.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT");
+}
+var signals_default = Signals;
+
+// node_modules/when-exit/dist/node/interceptor.js
+var Interceptor = class {
+  /* CONSTRUCTOR */
+  constructor() {
+    this.callbacks = /* @__PURE__ */ new Set();
+    this.exited = false;
+    this.exit = (signal) => {
+      if (this.exited)
+        return;
+      this.exited = true;
+      for (const callback of this.callbacks) {
+        callback();
+      }
+      if (signal) {
+        if (IS_WINDOWS && (signal !== "SIGINT" && signal !== "SIGTERM" && signal !== "SIGKILL")) {
+          import_node_process11.default.kill(import_node_process11.default.pid, "SIGTERM");
+        } else {
+          import_node_process11.default.kill(import_node_process11.default.pid, signal);
+        }
+      }
+    };
+    this.hook = () => {
+      import_node_process11.default.once("exit", () => this.exit());
+      for (const signal of signals_default) {
+        try {
+          import_node_process11.default.once(signal, () => this.exit(signal));
+        } catch {
+        }
+      }
+    };
+    this.register = (callback) => {
+      this.callbacks.add(callback);
+      return () => {
+        this.callbacks.delete(callback);
+      };
+    };
+    this.hook();
+  }
+};
+var interceptor_default = new Interceptor();
+
+// node_modules/when-exit/dist/node/index.js
+var whenExit = interceptor_default.register;
+var node_default = whenExit;
+
+// node_modules/atomically/dist/utils/temp.js
+var Temp = {
+  /* VARIABLES */
+  store: {},
+  // filePath => purge
+  /* API */
+  create: (filePath) => {
+    const randomness = `000000${Math.floor(Math.random() * 16777215).toString(16)}`.slice(-6);
+    const timestamp = Date.now().toString().slice(-10);
+    const prefix = "tmp-";
+    const suffix = `.${prefix}${timestamp}${randomness}`;
+    const tempPath = `${filePath}${suffix}`;
+    return tempPath;
+  },
+  get: (filePath, creator, purge = true) => {
+    const tempPath = Temp.truncate(creator(filePath));
+    if (tempPath in Temp.store)
+      return Temp.get(filePath, creator, purge);
+    Temp.store[tempPath] = purge;
+    const disposer = () => delete Temp.store[tempPath];
+    return [tempPath, disposer];
+  },
+  purge: (filePath) => {
+    if (!Temp.store[filePath])
+      return;
+    delete Temp.store[filePath];
+    dist_default.attempt.unlink(filePath);
+  },
+  purgeSync: (filePath) => {
+    if (!Temp.store[filePath])
+      return;
+    delete Temp.store[filePath];
+    dist_default.attempt.unlinkSync(filePath);
+  },
+  purgeSyncAll: () => {
+    for (const filePath in Temp.store) {
+      Temp.purgeSync(filePath);
+    }
+  },
+  truncate: (filePath) => {
+    const basename = import_node_path2.default.basename(filePath);
+    if (basename.length <= LIMIT_BASENAME_LENGTH)
+      return filePath;
+    const truncable = /^(\.?)(.*?)((?:\.[^.]+)?(?:\.tmp-\d{10}[a-f0-9]{6})?)$/.exec(basename);
+    if (!truncable)
+      return filePath;
+    const truncationLength = basename.length - LIMIT_BASENAME_LENGTH;
+    return `${filePath.slice(0, -basename.length)}${truncable[1]}${truncable[2].slice(0, -truncationLength)}${truncable[3]}`;
+  }
+};
+node_default(Temp.purgeSyncAll);
+var temp_default = Temp;
+
+// node_modules/atomically/dist/index.js
+function writeFileSync(filePath, data, options = DEFAULT_WRITE_OPTIONS) {
+  if (isString(options))
+    return writeFileSync(filePath, data, { encoding: options });
+  const timeout = options.timeout ?? DEFAULT_TIMEOUT_SYNC;
+  const retryOptions = { timeout };
+  let tempDisposer = null;
+  let tempPath = null;
+  let fd = null;
+  try {
+    const filePathReal = dist_default.attempt.realpathSync(filePath);
+    const filePathExists = !!filePathReal;
+    filePath = filePathReal || filePath;
+    [tempPath, tempDisposer] = temp_default.get(filePath, options.tmpCreate || temp_default.create, !(options.tmpPurge === false));
+    const useStatChown = IS_POSIX && isUndefined(options.chown);
+    const useStatMode = isUndefined(options.mode);
+    if (filePathExists && (useStatChown || useStatMode)) {
+      const stats = dist_default.attempt.statSync(filePath);
+      if (stats) {
+        options = { ...options };
+        if (useStatChown) {
+          options.chown = { uid: stats.uid, gid: stats.gid };
+        }
+        if (useStatMode) {
+          options.mode = stats.mode;
+        }
+      }
+    }
+    if (!filePathExists) {
+      const parentPath = import_node_path3.default.dirname(filePath);
+      dist_default.attempt.mkdirSync(parentPath, {
+        mode: DEFAULT_FOLDER_MODE,
+        recursive: true
+      });
+    }
+    fd = dist_default.retry.openSync(retryOptions)(tempPath, "w", options.mode || DEFAULT_FILE_MODE);
+    if (options.tmpCreated) {
+      options.tmpCreated(tempPath);
+    }
+    if (isString(data)) {
+      dist_default.retry.writeSync(retryOptions)(fd, data, 0, options.encoding || DEFAULT_ENCODING);
+    } else if (!isUndefined(data)) {
+      dist_default.retry.writeSync(retryOptions)(fd, data, 0, data.length, 0);
+    }
+    if (options.fsync !== false) {
+      if (options.fsyncWait !== false) {
+        dist_default.retry.fsyncSync(retryOptions)(fd);
+      } else {
+        dist_default.attempt.fsync(fd);
+      }
+    }
+    dist_default.retry.closeSync(retryOptions)(fd);
+    fd = null;
+    if (options.chown && (options.chown.uid !== DEFAULT_USER_UID || options.chown.gid !== DEFAULT_USER_GID)) {
+      dist_default.attempt.chownSync(tempPath, options.chown.uid, options.chown.gid);
+    }
+    if (options.mode && options.mode !== DEFAULT_FILE_MODE) {
+      dist_default.attempt.chmodSync(tempPath, options.mode);
+    }
+    try {
+      dist_default.retry.renameSync(retryOptions)(tempPath, filePath);
+    } catch (error49) {
+      if (!isException(error49))
+        throw error49;
+      if (error49.code !== "ENAMETOOLONG")
+        throw error49;
+      dist_default.retry.renameSync(retryOptions)(tempPath, temp_default.truncate(filePath));
+    }
+    tempDisposer();
+    tempPath = null;
+  } finally {
+    if (fd)
+      dist_default.attempt.closeSync(fd);
+    if (tempPath)
+      temp_default.purge(tempPath);
+  }
+}
+
+// node_modules/conf/dist/source/index.js
+var import_ajv = __toESM(require_ajv(), 1);
+var import_ajv_formats = __toESM(require_dist(), 1);
+
+// node_modules/mimic-fn/index.js
+var copyProperty2 = (to, from, property, ignoreNonConfigurable) => {
+  if (property === "length" || property === "prototype") {
+    return;
+  }
+  if (property === "arguments" || property === "caller") {
+    return;
+  }
+  const toDescriptor = Object.getOwnPropertyDescriptor(to, property);
+  const fromDescriptor = Object.getOwnPropertyDescriptor(from, property);
+  if (!canCopyProperty2(toDescriptor, fromDescriptor) && ignoreNonConfigurable) {
+    return;
+  }
+  Object.defineProperty(to, property, fromDescriptor);
+};
+var canCopyProperty2 = function(toDescriptor, fromDescriptor) {
+  return toDescriptor === void 0 || toDescriptor.configurable || toDescriptor.writable === fromDescriptor.writable && toDescriptor.enumerable === fromDescriptor.enumerable && toDescriptor.configurable === fromDescriptor.configurable && (toDescriptor.writable || toDescriptor.value === fromDescriptor.value);
+};
+var changePrototype2 = (to, from) => {
+  const fromPrototype = Object.getPrototypeOf(from);
+  if (fromPrototype === Object.getPrototypeOf(to)) {
+    return;
+  }
+  Object.setPrototypeOf(to, fromPrototype);
+};
+var wrappedToString2 = (withName, fromBody) => `/* Wrapped ${withName}*/
+${fromBody}`;
+var toStringDescriptor2 = Object.getOwnPropertyDescriptor(Function.prototype, "toString");
+var toStringName2 = Object.getOwnPropertyDescriptor(Function.prototype.toString, "name");
+var changeToString2 = (to, from, name) => {
+  const withName = name === "" ? "" : `with ${name.trim()}() `;
+  const newToString = wrappedToString2.bind(null, withName, from.toString());
+  Object.defineProperty(newToString, "name", toStringName2);
+  Object.defineProperty(to, "toString", { ...toStringDescriptor2, value: newToString });
+};
+function mimicFunction2(to, from, { ignoreNonConfigurable = false } = {}) {
+  const { name } = to;
+  for (const property of Reflect.ownKeys(from)) {
+    copyProperty2(to, from, property, ignoreNonConfigurable);
+  }
+  changePrototype2(to, from);
+  changeToString2(to, from, name);
+  return to;
+}
+
+// node_modules/debounce-fn/index.js
+var debounceFn = (inputFunction, options = {}) => {
+  if (typeof inputFunction !== "function") {
+    throw new TypeError(`Expected the first argument to be a function, got \`${typeof inputFunction}\``);
+  }
+  const {
+    wait = 0,
+    maxWait = Number.POSITIVE_INFINITY,
+    before = false,
+    after = true
+  } = options;
+  if (!before && !after) {
+    throw new Error("Both `before` and `after` are false, function wouldn't be called.");
+  }
+  let timeout;
+  let maxTimeout;
+  let result;
+  const debouncedFunction = function(...arguments_) {
+    const context = this;
+    const later = () => {
+      timeout = void 0;
+      if (maxTimeout) {
+        clearTimeout(maxTimeout);
+        maxTimeout = void 0;
+      }
+      if (after) {
+        result = inputFunction.apply(context, arguments_);
+      }
+    };
+    const maxLater = () => {
+      maxTimeout = void 0;
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = void 0;
+      }
+      if (after) {
+        result = inputFunction.apply(context, arguments_);
+      }
+    };
+    const shouldCallNow = before && !timeout;
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+    if (maxWait > 0 && maxWait !== Number.POSITIVE_INFINITY && !maxTimeout) {
+      maxTimeout = setTimeout(maxLater, maxWait);
+    }
+    if (shouldCallNow) {
+      result = inputFunction.apply(context, arguments_);
+    }
+    return result;
+  };
+  mimicFunction2(debouncedFunction, inputFunction);
+  debouncedFunction.cancel = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = void 0;
+    }
+    if (maxTimeout) {
+      clearTimeout(maxTimeout);
+      maxTimeout = void 0;
+    }
+  };
+  return debouncedFunction;
+};
+var debounce_fn_default = debounceFn;
+
+// node_modules/conf/dist/source/index.js
+var import_semver = __toESM(require_semver2(), 1);
+
+// node_modules/uint8array-extras/index.js
+var objectToString = Object.prototype.toString;
+function isUint8Array(value) {
+  return value && objectToString.call(value) === "[object Uint8Array]";
+}
+function assertUint8Array(value) {
+  if (!isUint8Array(value)) {
+    throw new TypeError(`Expected \`Uint8Array\`, got \`${typeof value}\``);
+  }
+}
+function concatUint8Arrays(arrays, totalLength) {
+  if (arrays.length === 0) {
+    return new Uint8Array(0);
+  }
+  totalLength ??= arrays.reduce((accumulator, currentValue) => accumulator + currentValue.length, 0);
+  const returnValue = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const array2 of arrays) {
+    assertUint8Array(array2);
+    returnValue.set(array2, offset);
+    offset += array2.length;
+  }
+  return returnValue;
+}
+function uint8ArrayToString(array2) {
+  assertUint8Array(array2);
+  return new globalThis.TextDecoder().decode(array2);
+}
+function assertString(value) {
+  if (typeof value !== "string") {
+    throw new TypeError(`Expected \`string\`, got \`${typeof value}\``);
+  }
+}
+function stringToUint8Array(string4) {
+  assertString(string4);
+  return new globalThis.TextEncoder().encode(string4);
+}
+var byteToHexLookupTable = Array.from({ length: 256 }, (_, index) => index.toString(16).padStart(2, "0"));
+
+// node_modules/conf/dist/source/index.js
+var Ajv = import_ajv.default.default;
+var ajvFormats = import_ajv_formats.default.default;
+var encryptionAlgorithm = "aes-256-cbc";
+var createPlainObject = () => /* @__PURE__ */ Object.create(null);
+var isExist = (data) => data !== void 0 && data !== null;
+var checkValueType = (key, value) => {
+  const nonJsonTypes = /* @__PURE__ */ new Set([
+    "undefined",
+    "symbol",
+    "function"
+  ]);
+  const type = typeof value;
+  if (nonJsonTypes.has(type)) {
+    throw new TypeError(`Setting a value of type \`${type}\` for key \`${key}\` is not allowed as it's not supported by JSON`);
+  }
+};
+var INTERNAL_KEY = "__internal__";
+var MIGRATION_KEY = `${INTERNAL_KEY}.migrations.version`;
+var Conf = class {
+  path;
+  events;
+  #validator;
+  #encryptionKey;
+  #options;
+  #defaultValues = {};
+  constructor(partialOptions = {}) {
+    const options = {
+      configName: "config",
+      fileExtension: "json",
+      projectSuffix: "nodejs",
+      clearInvalidConfig: false,
+      accessPropertiesByDotNotation: true,
+      configFileMode: 438,
+      ...partialOptions
+    };
+    if (!options.cwd) {
+      if (!options.projectName) {
+        throw new Error("Please specify the `projectName` option.");
+      }
+      options.cwd = envPaths(options.projectName, { suffix: options.projectSuffix }).config;
+    }
+    this.#options = options;
+    if (options.schema) {
+      if (typeof options.schema !== "object") {
+        throw new TypeError("The `schema` option must be an object.");
+      }
+      const ajv = new Ajv({
+        allErrors: true,
+        useDefaults: true
+      });
+      ajvFormats(ajv);
+      const schema = {
+        type: "object",
+        properties: options.schema
+      };
+      this.#validator = ajv.compile(schema);
+      for (const [key, value] of Object.entries(options.schema)) {
+        if (value?.default) {
+          this.#defaultValues[key] = value.default;
+        }
+      }
+    }
+    if (options.defaults) {
+      this.#defaultValues = {
+        ...this.#defaultValues,
+        ...options.defaults
+      };
+    }
+    if (options.serialize) {
+      this._serialize = options.serialize;
+    }
+    if (options.deserialize) {
+      this._deserialize = options.deserialize;
+    }
+    this.events = new EventTarget();
+    this.#encryptionKey = options.encryptionKey;
+    const fileExtension = options.fileExtension ? `.${options.fileExtension}` : "";
+    this.path = import_node_path4.default.resolve(options.cwd, `${options.configName ?? "config"}${fileExtension}`);
+    const fileStore = this.store;
+    const store = Object.assign(createPlainObject(), options.defaults, fileStore);
+    this._validate(store);
+    try {
+      import_node_assert.default.deepEqual(fileStore, store);
+    } catch {
+      this.store = store;
+    }
+    if (options.watch) {
+      this._watch();
+    }
+    if (options.migrations) {
+      if (!options.projectVersion) {
+        throw new Error("Please specify the `projectVersion` option.");
+      }
+      this._migrate(options.migrations, options.projectVersion, options.beforeEachMigration);
+    }
+  }
+  get(key, defaultValue) {
+    if (this.#options.accessPropertiesByDotNotation) {
+      return this._get(key, defaultValue);
+    }
+    const { store } = this;
+    return key in store ? store[key] : defaultValue;
+  }
+  set(key, value) {
+    if (typeof key !== "string" && typeof key !== "object") {
+      throw new TypeError(`Expected \`key\` to be of type \`string\` or \`object\`, got ${typeof key}`);
+    }
+    if (typeof key !== "object" && value === void 0) {
+      throw new TypeError("Use `delete()` to clear values");
+    }
+    if (this._containsReservedKey(key)) {
+      throw new TypeError(`Please don't use the ${INTERNAL_KEY} key, as it's used to manage this module internal operations.`);
+    }
+    const { store } = this;
+    const set2 = (key2, value2) => {
+      checkValueType(key2, value2);
+      if (this.#options.accessPropertiesByDotNotation) {
+        setProperty(store, key2, value2);
+      } else {
+        store[key2] = value2;
+      }
+    };
+    if (typeof key === "object") {
+      const object2 = key;
+      for (const [key2, value2] of Object.entries(object2)) {
+        set2(key2, value2);
+      }
+    } else {
+      set2(key, value);
+    }
+    this.store = store;
+  }
+  /**
+      Check if an item exists.
+  
+      @param key - The key of the item to check.
+      */
+  has(key) {
+    if (this.#options.accessPropertiesByDotNotation) {
+      return hasProperty(this.store, key);
+    }
+    return key in this.store;
+  }
+  /**
+      Reset items to their default values, as defined by the `defaults` or `schema` option.
+  
+      @see `clear()` to reset all items.
+  
+      @param keys - The keys of the items to reset.
+      */
+  reset(...keys) {
+    for (const key of keys) {
+      if (isExist(this.#defaultValues[key])) {
+        this.set(key, this.#defaultValues[key]);
+      }
+    }
+  }
+  delete(key) {
+    const { store } = this;
+    if (this.#options.accessPropertiesByDotNotation) {
+      deleteProperty(store, key);
+    } else {
+      delete store[key];
+    }
+    this.store = store;
+  }
+  /**
+      Delete all items.
+  
+      This resets known items to their default values, if defined by the `defaults` or `schema` option.
+      */
+  clear() {
+    this.store = createPlainObject();
+    for (const key of Object.keys(this.#defaultValues)) {
+      this.reset(key);
+    }
+  }
+  /**
+      Watches the given `key`, calling `callback` on any changes.
+  
+      @param key - The key wo watch.
+      @param callback - A callback function that is called on any changes. When a `key` is first set `oldValue` will be `undefined`, and when a key is deleted `newValue` will be `undefined`.
+      @returns A function, that when called, will unsubscribe.
+      */
+  onDidChange(key, callback) {
+    if (typeof key !== "string") {
+      throw new TypeError(`Expected \`key\` to be of type \`string\`, got ${typeof key}`);
+    }
+    if (typeof callback !== "function") {
+      throw new TypeError(`Expected \`callback\` to be of type \`function\`, got ${typeof callback}`);
+    }
+    return this._handleChange(() => this.get(key), callback);
+  }
+  /**
+      Watches the whole config object, calling `callback` on any changes.
+  
+      @param callback - A callback function that is called on any changes. When a `key` is first set `oldValue` will be `undefined`, and when a key is deleted `newValue` will be `undefined`.
+      @returns A function, that when called, will unsubscribe.
+      */
+  onDidAnyChange(callback) {
+    if (typeof callback !== "function") {
+      throw new TypeError(`Expected \`callback\` to be of type \`function\`, got ${typeof callback}`);
+    }
+    return this._handleChange(() => this.store, callback);
+  }
+  get size() {
+    return Object.keys(this.store).length;
+  }
+  get store() {
+    try {
+      const data = import_node_fs3.default.readFileSync(this.path, this.#encryptionKey ? null : "utf8");
+      const dataString = this._encryptData(data);
+      const deserializedData = this._deserialize(dataString);
+      this._validate(deserializedData);
+      return Object.assign(createPlainObject(), deserializedData);
+    } catch (error49) {
+      if (error49?.code === "ENOENT") {
+        this._ensureDirectory();
+        return createPlainObject();
+      }
+      if (this.#options.clearInvalidConfig && error49.name === "SyntaxError") {
+        return createPlainObject();
+      }
+      throw error49;
+    }
+  }
+  set store(value) {
+    this._ensureDirectory();
+    this._validate(value);
+    this._write(value);
+    this.events.dispatchEvent(new Event("change"));
+  }
+  *[Symbol.iterator]() {
+    for (const [key, value] of Object.entries(this.store)) {
+      yield [key, value];
+    }
+  }
+  _encryptData(data) {
+    if (!this.#encryptionKey) {
+      return typeof data === "string" ? data : uint8ArrayToString(data);
+    }
+    try {
+      const initializationVector = data.slice(0, 16);
+      const password = import_node_crypto.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
+      const decipher = import_node_crypto.default.createDecipheriv(encryptionAlgorithm, password, initializationVector);
+      const slice = data.slice(17);
+      const dataUpdate = typeof slice === "string" ? stringToUint8Array(slice) : slice;
+      return uint8ArrayToString(concatUint8Arrays([decipher.update(dataUpdate), decipher.final()]));
+    } catch {
+    }
+    return data.toString();
+  }
+  _handleChange(getter, callback) {
+    let currentValue = getter();
+    const onChange = () => {
+      const oldValue = currentValue;
+      const newValue = getter();
+      if ((0, import_node_util3.isDeepStrictEqual)(newValue, oldValue)) {
+        return;
+      }
+      currentValue = newValue;
+      callback.call(this, newValue, oldValue);
+    };
+    this.events.addEventListener("change", onChange);
+    return () => {
+      this.events.removeEventListener("change", onChange);
+    };
+  }
+  _deserialize = (value) => JSON.parse(value);
+  _serialize = (value) => JSON.stringify(value, void 0, "	");
+  _validate(data) {
+    if (!this.#validator) {
+      return;
+    }
+    const valid = this.#validator(data);
+    if (valid || !this.#validator.errors) {
+      return;
+    }
+    const errors = this.#validator.errors.map(({ instancePath, message = "" }) => `\`${instancePath.slice(1)}\` ${message}`);
+    throw new Error("Config schema violation: " + errors.join("; "));
+  }
+  _ensureDirectory() {
+    import_node_fs3.default.mkdirSync(import_node_path4.default.dirname(this.path), { recursive: true });
+  }
+  _write(value) {
+    let data = this._serialize(value);
+    if (this.#encryptionKey) {
+      const initializationVector = import_node_crypto.default.randomBytes(16);
+      const password = import_node_crypto.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
+      const cipher = import_node_crypto.default.createCipheriv(encryptionAlgorithm, password, initializationVector);
+      data = concatUint8Arrays([initializationVector, stringToUint8Array(":"), cipher.update(stringToUint8Array(data)), cipher.final()]);
+    }
+    if (import_node_process12.default.env.SNAP) {
+      import_node_fs3.default.writeFileSync(this.path, data, { mode: this.#options.configFileMode });
+    } else {
+      try {
+        writeFileSync(this.path, data, { mode: this.#options.configFileMode });
+      } catch (error49) {
+        if (error49?.code === "EXDEV") {
+          import_node_fs3.default.writeFileSync(this.path, data, { mode: this.#options.configFileMode });
+          return;
+        }
+        throw error49;
+      }
+    }
+  }
+  _watch() {
+    this._ensureDirectory();
+    if (!import_node_fs3.default.existsSync(this.path)) {
+      this._write(createPlainObject());
+    }
+    if (import_node_process12.default.platform === "win32") {
+      import_node_fs3.default.watch(this.path, { persistent: false }, debounce_fn_default(() => {
+        this.events.dispatchEvent(new Event("change"));
+      }, { wait: 100 }));
+    } else {
+      import_node_fs3.default.watchFile(this.path, { persistent: false }, debounce_fn_default(() => {
+        this.events.dispatchEvent(new Event("change"));
+      }, { wait: 5e3 }));
+    }
+  }
+  _migrate(migrations, versionToMigrate, beforeEachMigration) {
+    let previousMigratedVersion = this._get(MIGRATION_KEY, "0.0.0");
+    const newerVersions = Object.keys(migrations).filter((candidateVersion) => this._shouldPerformMigration(candidateVersion, previousMigratedVersion, versionToMigrate));
+    let storeBackup = { ...this.store };
+    for (const version2 of newerVersions) {
+      try {
+        if (beforeEachMigration) {
+          beforeEachMigration(this, {
+            fromVersion: previousMigratedVersion,
+            toVersion: version2,
+            finalVersion: versionToMigrate,
+            versions: newerVersions
+          });
+        }
+        const migration = migrations[version2];
+        migration?.(this);
+        this._set(MIGRATION_KEY, version2);
+        previousMigratedVersion = version2;
+        storeBackup = { ...this.store };
+      } catch (error49) {
+        this.store = storeBackup;
+        throw new Error(`Something went wrong during the migration! Changes applied to the store until this failed migration will be restored. ${error49}`);
+      }
+    }
+    if (this._isVersionInRangeFormat(previousMigratedVersion) || !import_semver.default.eq(previousMigratedVersion, versionToMigrate)) {
+      this._set(MIGRATION_KEY, versionToMigrate);
+    }
+  }
+  _containsReservedKey(key) {
+    if (typeof key === "object") {
+      const firsKey = Object.keys(key)[0];
+      if (firsKey === INTERNAL_KEY) {
+        return true;
+      }
+    }
+    if (typeof key !== "string") {
+      return false;
+    }
+    if (this.#options.accessPropertiesByDotNotation) {
+      if (key.startsWith(`${INTERNAL_KEY}.`)) {
+        return true;
+      }
+      return false;
+    }
+    return false;
+  }
+  _isVersionInRangeFormat(version2) {
+    return import_semver.default.clean(version2) === null;
+  }
+  _shouldPerformMigration(candidateVersion, previousMigratedVersion, versionToMigrate) {
+    if (this._isVersionInRangeFormat(candidateVersion)) {
+      if (previousMigratedVersion !== "0.0.0" && import_semver.default.satisfies(previousMigratedVersion, candidateVersion)) {
+        return false;
+      }
+      return import_semver.default.satisfies(versionToMigrate, candidateVersion);
+    }
+    if (import_semver.default.lte(candidateVersion, previousMigratedVersion)) {
+      return false;
+    }
+    if (import_semver.default.gt(candidateVersion, versionToMigrate)) {
+      return false;
+    }
+    return true;
+  }
+  _get(key, defaultValue) {
+    return getProperty(this.store, key, defaultValue);
+  }
+  _set(key, value) {
+    const { store } = this;
+    setProperty(store, key, value);
+    this.store = store;
+  }
+};
+
+// src/core/context.ts
+var import_prompts = __toESM(require_prompts3(), 1);
+var config = new Conf({
+  projectName: "jaggers-config-manager",
+  defaults: {
+    syncMode: "copy"
+  }
+});
+function getCandidatePaths() {
+  const home = import_os.default.homedir();
+  const appData = process.env.APPDATA;
+  const isWindows = process.platform === "win32";
+  const paths = [
+    { label: ".claude", path: import_path2.default.join(home, ".claude") },
+    { label: ".gemini", path: import_path2.default.join(home, ".gemini") },
+    { label: ".qwen", path: import_path2.default.join(home, ".qwen") },
+    { label: "~/.gemini/antigravity", path: import_path2.default.join(home, ".gemini", "antigravity") }
+  ];
+  if (isWindows && appData) {
+    paths.push({ label: "Claude (AppData)", path: import_path2.default.join(appData, "Claude") });
+  }
+  return paths;
+}
+async function getContext() {
+  const choices = [];
+  const candidates = getCandidatePaths();
+  for (const c of candidates) {
+    const exists = await import_fs_extra2.default.pathExists(c.path);
+    const icon = exists ? "[X]" : "[ ]";
+    const desc = exists ? "Found" : "Not found (will create)";
+    choices.push({
+      title: `${icon} ${c.label} (${c.path})`,
+      description: desc,
+      value: c.path,
+      selected: exists
+      // Pre-select existing environments
+    });
+  }
+  const response = await (0, import_prompts.default)({
+    type: "multiselect",
+    name: "targets",
+    message: "Select target environment(s):",
+    choices,
+    hint: "- Space to select. Return to submit",
+    instructions: false
+  });
+  if (!response.targets || response.targets.length === 0) {
+    console.log(kleur_default.gray("No targets selected. Exiting."));
+    process.exit(0);
+  }
+  for (const target of response.targets) {
+    await import_fs_extra2.default.ensureDir(target);
+  }
+  return {
+    targets: response.targets,
+    syncMode: config.get("syncMode"),
+    config
+  };
+}
+function resetContext() {
+  config.clear();
+  console.log(kleur_default.yellow("Configuration cleared."));
+}
+
+// src/core/preflight.ts
+var import_path10 = __toESM(require("path"), 1);
+var import_os3 = __toESM(require("os"), 1);
+var import_fs_extra7 = __toESM(require_lib(), 1);
 
 // src/core/diff.ts
-var import_path6 = require("path");
-var import_fs_extra3 = __toESM(require_lib2(), 1);
+var import_path7 = require("path");
+var import_fs_extra4 = __toESM(require_lib(), 1);
 
 // src/utils/hash.ts
 var import_crypto = require("crypto");
-var import_fs_extra2 = __toESM(require_lib2(), 1);
-var import_path2 = require("path");
+var import_fs_extra3 = __toESM(require_lib(), 1);
+var import_path3 = require("path");
 async function hashFile(filePath) {
-  const content = await import_fs_extra2.default.readFile(filePath);
+  const content = await import_fs_extra3.default.readFile(filePath);
   return (0, import_crypto.createHash)("md5").update(content).digest("hex");
 }
 async function hashDirectory(dirPath) {
-  if (!await import_fs_extra2.default.pathExists(dirPath)) return "";
-  const stats = await import_fs_extra2.default.stat(dirPath);
+  if (!await import_fs_extra3.default.pathExists(dirPath)) return "";
+  const stats = await import_fs_extra3.default.stat(dirPath);
   if (!stats.isDirectory()) {
     return hashFile(dirPath);
   }
-  const children = await import_fs_extra2.default.readdir(dirPath);
+  const children = await import_fs_extra3.default.readdir(dirPath);
   const childHashes = await Promise.all(
     children.sort().map(async (child) => {
-      const h = await hashDirectory((0, import_path2.join)(dirPath, child));
+      const h = await hashDirectory((0, import_path3.join)(dirPath, child));
       return `${child}:${h}`;
     })
   );
   return (0, import_crypto.createHash)("md5").update(childHashes.join("|")).digest("hex");
 }
 async function getNewestMtime(targetPath) {
-  if (!await import_fs_extra2.default.pathExists(targetPath)) return 0;
-  const stats = await import_fs_extra2.default.stat(targetPath);
+  if (!await import_fs_extra3.default.pathExists(targetPath)) return 0;
+  const stats = await import_fs_extra3.default.stat(targetPath);
   let maxTime = stats.mtimeMs;
   if (stats.isDirectory()) {
-    const children = await import_fs_extra2.default.readdir(targetPath);
+    const children = await import_fs_extra3.default.readdir(targetPath);
     for (const child of children) {
-      const childTime = await getNewestMtime((0, import_path2.join)(targetPath, child));
+      const childTime = await getNewestMtime((0, import_path3.join)(targetPath, child));
       if (childTime > maxTime) maxTime = childTime;
     }
   }
@@ -32586,7 +32429,7 @@ async function getNewestMtime(targetPath) {
 }
 
 // src/adapters/claude.ts
-var import_path3 = require("path");
+var import_path4 = require("path");
 
 // src/adapters/base.ts
 var ToolAdapter = class {
@@ -32605,13 +32448,13 @@ var ClaudeAdapter = class extends ToolAdapter {
     return this.config.baseDir;
   }
   getSkillsDir() {
-    return (0, import_path3.join)(this.config.baseDir, "skills");
+    return (0, import_path4.join)(this.config.baseDir, "skills");
   }
   getHooksDir() {
-    return (0, import_path3.join)(this.config.baseDir, "hooks");
+    return (0, import_path4.join)(this.config.baseDir, "hooks");
   }
   getCommandsDir() {
-    return (0, import_path3.join)(this.config.baseDir, "commands");
+    return (0, import_path4.join)(this.config.baseDir, "commands");
   }
   getCapabilities() {
     return {
@@ -32625,47 +32468,10 @@ var ClaudeAdapter = class extends ToolAdapter {
 };
 
 // src/adapters/gemini.ts
-var import_path4 = require("path");
+var import_path5 = require("path");
 var GeminiAdapter = class extends ToolAdapter {
   toolName = "gemini";
   displayName = "Gemini";
-  config;
-  constructor(baseDir) {
-    super();
-    this.config = { tool: this.toolName, baseDir, displayName: this.displayName };
-  }
-  getConfigDir() {
-    return this.config.baseDir;
-  }
-  getSkillsDir() {
-    return (0, import_path4.join)(this.config.baseDir, "skills");
-  }
-  getHooksDir() {
-    return (0, import_path4.join)(this.config.baseDir, "hooks");
-  }
-  getCommandsDir() {
-    if (this.config.baseDir.includes("antigravity")) {
-      return (0, import_path4.join)(this.config.baseDir, "global_workflows");
-    }
-    return (0, import_path4.join)(this.config.baseDir, "commands");
-  }
-  getCapabilities() {
-    return {
-      skills: true,
-      hooks: true,
-      // Gemini supports PreToolUse -> BeforeTool via our wrapper
-      mcp: true,
-      commands: true
-      // Auto-generates commands from skills
-    };
-  }
-};
-
-// src/adapters/qwen.ts
-var import_path5 = require("path");
-var QwenAdapter = class extends ToolAdapter {
-  toolName = "qwen";
-  displayName = "Qwen";
   config;
   constructor(baseDir) {
     super();
@@ -32681,7 +32487,44 @@ var QwenAdapter = class extends ToolAdapter {
     return (0, import_path5.join)(this.config.baseDir, "hooks");
   }
   getCommandsDir() {
+    if (this.config.baseDir.includes("antigravity")) {
+      return (0, import_path5.join)(this.config.baseDir, "global_workflows");
+    }
     return (0, import_path5.join)(this.config.baseDir, "commands");
+  }
+  getCapabilities() {
+    return {
+      skills: true,
+      hooks: true,
+      // Gemini supports PreToolUse -> BeforeTool via our wrapper
+      mcp: true,
+      commands: true
+      // Auto-generates commands from skills
+    };
+  }
+};
+
+// src/adapters/qwen.ts
+var import_path6 = require("path");
+var QwenAdapter = class extends ToolAdapter {
+  toolName = "qwen";
+  displayName = "Qwen";
+  config;
+  constructor(baseDir) {
+    super();
+    this.config = { tool: this.toolName, baseDir, displayName: this.displayName };
+  }
+  getConfigDir() {
+    return this.config.baseDir;
+  }
+  getSkillsDir() {
+    return (0, import_path6.join)(this.config.baseDir, "skills");
+  }
+  getHooksDir() {
+    return (0, import_path6.join)(this.config.baseDir, "hooks");
+  }
+  getCommandsDir() {
+    return (0, import_path6.join)(this.config.baseDir, "commands");
   }
   getCapabilities() {
     return {
@@ -32737,27 +32580,27 @@ async function calculateDiff(repoRoot, systemRoot, pruneMode = false) {
     let repoPath;
     let systemPath;
     if (category === "commands") {
-      repoPath = (0, import_path6.join)(repoRoot, ".gemini", "commands");
-      systemPath = (0, import_path6.join)(systemRoot, category);
+      repoPath = (0, import_path7.join)(repoRoot, ".gemini", "commands");
+      systemPath = (0, import_path7.join)(systemRoot, category);
     } else if (category === "qwen-commands") {
-      repoPath = (0, import_path6.join)(repoRoot, ".qwen", "commands");
-      systemPath = (0, import_path6.join)(systemRoot, "commands");
+      repoPath = (0, import_path7.join)(repoRoot, ".qwen", "commands");
+      systemPath = (0, import_path7.join)(systemRoot, "commands");
     } else if (category === "antigravity-workflows") {
-      repoPath = (0, import_path6.join)(repoRoot, ".gemini", "antigravity", "global_workflows");
-      systemPath = (0, import_path6.join)(systemRoot, ".gemini", "antigravity", "global_workflows");
+      repoPath = (0, import_path7.join)(repoRoot, ".gemini", "antigravity", "global_workflows");
+      systemPath = (0, import_path7.join)(systemRoot, ".gemini", "antigravity", "global_workflows");
     } else {
-      repoPath = (0, import_path6.join)(repoRoot, category);
-      systemPath = (0, import_path6.join)(systemRoot, category);
+      repoPath = (0, import_path7.join)(repoRoot, category);
+      systemPath = (0, import_path7.join)(systemRoot, category);
     }
-    if (!await import_fs_extra3.default.pathExists(repoPath)) continue;
-    const items = (await import_fs_extra3.default.readdir(repoPath)).filter((i) => !IGNORED_ITEMS.has(i));
+    if (!await import_fs_extra4.default.pathExists(repoPath)) continue;
+    const items = (await import_fs_extra4.default.readdir(repoPath)).filter((i) => !IGNORED_ITEMS.has(i));
     changeSet[category].total = items.length;
     for (const item of items) {
       await compareItem(
         category,
         item,
-        (0, import_path6.join)(repoPath, item),
-        (0, import_path6.join)(systemPath, item),
+        (0, import_path7.join)(repoPath, item),
+        (0, import_path7.join)(systemPath, item),
         changeSet,
         pruneMode
       );
@@ -32767,9 +32610,9 @@ async function calculateDiff(repoRoot, systemRoot, pruneMode = false) {
     "settings.json": { repo: "config/settings.json", sys: "settings.json" }
   };
   for (const [name, paths] of Object.entries(configMapping)) {
-    const itemRepoPath = (0, import_path6.join)(repoRoot, paths.repo);
-    const itemSystemPath = (0, import_path6.join)(systemRoot, paths.sys);
-    if (await import_fs_extra3.default.pathExists(itemRepoPath)) {
+    const itemRepoPath = (0, import_path7.join)(repoRoot, paths.repo);
+    const itemSystemPath = (0, import_path7.join)(systemRoot, paths.sys);
+    if (await import_fs_extra4.default.pathExists(itemRepoPath)) {
       await compareItem("config", name, itemRepoPath, itemSystemPath, changeSet);
     }
   }
@@ -32777,7 +32620,7 @@ async function calculateDiff(repoRoot, systemRoot, pruneMode = false) {
 }
 async function compareItem(category, item, repoPath, systemPath, changeSet, pruneMode = false) {
   const cat = changeSet[category];
-  if (!await import_fs_extra3.default.pathExists(systemPath)) {
+  if (!await import_fs_extra4.default.pathExists(systemPath)) {
     cat.missing.push(item);
     return;
   }
@@ -32803,419 +32646,17 @@ async function compareItem(category, item, repoPath, systemPath, changeSet, prun
   }
 }
 
-// src/core/sync-executor.ts
-var import_path10 = __toESM(require("path"), 1);
-var import_fs_extra9 = __toESM(require_lib2(), 1);
-init_kleur();
-
-// src/utils/transform-gemini.ts
-var import_fs_extra4 = __toESM(require_lib2(), 1);
-async function transformSkillToCommand(skillMdPath) {
-  try {
-    const content = await import_fs_extra4.default.readFile(skillMdPath, "utf8");
-    const frontmatterMatch = content.match(/^---([\s\S]+?)---/);
-    if (!frontmatterMatch) return null;
-    const frontmatter = frontmatterMatch[1];
-    const nameMatch = frontmatter.match(/name:\s*(.+)/);
-    const descMatch = frontmatter.match(/description:\s*(.+)/);
-    const geminiCmdMatch = frontmatter.match(/gemini-command:\s*(.+)/);
-    const geminiPromptMatch = frontmatter.match(/gemini-prompt:\s*\|?\s*\n?([\s\S]+?)(?=\n[a-z- ]+:|$)/);
-    if (!nameMatch || !descMatch) return null;
-    const name = nameMatch[1].trim();
-    const description = descMatch[1].trim();
-    const commandName = geminiCmdMatch ? geminiCmdMatch[1].trim() : name;
-    let promptBody = `Use the ${name} skill to handle this: {{args}}`;
-    if (geminiPromptMatch) {
-      const extraLines = geminiPromptMatch[1].trim();
-      promptBody = `Use the ${name} skill to handle this request: {{args}}
-
-${extraLines}`;
-    }
-    const toml = `description = """${description}"""
-prompt = """
-${promptBody}
-"""
-`;
-    return {
-      toml,
-      commandName
-    };
-  } catch (error49) {
-    console.error(`Error transforming skill to command: ${error49.message}`);
-    return null;
-  }
-}
-
-// src/utils/atomic-config.ts
-var import_fs_extra5 = __toESM(require_lib2(), 1);
-var import_comment_json = __toESM(require_src3(), 1);
-var PROTECTED_KEYS = [
-  "permissions.allow",
-  // User-defined permissions
-  "hooks.UserPromptSubmit",
-  // Claude hooks
-  "hooks.SessionStart",
-  "hooks.PreToolUse",
-  "hooks.BeforeAgent",
-  // Gemini hooks
-  "hooks.BeforeTool",
-  // Gemini hooks
-  "security",
-  // Auth secrets/OAuth data
-  "general",
-  // Personal preferences
-  "enabledPlugins",
-  // User-enabled/disabled plugins
-  "model",
-  // User's preferred model
-  "skillSuggestions.enabled"
-  // User preferences
-];
-function isValueProtected(keyPath) {
-  return PROTECTED_KEYS.some(
-    (protectedPath) => keyPath === protectedPath || keyPath.startsWith(protectedPath + ".")
-  );
-}
-function deepMergeWithProtection(original, updates, currentPath = "") {
-  const result = { ...original };
-  for (const [key, value] of Object.entries(updates)) {
-    const keyPath = currentPath ? `${currentPath}.${key}` : key;
-    if (isValueProtected(keyPath) && original.hasOwnProperty(key)) {
-      continue;
-    }
-    if (key === "mcpServers" && typeof value === "object" && value !== null && typeof original[key] === "object" && original[key] !== null) {
-      result[key] = { ...original[key] };
-      for (const [serverName, serverConfig] of Object.entries(value)) {
-        if (!result[key].hasOwnProperty(serverName)) {
-          result[key][serverName] = serverConfig;
-        }
-      }
-    } else if (typeof value === "object" && value !== null && !Array.isArray(value) && typeof original[key] === "object" && original[key] !== null && !Array.isArray(original[key])) {
-      result[key] = deepMergeWithProtection(original[key], value, keyPath);
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-}
-async function atomicWrite(filePath, data, options = {}) {
-  const {
-    preserveComments = false,
-    backupOnSuccess = false,
-    backupSuffix = ".bak"
-  } = options;
-  const tempFilePath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).substr(2, 9)}`;
-  try {
-    let content;
-    if (preserveComments) {
-      content = (0, import_comment_json.stringify)(data, null, 2);
-    } else {
-      content = JSON.stringify(data, null, 2);
-    }
-    await import_fs_extra5.default.writeFile(tempFilePath, content, "utf8");
-    const tempStats = await import_fs_extra5.default.stat(tempFilePath);
-    if (tempStats.size === 0) {
-      throw new Error("Temporary file is empty - write failed");
-    }
-    if (backupOnSuccess && await import_fs_extra5.default.pathExists(filePath)) {
-      const backupPath = `${filePath}${backupSuffix}`;
-      await import_fs_extra5.default.copy(filePath, backupPath);
-    }
-    await import_fs_extra5.default.rename(tempFilePath, filePath);
-  } catch (error49) {
-    try {
-      if (await import_fs_extra5.default.pathExists(tempFilePath)) {
-        await import_fs_extra5.default.unlink(tempFilePath);
-      }
-    } catch (cleanupError) {
-    }
-    throw error49;
-  }
-}
-async function safeReadConfig(filePath) {
-  try {
-    if (!await import_fs_extra5.default.pathExists(filePath)) {
-      return {};
-    }
-    const content = await import_fs_extra5.default.readFile(filePath, "utf8");
-    try {
-      return (0, import_comment_json.parse)(content);
-    } catch (parseError) {
-      return JSON.parse(content);
-    }
-  } catch (error49) {
-    if (error49.code === "ENOENT") return {};
-    throw new Error(`Failed to read config file: ${error49.message}`);
-  }
-}
-async function safeMergeConfig(localConfigPath, repoConfig, options = {}) {
-  const {
-    preserveComments = true,
-    backupOnSuccess = true,
-    dryRun = false,
-    resolvedLocalConfig = null
-  } = options;
-  const localConfig = resolvedLocalConfig || await safeReadConfig(localConfigPath);
-  const changes = [];
-  if (localConfig.mcpServers && typeof localConfig.mcpServers === "object") {
-    const localServerNames = Object.keys(localConfig.mcpServers);
-    if (localServerNames.length > 0) {
-      changes.push(`Preserved ${localServerNames.length} local mcpServers: ${localServerNames.join(", ")}`);
-    }
-  }
-  if (repoConfig.mcpServers && typeof repoConfig.mcpServers === "object") {
-    const repoServerNames = Object.keys(repoConfig.mcpServers);
-    const newServerNames = repoServerNames.filter(
-      (name) => !localConfig.mcpServers || !localConfig.mcpServers.hasOwnProperty(name)
-    );
-    if (newServerNames.length > 0) {
-      changes.push(`Added ${newServerNames.length} new non-conflicting mcpServers from repository: ${newServerNames.join(", ")}`);
-    }
-  }
-  const mergedConfig = deepMergeWithProtection(localConfig, repoConfig);
-  const configsAreEqual = JSON.stringify(localConfig) === JSON.stringify(mergedConfig);
-  if (!configsAreEqual && !dryRun) {
-    await atomicWrite(localConfigPath, mergedConfig, {
-      preserveComments,
-      backupOnSuccess
-    });
-  }
-  return {
-    updated: !configsAreEqual,
-    changes
-  };
-}
-
-// src/utils/config-adapter.ts
-var import_path7 = __toESM(require("path"), 1);
-var import_os2 = __toESM(require("os"), 1);
-var EnvVarTransformer = class {
-  static transform(value, from, to) {
-    if (from === to) return value;
-    if (typeof value === "string") return this.transformString(value, from, to);
-    if (Array.isArray(value)) return value.map((item) => this.transform(item, from, to));
-    if (value && typeof value === "object") {
-      const result = {};
-      for (const [key, item] of Object.entries(value)) {
-        result[key] = this.transform(item, from, to);
-      }
-      return result;
-    }
-    return value;
-  }
-  static transformString(value, from, to) {
-    const normalized = this.toNormalized(value, from);
-    return this.fromNormalized(normalized, to);
-  }
-  static toNormalized(value, from) {
-    switch (from) {
-      case "claude":
-        return value;
-      case "cursor":
-        return value.replace(/\$\{env:([A-Za-z0-9_]+)\}/g, "${$1}");
-      case "opencode":
-        return value.replace(/\{env:([A-Za-z0-9_]+)\}/g, "${$1}");
-      case "gemini":
-        return value;
-      case "qwen":
-        return value;
-      default:
-        return value;
-    }
-  }
-  static fromNormalized(value, to) {
-    switch (to) {
-      case "claude":
-        return value;
-      case "cursor":
-        return value.replace(/\$\{([A-Z0-9_]+)\}/g, (match, name) => {
-          if (["workspaceFolder", "userHome"].includes(name)) return match;
-          return `\${env:${name}}`;
-        });
-      case "opencode":
-        return value.replace(/\$\{([A-Z0-9_]+)\}/g, "{env:$1}");
-      case "gemini":
-        return value;
-      case "qwen":
-        return value;
-      default:
-        return value;
-    }
-  }
-};
-var ConfigAdapter = class {
-  systemRoot;
-  homeDir;
-  isClaude;
-  isGemini;
-  isQwen;
-  isCursor;
-  isAntigravity;
-  targetFormat;
-  hooksDir;
-  constructor(systemRoot) {
-    this.systemRoot = systemRoot;
-    this.homeDir = import_os2.default.homedir();
-    const normalizedRoot = systemRoot.replace(/\\/g, "/").toLowerCase();
-    this.isClaude = normalizedRoot.includes(".claude") || normalizedRoot.includes("/claude");
-    this.isGemini = normalizedRoot.includes(".gemini") || normalizedRoot.includes("/gemini");
-    this.isQwen = normalizedRoot.includes(".qwen") || normalizedRoot.includes("/qwen");
-    this.isCursor = normalizedRoot.includes("cursor");
-    this.isAntigravity = normalizedRoot.includes("antigravity");
-    this.targetFormat = this.isCursor ? "cursor" : this.isAntigravity ? "antigravity" : this.isClaude ? "claude" : "claude";
-    this.hooksDir = import_path7.default.join(this.systemRoot, "hooks");
-  }
-  adaptMcpConfig(canonicalConfig) {
-    if (!canonicalConfig || !canonicalConfig.mcpServers) return {};
-    const config3 = JSON.parse(JSON.stringify(canonicalConfig));
-    config3.mcpServers = EnvVarTransformer.transform(config3.mcpServers, "claude", this.targetFormat);
-    if (this.isGemini || this.isQwen) {
-      this.transformToGeminiFormat(config3.mcpServers);
-    } else if (this.isAntigravity) {
-      this.transformToAntigravityFormat(config3.mcpServers);
-    } else if (this.isClaude) {
-      this.transformToClaudeFormat(config3.mcpServers);
-    }
-    this.resolveMcpPaths(config3.mcpServers);
-    return config3;
-  }
-  adaptHooksConfig(canonicalHooks) {
-    if (!canonicalHooks) return {};
-    if (this.isCursor) return { hooks: {} };
-    const hooksConfig = JSON.parse(JSON.stringify(canonicalHooks));
-    if (this.isGemini) {
-      return this.transformToGeminiHooks(hooksConfig);
-    }
-    this.resolveHookScripts(hooksConfig);
-    return hooksConfig;
-  }
-  resolveMcpPaths(servers) {
-    for (const server of Object.values(servers)) {
-      if (server.args) server.args = server.args.map((arg) => this.resolvePath(arg));
-      if (server.cwd) server.cwd = this.resolvePath(server.cwd);
-      if (server.env) {
-        for (const key in server.env) server.env[key] = this.resolvePath(server.env[key]);
-      }
-    }
-  }
-  transformToGeminiFormat(servers) {
-    for (const server of Object.values(servers)) {
-      delete server.type;
-    }
-  }
-  transformToClaudeFormat(servers) {
-    for (const server of Object.values(servers)) {
-      if (server.url && !server.type) {
-        if (server.url.includes("/sse")) {
-          server.type = "sse";
-        } else {
-          server.type = "http";
-        }
-      } else if (server.command && !server.type) {
-        server.type = "stdio";
-      }
-    }
-  }
-  transformToAntigravityFormat(servers) {
-    for (const [name, server] of Object.entries(servers)) {
-      if (server.url && !server.type) {
-        if (server.url.includes("/sse")) {
-          server.type = "sse";
-        } else {
-          server.type = "http";
-        }
-      } else if (server.command && !server.type) {
-        server.type = "stdio";
-      }
-      if (server.url && (server.type === "http" || server.type === "sse")) {
-        server.serverUrl = server.url;
-        delete server.url;
-      }
-    }
-  }
-  resolveHookScripts(hooksConfig) {
-    if (hooksConfig.hooks) {
-      const pythonBin = process.platform === "win32" ? "python" : "python3";
-      for (const [event, hooks] of Object.entries(hooksConfig.hooks)) {
-        if (Array.isArray(hooks)) {
-          hooks.forEach((hook) => {
-            if (hook.script) {
-              hook.type = "command";
-              const resolvedScriptPath = this.resolvePath(import_path7.default.join(this.hooksDir, hook.script));
-              hook.command = `${pythonBin} ${resolvedScriptPath}`;
-              delete hook.script;
-            }
-          });
-        }
-      }
-    }
-    if (hooksConfig.statusLine && hooksConfig.statusLine.script) {
-      const pythonBin = process.platform === "win32" ? "python" : "python3";
-      hooksConfig.statusLine.type = "command";
-      const resolvedScriptPath = this.resolvePath(import_path7.default.join(this.hooksDir, hooksConfig.statusLine.script));
-      hooksConfig.statusLine.command = `${pythonBin} ${resolvedScriptPath}`;
-      delete hooksConfig.statusLine.script;
-    }
-  }
-  transformToGeminiHooks(hooksConfig) {
-    const geminiHooks = { hooks: {} };
-    const eventMap = {
-      "UserPromptSubmit": "BeforeAgent",
-      "PreToolUse": "BeforeTool",
-      "SessionStart": "SessionStart"
-    };
-    const toolMap = {
-      "Read": "read_file",
-      "Write": "write_file",
-      "Edit": "replace",
-      "Bash": "run_shell_command"
-    };
-    const pythonBin = process.platform === "win32" ? "python" : "python3";
-    for (const [event, hooks] of Object.entries(hooksConfig.hooks || {})) {
-      const geminiEvent = eventMap[event];
-      if (!geminiEvent) continue;
-      geminiHooks.hooks[geminiEvent] = hooks.map((hook) => {
-        const newHook = { ...hook };
-        if (newHook.matcher) {
-          for (const [claudeTool, geminiTool] of Object.entries(toolMap)) {
-            newHook.matcher = newHook.matcher.replace(new RegExp(`\\b${claudeTool}\\b`, "g"), geminiTool);
-          }
-        }
-        if (newHook.script) {
-          newHook.type = "command";
-          const resolvedScriptPath = this.resolvePath(import_path7.default.join(this.hooksDir, newHook.script));
-          newHook.command = `${pythonBin} ${resolvedScriptPath}`;
-          delete newHook.script;
-        }
-        newHook.timeout = newHook.timeout || 6e4;
-        return newHook;
-      });
-    }
-    return geminiHooks;
-  }
-  resolvePath(p) {
-    if (!p || typeof p !== "string") return p;
-    let resolved = p.replace(/~\//g, this.homeDir + "/").replace(/\${HOME}/g, this.homeDir);
-    if (process.platform === "win32") {
-      resolved = resolved.replace(/\\/g, "/");
-    }
-    return resolved;
-  }
-};
-
 // src/utils/sync-mcp-cli.ts
 var import_child_process = require("child_process");
-var import_fs_extra7 = __toESM(require_lib2(), 1);
+var import_fs_extra6 = __toESM(require_lib(), 1);
 var import_path9 = __toESM(require("path"), 1);
-init_kleur();
 
 // src/utils/env-manager.ts
-var import_fs_extra6 = __toESM(require_lib2(), 1);
+var import_fs_extra5 = __toESM(require_lib(), 1);
 var import_path8 = __toESM(require("path"), 1);
-var import_os3 = __toESM(require("os"), 1);
-init_kleur();
+var import_os2 = __toESM(require("os"), 1);
 var import_dotenv = __toESM(require_main(), 1);
-var CONFIG_DIR = import_path8.default.join(import_os3.default.homedir(), ".config", "jaggers-agent-tools");
+var CONFIG_DIR = import_path8.default.join(import_os2.default.homedir(), ".config", "jaggers-agent-tools");
 var ENV_FILE = import_path8.default.join(CONFIG_DIR, ".env");
 var ENV_EXAMPLE_FILE = import_path8.default.join(CONFIG_DIR, ".env.example");
 var REQUIRED_ENV_VARS = {
@@ -33226,14 +32667,14 @@ var REQUIRED_ENV_VARS = {
   }
 };
 function ensureEnvFile() {
-  if (!import_fs_extra6.default.existsSync(CONFIG_DIR)) {
-    import_fs_extra6.default.ensureDirSync(CONFIG_DIR);
+  if (!import_fs_extra5.default.existsSync(CONFIG_DIR)) {
+    import_fs_extra5.default.ensureDirSync(CONFIG_DIR);
     console.log(kleur_default.gray(`  Created config directory: ${CONFIG_DIR}`));
   }
-  if (!import_fs_extra6.default.existsSync(ENV_EXAMPLE_FILE)) {
+  if (!import_fs_extra5.default.existsSync(ENV_EXAMPLE_FILE)) {
     createEnvExample();
   }
-  if (!import_fs_extra6.default.existsSync(ENV_FILE)) {
+  if (!import_fs_extra5.default.existsSync(ENV_FILE)) {
     createEnvFile();
     return false;
   }
@@ -33255,7 +32696,7 @@ function createEnvExample() {
     "# See config/.env.example in the repository for all available options",
     ""
   ].join("\n");
-  import_fs_extra6.default.writeFileSync(ENV_EXAMPLE_FILE, content);
+  import_fs_extra5.default.writeFileSync(ENV_EXAMPLE_FILE, content);
   console.log(kleur_default.gray(`  Created example file: ${ENV_EXAMPLE_FILE}`));
 }
 function createEnvFile() {
@@ -33266,12 +32707,12 @@ function createEnvFile() {
     "# Copy values from .env.example and fill in your actual keys",
     ""
   ].join("\n");
-  import_fs_extra6.default.writeFileSync(ENV_FILE, content);
+  import_fs_extra5.default.writeFileSync(ENV_FILE, content);
   console.log(kleur_default.green(`  Created environment file: ${ENV_FILE}`));
 }
 function loadEnvFile() {
-  if (import_fs_extra6.default.existsSync(ENV_FILE)) {
-    const envConfig = import_dotenv.default.parse(import_fs_extra6.default.readFileSync(ENV_FILE));
+  if (import_fs_extra5.default.existsSync(ENV_FILE)) {
+    const envConfig = import_dotenv.default.parse(import_fs_extra5.default.readFileSync(ENV_FILE));
     for (const [key, value] of Object.entries(envConfig)) {
       if (!process.env[key]) {
         process.env[key] = value;
@@ -33560,71 +33001,591 @@ function loadCanonicalMcpConfig(repoRoot, includeOptional = false) {
   const corePath = import_path9.default.join(repoRoot, "config", "mcp_servers.json");
   const optionalPath = import_path9.default.join(repoRoot, "config", "mcp_servers_optional.json");
   const config3 = { mcpServers: {} };
-  if (import_fs_extra7.default.existsSync(corePath)) {
-    const core = import_fs_extra7.default.readJsonSync(corePath);
+  if (import_fs_extra6.default.existsSync(corePath)) {
+    const core = import_fs_extra6.default.readJsonSync(corePath);
     config3.mcpServers = { ...config3.mcpServers, ...core.mcpServers };
   }
-  if (includeOptional && import_fs_extra7.default.existsSync(optionalPath)) {
-    const optional2 = import_fs_extra7.default.readJsonSync(optionalPath);
+  if (includeOptional && import_fs_extra6.default.existsSync(optionalPath)) {
+    const optional2 = import_fs_extra6.default.readJsonSync(optionalPath);
     config3.mcpServers = { ...config3.mcpServers, ...optional2.mcpServers };
   }
   return config3;
 }
-async function promptOptionalServers(repoRoot) {
-  const optionalPath = import_path9.default.join(repoRoot, "config", "mcp_servers_optional.json");
-  if (!import_fs_extra7.default.existsSync(optionalPath)) {
-    return false;
-  }
-  const optional2 = import_fs_extra7.default.readJsonSync(optionalPath);
-  const servers = Object.entries(optional2.mcpServers || {}).map(([name, server]) => ({
-    name,
-    description: server._notes?.description || "No description",
-    prerequisite: server._notes?.prerequisite || ""
-  }));
-  if (servers.length === 0) {
-    return false;
-  }
-  console.log(kleur_default.bold("\n\u{1F4E6} Optional MCP Servers Available:"));
-  console.log(kleur_default.dim("   These are not installed by default.\n"));
-  for (let i = 0; i < servers.length; i++) {
-    const server = servers[i];
-    console.log(kleur_default.cyan(`   [${i + 1}] ${server.name}`));
-    console.log(kleur_default.dim(`      ${server.description}`));
-    if (server.prerequisite) {
-      console.log(kleur_default.yellow(`      \u26A0\uFE0F  ${server.prerequisite}`));
+
+// src/core/preflight.ts
+function getCandidatePaths2() {
+  const home = import_os3.default.homedir();
+  return [
+    { label: ".claude", path: import_path10.default.join(home, ".claude") },
+    { label: ".gemini", path: import_path10.default.join(home, ".gemini") },
+    { label: ".qwen", path: import_path10.default.join(home, ".qwen") },
+    { label: ".gemini/antigravity", path: import_path10.default.join(home, ".gemini", "antigravity") }
+  ];
+}
+async function runPreflight(repoRoot, prune = false) {
+  const candidates = getCandidatePaths2();
+  const canonicalMcp = loadCanonicalMcpConfig(repoRoot);
+  const targetResults = await Promise.all(
+    candidates.map(async (c) => {
+      try {
+        const exists = await import_fs_extra7.default.pathExists(c.path);
+        if (!exists) return null;
+        const agent = detectAgent(c.path);
+        const changeSet = await calculateDiff(repoRoot, c.path, prune);
+        const files = [];
+        for (const [category, cat] of Object.entries(changeSet)) {
+          for (const name of cat.missing) files.push({ name, status: "missing", category });
+          for (const name of cat.outdated) files.push({ name, status: "outdated", category });
+          for (const name of cat.drifted) files.push({ name, status: "drifted", category });
+        }
+        const installedMcp = agent ? getCurrentServers(agent) : [];
+        const mcpCore = Object.keys(canonicalMcp.mcpServers || {}).map((name) => ({
+          name,
+          installed: installedMcp.includes(name)
+        }));
+        return { target: c.path, label: c.label, agent, files, mcpCore, changeSet };
+      } catch (err) {
+        console.warn(`\u26A0 Preflight skipped ${c.label}: ${err.message}`);
+        return null;
+      }
+    })
+  );
+  const targets = targetResults.filter((t) => t !== null);
+  const allInstalledMcp = /* @__PURE__ */ new Set();
+  for (const t of targets) {
+    if (t.agent) {
+      const installed = getCurrentServers(t.agent);
+      for (const name of installed) allInstalledMcp.add(name);
     }
   }
-  console.log(kleur_default.dim("\n   Enter numbers separated by commas (e.g., 1,2) or press Enter to skip.\n"));
-  const prompts3 = await Promise.resolve().then(() => __toESM(require_prompts3(), 1));
-  const { selection } = await prompts3.default({
-    type: "text",
-    name: "selection",
-    message: "Which optional servers would you like to install?",
-    initial: "",
-    format: (val) => val.trim()
-  });
-  if (!selection || selection.trim() === "") {
-    console.log(kleur_default.gray("  Skipping optional servers.\n"));
-    return false;
-  }
-  const selectedIndices = selection.split(/[,\s]+/).map((s) => parseInt(s.trim(), 10) - 1).filter((n) => !isNaN(n) && n >= 0 && n < servers.length);
-  if (selectedIndices.length === 0) {
-    console.log(kleur_default.gray("  No valid selection. Skipping optional servers.\n"));
-    return false;
-  }
-  const selected = selectedIndices.map((i) => servers[i].name);
-  console.log(kleur_default.green(`  Selected: ${selected.join(", ")}
-`));
-  return selected;
+  const optionalConfig = loadCanonicalMcpConfig(repoRoot, true);
+  const optionalServers = Object.entries(optionalConfig.mcpServers || {}).filter(([name]) => !allInstalledMcp.has(name)).map(([name, server]) => ({
+    name,
+    description: server._notes?.description || "",
+    prerequisite: server._notes?.prerequisite,
+    installCmd: server._notes?.install_cmd,
+    postInstallMessage: server._notes?.post_install_message
+  }));
+  const syncMode = prune ? "prune" : "copy";
+  return { targets, optionalServers, repoRoot, syncMode };
 }
 
+// src/core/interactive-plan.ts
+var import_prompts2 = __toESM(require_prompts3(), 1);
+var STATUS_LABEL = {
+  missing: kleur_default.green("[+]"),
+  outdated: kleur_default.blue("[\u2191]"),
+  drifted: kleur_default.red("[~]")
+};
+function fileChoices(target) {
+  if (target.files.length === 0) return [];
+  const choices = [
+    { title: kleur_default.bold().dim(`  \u2500\u2500 ${target.label} files \u2500\u2500`), disabled: true, value: null }
+  ];
+  for (const f of target.files) {
+    const label = STATUS_LABEL[f.status] ?? "[?]";
+    const hint = f.status === "drifted" ? kleur_default.dim(" local edits \u2014 skip recommended") : "";
+    choices.push({
+      title: `  ${label} ${f.category}/${f.name}${hint}`,
+      value: { type: "file", target: target.target, name: f.name, status: f.status, category: f.category },
+      selected: f.status !== "drifted"
+    });
+  }
+  return choices;
+}
+function mcpCoreChoices(target) {
+  const uninstalled = target.mcpCore.filter((m) => !m.installed);
+  const installed = target.mcpCore.filter((m) => m.installed);
+  if (target.mcpCore.length === 0) return [];
+  const choices = [
+    { title: kleur_default.bold().dim(`  \u2500\u2500 ${target.label} MCP servers \u2500\u2500`), disabled: true, value: null }
+  ];
+  for (const m of uninstalled) {
+    choices.push({
+      title: `  ${kleur_default.green("[+]")} ${m.name}`,
+      value: { type: "mcp-core", target: target.target, agent: target.agent, name: m.name },
+      selected: true
+    });
+  }
+  for (const m of installed) {
+    choices.push({
+      title: kleur_default.dim(`  [=] ${m.name}  (already installed)`),
+      disabled: true,
+      value: null
+    });
+  }
+  return choices;
+}
+function optionalChoices(optionalServers) {
+  if (optionalServers.length === 0) return [];
+  const choices = [
+    { title: kleur_default.bold().dim("  \u2500\u2500 optional servers \u2500\u2500"), disabled: true, value: null }
+  ];
+  for (const s of optionalServers) {
+    const prereq = s.prerequisite ? kleur_default.yellow(` \u26A0 ${s.prerequisite}`) : "";
+    choices.push({
+      title: `  ${kleur_default.yellow("[?]")} ${s.name}${prereq}`,
+      value: { type: "mcp-optional", server: s },
+      selected: false
+    });
+  }
+  return choices;
+}
+async function interactivePlan(plan, opts = {}) {
+  const allChoices = [
+    ...plan.targets.flatMap((t) => [...fileChoices(t), ...mcpCoreChoices(t)]),
+    ...optionalChoices(plan.optionalServers)
+  ].filter((c) => c.title);
+  const totalSelectable = allChoices.filter((c) => !c.disabled && c.value !== null).length;
+  if (totalSelectable === 0) {
+    console.log(kleur_default.green("\n\u2713 Everything is up-to-date\n"));
+    return { files: [], mcpCore: [], optionalServers: [], repoRoot: plan.repoRoot, syncMode: plan.syncMode };
+  }
+  console.log(kleur_default.bold("\n\u{1F4CB} Sync Plan") + kleur_default.dim("  (space to toggle, a = all, enter to confirm)\n"));
+  if (opts.dryRun) {
+    for (const c of allChoices) {
+      if (c.disabled) {
+        console.log(kleur_default.dim(c.title));
+        continue;
+      }
+      const bullet = c.selected ? "\u25C9" : "\u25EF";
+      console.log(`  ${bullet} ${c.title?.trim()}`);
+    }
+    console.log(kleur_default.cyan("\n\u{1F4A1} Dry run \u2014 no changes written\n"));
+    return null;
+  }
+  if (opts.yes) {
+    const selected = allChoices.filter((c) => !c.disabled && c.selected && c.value).map((c) => c.value);
+    return buildSelectedPlan(selected, plan);
+  }
+  const response = await (0, import_prompts2.default)({
+    type: "multiselect",
+    name: "selected",
+    message: "Select items to sync:",
+    choices: allChoices,
+    hint: "space to toggle \xB7 a = all \xB7 enter to confirm",
+    instructions: false,
+    min: 0
+  });
+  if (!response || response.selected === void 0) {
+    console.log(kleur_default.gray("\n  Cancelled.\n"));
+    return null;
+  }
+  return buildSelectedPlan(response.selected, plan);
+}
+function buildSelectedPlan(selected, plan) {
+  const files = selected.filter((v) => v?.type === "file").map((v) => ({ target: v.target, name: v.name, status: v.status, category: v.category }));
+  const mcpCore = selected.filter((v) => v?.type === "mcp-core").map((v) => ({ target: v.target, agent: v.agent, name: v.name }));
+  const optionalServers = selected.filter((v) => v?.type === "mcp-optional").map((v) => v.server);
+  return { files, mcpCore, optionalServers, repoRoot: plan.repoRoot, syncMode: plan.syncMode };
+}
+
+// src/core/sync-executor.ts
+var import_path12 = __toESM(require("path"), 1);
+var import_fs_extra11 = __toESM(require_lib(), 1);
+
+// src/utils/transform-gemini.ts
+var import_fs_extra8 = __toESM(require_lib(), 1);
+async function transformSkillToCommand(skillMdPath) {
+  try {
+    const content = await import_fs_extra8.default.readFile(skillMdPath, "utf8");
+    const frontmatterMatch = content.match(/^---([\s\S]+?)---/);
+    if (!frontmatterMatch) return null;
+    const frontmatter = frontmatterMatch[1];
+    const nameMatch = frontmatter.match(/name:\s*(.+)/);
+    const descMatch = frontmatter.match(/description:\s*(.+)/);
+    const geminiCmdMatch = frontmatter.match(/gemini-command:\s*(.+)/);
+    const geminiPromptMatch = frontmatter.match(/gemini-prompt:\s*\|?\s*\n?([\s\S]+?)(?=\n[a-z- ]+:|$)/);
+    if (!nameMatch || !descMatch) return null;
+    const name = nameMatch[1].trim();
+    const description = descMatch[1].trim();
+    const commandName = geminiCmdMatch ? geminiCmdMatch[1].trim() : name;
+    let promptBody = `Use the ${name} skill to handle this: {{args}}`;
+    if (geminiPromptMatch) {
+      const extraLines = geminiPromptMatch[1].trim();
+      promptBody = `Use the ${name} skill to handle this request: {{args}}
+
+${extraLines}`;
+    }
+    const toml = `description = """${description}"""
+prompt = """
+${promptBody}
+"""
+`;
+    return {
+      toml,
+      commandName
+    };
+  } catch (error49) {
+    console.error(`Error transforming skill to command: ${error49.message}`);
+    return null;
+  }
+}
+
+// src/utils/atomic-config.ts
+var import_fs_extra9 = __toESM(require_lib(), 1);
+var import_comment_json = __toESM(require_src3(), 1);
+var PROTECTED_KEYS = [
+  "permissions.allow",
+  // User-defined permissions
+  "hooks.UserPromptSubmit",
+  // Claude hooks
+  "hooks.SessionStart",
+  "hooks.PreToolUse",
+  "hooks.BeforeAgent",
+  // Gemini hooks
+  "hooks.BeforeTool",
+  // Gemini hooks
+  "security",
+  // Auth secrets/OAuth data
+  "general",
+  // Personal preferences
+  "enabledPlugins",
+  // User-enabled/disabled plugins
+  "model",
+  // User's preferred model
+  "skillSuggestions.enabled"
+  // User preferences
+];
+function isValueProtected(keyPath) {
+  return PROTECTED_KEYS.some(
+    (protectedPath) => keyPath === protectedPath || keyPath.startsWith(protectedPath + ".")
+  );
+}
+function deepMergeWithProtection(original, updates, currentPath = "") {
+  const result = { ...original };
+  for (const [key, value] of Object.entries(updates)) {
+    const keyPath = currentPath ? `${currentPath}.${key}` : key;
+    if (isValueProtected(keyPath) && original.hasOwnProperty(key)) {
+      continue;
+    }
+    if (key === "mcpServers" && typeof value === "object" && value !== null && typeof original[key] === "object" && original[key] !== null) {
+      result[key] = { ...original[key] };
+      for (const [serverName, serverConfig] of Object.entries(value)) {
+        if (!result[key].hasOwnProperty(serverName)) {
+          result[key][serverName] = serverConfig;
+        }
+      }
+    } else if (typeof value === "object" && value !== null && !Array.isArray(value) && typeof original[key] === "object" && original[key] !== null && !Array.isArray(original[key])) {
+      result[key] = deepMergeWithProtection(original[key], value, keyPath);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+async function atomicWrite(filePath, data, options = {}) {
+  const {
+    preserveComments = false,
+    backupOnSuccess = false,
+    backupSuffix = ".bak"
+  } = options;
+  const tempFilePath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).substr(2, 9)}`;
+  try {
+    let content;
+    if (preserveComments) {
+      content = (0, import_comment_json.stringify)(data, null, 2);
+    } else {
+      content = JSON.stringify(data, null, 2);
+    }
+    await import_fs_extra9.default.writeFile(tempFilePath, content, "utf8");
+    const tempStats = await import_fs_extra9.default.stat(tempFilePath);
+    if (tempStats.size === 0) {
+      throw new Error("Temporary file is empty - write failed");
+    }
+    if (backupOnSuccess && await import_fs_extra9.default.pathExists(filePath)) {
+      const backupPath = `${filePath}${backupSuffix}`;
+      await import_fs_extra9.default.copy(filePath, backupPath);
+    }
+    await import_fs_extra9.default.rename(tempFilePath, filePath);
+  } catch (error49) {
+    try {
+      if (await import_fs_extra9.default.pathExists(tempFilePath)) {
+        await import_fs_extra9.default.unlink(tempFilePath);
+      }
+    } catch (cleanupError) {
+    }
+    throw error49;
+  }
+}
+async function safeReadConfig(filePath) {
+  try {
+    if (!await import_fs_extra9.default.pathExists(filePath)) {
+      return {};
+    }
+    const content = await import_fs_extra9.default.readFile(filePath, "utf8");
+    try {
+      return (0, import_comment_json.parse)(content);
+    } catch (parseError) {
+      return JSON.parse(content);
+    }
+  } catch (error49) {
+    if (error49.code === "ENOENT") return {};
+    throw new Error(`Failed to read config file: ${error49.message}`);
+  }
+}
+async function safeMergeConfig(localConfigPath, repoConfig, options = {}) {
+  const {
+    preserveComments = true,
+    backupOnSuccess = true,
+    dryRun = false,
+    resolvedLocalConfig = null
+  } = options;
+  const localConfig = resolvedLocalConfig || await safeReadConfig(localConfigPath);
+  const changes = [];
+  if (localConfig.mcpServers && typeof localConfig.mcpServers === "object") {
+    const localServerNames = Object.keys(localConfig.mcpServers);
+    if (localServerNames.length > 0) {
+      changes.push(`Preserved ${localServerNames.length} local mcpServers: ${localServerNames.join(", ")}`);
+    }
+  }
+  if (repoConfig.mcpServers && typeof repoConfig.mcpServers === "object") {
+    const repoServerNames = Object.keys(repoConfig.mcpServers);
+    const newServerNames = repoServerNames.filter(
+      (name) => !localConfig.mcpServers || !localConfig.mcpServers.hasOwnProperty(name)
+    );
+    if (newServerNames.length > 0) {
+      changes.push(`Added ${newServerNames.length} new non-conflicting mcpServers from repository: ${newServerNames.join(", ")}`);
+    }
+  }
+  const mergedConfig = deepMergeWithProtection(localConfig, repoConfig);
+  const configsAreEqual = JSON.stringify(localConfig) === JSON.stringify(mergedConfig);
+  if (!configsAreEqual && !dryRun) {
+    await atomicWrite(localConfigPath, mergedConfig, {
+      preserveComments,
+      backupOnSuccess
+    });
+  }
+  return {
+    updated: !configsAreEqual,
+    changes
+  };
+}
+
+// src/utils/config-adapter.ts
+var import_path11 = __toESM(require("path"), 1);
+var import_os4 = __toESM(require("os"), 1);
+var EnvVarTransformer = class {
+  static transform(value, from, to) {
+    if (from === to) return value;
+    if (typeof value === "string") return this.transformString(value, from, to);
+    if (Array.isArray(value)) return value.map((item) => this.transform(item, from, to));
+    if (value && typeof value === "object") {
+      const result = {};
+      for (const [key, item] of Object.entries(value)) {
+        result[key] = this.transform(item, from, to);
+      }
+      return result;
+    }
+    return value;
+  }
+  static transformString(value, from, to) {
+    const normalized = this.toNormalized(value, from);
+    return this.fromNormalized(normalized, to);
+  }
+  static toNormalized(value, from) {
+    switch (from) {
+      case "claude":
+        return value;
+      case "cursor":
+        return value.replace(/\$\{env:([A-Za-z0-9_]+)\}/g, "${$1}");
+      case "opencode":
+        return value.replace(/\{env:([A-Za-z0-9_]+)\}/g, "${$1}");
+      case "gemini":
+        return value;
+      case "qwen":
+        return value;
+      default:
+        return value;
+    }
+  }
+  static fromNormalized(value, to) {
+    switch (to) {
+      case "claude":
+        return value;
+      case "cursor":
+        return value.replace(/\$\{([A-Z0-9_]+)\}/g, (match, name) => {
+          if (["workspaceFolder", "userHome"].includes(name)) return match;
+          return `\${env:${name}}`;
+        });
+      case "opencode":
+        return value.replace(/\$\{([A-Z0-9_]+)\}/g, "{env:$1}");
+      case "gemini":
+        return value;
+      case "qwen":
+        return value;
+      default:
+        return value;
+    }
+  }
+};
+var ConfigAdapter = class {
+  systemRoot;
+  homeDir;
+  isClaude;
+  isGemini;
+  isQwen;
+  isCursor;
+  isAntigravity;
+  targetFormat;
+  hooksDir;
+  constructor(systemRoot) {
+    this.systemRoot = systemRoot;
+    this.homeDir = import_os4.default.homedir();
+    const normalizedRoot = systemRoot.replace(/\\/g, "/").toLowerCase();
+    this.isClaude = normalizedRoot.includes(".claude") || normalizedRoot.includes("/claude");
+    this.isGemini = normalizedRoot.includes(".gemini") || normalizedRoot.includes("/gemini");
+    this.isQwen = normalizedRoot.includes(".qwen") || normalizedRoot.includes("/qwen");
+    this.isCursor = normalizedRoot.includes("cursor");
+    this.isAntigravity = normalizedRoot.includes("antigravity");
+    this.targetFormat = this.isCursor ? "cursor" : this.isAntigravity ? "antigravity" : this.isClaude ? "claude" : "claude";
+    this.hooksDir = import_path11.default.join(this.systemRoot, "hooks");
+  }
+  adaptMcpConfig(canonicalConfig) {
+    if (!canonicalConfig || !canonicalConfig.mcpServers) return {};
+    const config3 = JSON.parse(JSON.stringify(canonicalConfig));
+    config3.mcpServers = EnvVarTransformer.transform(config3.mcpServers, "claude", this.targetFormat);
+    if (this.isGemini || this.isQwen) {
+      this.transformToGeminiFormat(config3.mcpServers);
+    } else if (this.isAntigravity) {
+      this.transformToAntigravityFormat(config3.mcpServers);
+    } else if (this.isClaude) {
+      this.transformToClaudeFormat(config3.mcpServers);
+    }
+    this.resolveMcpPaths(config3.mcpServers);
+    return config3;
+  }
+  adaptHooksConfig(canonicalHooks) {
+    if (!canonicalHooks) return {};
+    if (this.isCursor) return { hooks: {} };
+    const hooksConfig = JSON.parse(JSON.stringify(canonicalHooks));
+    if (this.isGemini) {
+      return this.transformToGeminiHooks(hooksConfig);
+    }
+    this.resolveHookScripts(hooksConfig);
+    return hooksConfig;
+  }
+  resolveMcpPaths(servers) {
+    for (const server of Object.values(servers)) {
+      if (server.args) server.args = server.args.map((arg) => this.resolvePath(arg));
+      if (server.cwd) server.cwd = this.resolvePath(server.cwd);
+      if (server.env) {
+        for (const key in server.env) server.env[key] = this.resolvePath(server.env[key]);
+      }
+    }
+  }
+  transformToGeminiFormat(servers) {
+    for (const server of Object.values(servers)) {
+      delete server.type;
+    }
+  }
+  transformToClaudeFormat(servers) {
+    for (const server of Object.values(servers)) {
+      if (server.url && !server.type) {
+        if (server.url.includes("/sse")) {
+          server.type = "sse";
+        } else {
+          server.type = "http";
+        }
+      } else if (server.command && !server.type) {
+        server.type = "stdio";
+      }
+    }
+  }
+  transformToAntigravityFormat(servers) {
+    for (const [name, server] of Object.entries(servers)) {
+      if (server.url && !server.type) {
+        if (server.url.includes("/sse")) {
+          server.type = "sse";
+        } else {
+          server.type = "http";
+        }
+      } else if (server.command && !server.type) {
+        server.type = "stdio";
+      }
+      if (server.url && (server.type === "http" || server.type === "sse")) {
+        server.serverUrl = server.url;
+        delete server.url;
+      }
+    }
+  }
+  resolveHookScripts(hooksConfig) {
+    if (hooksConfig.hooks) {
+      const pythonBin = process.platform === "win32" ? "python" : "python3";
+      for (const [event, hooks] of Object.entries(hooksConfig.hooks)) {
+        if (Array.isArray(hooks)) {
+          hooks.forEach((hook) => {
+            if (hook.script) {
+              hook.type = "command";
+              const resolvedScriptPath = this.resolvePath(import_path11.default.join(this.hooksDir, hook.script));
+              hook.command = `${pythonBin} ${resolvedScriptPath}`;
+              delete hook.script;
+            }
+          });
+        }
+      }
+    }
+    if (hooksConfig.statusLine && hooksConfig.statusLine.script) {
+      const pythonBin = process.platform === "win32" ? "python" : "python3";
+      hooksConfig.statusLine.type = "command";
+      const resolvedScriptPath = this.resolvePath(import_path11.default.join(this.hooksDir, hooksConfig.statusLine.script));
+      hooksConfig.statusLine.command = `${pythonBin} ${resolvedScriptPath}`;
+      delete hooksConfig.statusLine.script;
+    }
+  }
+  transformToGeminiHooks(hooksConfig) {
+    const geminiHooks = { hooks: {} };
+    const eventMap = {
+      "UserPromptSubmit": "BeforeAgent",
+      "PreToolUse": "BeforeTool",
+      "SessionStart": "SessionStart"
+    };
+    const toolMap = {
+      "Read": "read_file",
+      "Write": "write_file",
+      "Edit": "replace",
+      "Bash": "run_shell_command"
+    };
+    const pythonBin = process.platform === "win32" ? "python" : "python3";
+    for (const [event, hooks] of Object.entries(hooksConfig.hooks || {})) {
+      const geminiEvent = eventMap[event];
+      if (!geminiEvent) continue;
+      geminiHooks.hooks[geminiEvent] = hooks.map((hook) => {
+        const newHook = { ...hook };
+        if (newHook.matcher) {
+          for (const [claudeTool, geminiTool] of Object.entries(toolMap)) {
+            newHook.matcher = newHook.matcher.replace(new RegExp(`\\b${claudeTool}\\b`, "g"), geminiTool);
+          }
+        }
+        if (newHook.script) {
+          newHook.type = "command";
+          const resolvedScriptPath = this.resolvePath(import_path11.default.join(this.hooksDir, newHook.script));
+          newHook.command = `${pythonBin} ${resolvedScriptPath}`;
+          delete newHook.script;
+        }
+        newHook.timeout = newHook.timeout || 6e4;
+        return newHook;
+      });
+    }
+    return geminiHooks;
+  }
+  resolvePath(p) {
+    if (!p || typeof p !== "string") return p;
+    let resolved = p.replace(/~\//g, this.homeDir + "/").replace(/\${HOME}/g, this.homeDir);
+    if (process.platform === "win32") {
+      resolved = resolved.replace(/\\/g, "/");
+    }
+    return resolved;
+  }
+};
+
 // src/core/rollback.ts
-var import_fs_extra8 = __toESM(require_lib2(), 1);
+var import_fs_extra10 = __toESM(require_lib(), 1);
 async function createBackup(filePath) {
   const timestamp = Date.now();
   const backupPath = `${filePath}.backup-${timestamp}`;
-  if (await import_fs_extra8.default.pathExists(filePath)) {
-    await import_fs_extra8.default.copy(filePath, backupPath);
+  if (await import_fs_extra10.default.pathExists(filePath)) {
+    await import_fs_extra10.default.copy(filePath, backupPath);
   }
   return {
     originalPath: filePath,
@@ -33633,16 +33594,16 @@ async function createBackup(filePath) {
   };
 }
 async function restoreBackup(backup) {
-  if (await import_fs_extra8.default.pathExists(backup.backupPath)) {
-    await import_fs_extra8.default.move(backup.backupPath, backup.originalPath, { overwrite: true });
+  if (await import_fs_extra10.default.pathExists(backup.backupPath)) {
+    await import_fs_extra10.default.move(backup.backupPath, backup.originalPath, { overwrite: true });
   }
 }
 async function cleanupBackup(backup) {
-  await import_fs_extra8.default.remove(backup.backupPath);
+  await import_fs_extra10.default.remove(backup.backupPath);
 }
 
 // src/core/sync-executor.ts
-async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun = false) {
+async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun = false, selectedMcpServers) {
   const isClaude = systemRoot.includes(".claude") || systemRoot.includes("Claude");
   const isQwen = systemRoot.includes(".qwen") || systemRoot.includes("Qwen");
   const isGemini = systemRoot.includes(".gemini") || systemRoot.includes("Gemini");
@@ -33656,39 +33617,22 @@ async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, is
   try {
     const agent = detectAgent(systemRoot);
     if (agent && actionType === "sync") {
-      console.log(kleur_default.gray(`  --> ${agent} MCP servers (via ${agent} mcp CLI)`));
-      const manifestPath = import_path10.default.join(systemRoot, ".jaggers-sync-manifest.json");
-      let manifest = {};
-      if (await import_fs_extra9.default.pathExists(manifestPath)) {
-        manifest = await import_fs_extra9.default.readJson(manifestPath);
-      }
-      const wasOptionalPromptShown = manifest.optionalServersPrompted || false;
-      let includeOptional = false;
-      let selectedOptionalServers = [];
-      if (!wasOptionalPromptShown) {
-        const selected = await promptOptionalServers(repoRoot);
-        if (selected && Array.isArray(selected)) {
-          includeOptional = selected.length > 0;
-          selectedOptionalServers = selected;
-        }
-        manifest.optionalServersPrompted = true;
-      }
-      const canonicalConfig = loadCanonicalMcpConfig(repoRoot, includeOptional);
-      if (selectedOptionalServers.length > 0 && canonicalConfig.mcpServers) {
-        const filteredServers = {};
-        const coreServers = import_fs_extra9.default.readJsonSync(import_path10.default.join(repoRoot, "config", "mcp_servers.json")).mcpServers;
-        for (const [name, server] of Object.entries(canonicalConfig.mcpServers)) {
-          if (coreServers[name] || selectedOptionalServers.includes(name)) {
-            filteredServers[name] = server;
+      const coreConfig = loadCanonicalMcpConfig(repoRoot);
+      const mcpToSync = { mcpServers: { ...coreConfig.mcpServers } };
+      if (selectedMcpServers && selectedMcpServers.length > 0) {
+        const optionalConfig = loadCanonicalMcpConfig(repoRoot, true);
+        for (const name of selectedMcpServers) {
+          if (optionalConfig.mcpServers[name]) {
+            mcpToSync.mcpServers[name] = optionalConfig.mcpServers[name];
           }
         }
-        canonicalConfig.mcpServers = filteredServers;
       }
-      await syncMcpServersWithCli(agent, canonicalConfig, isDryRun, mode === "prune");
-      count++;
       if (!isDryRun) {
-        await import_fs_extra9.default.writeJson(manifestPath, manifest, { spaces: 2 });
+        await syncMcpServersWithCli(agent, mcpToSync, isDryRun, false);
+      } else {
+        console.log(kleur_default.cyan(`  [DRY RUN] MCP sync for ${agent}`));
       }
+      count++;
     }
     for (const category of categories) {
       const itemsToProcess = [];
@@ -33698,12 +33642,12 @@ async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, is
         itemsToProcess.push(...cat.outdated);
         if (mode === "prune") {
           for (const itemToDelete of cat.drifted || []) {
-            const dest = import_path10.default.join(systemRoot, category, itemToDelete);
+            const dest = import_path12.default.join(systemRoot, category, itemToDelete);
             console.log(kleur_default.red(`  [x] PRUNING ${category}/${itemToDelete}`));
             if (!isDryRun) {
-              if (await import_fs_extra9.default.pathExists(dest)) {
+              if (await import_fs_extra11.default.pathExists(dest)) {
                 backups.push(await createBackup(dest));
-                await import_fs_extra9.default.remove(dest);
+                await import_fs_extra11.default.remove(dest);
               }
             }
             count++;
@@ -33716,30 +33660,30 @@ async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, is
       for (const item of itemsToProcess) {
         let src, dest;
         if (category === "config" && item === "settings.json" && actionType === "sync") {
-          src = import_path10.default.join(repoRoot, "config", "settings.json");
-          dest = import_path10.default.join(systemRoot, "settings.json");
+          src = import_path12.default.join(repoRoot, "config", "settings.json");
+          dest = import_path12.default.join(systemRoot, "settings.json");
           console.log(kleur_default.gray(`  --> config/settings.json`));
           if (agent) {
             console.log(kleur_default.gray(`  (Skipped: ${agent} uses ${agent} mcp CLI for MCP servers)`));
             count++;
             continue;
           }
-          if (!isDryRun && await import_fs_extra9.default.pathExists(dest)) {
+          if (!isDryRun && await import_fs_extra11.default.pathExists(dest)) {
             backups.push(await createBackup(dest));
           }
-          const repoConfig = await import_fs_extra9.default.readJson(src);
+          const repoConfig = await import_fs_extra11.default.readJson(src);
           let finalRepoConfig = resolveConfigPaths(repoConfig, systemRoot);
-          const hooksSrc = import_path10.default.join(repoRoot, "config", "hooks.json");
-          if (await import_fs_extra9.default.pathExists(hooksSrc)) {
-            const hooksRaw = await import_fs_extra9.default.readJson(hooksSrc);
+          const hooksSrc = import_path12.default.join(repoRoot, "config", "hooks.json");
+          if (await import_fs_extra11.default.pathExists(hooksSrc)) {
+            const hooksRaw = await import_fs_extra11.default.readJson(hooksSrc);
             const hooksAdapted = adapter.adaptHooksConfig(hooksRaw);
             if (hooksAdapted.hooks) {
               finalRepoConfig.hooks = { ...finalRepoConfig.hooks || {}, ...hooksAdapted.hooks };
               if (!isDryRun) console.log(kleur_default.dim(`      (Injected hooks)`));
             }
           }
-          if (import_fs_extra9.default.existsSync(dest)) {
-            const localConfig = await import_fs_extra9.default.readJson(dest);
+          if (import_fs_extra11.default.existsSync(dest)) {
+            const localConfig = await import_fs_extra11.default.readJson(dest);
             const resolvedLocalConfig = resolveConfigPaths(localConfig, systemRoot);
             if (mode === "prune") {
               if (localConfig.mcpServers && finalRepoConfig.mcpServers) {
@@ -33764,55 +33708,55 @@ async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, is
             }
           } else {
             if (!isDryRun) {
-              await import_fs_extra9.default.ensureDir(import_path10.default.dirname(dest));
-              await import_fs_extra9.default.writeJson(dest, finalRepoConfig, { spaces: 2 });
+              await import_fs_extra11.default.ensureDir(import_path12.default.dirname(dest));
+              await import_fs_extra11.default.writeJson(dest, finalRepoConfig, { spaces: 2 });
             }
             console.log(kleur_default.green(`      (Created new configuration)`));
           }
           count++;
           continue;
         }
-        const repoPath = category === "commands" ? import_path10.default.join(repoRoot, ".gemini", "commands") : category === "qwen-commands" ? import_path10.default.join(repoRoot, ".qwen", "commands") : category === "antigravity-workflows" ? import_path10.default.join(repoRoot, ".gemini", "antigravity", "global_workflows") : import_path10.default.join(repoRoot, category);
-        const systemPath = category === "qwen-commands" ? import_path10.default.join(systemRoot, "commands") : category === "antigravity-workflows" ? import_path10.default.join(systemRoot, ".gemini", "antigravity", "global_workflows") : import_path10.default.join(systemRoot, category);
+        const repoPath = category === "commands" ? import_path12.default.join(repoRoot, ".gemini", "commands") : category === "qwen-commands" ? import_path12.default.join(repoRoot, ".qwen", "commands") : category === "antigravity-workflows" ? import_path12.default.join(repoRoot, ".gemini", "antigravity", "global_workflows") : import_path12.default.join(repoRoot, category);
+        const systemPath = category === "qwen-commands" ? import_path12.default.join(systemRoot, "commands") : category === "antigravity-workflows" ? import_path12.default.join(systemRoot, ".gemini", "antigravity", "global_workflows") : import_path12.default.join(systemRoot, category);
         if (actionType === "backport") {
-          src = import_path10.default.join(systemPath, item);
-          dest = import_path10.default.join(repoPath, item);
+          src = import_path12.default.join(systemPath, item);
+          dest = import_path12.default.join(repoPath, item);
         } else {
-          src = import_path10.default.join(repoPath, item);
-          dest = import_path10.default.join(systemPath, item);
+          src = import_path12.default.join(repoPath, item);
+          dest = import_path12.default.join(systemPath, item);
         }
         console.log(kleur_default.gray(`  ${actionType === "backport" ? "<--" : "-->"} ${category}/${item}`));
-        if (!isDryRun && actionType === "sync" && await import_fs_extra9.default.pathExists(dest)) {
+        if (!isDryRun && actionType === "sync" && await import_fs_extra11.default.pathExists(dest)) {
           backups.push(await createBackup(dest));
         }
         if (mode === "symlink" && actionType === "sync" && category !== "config") {
           if (!isDryRun) {
             if (process.platform === "win32") {
               console.log(kleur_default.yellow("  \u26A0 Symlinks require Developer Mode on Windows \u2014 falling back to copy."));
-              await import_fs_extra9.default.remove(dest);
-              await import_fs_extra9.default.copy(src, dest);
+              await import_fs_extra11.default.remove(dest);
+              await import_fs_extra11.default.copy(src, dest);
             } else {
-              await import_fs_extra9.default.remove(dest);
-              await import_fs_extra9.default.ensureSymlink(src, dest);
+              await import_fs_extra11.default.remove(dest);
+              await import_fs_extra11.default.ensureSymlink(src, dest);
             }
           }
         } else {
           if (!isDryRun) {
-            await import_fs_extra9.default.remove(dest);
-            await import_fs_extra9.default.copy(src, dest);
+            await import_fs_extra11.default.remove(dest);
+            await import_fs_extra11.default.copy(src, dest);
           }
         }
         if (category === "skills" && !isClaude && actionType === "sync") {
-          const skillMdPath = import_path10.default.join(src, "SKILL.md");
-          if (import_fs_extra9.default.existsSync(skillMdPath)) {
+          const skillMdPath = import_path12.default.join(src, "SKILL.md");
+          if (import_fs_extra11.default.existsSync(skillMdPath)) {
             const result = await transformSkillToCommand(skillMdPath);
             if (result && !isDryRun) {
-              const commandDest = import_path10.default.join(systemRoot, "commands", `${result.commandName}.toml`);
-              if (await import_fs_extra9.default.pathExists(commandDest)) {
+              const commandDest = import_path12.default.join(systemRoot, "commands", `${result.commandName}.toml`);
+              if (await import_fs_extra11.default.pathExists(commandDest)) {
                 backups.push(await createBackup(commandDest));
               }
-              await import_fs_extra9.default.ensureDir(import_path10.default.dirname(commandDest));
-              await import_fs_extra9.default.writeFile(commandDest, result.toml);
+              await import_fs_extra11.default.ensureDir(import_path12.default.dirname(commandDest));
+              await import_fs_extra11.default.writeFile(commandDest, result.toml);
               console.log(kleur_default.cyan(`      (Auto-generated slash command: /${result.commandName})`));
             }
           }
@@ -33821,13 +33765,13 @@ async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, is
       }
     }
     if (!isDryRun && actionType === "sync") {
-      const manifestPath = import_path10.default.join(systemRoot, ".jaggers-sync-manifest.json");
+      const manifestPath = import_path12.default.join(systemRoot, ".jaggers-sync-manifest.json");
       const manifest = {
         lastSync: (/* @__PURE__ */ new Date()).toISOString(),
         repoRoot,
         items: count
       };
-      await import_fs_extra9.default.writeJson(manifestPath, manifest, { spaces: 2 });
+      await import_fs_extra11.default.writeJson(manifestPath, manifest, { spaces: 2 });
     }
     for (const backup of backups) {
       await cleanupBackup(backup);
@@ -33849,7 +33793,7 @@ function resolveConfigPaths(config3, targetDir) {
     for (const key in obj) {
       if (typeof obj[key] === "string") {
         if (obj[key].match(/\/[^\s"']+\/hooks\//)) {
-          const hooksDir = import_path10.default.join(targetDir, "hooks");
+          const hooksDir = import_path12.default.join(targetDir, "hooks");
           let replacementDir = `${hooksDir}/`;
           if (process.platform === "win32") {
             replacementDir = replacementDir.replace(/\\/g, "/");
@@ -33865,123 +33809,122 @@ function resolveConfigPaths(config3, targetDir) {
   return newConfig;
 }
 
-// src/utils/repo-root.ts
-var import_fs_extra10 = __toESM(require_lib2(), 1);
-var import_path11 = __toESM(require("path"), 1);
-async function findRepoRoot(startDir = process.cwd()) {
-  let dir = import_path11.default.resolve(startDir);
-  while (true) {
-    const skillsPath = import_path11.default.join(dir, "skills");
-    const hooksPath = import_path11.default.join(dir, "hooks");
-    if (await import_fs_extra10.default.pathExists(skillsPath) && await import_fs_extra10.default.pathExists(hooksPath)) {
-      return dir;
-    }
-    const parent = import_path11.default.dirname(dir);
-    if (parent === dir) {
-      throw new Error("Could not locate jaggers-agent-tools repo root. Run from within the cloned repository.");
-    }
-    dir = parent;
-  }
-}
-
 // src/commands/sync.ts
-var import_path12 = __toESM(require("path"), 1);
+var import_path13 = __toESM(require("path"), 1);
 function createSyncCommand() {
-  return new Command("sync").description("Sync agent tools (skills, hooks, config) to target environments").option("--dry-run", "Preview changes without making any modifications", false).option("-y, --yes", "Skip confirmation prompts", false).option("--prune", "Remove items not in the canonical repository", false).option("--backport", "Backport drifted local changes back to the repository", false).action(async (opts) => {
+  return new Command("sync").description("Sync skills, hooks, config, and MCP servers to all agent environments").option("--dry-run", "Preview the plan without making any changes", false).option("-y, --yes", "Skip interactive plan, apply all defaults", false).option("--prune", "Also remove items not present in the canonical repository", false).option("--backport", "Reverse direction: copy local edits back into the repository", false).action(async (opts) => {
     const { dryRun, yes, prune, backport } = opts;
     const actionType = backport ? "backport" : "sync";
     const repoRoot = await findRepoRoot();
-    const ctxSpinner = ora("Detecting environments\u2026").start();
-    const ctx = await getContext();
-    ctxSpinner.succeed("Config loaded");
-    const { targets, syncMode, config: config3 } = ctx;
-    const allChanges = [];
-    let totalCount = 0;
-    for (const target of targets) {
-      const diffSpinner = ora(`Calculating diff for ${import_path12.default.basename(target)}\u2026`).start();
-      const changeSet = await calculateDiff(repoRoot, target, prune);
-      const totalChanges = Object.values(changeSet).reduce((sum, cat) => {
-        return sum + cat.missing.length + cat.outdated.length + cat.drifted.length;
-      }, 0);
-      diffSpinner.succeed("Plan generated");
-      if (totalChanges === 0) {
-        continue;
+    const spinner = ora("Checking environments\u2026").start();
+    let plan;
+    try {
+      if (!yes && !dryRun) {
+        spinner.stop();
+        const ctx = await getContext();
+        spinner.start("Running preflight checks\u2026");
+        plan = await runPreflight(repoRoot, prune);
+        plan = {
+          ...plan,
+          targets: plan.targets.filter((t) => ctx.targets.includes(t.target))
+        };
+      } else {
+        plan = await runPreflight(repoRoot, prune);
       }
-      allChanges.push({ target, changeSet, totalChanges, skippedDrifted: [] });
+      const totalChanges = plan.targets.reduce(
+        (sum, t) => sum + t.files.length + t.mcpCore.filter((m) => !m.installed).length,
+        0
+      ) + plan.optionalServers.length;
+      spinner.succeed(`Ready \u2014 ${totalChanges} potential change(s) across ${plan.targets.length} target(s)`);
+    } catch (err) {
+      spinner.fail(`Preflight failed: ${err.message}`);
+      process.exit(1);
     }
-    if (allChanges.length === 0) {
-      console.log(kleur_default.green("\n\u2713 All targets are up-to-date\n"));
+    const selected = await interactivePlan(plan, { dryRun, yes });
+    if (!selected) return;
+    if (selected.files.length === 0 && selected.mcpCore.length === 0 && selected.optionalServers.length === 0) {
+      console.log(kleur_default.green("\n\u2713 Nothing to do\n"));
       return;
     }
-    console.log(kleur_default.bold("\n\u{1F4CB} Sync Plan:"));
-    for (const { target, changeSet, totalChanges } of allChanges) {
+    const postInstallMessages = [];
+    for (const optServer of selected.optionalServers) {
+      if (optServer.installCmd) {
+        const installSpinner = ora(`Installing: ${optServer.installCmd}`).start();
+        try {
+          (0, import_child_process2.execSync)(optServer.installCmd, { stdio: "pipe" });
+          installSpinner.succeed(kleur_default.green(`Installed: ${optServer.installCmd}`));
+        } catch (err) {
+          const stderr = err.stderr?.toString() || err.message;
+          installSpinner.fail(kleur_default.red(`Failed: ${optServer.installCmd}`));
+          console.log(kleur_default.dim(`  ${stderr.trim()}`));
+        }
+      }
+      if (optServer.postInstallMessage) {
+        postInstallMessages.push(`[${optServer.name}]
+  ${optServer.postInstallMessage}`);
+      }
+    }
+    const { syncMode } = plan;
+    const targetPaths = [.../* @__PURE__ */ new Set([
+      ...selected.files.map((f) => f.target),
+      ...selected.mcpCore.map((m) => m.target)
+    ])];
+    let totalSynced = 0;
+    const skippedDrifted = [];
+    for (const targetPath of targetPaths) {
       console.log(kleur_default.bold(`
-\u{1F4C2} ${import_path12.default.basename(target)} \u2192 ${totalChanges} changes`));
-      for (const [category, cat] of Object.entries(changeSet)) {
-        const c = cat;
-        if (c.missing.length > 0) {
-          console.log(kleur_default.yellow(`  + ${c.missing.length} missing ${category}: ${c.missing.join(", ")}`));
-        }
-        if (c.outdated.length > 0) {
-          console.log(kleur_default.blue(`  \u2191 ${c.outdated.length} outdated ${category}: ${c.outdated.join(", ")}`));
-        }
-        if (c.drifted.length > 0) {
-          console.log(kleur_default.red(`  \u2717 ${c.drifted.length} drifted ${category}: ${c.drifted.join(", ")}`));
-        }
-      }
-    }
-    if (dryRun) {
-      console.log(kleur_default.cyan("\n\u{1F4A1} Dry run \u2014 no changes written\n"));
-    }
-    if (!yes && !dryRun) {
-      const totalChangesCount = allChanges.reduce((sum, c) => sum + c.totalChanges, 0);
-      const { confirm } = await (0, import_prompts2.default)({
-        type: "confirm",
-        name: "confirm",
-        message: `Proceed with ${actionType} (${totalChangesCount} total changes)?`,
-        initial: true
-      });
-      if (!confirm) {
-        console.log(kleur_default.gray("  Sync cancelled.\n"));
-        return;
-      }
-    }
-    for (const { target, changeSet, skippedDrifted } of allChanges) {
-      console.log(kleur_default.bold(`
-\u{1F4C2} Target: ${import_path12.default.basename(target)}`));
-      const syncSpinner = ora("Syncing\u2026").start();
-      const count = await executeSync(repoRoot, target, changeSet, syncMode, actionType, dryRun);
-      syncSpinner.succeed(`Synced ${count} items`);
-      totalCount += count;
-      for (const [category, cat] of Object.entries(changeSet)) {
-        const c = cat;
-        if (c.drifted.length > 0 && actionType === "sync") {
-          skippedDrifted.push(...c.drifted.map((item) => `${category}/${item}`));
+\u{1F4C2} ${import_path13.default.basename(targetPath)}`));
+      const targetFiles = selected.files.filter((f) => f.target === targetPath);
+      const partialChangeSet = {
+        skills: { missing: [], outdated: [], drifted: [], total: 0 },
+        hooks: { missing: [], outdated: [], drifted: [], total: 0 },
+        config: { missing: [], outdated: [], drifted: [], total: 0 },
+        commands: { missing: [], outdated: [], drifted: [], total: 0 },
+        "qwen-commands": { missing: [], outdated: [], drifted: [], total: 0 },
+        "antigravity-workflows": { missing: [], outdated: [], drifted: [], total: 0 }
+      };
+      for (const f of targetFiles) {
+        if (partialChangeSet[f.category]) {
+          partialChangeSet[f.category][f.status].push(f.name);
         }
       }
-    }
-    const allSkipped = allChanges.flatMap((c) => c.skippedDrifted);
-    if (allSkipped.length > 0 && actionType === "sync" && !dryRun) {
-      console.log(kleur_default.yellow(`
-  \u26A0 ${allSkipped.length} drifted item(s) skipped (local edits preserved):`));
-      for (const item of allSkipped) {
-        console.log(kleur_default.yellow(`      ${item}`));
+      const selectedOptionalNames = selected.optionalServers.map((s) => s.name);
+      const count = await executeSync(
+        repoRoot,
+        targetPath,
+        partialChangeSet,
+        syncMode,
+        actionType,
+        false,
+        selectedOptionalNames
+      );
+      totalSynced += count;
+      for (const f of targetFiles) {
+        if (f.status === "drifted") {
+          skippedDrifted.push(`${import_path13.default.basename(targetPath)}/${f.category}/${f.name}`);
+        }
       }
-      console.log(kleur_default.yellow(`  Run 'jaggers-config sync --backport' to push them back.
-`));
     }
     console.log(kleur_default.bold(kleur_default.green(`
-\u2713 Total: ${totalCount} items synced
+\u2713 Synced ${totalSynced} item(s)
 `)));
+    if (skippedDrifted.length > 0) {
+      console.log(kleur_default.yellow(`  \u26A0 ${skippedDrifted.length} drifted item(s) were preserved (local edits kept)`));
+      console.log(kleur_default.yellow(`  Run 'jaggers-config sync --backport' to push them back to the repo.
+`));
+    }
+    if (postInstallMessages.length > 0) {
+      console.log(kleur_default.yellow().bold("\u26A0\uFE0F  Next Steps Required:\n"));
+      for (const msg of postInstallMessages) {
+        console.log(kleur_default.yellow(`  ${msg}`));
+      }
+      console.log("");
+    }
   });
 }
 
-// src/commands/status.ts
-init_kleur();
-init_context();
-
 // src/core/manifest.ts
-var import_path13 = require("path");
+var import_path14 = require("path");
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -47792,12 +47735,12 @@ var ManifestSchema = external_exports.object({
 // src/core/manifest.ts
 var MANIFEST_FILE = ".jaggers-sync-manifest.json";
 function getManifestPath(projectDir) {
-  return (0, import_path13.join)(projectDir, MANIFEST_FILE);
+  return (0, import_path14.join)(projectDir, MANIFEST_FILE);
 }
 
 // src/commands/status.ts
-var import_fs_extra11 = __toESM(require_lib2(), 1);
-var import_path14 = __toESM(require("path"), 1);
+var import_fs_extra12 = __toESM(require_lib(), 1);
+var import_path15 = __toESM(require("path"), 1);
 function formatRelativeTime(timestamp) {
   const now = Date.now();
   const diff = now - timestamp;
@@ -47818,11 +47761,11 @@ function createStatusCommand() {
     loadingSpinner.succeed("Status loaded");
     for (const target of targets) {
       console.log(kleur_default.bold(`
-\u{1F4C2} ${import_path14.default.basename(target)}`));
+\u{1F4C2} ${import_path15.default.basename(target)}`));
       try {
         const manifestPath = getManifestPath(target);
-        if (await import_fs_extra11.default.pathExists(manifestPath)) {
-          const manifest = await import_fs_extra11.default.readJson(manifestPath);
+        if (await import_fs_extra12.default.pathExists(manifestPath)) {
+          const manifest = await import_fs_extra12.default.readJson(manifestPath);
           if (manifest.lastSync) {
             console.log(kleur_default.gray(`  Last synced: ${formatRelativeTime(manifest.lastSync)}`));
           }
@@ -47874,8 +47817,6 @@ function createStatusCommand() {
 }
 
 // src/commands/reset.ts
-init_kleur();
-init_context();
 function createResetCommand() {
   return new Command("reset").description("Reset CLI configuration (clears saved sync mode and preferences)").action(() => {
     resetContext();
@@ -47884,38 +47825,11 @@ function createResetCommand() {
 }
 
 // src/commands/add-optional.ts
-init_kleur();
-var import_path15 = __toESM(require("path"), 1);
 function createAddOptionalCommand() {
-  return new Command("add-optional").description("Add optional MCP servers (unitAI, omni-search-engine, etc.)").action(async () => {
-    const repoRoot = await findRepoRoot();
-    console.log(kleur_default.cyan().bold("\nAdding Optional MCP Servers\n"));
-    const selected = await promptOptionalServers(repoRoot);
-    if (!selected || selected.length === 0) {
-      console.log(kleur_default.gray("  No optional servers selected.\n"));
-      return;
-    }
-    console.log(kleur_default.green(`
-  Selected: ${selected.join(", ")}
-`));
-    const optionalConfig = loadCanonicalMcpConfig(repoRoot, true);
-    const filteredConfig = { mcpServers: {} };
-    for (const serverName of selected) {
-      if (optionalConfig.mcpServers[serverName]) {
-        filteredConfig.mcpServers[serverName] = optionalConfig.mcpServers[serverName];
-      }
-    }
-    const { getContext: getContext2 } = await Promise.resolve().then(() => (init_context(), context_exports));
-    const ctx = await getContext2();
-    for (const target of ctx.targets) {
-      const agent = detectAgent(target);
-      if (agent) {
-        console.log(kleur_default.bold(`
-\u{1F4C2} Target: ${import_path15.default.basename(target)}`));
-        await syncMcpServersWithCli(agent, filteredConfig, false, false);
-      }
-    }
-    console.log(kleur_default.green("\n\u2713 Optional MCP servers added successfully\n"));
+  return new Command("add-optional").description("[deprecated] Use: jaggers-config sync \u2014 optional servers are now part of the main sync flow").action(async () => {
+    console.log(kleur_default.yellow(
+      "\n\u26A0  add-optional is deprecated.\n   Optional MCP servers are now part of the main sync flow.\n   Run: jaggers-config sync\n"
+    ));
   });
 }
 

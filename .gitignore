@@ -11,3 +11,4 @@ node_modules/
 *.log
 cli/node_modules
 /vsync_repo
+.gitnexus
