@@ -5,6 +5,68 @@ All notable changes to Claude Code skills and configuration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
+## [1.7.0] - 2026-02-25
+
+### Added
+
+#### GitNexus Integration
+- **Optional MCP server**: `gitnexus` added to `config/mcp_servers_optional.json` with auto-install support (`npm install -g gitnexus`)
+- **PreToolUse hook**: `hooks/gitnexus/gitnexus-hook.cjs` — enriches Grep/Glob/Bash tool calls with knowledge-graph context via `gitnexus augment`
+- **4 knowledge-graph skills**: `skills/gitnexus/{exploring,debugging,impact-analysis,refactoring}/SKILL.md` — synced via standard pipeline
+
+#### Unified 3-Phase Sync Flow
+- **`cli/src/core/preflight.ts`**: Parallel `Promise.all` preflight checks across all targets. Returns `PreflightPlan` with file diffs, MCP status, and optional server list. Per-target error isolation — one bad target never aborts the rest.
+- **`cli/src/core/interactive-plan.ts`**: Single `prompts` multiselect plan — all targets, files, MCP servers, and optional servers in one view. `[~]` drifted and `[?]` optional items pre-unchecked by default.
+
+#### MCP CLI Sync
+- **`sync-mcp-cli.ts`**: Unified MCP CLI sync for Claude, Gemini, and Qwen via official `mcp add/remove/list` commands. Idempotent — re-running is always safe.
+- **Env file management**: `~/.config/jaggers-agent-tools/.env` — auto-created on first sync, validates required env vars (e.g. `CONTEXT7_API_KEY`), preserves existing values.
+- **ConfigAdapter enhancements**: Qwen and Antigravity support added; `type` field auto-handled per agent; `EnvVarTransformer` extended for cross-agent compatibility.
+
+### Changed
+
+#### Sync Command — 3-Phase Rewrite
+- `cli/src/commands/sync.ts` fully rewritten: Phase 1 preflight spinner → Phase 2 multiselect plan → Phase 3 ordered execution (prerequisite installs → file sync → MCP sync → post-install messages)
+- `--dry-run`: displays full plan grouped by target, prints "Dry run — no changes written", exits cleanly
+- `-y`/`--yes`: auto-applies pre-checked defaults without prompting
+- `--prune`: propagated through `plan.syncMode` to `executeSync` correctly
+- `--backport`: reverses sync direction (local → repo)
+
+#### sync-executor.ts
+- Removed inline `promptOptionalServers` call and manifest-based prompt tracking
+- Added `selectedMcpServers?: string[]` parameter — optional server names pre-selected upstream in Phase 2
+
+#### MCP Configuration
+- Split into `config/mcp_servers.json` (core: serena, context7, github-grep, deepwiki) and `config/mcp_servers_optional.json` (optional: unitAI, omni-search-engine, gitnexus)
+- `_notes.install_cmd` and `_notes.post_install_message` metadata — drives Phase 3 auto-install
+- Core servers: removed unused `filesystem`, `git`, `memory`, `gmail`, `yfinance-market-intelligence`
+- `serena` command updated to uvx-from-git with auto project detection
+
+#### Exported Symbols
+- `getCurrentServers(agent)` and `AgentName` exported from `cli/src/utils/sync-mcp-cli.ts` (consumed by `preflight.ts`)
+
+### Deprecated
+- **`jaggers-config add-optional`**: now prints a redirect notice — optional servers are part of `jaggers-config sync`
+- **JSON file sync for Claude/Gemini/Qwen MCP**: superseded by official `mcp` CLI method
+- **Repo `.env` files**: use centralized `~/.config/jaggers-agent-tools/.env`
+
+### Removed
+- **Old Claude-specific sync**: `cli/lib/sync-claude-mcp.js` (replaced by unified `sync-mcp-cli.ts`)
+
+### Fixed
+- **`--prune` propagation**: `runPreflight` now sets `syncMode: 'prune'` when `--prune` passed (was hardcoded `'copy'`)
+- **Optional server "already installed" filter**: now uses live `getCurrentServers()` call per agent instead of only checking core MCP names
+
+### Documentation
+- Updated SSoT: `ssot_jaggers-agent-tools_installer_architecture` → v1.4.0
+- Updated SSoT: `ssot_cli_ux_improvements` → v2.0.0
+- Updated SSoT: `ssot_cli_universal_hub` → v2.2.0
+- Updated SSoT: `ssot_cli_mcp_servers` → v3.2.1
+
+---
+
 ## [1.6.0] - 2026-02-24
 
 ### Added
@@ -32,31 +94,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.0] - 2026-02-23
-
-### Changed
-
-#### Delegating Skill Hardening
-- **Description rewrite**: Proactive language with trigger keywords (`tests`, `typos`, `refactors`, `code reviews`, `debugging`) — auto-discovery now fires without explicit "delegate" keyword
-- **Frontmatter cleanup**: Removed unsupported fields (`version`, `gemini-command`, `gemini-prompt`); added `allowed-tools: Bash`
-- **CCS nested session fix**: All CCS execution commands now use `env -u CLAUDECODE ccs {profile} -p "{task}"` — confirmed working inside Claude Code sessions
-- **Interactive menu**: Replaced TypeScript `ask_user()` pseudocode with prose `AskUserQuestion` instructions
-
-#### skill-suggestion.py Hook
-- **Orchestration patterns**: Added `ORCHESTRATION_PATTERNS` — hook now fires for code reviews, feature implementation, debugging, security audits, commit validation
-- **CLAUDECODE detection**: Hints correctly say "Gemini or Qwen directly" when running inside Claude Code (CCS unavailable), "CCS backend" otherwise
-- **Security exclusion fix**: Narrowed `security` exclude pattern to only block auth/vuln *implementation* — security *reviews* now correctly route to orchestration
-
-### Files Modified
-- `skills/delegating/SKILL.md` — Description, frontmatter, pseudocode, CCS command
-- `hooks/skill-suggestion.py` — Orchestration patterns, CLAUDECODE detection, security exclusion
-
-### Documentation
-- Updated SSOT: `ssot_cli_hooks_2026-02-03` → v1.1.0
-- New SSOT: `ssot_jaggers-agent-tools_delegating_skill_2026-02-23` v1.0.0
-
----
-
 ## [1.5.0] - 2026-02-23
 
 ### Added
@@ -80,22 +117,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phase 3 — Hook Registration**: new phase in `creating-service-skills` workflow verifies PreToolUse wiring, confirms territory globs in registry, communicates auto-activation to user
 
 ### Changed
-
 - Project structure: moved into `project-skills/service-skills-set/` with `.claude/` subdirectory
 - `settings.json` PostToolUse hook moved to project-level (was only in skill frontmatter — now always-on)
 - PreToolUse added to `settings.json` for territory-based skill auto-enforcement
 
 ### Fixed
-
 - `allowed-tools` in skill frontmatter: corrected to Claude Code native tool names — removed invalid MCP/Serena names
 - `SessionStart` removed from skill frontmatter (unsupported); moved to `settings.json`
 - Removed `disable-model-invocation: true` from workflow skill and scaffolder template
 - `project_root.glob()` type error in `bootstrap.py` fixed by wrapping with `Path()`
 
 ### Documentation
-
 - Added `project-skills/service-skills-set/service-skills-readme.md`
 - New SSOT memory: `ssot_jaggers-agent-tools_service_skills_set_2026-02-23`
+
+---
+
+## [1.4.0] - 2026-02-23
+
+### Changed
+
+#### Delegating Skill Hardening
+- **Description rewrite**: Proactive language with trigger keywords (`tests`, `typos`, `refactors`, `code reviews`, `debugging`) — auto-discovery now fires without explicit "delegate" keyword
+- **Frontmatter cleanup**: Removed unsupported fields (`version`, `gemini-command`, `gemini-prompt`); added `allowed-tools: Bash`
+- **CCS nested session fix**: All CCS execution commands now use `env -u CLAUDECODE ccs {profile} -p "{task}"` — confirmed working inside Claude Code sessions
+- **Interactive menu**: Replaced TypeScript `ask_user()` pseudocode with prose `AskUserQuestion` instructions
+
+#### skill-suggestion.py Hook
+- **Orchestration patterns**: Added `ORCHESTRATION_PATTERNS` — hook now fires for code reviews, feature implementation, debugging, security audits, commit validation
+- **CLAUDECODE detection**: Hints correctly say "Gemini or Qwen directly" when running inside Claude Code (CCS unavailable), "CCS backend" otherwise
+- **Security exclusion fix**: Narrowed `security` exclude pattern to only block auth/vuln *implementation* — security *reviews* now correctly route to orchestration
+
+### Files Modified
+- `skills/delegating/SKILL.md` — Description, frontmatter, pseudocode, CCS command
+- `hooks/skill-suggestion.py` — Orchestration patterns, CLAUDECODE detection, security exclusion
+
+### Documentation
+- Updated SSOT: `ssot_cli_hooks_2026-02-03` → v1.1.0
+- New SSOT: `ssot_jaggers-agent-tools_delegating_skill_2026-02-23` v1.0.0
 
 ---
 
@@ -169,68 +228,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
-
-
-### Added
-- **MCP Servers Configuration v3.1.0**: Centralized environment file management
-  - New module: `cli/lib/env-manager.js` - manages `~/.config/jaggers-agent-tools/.env`
-  - CLI auto-creates `.env` file on first sync
-  - Validates required environment variables before sync
-  - Shows helpful warnings with links to get API keys
-  - Re-sync safe: existing values preserved, file not overwritten
-  - Example file at `~/.config/jaggers-agent-tools/.env.example`
-- **MCP Servers Configuration v3.0.0**: Unified MCP CLI sync for all agents
-  - New module: `cli/lib/sync-mcp-cli.js` - handles Claude, Gemini, and Qwen
-  - All three agents now use official `mcp add/remove/list` commands
-  - Idempotent sync (re-running doesn't cause errors)
-  - Agent-specific command builders for each CLI
-  - User-level installation for Claude (`-s user` scope)
-- **MCP Servers Configuration v2.0.0**: Complete overhaul of MCP servers sync system
-  - Split into `config/mcp_servers.json` (core) and `config/mcp_servers_optional.json` (optional)
-  - Core servers: serena, context7, github-grep, deepwiki
-  - Optional servers: unitAI, omni-search-engine (user prompted during sync)
-  - Added `config/.env.example` for API key documentation
-  - New SSOT memory: `ssot_cli_mcp_servers_2026-02-21.md`
-- **ConfigAdapter Enhancements**: Format adaptation for all 4 agents
-  - Added Qwen support (same format as Gemini)
-  - Added Antigravity support (`url` → `serverUrl` transformation)
-  - Automatic `type` field handling (required for Claude/Antigravity, removed for Gemini/Qwen)
-  - Enhanced `EnvVarTransformer` for cross-agent compatibility
-- **Documentation**: New comprehensive guide `docs/mcp-servers-config.md`
-- **README Update**: Added MCP Servers configuration section with links to documentation
-- GitNexus system integration into CLI installer: optional MCP server (gitnexus) with auto npm install, PreToolUse hook (hooks/gitnexus/gitnexus-hook.cjs), and 4 knowledge-graph skills synced via standard pipeline
-
-### Changed
-- **MCP Configuration Cleanup**: Removed unused servers from canonical source
-  - Removed: `filesystem`, `git`, `memory` (not in actual user config)
-  - Removed: `gmail`, `yfinance-market-intelligence` (project-specific/personal)
-  - Updated: `serena` command (uvx from git, auto-detects project at runtime)
-- **Universal Hub SSOT**: Updated to v2.0.0, references new MCP Servers SSOT
-- **Metadata**: Added `_notes` fields to MCP configs for documentation and prerequisites
-- **Env File Location**: Moved from repo to `~/.config/jaggers-agent-tools/.env` (centralized)
-- Unified 3-phase sync flow: preflight.ts (parallel checks), interactive-plan.ts (prompts multiselect), sync.ts rewrite. add-optional deprecated. Drifted/optionals pre-unchecked by default.
-
-### Deprecated
-- **Single MCP Config File**: `config/mcp_servers.json` now core-only, optional servers separated
-- **JSON File Sync for Claude/Gemini/Qwen**: Prefer official `mcp` CLI method
-- **Repo .env files**: Use centralized `~/.config/jaggers-agent-tools/.env` instead
-
-### Removed
-- **Unused MCP Servers**: filesystem, git, memory (never in actual production use)
-- **Personal MCP Servers**: gmail, yfinance-market-intelligence (user-specific, not canonical)
-- **Old Claude-specific sync**: `cli/lib/sync-claude-mcp.js` (replaced by unified `sync-mcp-cli.js`)
-
-### Fixed
-- **Format Compatibility**: All 4 agents (Claude, Gemini, Qwen, Antigravity) now properly supported
-- **URL Field Names**: Antigravity `serverUrl` transformation implemented
-- **Type Field Handling**: Automatic addition/removal per agent requirements
-- **Claude Code MCP Sync**: Now uses official CLI instead of JSON file manipulation
-- **Claude Scope**: Uses `-s user` for user-level installation (not project-level)
-- **Gemini/Qwen MCP Sync**: Now use official CLI commands instead of JSON manipulation
-- **Idempotent Sync**: Re-running sync doesn't cause "already exists" errors
-- **Env Var Management**: Centralized at `~/.config/jaggers-agent-tools/.env`, auto-created
-
 ## [1.1.1] - 2026-02-03
 
 ### Added
@@ -255,6 +252,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prevent redundant auto-generation of commands for core skills in CLI
 - Fix hardcoded paths in settings.json during sync
 - Fix ReferenceError in sync.js by adding missing import and verify via Qwen handshake
+
+---
+
 ## [6.0.0] - 2026-02-01
 
 ### Added
@@ -349,7 +349,7 @@ ln -s ~/.claude/skills/prompt-improving ~/.claude/skills/p
 - **SKILL.md**: Reduced from 486 to 151 lines (-69% size)
 - **Keyword-based profile selection**: Replaced quantitative complexity scoring (0-10 scale)
   - Simple patterns: `typo|test|doc` → glm
-  - Reasoning patterns: `analiz|think|reason` → gemini  
+  - Reasoning patterns: `analiz|think|reason` → gemini
   - Architecture patterns: `architecture|entire|codebase` → gemini
 - **Bilingual support**: IT+EN keywords throughout (e.g., "correggi|fix", "aggiungi.*test|add.*test")
 - **Simplified execution flow**: Detect → Ask → Select Profile → Execute (removed fallback chains)
@@ -374,13 +374,6 @@ ln -s ~/.claude/skills/prompt-improving ~/.claude/skills/p
 - `parallel_delegation.md` (17.1KB) - Multi-agent parallel execution
 - `delegation_history_analysis.md` (15.7KB) - Learning/persistence system
 
-#### Features Removed
-- **Quality metrics validation** from `p` skill (over-engineered for use case)
-- **Smart context gathering** from `ccs-delegation` (Claude handles naturally)
-- **Fallback chain** from `ccs-delegation` (<1% usage, 15KB overhead)
-- **Parallel delegation** from `ccs-delegation` (power-user feature, 17KB overhead)
-- **Delegation history tracking** from `ccs-delegation` (requires state management)
-
 ### Fixed
 
 #### Pattern Matching
@@ -391,14 +384,6 @@ ln -s ~/.claude/skills/prompt-improving ~/.claude/skills/p
 #### Hook Configuration
 - **Hook script not executable** → Added `chmod +x` to deployment checklist
 - **Missing skillSuggestions config** → Added to `settings.json` with `enabled: true`
-
-### Deprecated
-
-Nothing deprecated in this release.
-
-### Security
-
-No security-related changes in this release.
 
 ---
 
