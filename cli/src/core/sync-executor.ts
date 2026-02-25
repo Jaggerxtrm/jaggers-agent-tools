@@ -4,7 +4,7 @@ import kleur from 'kleur';
 import { transformGeminiConfig, transformSkillToCommand } from '../utils/transform-gemini.js';
 import { safeMergeConfig } from '../utils/atomic-config.js';
 import { ConfigAdapter } from '../utils/config-adapter.js';
-import { syncMcpServersWithCli, loadCanonicalMcpConfig, detectAgent, promptOptionalServers } from '../utils/sync-mcp-cli.js';
+import { syncMcpServersWithCli, loadCanonicalMcpConfig, detectAgent } from '../utils/sync-mcp-cli.js';
 import { createBackup, restoreBackup, cleanupBackup, type BackupInfo } from './rollback.js';
 import type { ChangeSet } from '../types/config.js';
 
@@ -17,7 +17,8 @@ export async function executeSync(
     changeSet: ChangeSet,
     mode: 'copy' | 'symlink' | 'prune',
     actionType: 'sync' | 'backport',
-    isDryRun: boolean = false
+    isDryRun: boolean = false,
+    selectedMcpServers?: string[]
 ): Promise<number> {
     const isClaude = systemRoot.includes('.claude') || systemRoot.includes('Claude');
     const isQwen = systemRoot.includes('.qwen') || systemRoot.includes('Qwen');
@@ -36,53 +37,26 @@ export async function executeSync(
     try {
         const agent = detectAgent(systemRoot);
         if (agent && actionType === 'sync') {
-            console.log(kleur.gray(`  --> ${agent} MCP servers (via ${agent} mcp CLI)`));
-            
-            // Check if optional servers prompt was already shown
-            const manifestPath = path.join(systemRoot, '.jaggers-sync-manifest.json');
-            let manifest: any = {};
-            if (await fs.pathExists(manifestPath)) {
-                manifest = await fs.readJson(manifestPath);
-            }
-            
-            const wasOptionalPromptShown = manifest.optionalServersPrompted || false;
-            
-            // Prompt for optional servers if not shown yet
-            let includeOptional = false;
-            let selectedOptionalServers: string[] = [];
-            
-            if (!wasOptionalPromptShown) {
-                const selected = await promptOptionalServers(repoRoot);
-                if (selected && Array.isArray(selected)) {
-                    includeOptional = selected.length > 0;
-                    selectedOptionalServers = selected;
-                }
-                // Mark that prompt was shown (even if user declined)
-                manifest.optionalServersPrompted = true;
-            }
-            
-            const canonicalConfig = loadCanonicalMcpConfig(repoRoot, includeOptional);
-            
-            // If user selected specific optional servers, filter to only those
-            if (selectedOptionalServers.length > 0 && canonicalConfig.mcpServers) {
-                const filteredServers: any = {};
-                const coreServers = fs.readJsonSync(path.join(repoRoot, 'config', 'mcp_servers.json')).mcpServers;
-                for (const [name, server] of Object.entries(canonicalConfig.mcpServers)) {
-                    // Include all core servers + selected optional ones
-                    if (coreServers[name] || selectedOptionalServers.includes(name)) {
-                        filteredServers[name] = server;
+            const coreConfig = loadCanonicalMcpConfig(repoRoot);
+
+            // Build MCP config: core servers always + any pre-selected optionals
+            const mcpToSync: any = { mcpServers: { ...coreConfig.mcpServers } };
+
+            if (selectedMcpServers && selectedMcpServers.length > 0) {
+                const optionalConfig = loadCanonicalMcpConfig(repoRoot, true);
+                for (const name of selectedMcpServers) {
+                    if (optionalConfig.mcpServers[name]) {
+                        mcpToSync.mcpServers[name] = optionalConfig.mcpServers[name];
                     }
                 }
-                canonicalConfig.mcpServers = filteredServers;
             }
-            
-            await syncMcpServersWithCli(agent, canonicalConfig, isDryRun, mode === 'prune');
-            count++;
-            
-            // Update manifest to track that prompt was shown
+
             if (!isDryRun) {
-                await fs.writeJson(manifestPath, manifest, { spaces: 2 });
+                await syncMcpServersWithCli(agent, mcpToSync, isDryRun, false);
+            } else {
+                console.log(kleur.cyan(`  [DRY RUN] MCP sync for ${agent}`));
             }
+            count++;
         }
 
         for (const category of categories) {
