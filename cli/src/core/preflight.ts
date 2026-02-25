@@ -45,7 +45,7 @@ export interface PreflightPlan {
     targets: TargetPlan[];
     optionalServers: OptionalServerItem[];
     repoRoot: string;
-    syncMode: 'copy' | 'symlink';
+    syncMode: 'copy' | 'symlink' | 'prune';
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -138,5 +138,6 @@ export async function runPreflight(
             postInstallMessage: server._notes?.post_install_message,
         }));
 
-    return { targets, optionalServers, repoRoot, syncMode: 'copy' };
+    const syncMode: 'copy' | 'symlink' | 'prune' = prune ? 'prune' : 'copy';
+    return { targets, optionalServers, repoRoot, syncMode };
 }
