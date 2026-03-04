@@ -1,0 +1,660 @@
+# Instincts generated from https://github.com/Jaggerxtrm/jaggers-agent-tools
+# Generated: 2026-03-01T15:13:53.786Z
+# Version: 2.0
+
+---
+id: jaggers-agent-tools-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: feat, docs, fix, chore, refactor
+
+## Evidence
+
+- 108 commits analyzed
+- Detected conventional commit pattern
+- Examples: chore: update dist, gitignore, CLAUDE.md, AGENTS.md, and docs/plans, docs: promote [Unreleased] to v1.7.0, fix version order in CHANGELOG
+
+---
+id: jaggers-agent-tools-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Commit Length
+
+## Action
+
+Write moderate-length commit messages (~50 characters)
+
+## Evidence
+
+- Average commit message length: 60 chars
+- Based on 108 commits
+
+---
+id: jaggers-agent-tools-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: jaggers-agent-tools-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: jaggers-agent-tools-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: jaggers-agent-tools-arch-type-based
+trigger: "when adding new code"
+confidence: 0.8
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Arch Type Based
+
+## Action
+
+Place code in the appropriate type folder (components/, services/, utils/, etc.)
+
+## Evidence
+
+- Type-based module organization detected
+- Folders: 
+
+---
+id: jaggers-agent-tools-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: jaggers-agent-tools-workflow-database-migration
+trigger: "when modifying the database schema or adding tables"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Workflow Database Migration
+
+## Action
+
+Follow the database-migration workflow:
+1. Create migration file
+2. Update schema definitions
+3. Generate/update types
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: **/schema.*, migrations/*
+
+---
+id: jaggers-agent-tools-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~19x per month
+- Files: cli/src/commands/*, cli/src/core/*, cli/src/*
+
+---
+id: jaggers-agent-tools-workflow-version-release-documentation
+trigger: "when doing version release documentation"
+confidence: 0.75
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Workflow Version Release Documentation
+
+## Action
+
+Follow the version-release-documentation workflow:
+1. Update CHANGELOG.md with new version entry
+2. Update version references in documentation
+3. Sometimes update README.md version table
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~5x per month
+- Files: CHANGELOG.md, README.md, .serena/memories/ssot_*
+
+---
+id: jaggers-agent-tools-workflow-ssot-memory-documentation
+trigger: "when doing ssot memory documentation"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Workflow Ssot Memory Documentation
+
+## Action
+
+Follow the ssot-memory-documentation workflow:
+1. Identify relevant SSOT memory file
+2. Update memory content with new information
+3. Often batch update multiple related memories
+4. Sometimes regenerate INDEX sections
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~8x per month
+- Files: .serena/memories/ssot_cli_*.md, .serena/memories/ssot_jaggers-agent-tools_*.md
+
+---
+id: jaggers-agent-tools-workflow-skill-development-workflow
+trigger: "when doing skill development workflow"
+confidence: 0.8
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Workflow Skill Development Workflow
+
+## Action
+
+Follow the skill-development-workflow workflow:
+1. Create/update SKILL.md with metadata and instructions
+2. Add/modify supporting scripts
+3. Update configuration files (settings.json, mcp_servers_optional.json)
+4. Sometimes add hooks or reference documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~6x per month
+- Files: skills/*/SKILL.md, */scripts/*.py, config/settings.json
+
+---
+id: jaggers-agent-tools-workflow-cli-feature-development
+trigger: "when doing cli feature development"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Workflow Cli Feature Development
+
+## Action
+
+Follow the cli-feature-development workflow:
+1. Modify CLI source files
+2. Update build artifacts (dist files)
+3. Sometimes update package.json dependencies
+4. Often update documentation or SSOT memories
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: cli/src/**/*.ts, cli/dist/index.cjs, cli/dist/index.cjs.map
+
+---
+id: jaggers-agent-tools-workflow-design-document-creation
+trigger: "when doing design document creation"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Workflow Design Document Creation
+
+## Action
+
+Follow the design-document-creation workflow:
+1. Create design document in docs/plans/
+2. Sometimes create corresponding implementation plan
+3. Often follow with actual implementation commits
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: docs/plans/*-design.md, docs/plans/*-implementation*.md, docs/plans/*.md
+
+---
+id: jaggers-agent-tools-workflow-configuration-integration
+trigger: "when doing configuration integration"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Workflow Configuration Integration
+
+## Action
+
+Follow the configuration-integration workflow:
+1. Add entry to mcp_servers_optional.json or settings.json
+2. Create supporting files (skills, hooks, or scripts)
+3. Sometimes update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: config/mcp_servers_optional.json, config/settings.json, skills/*/
+
+---
+id: jaggers-agent-tools-camel-case-files
+trigger: "When creating new TypeScript files"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Camel Case Files
+
+## Action
+
+Use camelCase naming convention for file names
+
+## Evidence
+
+- Pattern observed in cli/src structure
+- Consistent with TypeScript conventions
+
+---
+id: jaggers-agent-tools-pascal-case-classes
+trigger: "When defining new classes"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Pascal Case Classes
+
+## Action
+
+Use PascalCase naming convention for class names
+
+## Evidence
+
+- Standard TypeScript pattern in codebase
+- Consistent with detected naming conventions
+
+---
+id: jaggers-agent-tools-screaming-snake-constants
+trigger: "When defining constants"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Screaming Snake Constants
+
+## Action
+
+Use SCREAMING_SNAKE_CASE for constant variable names
+
+## Evidence
+
+- Detected naming convention pattern
+- Standard practice for constants
+
+---
+id: jaggers-agent-tools-relative-imports
+trigger: "When importing modules within the same project"
+confidence: 0.6
+domain: code-style
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Relative Imports
+
+## Action
+
+Use relative import paths
+
+## Evidence
+
+- Detected import style pattern
+- Common in single-package architecture
+
+---
+id: jaggers-agent-tools-named-exports
+trigger: "When exporting from modules"
+confidence: 0.6
+domain: code-style
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Named Exports
+
+## Action
+
+Use named exports instead of default exports
+
+## Evidence
+
+- Detected export style pattern
+- Consistent with modular architecture
+
+---
+id: jaggers-agent-tools-try-catch-errors
+trigger: "When handling potential errors"
+confidence: 0.6
+domain: code-style
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Try Catch Errors
+
+## Action
+
+Use try-catch blocks for error handling
+
+## Evidence
+
+- Detected error handling style
+- No custom error classes observed
+
+---
+id: jaggers-agent-tools-conventional-commits
+trigger: "When making a git commit"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Conventional Commits
+
+## Action
+
+Use conventional commit format with prefixes: feat, docs, fix, chore, refactor
+
+## Evidence
+
+- All 8 example commits follow conventional format
+- Consistent use of feat, docs, fix, chore, refactor prefixes
+
+---
+id: jaggers-agent-tools-60-char-commits
+trigger: "When writing commit messages"
+confidence: 0.7
+domain: git
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools 60 Char Commits
+
+## Action
+
+Keep commit message length around 60 characters
+
+## Evidence
+
+- Average commit length detected as 60 characters
+- Example commits follow this pattern
+
+---
+id: jaggers-agent-tools-version-release-workflow
+trigger: "When releasing a new version"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Version Release Workflow
+
+## Action
+
+Update CHANGELOG.md, version references in docs, and optionally README.md version table
+
+## Evidence
+
+- 5 instances per month
+- Consistent pattern in CHANGELOG.md and README.md updates
+
+---
+id: jaggers-agent-tools-ssot-memory-update
+trigger: "When documenting system changes or architectural decisions"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Ssot Memory Update
+
+## Action
+
+Update relevant SSOT memory files in .serena/memories/ and regenerate INDEX sections
+
+## Evidence
+
+- 8 instances per month
+- Consistent pattern of updating ssot_cli_*.md and ssot_jaggers-agent-tools_*.md
+
+---
+id: jaggers-agent-tools-skill-creation
+trigger: "When adding or modifying a skill"
+confidence: 0.88
+domain: workflow
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Skill Creation
+
+## Action
+
+Create/update SKILL.md with metadata, add supporting scripts, and update config files
+
+## Evidence
+
+- 6 instances per month
+- Pattern of SKILL.md creation with scripts and config updates
+
+---
+id: jaggers-agent-tools-cli-build-artifacts
+trigger: "When modifying CLI source files"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Cli Build Artifacts
+
+## Action
+
+Update build artifacts in cli/dist/ and potentially package.json dependencies
+
+## Evidence
+
+- 4 instances per month
+- Consistent pattern of dist file updates with source changes
+
+---
+id: jaggers-agent-tools-design-before-implementation
+trigger: "When planning a new feature or system"
+confidence: 0.82
+domain: workflow
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Design Before Implementation
+
+## Action
+
+Create design document in docs/plans/ before implementation
+
+## Evidence
+
+- 3 instances per month
+- Pattern of design docs followed by implementation commits
+
+---
+id: jaggers-agent-tools-mcp-server-integration
+trigger: "When integrating a new tool or MCP server"
+confidence: 0.8
+domain: workflow
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Mcp Server Integration
+
+## Action
+
+Add entry to mcp_servers_optional.json or settings.json and create supporting files
+
+## Evidence
+
+- 3 instances per month
+- Consistent pattern of config file updates with supporting assets
+
+---
+id: jaggers-agent-tools-database-migration-sequence
+trigger: "When making database schema changes"
+confidence: 0.8
+domain: workflow
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Database Migration Sequence
+
+## Action
+
+Create migration file, update schema definitions, then generate/update types
+
+## Evidence
+
+- 4 instances per month
+- Example shows migration → schema → types sequence
+
+---
+id: jaggers-agent-tools-feature-test-doc-sequence
+trigger: "When implementing a new feature"
+confidence: 0.75
+domain: workflow
+source: repo-analysis
+source_repo: Jaggerxtrm/jaggers-agent-tools
+---
+
+# Jaggers Agent Tools Feature Test Doc Sequence
+
+## Action
+
+Add feature implementation, then tests, then update documentation
+
+## Evidence
+
+- 19 instances per month (highest frequency)
+- Standard feature development pattern observed
+
