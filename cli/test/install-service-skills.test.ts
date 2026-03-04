@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { mergeSettingsHooks } from '../src/commands/install-service-skills.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import fsExtra from 'fs-extra';
+import { mergeSettingsHooks, installSkills } from '../src/commands/install-service-skills.js';
 
 describe('mergeSettingsHooks', () => {
     it('adds all three hooks to empty settings', () => {
@@ -26,5 +30,32 @@ describe('mergeSettingsHooks', () => {
         const { result } = mergeSettingsHooks(existing);
         expect(result.apiKey).toBe('abc');
         expect(result.permissions).toEqual({ allow: [] });
+    });
+});
+
+describe('installSkills', () => {
+    let tmpDir: string;
+    // __dirname in test context = cli/test/, so three levels up = repo root
+    const ACTUAL_SKILLS_SRC = path.resolve(__dirname, '../../project-skills/service-skills-set/.claude');
+
+    beforeEach(async () => {
+        tmpDir = await mkdtemp(path.join(tmpdir(), 'jaggers-test-'));
+    });
+
+    afterEach(async () => {
+        await rm(tmpDir, { recursive: true, force: true });
+    });
+
+    it('creates .claude/skills/<skill> directories', async () => {
+        await installSkills(tmpDir, ACTUAL_SKILLS_SRC);
+        for (const skill of ['creating-service-skills', 'using-service-skills', 'updating-service-skills', 'scoping-service-skills']) {
+            const dest = path.join(tmpDir, '.claude', 'skills', skill);
+            expect(await fsExtra.pathExists(dest)).toBe(true);
+        }
+    });
+
+    it('is idempotent (safe to run twice)', async () => {
+        await installSkills(tmpDir, ACTUAL_SKILLS_SRC);
+        await expect(installSkills(tmpDir, ACTUAL_SKILLS_SRC)).resolves.not.toThrow();
     });
 });

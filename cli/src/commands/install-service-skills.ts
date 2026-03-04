@@ -75,6 +75,23 @@ export function mergeSettingsHooks(existing: Record<string, unknown>): {
     return { result, added, skipped };
 }
 
+export async function installSkills(projectRoot: string, skillsSrc: string = SKILLS_SRC): Promise<{ skill: string; status: 'installed' | 'updated' }[]> {
+    const results: { skill: string; status: 'installed' | 'updated' }[] = [];
+    for (const skill of TRINITY) {
+        const src = path.join(skillsSrc, skill);
+        const dest = path.join(projectRoot, '.claude', 'skills', skill);
+        const existed = await fs.pathExists(dest);
+        if (existed) {
+            await fs.remove(dest);
+        }
+        await fs.copy(src, dest, {
+            filter: (src: string) => !src.includes('.Zone.Identifier'),
+        });
+        results.push({ skill, status: existed ? 'updated' : 'installed' });
+    }
+    return results;
+}
+
 export function createInstallServiceSkillsCommand(): Command {
     return new Command('install-service-skills')
         .description('Install the Service Skill Trinity into the current project')
