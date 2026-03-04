@@ -15191,8 +15191,8 @@ var require_resolve = __commonJS({
       }
       return count;
     }
-    function getFullPath(resolver, id = "", normalize) {
-      if (normalize !== false)
+    function getFullPath(resolver, id = "", normalize2) {
+      if (normalize2 !== false)
         id = normalizeId(id);
       const p = resolver.parse(id);
       return _getFullPath(resolver, p);
@@ -16532,7 +16532,7 @@ var require_fast_uri = __commonJS({
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizeComponentEncoding, isIPv4, nonSimpleDomain } = require_utils3();
     var { SCHEMES, getSchemeHandler } = require_schemes();
-    function normalize(uri, options) {
+    function normalize2(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
         serialize(parse4(uri, options), options);
@@ -16768,7 +16768,7 @@ var require_fast_uri = __commonJS({
     }
     var fastUri = {
       SCHEMES,
-      normalize,
+      normalize: normalize2,
       resolve: resolve2,
       resolveComponent,
       equal,
@@ -36465,9 +36465,8 @@ function getCandidatePaths() {
   const isWindows4 = process.platform === "win32";
   const paths = [
     { label: ".claude", path: import_path.default.join(home, ".claude") },
-    { label: ".gemini", path: import_path.default.join(home, ".gemini") },
     { label: ".qwen", path: import_path.default.join(home, ".qwen") },
-    { label: "~/.gemini/antigravity", path: import_path.default.join(home, ".gemini", "antigravity") }
+    { label: "~/.agents/skills", path: import_path.default.join(home, ".agents", "skills") }
   ];
   if (isWindows4 && appData) {
     paths.push({ label: "Claude (AppData)", path: import_path.default.join(appData, "Claude") });
@@ -36695,7 +36694,8 @@ async function calculateDiff(repoRoot, systemRoot, pruneMode = false) {
   const adapter = detectAdapter(systemRoot);
   const isClaude = adapter?.toolName === "claude-code";
   const isQwen = adapter?.toolName === "qwen";
-  const isGemini = adapter?.toolName === "gemini";
+  const normalizedRoot = (0, import_path6.normalize)(systemRoot).replace(/\\/g, "/");
+  const isAgentsSkills = normalizedRoot.includes(".agents/skills");
   const changeSet = {
     skills: { missing: [], outdated: [], drifted: [], total: 0 },
     hooks: { missing: [], outdated: [], drifted: [], total: 0 },
@@ -36704,22 +36704,25 @@ async function calculateDiff(repoRoot, systemRoot, pruneMode = false) {
     "qwen-commands": { missing: [], outdated: [], drifted: [], total: 0 },
     "antigravity-workflows": { missing: [], outdated: [], drifted: [], total: 0 }
   };
+  if (isAgentsSkills) {
+    const repoPath = (0, import_path6.join)(repoRoot, "skills");
+    if (!await import_fs_extra3.default.pathExists(repoPath)) return changeSet;
+    const items = (await import_fs_extra3.default.readdir(repoPath)).filter((i) => !IGNORED_ITEMS.has(i));
+    changeSet.skills.total = items.length;
+    for (const item of items) {
+      await compareItem("skills", item, (0, import_path6.join)(repoPath, item), (0, import_path6.join)(systemRoot, item), changeSet, pruneMode);
+    }
+    return changeSet;
+  }
   const folders = ["skills", "hooks"];
   if (isQwen) folders.push("qwen-commands");
-  else if (isGemini) folders.push("commands", "antigravity-workflows");
   else if (!isClaude) folders.push("commands");
   for (const category of folders) {
     let repoPath;
     let systemPath;
-    if (category === "commands") {
-      repoPath = (0, import_path6.join)(repoRoot, ".gemini", "commands");
-      systemPath = (0, import_path6.join)(systemRoot, category);
-    } else if (category === "qwen-commands") {
+    if (category === "qwen-commands") {
       repoPath = (0, import_path6.join)(repoRoot, ".qwen", "commands");
       systemPath = (0, import_path6.join)(systemRoot, "commands");
-    } else if (category === "antigravity-workflows") {
-      repoPath = (0, import_path6.join)(repoRoot, ".gemini", "antigravity", "global_workflows");
-      systemPath = (0, import_path6.join)(systemRoot, ".gemini", "antigravity", "global_workflows");
     } else {
       repoPath = (0, import_path6.join)(repoRoot, category);
       systemPath = (0, import_path6.join)(systemRoot, category);
@@ -37631,14 +37634,16 @@ async function cleanupBackup(backup) {
 }
 
 // src/core/sync-executor.ts
-var syncedMcpAgents = /* @__PURE__ */ new Set();
 async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun = false, selectedMcpServers) {
+  const normalizedRoot = import_path10.default.normalize(systemRoot).replace(/\\/g, "/");
+  const isAgentsSkills = normalizedRoot.includes(".agents/skills");
   const isClaude = systemRoot.includes(".claude") || systemRoot.includes("Claude");
   const isQwen = systemRoot.includes(".qwen") || systemRoot.includes("Qwen");
-  const isGemini = systemRoot.includes(".gemini") || systemRoot.includes("Gemini");
+  if (isAgentsSkills) {
+    return executeSyncAgentsSkills(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun);
+  }
   const categories = ["skills", "hooks", "config"];
   if (isQwen) categories.push("qwen-commands");
-  else if (isGemini) categories.push("commands", "antigravity-workflows");
   else if (!isClaude) categories.push("commands");
   let count = 0;
   const adapter = new ConfigAdapter(systemRoot);
@@ -37805,6 +37810,55 @@ async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, is
     for (const backup of backups) {
       await cleanupBackup(backup);
     }
+    return count;
+  } catch (error48) {
+    console.error(kleur_default.red(`
+Sync failed, rolling back ${backups.length} changes...`));
+    for (const backup of backups) {
+      try {
+        await restoreBackup(backup);
+      } finally {
+        await cleanupBackup(backup);
+      }
+    }
+    throw error48;
+  }
+}
+async function executeSyncAgentsSkills(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun) {
+  let count = 0;
+  const backups = [];
+  try {
+    const repoSkillsPath = import_path10.default.join(repoRoot, "skills");
+    const itemsToProcess = [];
+    if (actionType === "sync") {
+      itemsToProcess.push(...changeSet.skills.missing, ...changeSet.skills.outdated);
+    } else if (actionType === "backport") {
+      itemsToProcess.push(...changeSet.skills.drifted);
+    }
+    for (const item of itemsToProcess) {
+      const src = actionType === "backport" ? import_path10.default.join(systemRoot, item) : import_path10.default.join(repoSkillsPath, item);
+      const dest = actionType === "backport" ? import_path10.default.join(repoSkillsPath, item) : import_path10.default.join(systemRoot, item);
+      console.log(kleur_default.gray(`  ${actionType === "backport" ? "<--" : "-->"} ${item}`));
+      if (!isDryRun) {
+        if (await import_fs_extra9.default.pathExists(dest)) backups.push(await createBackup(dest));
+        await import_fs_extra9.default.ensureDir(import_path10.default.dirname(dest));
+        if (mode === "symlink" && actionType === "sync") {
+          if (process.platform === "win32") {
+            console.log(kleur_default.yellow("  \u26A0 Symlinks require Developer Mode on Windows \u2014 falling back to copy."));
+            await import_fs_extra9.default.remove(dest);
+            await import_fs_extra9.default.copy(src, dest);
+          } else {
+            await import_fs_extra9.default.remove(dest);
+            await import_fs_extra9.default.ensureSymlink(src, dest);
+          }
+        } else {
+          await import_fs_extra9.default.remove(dest);
+          await import_fs_extra9.default.copy(src, dest);
+        }
+      }
+      count++;
+    }
+    for (const backup of backups) await cleanupBackup(backup);
     return count;
   } catch (error48) {
     console.error(kleur_default.red(`

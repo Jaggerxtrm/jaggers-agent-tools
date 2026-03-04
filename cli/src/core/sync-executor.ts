@@ -11,9 +11,6 @@ import type { ChangeSet } from '../types/config.js';
 /**
  * Execute a sync plan based on changeset and mode
  */
-// Track which MCP agents have been synced in this process run to prevent duplicate syncs
-// when multiple target directories map to the same agent (e.g. .claude + .gemini + .qwen)
-const syncedMcpAgents = new Set<string>();
 
 export async function executeSync(
     repoRoot: string,
@@ -24,14 +21,19 @@ export async function executeSync(
     isDryRun: boolean = false,
     selectedMcpServers?: string[]
 ): Promise<number> {
+    const normalizedRoot = path.normalize(systemRoot).replace(/\\/g, '/');
+    const isAgentsSkills = normalizedRoot.includes('.agents/skills');
     const isClaude = systemRoot.includes('.claude') || systemRoot.includes('Claude');
     const isQwen = systemRoot.includes('.qwen') || systemRoot.includes('Qwen');
-    const isGemini = systemRoot.includes('.gemini') || systemRoot.includes('Gemini');
+
+    // ~/.agents/skills: skills-only, written directly into systemRoot (no subdirectory)
+    if (isAgentsSkills) {
+        return executeSyncAgentsSkills(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun);
+    }
 
     const categories: Array<keyof ChangeSet> = ['skills', 'hooks', 'config'];
 
     if (isQwen) categories.push('qwen-commands');
-    else if (isGemini) categories.push('commands', 'antigravity-workflows');
     else if (!isClaude) categories.push('commands');
 
     let count = 0;
@@ -250,6 +252,74 @@ export async function executeSync(
             } finally {
                 await cleanupBackup(backup);
             }
+        }
+        throw error;
+    }
+}
+
+/**
+ * Sync skills directly into ~/.agents/skills/<skill> (no subdirectory indirection).
+ * This target is skills-only — no hooks, config, MCP, or commands.
+ */
+async function executeSyncAgentsSkills(
+    repoRoot: string,
+    systemRoot: string,
+    changeSet: ChangeSet,
+    mode: 'copy' | 'symlink' | 'prune',
+    actionType: 'sync' | 'backport',
+    isDryRun: boolean,
+): Promise<number> {
+    let count = 0;
+    const backups: BackupInfo[] = [];
+
+    try {
+        const repoSkillsPath = path.join(repoRoot, 'skills');
+        const itemsToProcess: string[] = [];
+
+        if (actionType === 'sync') {
+            itemsToProcess.push(...changeSet.skills.missing, ...changeSet.skills.outdated);
+        } else if (actionType === 'backport') {
+            itemsToProcess.push(...changeSet.skills.drifted);
+        }
+
+        for (const item of itemsToProcess) {
+            const src = actionType === 'backport'
+                ? path.join(systemRoot, item)
+                : path.join(repoSkillsPath, item);
+            const dest = actionType === 'backport'
+                ? path.join(repoSkillsPath, item)
+                : path.join(systemRoot, item);
+
+            console.log(kleur.gray(`  ${actionType === 'backport' ? '<--' : '-->'} ${item}`));
+
+            if (!isDryRun) {
+                if (await fs.pathExists(dest)) backups.push(await createBackup(dest));
+                await fs.ensureDir(path.dirname(dest));
+
+                if (mode === 'symlink' && actionType === 'sync') {
+                    if (process.platform === 'win32') {
+                        console.log(kleur.yellow('  ⚠ Symlinks require Developer Mode on Windows — falling back to copy.'));
+                        await fs.remove(dest);
+                        await fs.copy(src, dest);
+                    } else {
+                        await fs.remove(dest);
+                        await fs.ensureSymlink(src, dest);
+                    }
+                } else {
+                    await fs.remove(dest);
+                    await fs.copy(src, dest);
+                }
+            }
+            count++;
+        }
+
+        for (const backup of backups) await cleanupBackup(backup);
+        return count;
+
+    } catch (error: any) {
+        console.error(kleur.red(`\nSync failed, rolling back ${backups.length} changes...`));
+        for (const backup of backups) {
+            try { await restoreBackup(backup); } finally { await cleanupBackup(backup); }
         }
         throw error;
     }

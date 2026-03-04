@@ -1,4 +1,4 @@
-import { join } from 'path';
+import { join, normalize } from 'path';
 import fs from 'fs-extra';
 import { hashDirectory, getNewestMtime } from '../utils/hash.js';
 import type { ChangeSet } from '../types/config.js';
@@ -19,7 +19,8 @@ export async function calculateDiff(repoRoot: string, systemRoot: string, pruneM
     const adapter = detectAdapter(systemRoot);
     const isClaude = adapter?.toolName === 'claude-code';
     const isQwen = adapter?.toolName === 'qwen';
-    const isGemini = adapter?.toolName === 'gemini';
+    const normalizedRoot = normalize(systemRoot).replace(/\\/g, '/');
+    const isAgentsSkills = normalizedRoot.includes('.agents/skills');
 
     const changeSet: ChangeSet = {
         skills: { missing: [], outdated: [], drifted: [], total: 0 },
@@ -30,25 +31,32 @@ export async function calculateDiff(repoRoot: string, systemRoot: string, pruneM
         'antigravity-workflows': { missing: [], outdated: [], drifted: [], total: 0 },
     };
 
+    // ~/.agents/skills: skills-only, mapped directly (repoRoot/skills/* → systemRoot/*)
+    if (isAgentsSkills) {
+        const repoPath = join(repoRoot, 'skills');
+        if (!(await fs.pathExists(repoPath))) return changeSet;
+
+        const items = (await fs.readdir(repoPath)).filter(i => !IGNORED_ITEMS.has(i));
+        changeSet.skills.total = items.length;
+
+        for (const item of items) {
+            await compareItem('skills', item, join(repoPath, item), join(systemRoot, item), changeSet, pruneMode);
+        }
+        return changeSet;
+    }
+
     // 1. Folders: Skills & Hooks & Commands
     const folders = ['skills', 'hooks'];
     if (isQwen) folders.push('qwen-commands');
-    else if (isGemini) folders.push('commands', 'antigravity-workflows');
     else if (!isClaude) folders.push('commands');
 
     for (const category of folders) {
         let repoPath: string;
         let systemPath: string;
 
-        if (category === 'commands') {
-            repoPath = join(repoRoot, '.gemini', 'commands');
-            systemPath = join(systemRoot, category);
-        } else if (category === 'qwen-commands') {
+        if (category === 'qwen-commands') {
             repoPath = join(repoRoot, '.qwen', 'commands');
             systemPath = join(systemRoot, 'commands');
-        } else if (category === 'antigravity-workflows') {
-            repoPath = join(repoRoot, '.gemini', 'antigravity', 'global_workflows');
-            systemPath = join(systemRoot, '.gemini', 'antigravity', 'global_workflows');
         } else {
             repoPath = join(repoRoot, category);
             systemPath = join(systemRoot, category);
