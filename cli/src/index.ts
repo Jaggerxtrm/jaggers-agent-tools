@@ -12,6 +12,7 @@ import { createSyncCommand } from './commands/sync.js';
 import { createStatusCommand } from './commands/status.js';
 import { createResetCommand } from './commands/reset.js';
 import { createAddOptionalCommand } from './commands/add-optional.js';
+import { createInstallServiceSkillsCommand } from './commands/install-service-skills.js';
 
 const program = new Command();
 
@@ -33,6 +34,7 @@ program.addCommand(createSyncCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createResetCommand());
 program.addCommand(createAddOptionalCommand());
+program.addCommand(createInstallServiceSkillsCommand());
 
 // Default action: run sync (for backwards compatibility)
 program

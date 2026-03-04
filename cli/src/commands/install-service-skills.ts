@@ -156,10 +156,84 @@ export async function installGitHooks(projectRoot: string, skillsSrc: string = S
     return { hookFiles };
 }
 
+export async function installSettings(projectRoot: string): Promise<{ added: string[]; skipped: string[] }> {
+    const settingsPath = path.join(projectRoot, '.claude', 'settings.json');
+    await fs.mkdirp(path.dirname(settingsPath));
+
+    let existing: Record<string, unknown> = {};
+    if (await fs.pathExists(settingsPath)) {
+        try {
+            existing = JSON.parse(await fs.readFile(settingsPath, 'utf8'));
+        } catch {
+            // malformed JSON — start fresh
+        }
+    }
+
+    const { result, added, skipped } = mergeSettingsHooks(existing);
+    await fs.writeFile(settingsPath, JSON.stringify(result, null, 2) + '\n');
+    return { added, skipped };
+}
+
+export function getProjectRoot(pkgRoot: string): string {
+    const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
+        encoding: 'utf8',
+        timeout: 5000,
+    });
+    if (result.status !== 0) {
+        throw new Error('Not inside a git repository. Run this command from your target project directory.');
+    }
+    const root = path.resolve(result.stdout.trim());
+    if (root === path.resolve(pkgRoot)) {
+        throw new Error('Run this from inside your TARGET project, not the jaggers-agent-tools repo itself.');
+    }
+    return root;
+}
+
 export function createInstallServiceSkillsCommand(): Command {
     return new Command('install-service-skills')
         .description('Install the Service Skill Trinity into the current project')
         .action(async () => {
-            console.log(kleur.bold('\n  install-service-skills') + kleur.dim(' — not yet implemented\n'));
+            let projectRoot: string;
+            try {
+                projectRoot = getProjectRoot(PKG_ROOT);
+            } catch (err) {
+                console.error(kleur.red(`\n✗ ${(err as Error).message}\n`));
+                process.exit(1);
+            }
+
+            console.log(kleur.dim(`\n  Installing into: ${projectRoot}\n`));
+
+            console.log(kleur.bold('── Skills ──────────────────────────────'));
+            const skillResults = await installSkills(projectRoot);
+            for (const { skill, status } of skillResults) {
+                const icon = status === 'installed' ? kleur.green('  ✓') : kleur.yellow('  ↺');
+                console.log(`${icon} .claude/skills/${skill}/`);
+            }
+
+            console.log(kleur.bold('\n── settings.json ───────────────────────'));
+            const { added, skipped } = await installSettings(projectRoot);
+            for (const event of added) {
+                console.log(`${kleur.green('  ✓')} added hook: ${event}`);
+            }
+            for (const event of skipped) {
+                console.log(`${kleur.yellow('  ○')} already present: ${event} (not overwritten)`);
+            }
+
+            console.log(kleur.bold('\n── Git hooks ───────────────────────────'));
+            const { hookFiles } = await installGitHooks(projectRoot);
+            for (const { name, status } of hookFiles) {
+                if (status === 'added') {
+                    console.log(`${kleur.green('  ✓')} .githooks/${name}`);
+                } else {
+                    console.log(`${kleur.yellow('  ○')} already installed: ${name}`);
+                }
+            }
+            if (hookFiles.some(h => h.status === 'added')) {
+                console.log(`${kleur.green('  ✓')} activated in .git/hooks/`);
+            }
+            console.log(`${kleur.green('  ✓')} scripts → .claude/git-hooks/`);
+
+            console.log(kleur.green('\n  Done.'));
+            console.log(kleur.dim('  Hooks active: SessionStart · PreToolUse · PostToolUse · pre-commit · pre-push\n'));
         });
 }
