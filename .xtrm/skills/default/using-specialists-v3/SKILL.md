@@ -7,7 +7,7 @@ description: >
   security checks, multi-step chains, integration-phase reconciliation,
   debugger-restitch on conflicting chains, pre-dispatch conflict-cluster
   mapping, test-failure-map epics, and questions about specialist workflow.
-version: 3.6
+version: 3.7
 ---
 
 # Using Specialists v3
@@ -215,6 +215,7 @@ Do small deterministic edits directly when scope is already obvious and delegati
 12. Drive routine stages autonomously once task is clear. Escalate only for human judgment, destructive actions, repeated crashes, or reviewer `FAIL`.
 13. The orchestrator NEVER edits code directly. Conflict resolution, even mechanical, goes through a debugger or executor specialist. Manual conflict resolution always escalates to the operator. (Exception: epics that explicitly restructure the specialists themselves — bootstrapping via the specialists they restructure is circular. Such epics are operator-authorized manual-orchestrator-direct work and must say so up-front.)
 14. Before dispatching any chain whose work depends on prior chain output, verify git state per the Git State Precondition section: `git status` clean, HEAD contains prior chain commits, no orphaned worktrees. Stale-base dispatch produces guaranteed debugger-restitch loops downstream.
+15. Never dispatch a specialist against a bead tagged `contract:draft` (`bd state <id> contract` returns `draft` or nothing). Promote it first — see Draft Beads And The Promotion Gate. A draft is a sanctioned capture format, not a shortcut around bead quality.
 
 ## Escalation Matrix
 
@@ -238,6 +239,7 @@ Do small deterministic edits directly when scope is already obvious and delegati
 | `npm publish` | Never | Always |
 | Dependency bump | Auto for security-patch bumps | Major/minor bumps escalate |
 | Config file schema-changing edit | Never | Always |
+| Dispatch against `contract:draft` bead | Never (rule #15) | Always — promote first: explore + rewrite full 7-section contract + `bd set-state <id> contract=ready --reason "..."` |
 
 ## Live Registry And Help
 
@@ -299,6 +301,38 @@ Fix three bad smells fast:
 - Missing VALIDATION. Say what proves done, not just that work is “finished.”
 
 What differs: orchestrator writes contract before dispatch, so specialist does less guessing and more useful work.
+
+## Draft Beads And The Promotion Gate
+
+Full 7-section contracts are expensive to write for an idea you won't touch for weeks. Demanding that rigor for every captured thought is exactly what produces the other failure mode: skipping the bead entirely, or writing a one-liner. There is a third, sanctioned option — but it is a capture format, not an escape hatch.
+
+**Draft state.** Tag a bead `contract:draft` at creation:
+
+```bash
+bd create --title "..." --labels contract:draft --type task --priority 3 \
+  --description "PROBLEM: <2+ real sentences — why this matters, not a title restated>
+SCOPE: <rough guess — 'somewhere in src/auth/, needs investigation' is fine>
+SUCCESS: TBD — needs exploration
+NON_GOALS: TBD — needs exploration
+CONSTRAINTS: TBD — needs exploration
+VALIDATION: TBD — needs exploration
+OUTPUT: TBD — needs exploration"
+```
+
+**No one-liners, ever — draft or not.** A draft still requires a real PROBLEM (why this exists, in prose) and a rough SCOPE. Every other section must be present and say `TBD — needs exploration` explicitly. A bare title, or a description that just restates the title, is never a valid bead — draft state lowers the bar on *completeness*, not on *honesty about what's missing*.
+
+**The promotion gate (rule #15).** No specialist may be dispatched against a `contract:draft` bead. Before dispatch, the orchestrator must:
+
+1. Re-read the bead (`bd show <id>`).
+2. Actually explore — the same Phase 2 evidence-gathering the `planning` skill requires before writing a real contract (`gitnexus_query`/`gitnexus_context`/`gitnexus_impact`, or Serena symbol reads).
+3. Rewrite the bead in place to the full 7-section contract (`bd update <id> --description "..."`), replacing every `TBD` with real content grounded in what was just found.
+4. Flip the state: `bd set-state <id> contract=ready --reason "Explored via <what>; rewrote to full contract"`.
+
+Check before any dispatch: `bd state <id> contract` — if it returns `draft` or nothing, stop and promote. This is a hard refuse (Escalation Matrix), not a warning — a stale draft wastes a full specialist turn on a contract the executor will have to guess at, which is the exact failure this rule exists to prevent.
+
+**Current enforcement is a bridge.** This is orchestrator-discipline-enforced today, not yet a hard `sp run` pre-dispatch check — see `specialists-roadmap.md` §5.3 for the planned real enforcement (same class as the existing C1 cwd-mismatch hard-refuse). Follow the rule anyway; do not treat the absence of a hook as license to dispatch against a draft.
+
+What differs: orchestrator has a sanctioned way to capture backlog ideas cheaply without either over-scoping them immediately or letting them decay into unusable one-liners.
 
 ## Bead Title Convention (canonical)
 

@@ -56,6 +56,25 @@ Before touching any code, nail down:
 
 If the request is under 8 words or the scope is unclear, ask **one** clarifying question before exploring. Don't ask two.
 
+### Draft capture mode — when the ask is "log this for later," not "plan this now"
+
+Full Phase 1–4 rigor is expensive, and demanding it for every captured idea is what produces the failure this skill exists to prevent — a user skips the bead entirely, or you write a one-liner. When the intent is clearly deferred work (backlog capture, "someone should look at this eventually," an idea surfaced mid-task that isn't the current focus), skip straight to a **draft bead** instead of running Phases 2–4:
+
+```bash
+bd create --title "..." --labels contract:draft --type task --priority 3 \
+  --description "PROBLEM: <2+ real sentences — why this matters, not the title restated>
+SCOPE: <rough guess — 'somewhere in src/auth/, needs investigation' is fine here>
+SUCCESS: TBD — needs exploration
+NON_GOALS: TBD — needs exploration
+CONSTRAINTS: TBD — needs exploration
+VALIDATION: TBD — needs exploration
+OUTPUT: TBD — needs exploration"
+```
+
+**No one-liners, ever — draft mode included.** PROBLEM must be real prose, SCOPE must be a real guess, and every other section must explicitly say `TBD — needs exploration` rather than being silently absent. Draft state lowers the bar on completeness, never on honesty about what's still unknown.
+
+**A draft bead cannot be dispatched.** `using-specialists-v3` rule #15 hard-refuses any specialist run against a `contract:draft` bead. Promoting it later means coming back to this skill and actually running Phases 2–4 (explore, structure, rewrite) against the real bead, then `bd set-state <id> contract=ready --reason "..."`. Draft mode defers the work, not the eventual rigor.
+
 ---
 
 ## Phase 2 — Explore Codebase (Read-Only)
@@ -526,6 +545,7 @@ Before presenting the plan to the user:
 - [ ] If refactor scope exists, rename/extract safety checks were included in plan
 - [ ] test-planning was invoked (or scheduled as next step), including smoke/E2E and log/telemetry requirements
 - [ ] First implementation issue is ready to claim
+- [ ] Any bead intentionally left in draft capture mode carries `contract:draft`, a real PROBLEM + rough SCOPE, and explicit `TBD` markers elsewhere — not silent gaps
 
 If any issue description is empty or just restates the title — it's not ready.
-The test of a good issue: could another agent pick it up cold and succeed?
+The test of a good issue: could another agent pick it up cold and succeed? (For a `contract:draft` bead, the test is different: could another agent tell *why this exists* and *that it needs promotion before dispatch*?)
