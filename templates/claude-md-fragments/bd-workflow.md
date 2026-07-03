@@ -1,6 +1,6 @@
 ---
 name: bd-workflow
-version: 1.0.0
+version: 1.0.1
 description: bd issue tracking + bv triage + git/worktree workflow + active gates
 ---
 # XTRM Agent Workflow
@@ -50,7 +50,8 @@ bd update                              # Update last-touched issue (no ID needed
 
 # Creating
 bd create --title="..." --description="..." --type=task --priority=2
-# --parent <epic-id>                   epic child: auto-names `.1`, `.2`, … and adds parent edge
+# --parent <bead-id>                    nest as <id>.1, .2, … (recursive: .1.1) — default whenever this bead
+#                                        services another bead's work, not only epics
 # --deps "discovered-from:<parent-id>"  link follow-ups to source
 # priority: 0=critical  1=high  2=medium  3=low  4=backlog
 # types: task | bug | feature | epic | chore | decision
