@@ -56,6 +56,7 @@ Use these command surfaces when the task is operational rather than code-editing
 | Unfamiliar area of code | `gitnexus_query({query: "concept"})` before opening any file |
 | About to edit a symbol | `gitnexus_impact({target: "name", direction: "upstream"})` |
 | Before `git commit` | `gitnexus_detect_changes({scope: "staged"})` to verify scope |
+| About to `bd create` a bead for a specialist dispatch | Add `--parent <bead-it-services>` (nests `.1`, recursive `.1.1`) + title `<role>: <task>` — never a loose top-level bead |
 | Reading code | `get_symbols_overview` → `find_symbol` — never read whole files |
 | Task is tests | use /test-planning
 | Task is docs updates | use /sync-docs
