@@ -14,6 +14,7 @@ import qualityGatesExtension from "./extensions/quality-gates.ts";
 import serviceSkillsExtension from "./extensions/service-skills.ts";
 import sessionFlowExtension from "./extensions/session-flow.ts";
 import spTerminalOverlayExtension from "./extensions/sp-terminal-overlay.ts";
+import xtprompt from "./extensions/xtprompt.ts";
 import xtrmLoaderExtension from "./extensions/xtrm-loader.ts";
 import xtrmUiExtension from "./extensions/xtrm-ui.ts";
 
@@ -37,6 +38,7 @@ export const managedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "service-skills", register: serviceSkillsExtension },
   { id: "session-flow", register: sessionFlowExtension },
   { id: "sp-terminal-overlay", register: spTerminalOverlayExtension },
+  { id: "xtprompt", register: xtprompt },
   { id: "xtrm-loader", register: xtrmLoaderExtension },
   { id: "xtrm-ui", register: xtrmUiExtension },
 ];
