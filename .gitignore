@@ -113,3 +113,59 @@ hooks/tsconfig-cache.json
 # Nested tool runtime folders
 cli/.pi/
 packages/*/.serena/
+
+# Per-session scratch + tool caches (documented in CLAUDE.md as untracked)
+context.md
+cli/.gemini/
+.pytest_cache/
+.ruff_cache/
+
+# ────────────────────────────────────────────────────────────────
+# Runtime dot dirs — follow ~/dev/specialists pattern.
+# Existing tracked files stay tracked (git does not retroactively
+# untrack); only NEW files under these dirs are ignored by default.
+# Use `git add -f` to intentionally add a new file here.
+# ────────────────────────────────────────────────────────────────
+.beads/
+.claude/
+.pi/
+.codex
+
+# .xtrm/ is the SOURCE of canonical assets shipped in the npm tarball
+# (see package.json `files`). Ignore everything by default, then
+# re-include the canonical + currently-tracked paths.
+.xtrm/*
+!.xtrm/config/
+!.xtrm/config/**
+!.xtrm/hooks/
+!.xtrm/hooks/**
+!.xtrm/registry.json
+!.xtrm/memory.md
+!.xtrm/specialists-source.json
+!.xtrm/cache/
+!.xtrm/cache/**
+!.xtrm/ext-src/
+!.xtrm/ext-src/**
+!.xtrm/packages/
+!.xtrm/packages/**
+!.xtrm/skills/
+!.xtrm/skills/INVARIANTS.md
+!.xtrm/skills/state.json
+!.xtrm/skills/default/
+!.xtrm/skills/default/**
+!.xtrm/skills/optional/
+!.xtrm/skills/optional/**
+!.xtrm/skills/user/
+!.xtrm/skills/user/**
+!.xtrm/skills/deferred/
+!.xtrm/skills/deferred/**
+
+# Re-exclude common runtime/cache noise deep in re-included .xtrm/ subtrees.
+# Mirrors the exclusions in package.json `files`.
+.xtrm/**/__pycache__/
+.xtrm/**/*.pyc
+.xtrm/**/.serena/
+.xtrm/**/.pi/
+.xtrm/skills/default/**/evals/
+.xtrm/skills/default/**/workspace/iteration-*/
+.xtrm/skills/default/*-workspace/
