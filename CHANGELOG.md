@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`.gitignore` sweep for session/runtime dot dirs (PR #352).** Applies the specialists-style pattern: catch-all ignore for `.beads/`, `.claude/`, `.pi/`, `.codex`, and a `.xtrm/*` whitelist re-including canonical shipped assets (`config/`, `hooks/`, `registry.json`, `skills/{INVARIANTS.md, state.json, default/, optional/, user/, deferred/}`, `ext-src/`, `packages/`, `cache/`, `memory.md`, `specialists-source.json`) plus deep re-exclusions mirroring `package.json` `files` excludes (`__pycache__/`, `*.pyc`, `.serena/`, `.pi/`, `evals/`, `workspace/iteration-*/`, `*-workspace/`). Untracks 34 accumulated `.xtrm/reports/*.md` plus `context.md` and `cli/.gemini/settings.json`. Existing tracked content under swept dot dirs stays tracked; only new files are ignored by default. `git add -f` for intentional new files.
 - **Specialists vendor manifest drift for `using-specialists-v3/SKILL.md` (xtrm-rcsmu, PR #353).** `check:specialists-vendor` was red on main after PR #351 edited the vendored SKILL.md in-tree (v3.6 → v3.7 with the `contract:draft/ready` bead-promotion gate and rule #15) without first porting to `~/dev/specialists` master and re-vendoring. Manifest hash patched to match the current vendored content as a stopgap; proper upstream port tracked as `xtrm-rcsmu`. Do not run `npm run vendor-specialists-skills` until that bead closes — the specialists source is still at v3.5 and a re-vendor would silently revert PR #351.
 
-### `@jaggerxtrm/pi-extensions` v0.9.2 — 2026-07-04
+### `@jaggerxtrm/pi-extensions` v0.9.1 — 2026-07-04
 
 #### Added
 
