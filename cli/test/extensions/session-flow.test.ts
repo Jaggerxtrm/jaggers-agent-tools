@@ -3,7 +3,7 @@ import { ExtensionHarness } from "./extension-harness";
 import sessionFlowExtension from "../../../packages/pi-extensions/extensions/session-flow/index";
 import { SubprocessRunner } from "../../../packages/pi-extensions/src/core";
 
-vi.mock("@mariozechner/pi-coding-agent", () => ({
+vi.mock("@earendil-works/pi-coding-agent", () => ({
 	isBashToolResult: (event: any) => event?.toolName === "bash",
 }));
 

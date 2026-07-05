@@ -4,7 +4,7 @@ import beadsExtension from "../../../packages/pi-extensions/extensions/beads/ind
 import { SubprocessRunner } from "../../../packages/pi-extensions/src/core";
 import * as fs from "node:fs";
 
-vi.mock("@mariozechner/pi-coding-agent", () => ({
+vi.mock("@earendil-works/pi-coding-agent", () => ({
 	isToolCallEventType: (name: string, event: any) => event?.toolName === name,
 	isBashToolResult: (event: any) => event?.toolName === "bash",
 }));

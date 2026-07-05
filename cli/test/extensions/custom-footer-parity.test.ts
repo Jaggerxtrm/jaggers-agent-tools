@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock the @mariozechner Pi runtime packages before importing the extension —
+// Mock the @earendil-works Pi runtime packages before importing the extension —
 // Pi provides these at runtime, but CI's npm install does not pull them in.
 // Without these mocks, vitest fails the entire test file at module-load time.
 // See xtrm-qdsx.
-vi.mock("@mariozechner/pi-coding-agent", () => ({
+vi.mock("@earendil-works/pi-coding-agent", () => ({
 	isToolCallEventType: vi.fn(() => false),
 	isBashToolResult: vi.fn(() => false),
 }));
-vi.mock("@mariozechner/pi-tui", () => ({
+vi.mock("@earendil-works/pi-tui", () => ({
 	truncateToWidth: vi.fn((s: string) => s),
 	visibleWidth: vi.fn((s: string) => s.length),
 }));
