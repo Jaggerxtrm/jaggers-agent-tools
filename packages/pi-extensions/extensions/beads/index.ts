@@ -1,5 +1,5 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { isToolCallEventType, isBashToolResult } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { isToolCallEventType, isBashToolResult } from "@earendil-works/pi-coding-agent";
 import { SubprocessRunner, EventAdapter } from "../../src/core";
 
 export default function (pi: ExtensionAPI) {

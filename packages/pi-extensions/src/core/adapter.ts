@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as nodePath from "node:path";
 
-import type { ExtensionAPI, ToolCallEvent } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ToolCallEvent } from "@earendil-works/pi-coding-agent";
 import { PI_MUTATING_FILE_TOOLS } from "./guard-rules";
 
 export class EventAdapter {

@@ -3,7 +3,7 @@ import { ExtensionHarness } from "./extension-harness";
 import beadsExtension from "../../../packages/pi-extensions/extensions/beads/index";
 import { SubprocessRunner } from "../../../packages/pi-extensions/src/core";
 
-vi.mock("@mariozechner/pi-coding-agent", () => ({
+vi.mock("@earendil-works/pi-coding-agent", () => ({
 	isToolCallEventType: (name: string, event: any) => event?.toolName === name,
 	isBashToolResult: (event: any) => event?.toolName === "bash",
 }));
