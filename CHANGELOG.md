@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [pi-extensions v0.9.2] — 2026-07-05
+
+### `@jaggerxtrm/pi-extensions` v0.9.2 — 2026-07-05
+
+#### Fixed
+
+- **`pi` failed to start after installing `@jaggerxtrm/pi-extensions@0.9.1`.** The v0.9.1 release added `xtprompt` to `src/registry.ts` (`import xtprompt from "./extensions/xtprompt.ts"`) but shipped no `src/extensions/xtprompt.ts` — every other bundled extension has a one-line shim there re-exporting from `../../extensions/<name>/index.ts`, and the new one was missed. Every `pi` startup crashed with `Cannot find module './extensions/xtprompt.ts'` from `pi-extensions/src/registry.ts:17`, forcing users onto `pi -ne` to load the agent at all. This release adds the missing shim; the `xtprompt` package source at `packages/pi-extensions/extensions/xtprompt/{index.ts,package.json}` was already correct and shipped in v0.9.1.
+
 ## [v0.9.1] — 2026-07-04
 
 ### `xtrm-tools` v0.9.1 — 2026-07-04
