@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import autoSessionNameExtension from "./extensions/auto-session-name.ts";
 import autoUpdateExtension from "./extensions/auto-update.ts";

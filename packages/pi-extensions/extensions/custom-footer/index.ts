@@ -7,8 +7,8 @@
  * Line 3: ◐ 4843.5 Rework project bootstrap... — beads claim or ○ 6 open
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 import { SubprocessRunner, EventAdapter } from "../../src/core";
 

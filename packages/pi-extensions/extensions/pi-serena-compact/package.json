@@ -12,8 +12,8 @@
   "type": "module",
   "main": "index.ts",
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "^0.56.0",
-    "@mariozechner/pi-tui": "^0.56.0"
+    "@earendil-works/pi-coding-agent": "^0.80.0",
+    "@earendil-works/pi-tui": "^0.80.0"
   },
   "pi": {
     "extensions": [

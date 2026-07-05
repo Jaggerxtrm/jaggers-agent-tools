@@ -20,7 +20,7 @@ import type {
   LsToolDetails,
   ReadToolDetails,
   ToolResultEvent,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import {
   CustomEditor,
   createBashTool,
@@ -30,8 +30,8 @@ import {
   createLsTool,
   createReadTool,
   createWriteTool,
-} from "@mariozechner/pi-coding-agent";
-import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { Box, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -184,14 +184,11 @@ function resolvePiCodingAgentEntryPath(): string {
 
   candidates.push(
     join(dirname(process.execPath), "..", "lib", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js"),
-    join(dirname(process.execPath), "..", "lib", "node_modules", "@mariozechner", "pi-coding-agent", "dist", "index.js"),
   );
 
-  for (const packageName of ["@earendil-works/pi-coding-agent", "@mariozechner/pi-coding-agent"]) {
-    try {
-      candidates.push(maybeFileUrlToPath(import.meta.resolve(packageName)));
-    } catch {}
-  }
+  try {
+    candidates.push(maybeFileUrlToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
+  } catch {}
 
   const entryPath = candidates.find((candidate) => existsSync(candidate));
   if (!entryPath) throw new Error("Could not resolve pi-coding-agent entry path");

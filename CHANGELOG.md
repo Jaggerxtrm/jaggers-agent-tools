@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [pi-extensions v0.9.3] — 2026-07-05
+
+### `@jaggerxtrm/pi-extensions` v0.9.3 — 2026-07-05
+
+#### Changed
+
+- **Migrate all `@mariozechner/*` imports to `@earendil-works/*` across the bundle.** Upstream Pi renamed the npm scope (Mario Zechner → Earendil Works); the currently installed `pi` binary is `@earendil-works/pi-coding-agent@0.80.3`. Legacy `@mariozechner/*` continued to work at runtime only via a temporary compat alias in Pi's extension loader — its own CHANGELOG notes that "the compat entrypoint and the loader alias will be removed in a future release." This release rewrites every specifier (both value and type imports, plus per-extension `peerDependencies` in `serena-pool` and `pi-serena-compact`, and the fallback filesystem path in `xtrm-ui`) to `@earendil-works/pi-{coding-agent,tui,ai}`. Surfaced by Codex review on PR #357 while landing v0.9.2. Verified by swapping the migrated bundle into the live pi runtime and running `pi --version` — no `Cannot find module` errors, no warnings.
+
 ## [pi-extensions v0.9.2] — 2026-07-05
 
 ### `@jaggerxtrm/pi-extensions` v0.9.2 — 2026-07-05
