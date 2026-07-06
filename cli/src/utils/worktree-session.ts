@@ -9,6 +9,115 @@ import { runPiLaunchPreflight } from '../core/pi-runtime.js';
 export interface WorktreeSessionOptions {
     runtime: 'claude' | 'pi';
     name?: string;
+    role?: string;
+    bead?: string;
+    attach?: boolean;
+}
+
+export interface ResolvedRole {
+    name: string;
+    systemPrompt: string;
+    skillPaths: string[];
+}
+
+// Exposed for unit testing. sp view <name> --raw is the source of truth for
+// specialist resolution — do not reimplement its .specialists/user + installed
+// package precedence here.
+export function parseSpecialistJson(name: string, raw: string): ResolvedRole {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        throw new Error(`sp view ${name} --raw did not return JSON`);
+    }
+    const spec = (parsed as { specialist?: Record<string, unknown> } | null)?.specialist;
+    if (!spec || typeof spec !== 'object') {
+        throw new Error(`role '${name}': missing 'specialist' key in sp output`);
+    }
+    const promptSection = (spec as { prompt?: unknown }).prompt as { system?: unknown } | undefined;
+    const systemPrompt = promptSection?.system;
+    if (typeof systemPrompt !== 'string' || !systemPrompt.trim()) {
+        throw new Error(`role '${name}': specialist.prompt.system is empty`);
+    }
+    const skillsSection = (spec as { skills?: unknown }).skills as { paths?: unknown } | undefined;
+    const rawPaths = skillsSection?.paths;
+    const skillPaths = Array.isArray(rawPaths)
+        ? rawPaths.filter((p): p is string => typeof p === 'string' && p.length > 0)
+        : [];
+    const mode = (spec as { system_prompt_mode?: unknown }).system_prompt_mode;
+    if (mode === 'replace') {
+        // Interactive pi must keep AGENTS.md + coding base. Warn and force append.
+        process.stderr.write(kleur.yellow(
+            `  ⚠ role '${name}': system_prompt_mode=replace ignored; forcing append\n`,
+        ));
+    }
+    return { name, systemPrompt, skillPaths };
+}
+
+export function resolveRole(name: string): ResolvedRole {
+    const r = spawnSync('sp', ['view', name, '--raw'], {
+        encoding: 'utf8',
+        stdio: 'pipe',
+    });
+    if (r.status !== 0) {
+        const stderr = (r.stderr ?? '').trim() || 'unknown error';
+        throw new Error(`role '${name}' not found via sp view (${stderr})`);
+    }
+    return parseSpecialistJson(name, r.stdout ?? '');
+}
+
+function slugifyForSession(input: string): string {
+    const s = input.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return s.slice(0, 32) || 'x';
+}
+
+function shellQuote(s: string): string {
+    return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+export interface RoleTmuxPlan {
+    sessionName: string;
+    piArgs: string[];
+    piCmdString: string;
+    paneOptions: Array<{ key: string; value: string }>;
+}
+
+// Pure — no I/O. Exported for unit testing.
+export function buildRoleTmuxPlan(args: {
+    role: ResolvedRole;
+    bead?: string;
+    parentSessionId: string;
+    promptFile: string;
+}): RoleTmuxPlan {
+    const { role, bead, parentSessionId, promptFile } = args;
+    const roleSlug = slugifyForSession(role.name);
+    const sessionName = bead
+        ? `role-${roleSlug}-${slugifyForSession(bead)}`
+        : `role-${roleSlug}`;
+
+    const piArgs = ['--append-system-prompt', promptFile];
+    for (const skill of role.skillPaths) {
+        piArgs.push('--skill', skill);
+    }
+
+    const piCmdString = ['pi', ...piArgs].map(shellQuote).join(' ');
+
+    const paneOptions: Array<{ key: string; value: string }> = [
+        { key: '@agent_parent_session', value: parentSessionId },
+        { key: '@agent_task', value: `role:${role.name}` },
+    ];
+    if (bead) paneOptions.push({ key: '@agent_bead', value: bead });
+
+    return { sessionName, piArgs, piCmdString, paneOptions };
+}
+
+function currentTmuxSessionId(): string {
+    if (!process.env.TMUX) return '';
+    const r = spawnSync('tmux', ['display-message', '-p', '-F', '#{session_id}'], {
+        encoding: 'utf8',
+        stdio: 'pipe',
+    });
+    return r.status === 0 ? (r.stdout ?? '').trim() : '';
 }
 
 function randomSlug(len: number = 4): string {
@@ -199,8 +308,25 @@ export function unregisterPluginsForWorktree(worktreePath: string): void {
 }
 
 export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promise<void> {
-    const { runtime, name } = opts;
+    const { runtime, name, role: roleName, bead, attach = true } = opts;
     const cwd = process.cwd();
+
+    // Resolve role up-front so we fail fast on an unknown role name before
+    // creating a worktree (which would otherwise leak on a bad --role typo).
+    let resolvedRole: ResolvedRole | null = null;
+    if (roleName) {
+        if (runtime !== 'pi') {
+            console.error(kleur.red('\n  ✗ --role is currently only supported for pi\n'));
+            process.exit(1);
+        }
+        try {
+            resolvedRole = resolveRole(roleName);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(kleur.red(`\n  ✗ ${msg}\n`));
+            process.exit(1);
+        }
+    }
 
     // Use git to find both current checkout root and common/main repo root.
     const currentRepoRoot = gitRepoRoot(cwd);
@@ -368,6 +494,20 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         await runPiLaunchPreflight(worktreePath, false);
     }
 
+    // Role mode: launch pi inside a named tmux session with agent metadata
+    // set on the pane. --no-attach → print `session:pane` to stdout for
+    // orchestrator capture. All chatter above went to console.log — headless
+    // callers should capture stdout only after seeing that final line.
+    if (resolvedRole) {
+        await launchRoleTmuxSession({
+            role: resolvedRole,
+            bead,
+            attach,
+            worktreePath,
+        });
+        return; // launchRoleTmuxSession never returns (calls process.exit)
+    }
+
     // Launch the runtime in the worktree
     const runtimeCmd = runtime === 'claude' ? 'claude' : 'pi';
     const runtimeArgs = runtime === 'claude' ? ['--dangerously-skip-permissions'] : [];
@@ -377,4 +517,74 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     });
 
     process.exit(launchResult.status ?? 0);
+}
+
+async function launchRoleTmuxSession(args: {
+    role: ResolvedRole;
+    bead?: string;
+    attach: boolean;
+    worktreePath: string;
+}): Promise<never> {
+    const { role, bead, attach, worktreePath } = args;
+
+    // Transport file for the system prompt. `.xtrm/` is gitignored so this
+    // never rides a checkpoint commit.
+    const promptFile = path.join(
+        worktreePath,
+        '.xtrm',
+        `role-${slugifyForSession(role.name)}-prompt.md`,
+    );
+    mkdirSync(path.dirname(promptFile), { recursive: true });
+    writeFileSync(promptFile, role.systemPrompt);
+
+    const parentSessionId = currentTmuxSessionId();
+    const plan = buildRoleTmuxPlan({ role, bead, parentSessionId, promptFile });
+
+    // Fail fast if the session name already exists — do not silently attach
+    // to a stale session with unknown metadata.
+    const hasSess = spawnSync('tmux', ['has-session', '-t', `=${plan.sessionName}`], {
+        stdio: 'pipe',
+    });
+    if (hasSess.status === 0) {
+        process.stderr.write(kleur.red(
+            `\n  ✗ tmux session '${plan.sessionName}' already exists — kill it or pick a fresh bead\n`,
+        ));
+        process.exit(1);
+    }
+
+    const newSess = spawnSync('tmux', [
+        'new-session', '-d',
+        '-s', plan.sessionName,
+        '-c', worktreePath,
+        plan.piCmdString,
+    ], { stdio: 'pipe', encoding: 'utf8' });
+    if (newSess.status !== 0) {
+        const stderr = (newSess.stderr ?? '').trim() || 'unknown error';
+        process.stderr.write(kleur.red(`\n  ✗ tmux new-session failed: ${stderr}\n`));
+        process.exit(1);
+    }
+
+    const paneQuery = spawnSync('tmux', [
+        'list-panes', '-t', plan.sessionName, '-F', '#{pane_id}',
+    ], { stdio: 'pipe', encoding: 'utf8' });
+    const paneId = (paneQuery.stdout ?? '').trim().split('\n')[0] ?? '';
+    if (!paneId) {
+        process.stderr.write(kleur.red('\n  ✗ Could not resolve pane id for new session\n'));
+        process.exit(1);
+    }
+
+    for (const { key, value } of plan.paneOptions) {
+        spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
+    }
+
+    if (!attach) {
+        // Contract: exactly one line on stdout, session_name:pane_id
+        process.stdout.write(`${plan.sessionName}:${paneId}\n`);
+        process.exit(0);
+    }
+
+    const attachResult = spawnSync('tmux', ['attach-session', '-t', plan.sessionName], {
+        stdio: 'inherit',
+    });
+    process.exit(attachResult.status ?? 0);
 }
