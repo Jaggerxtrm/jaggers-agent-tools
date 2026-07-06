@@ -69,8 +69,17 @@ export function createPiCommand(): Command {
     const cmd = new Command('pi')
         .description('Launch a Pi session in a sandboxed worktree, or manage the Pi runtime')
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
-        .action(async (name: string | undefined) => {
-            await launchWorktreeSession({ runtime: 'pi', name });
+        .option('--role <name>', 'Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata')
+        .option('--bead <id>', 'Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug')
+        .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
+        .action(async (name: string | undefined, opts: { role?: string; bead?: string; attach?: boolean }) => {
+            await launchWorktreeSession({
+                runtime: 'pi',
+                name,
+                role: opts.role,
+                bead: opts.bead,
+                attach: opts.attach,
+            });
         });
 
     // 'setup' = interactive first-time API key + OAuth config

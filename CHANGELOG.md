@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Add `## Code restraint (when implementing directly)` to `agents-top.md` and `claude-top.md`.** Companion to specialists PR #173 (unitAI-pzmwf) which introduced a unified code-restraint discipline at the mandatory-rule level and in the orchestrator skill. This layer is for when the agent implements directly without delegating to a specialist. Compact 3-bullet section fits the "managed block" style the file's own header enforces (`This is a compact managed block. Use CLI --help and skills for details; do not paste full manuals here.`): the ladder in one line (YAGNI → reuse → stdlib → native → one line → minimum), the "never simplify away" boundary (input validation at trust boundaries, error handling that prevents data loss, security, accessibility, explicitly requested behavior, understanding the problem), and the deliberate-shortcut marker `// SIMPLIFIED: <ceiling>. upgrade when <trigger>.` The full ladder + rules + tag vocabulary specifics live in the specialists mandatory rule and are not repeated here (reuse over rewrite — the same discipline being taught). Identical text in both files so all downstream propagation (~30 consumer repos via existing `xt update` flow) picks up the same rule regardless of runtime. Zero external plugin brand references in shipped text.
+
 ## [pi-extensions v0.9.3] — 2026-07-05
 
 ### `@jaggerxtrm/pi-extensions` v0.9.3 — 2026-07-05
