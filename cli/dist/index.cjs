@@ -5522,7 +5522,7 @@ var require_jsonfile = __commonJS({
       await universalify.fromCallback(fs51.writeFile)(file2, str, options);
     }
     var writeFile = universalify.fromPromise(_writeFile);
-    function writeFileSync3(file2, obj, options = {}) {
+    function writeFileSync4(file2, obj, options = {}) {
       const fs51 = options.fs || _fs;
       const str = stringify2(obj, options);
       return fs51.writeFileSync(file2, str, options);
@@ -5531,7 +5531,7 @@ var require_jsonfile = __commonJS({
       readFile,
       readFileSync: readFileSync6,
       writeFile,
-      writeFileSync: writeFileSync3
+      writeFileSync: writeFileSync4
     };
   }
 });
@@ -44470,7 +44470,7 @@ var init_handoff = __esm({
 });
 
 // src/index.ts
-var import_node_fs12 = require("fs");
+var import_node_fs13 = require("fs");
 var import_node_path39 = require("path");
 
 // ../node_modules/commander/esm.mjs
@@ -60079,7 +60079,8 @@ var MANAGED_EXTENSIONS = [
   { id: "git-checkpoint", displayName: "git-checkpoint", required: false },
   { id: "lsp-bootstrap", displayName: "lsp-bootstrap", required: false },
   { id: "pi-serena-compact", displayName: "pi-serena-compact", required: false },
-  { id: "quality-gates", displayName: "quality-gates", required: true },
+  // quality-gates disabled at the bundle registry level — broken .claude/hooks
+  // wiring under the managed .xtrm/hooks layout means it never fires. (xtrm-e2vkn)
   { id: "service-skills", displayName: "service-skills", required: false },
   { id: "session-flow", displayName: "session-flow", required: true },
   { id: "xtrm-loader", displayName: "xtrm-loader", required: true },
@@ -60595,9 +60596,22 @@ async function cleanupLegacyProjectExtensionCopies(projectRoot, dryRun, log) {
   }
   return { removed, failed };
 }
+var SERENA_DEFAULT_BLOCKED_TOOLS = /* @__PURE__ */ new Set(["read", "write", "edit", "ls", "find", "grep"]);
 function normalizeStringArray(value) {
   if (!Array.isArray(value)) return [];
   return value.filter((entry) => typeof entry === "string");
+}
+function normalizeRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
+}
+function normalizeSerenaSettings(value) {
+  const serena = normalizeRecord(value);
+  const blockedTools = normalizeStringArray(serena.blockedTools);
+  const hasCustomBlocklist = blockedTools.some((toolName) => !SERENA_DEFAULT_BLOCKED_TOOLS.has(toolName));
+  if (!Array.isArray(serena.blockedTools) || !hasCustomBlocklist) {
+    serena.blockedTools = [];
+  }
+  return serena;
 }
 function pruneConflictingPiPackageEntries(entries) {
   const kept = [];
@@ -60676,7 +60690,8 @@ async function updatePiSettings(projectRoot, dryRun, log) {
     ...existingSettings,
     extensions: existingExtensions,
     skills: existingSkills,
-    packages: existingPackages
+    packages: existingPackages,
+    serena: normalizeSerenaSettings(existingSettings.serena)
   };
   await import_fs_extra8.default.writeJson(piSettingsPath, nextSettings, { spaces: 2 });
   log?.(kleur_default.dim(`Updated .pi/settings.json \u2192 ${PROJECT_EXTENSION_PACKAGE_ID} + ${PROJECT_SKILLS_ENTRY} + ${USER_DEFAULT_SKILLS_ENTRY}`));
@@ -60900,6 +60915,76 @@ async function runPiRuntimeSync(opts = {}) {
 }
 
 // src/utils/worktree-session.ts
+function parseSpecialistJson(name, raw) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`sp view ${name} --raw did not return JSON`);
+  }
+  const spec = parsed?.specialist;
+  if (!spec || typeof spec !== "object") {
+    throw new Error(`role '${name}': missing 'specialist' key in sp output`);
+  }
+  const promptSection = spec.prompt;
+  const systemPrompt = promptSection?.system;
+  if (typeof systemPrompt !== "string" || !systemPrompt.trim()) {
+    throw new Error(`role '${name}': specialist.prompt.system is empty`);
+  }
+  const skillsSection = spec.skills;
+  const rawPaths = skillsSection?.paths;
+  const skillPaths = Array.isArray(rawPaths) ? rawPaths.filter((p) => typeof p === "string" && p.length > 0) : [];
+  const mode = spec.system_prompt_mode;
+  if (mode === "replace") {
+    process.stderr.write(kleur_default.yellow(
+      `  \u26A0 role '${name}': system_prompt_mode=replace ignored; forcing append
+`
+    ));
+  }
+  return { name, systemPrompt, skillPaths };
+}
+function resolveRole(name) {
+  const r = (0, import_node_child_process.spawnSync)("sp", ["view", name, "--raw"], {
+    encoding: "utf8",
+    stdio: "pipe"
+  });
+  if (r.status !== 0) {
+    const stderr = (r.stderr ?? "").trim() || "unknown error";
+    throw new Error(`role '${name}' not found via sp view (${stderr})`);
+  }
+  return parseSpecialistJson(name, r.stdout ?? "");
+}
+function slugifyForSession(input) {
+  const s = input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return s.slice(0, 32) || "x";
+}
+function shellQuote(s) {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+function buildRoleTmuxPlan(args) {
+  const { role, bead, parentSessionId, promptFile } = args;
+  const roleSlug = slugifyForSession(role.name);
+  const sessionName = bead ? `role-${roleSlug}-${slugifyForSession(bead)}` : `role-${roleSlug}`;
+  const piArgs = ["--append-system-prompt", promptFile];
+  for (const skill of role.skillPaths) {
+    piArgs.push("--skill", skill);
+  }
+  const piCmdString = ["pi", ...piArgs].map(shellQuote).join(" ");
+  const paneOptions = [
+    { key: "@agent_parent_session", value: parentSessionId },
+    { key: "@agent_task", value: `role:${role.name}` }
+  ];
+  if (bead) paneOptions.push({ key: "@agent_bead", value: bead });
+  return { sessionName, piArgs, piCmdString, paneOptions };
+}
+function currentTmuxSessionId() {
+  if (!process.env.TMUX) return "";
+  const r = (0, import_node_child_process.spawnSync)("tmux", ["display-message", "-p", "-F", "#{session_id}"], {
+    encoding: "utf8",
+    stdio: "pipe"
+  });
+  return r.status === 0 ? (r.stdout ?? "").trim() : "";
+}
 function randomSlug(len = 4) {
   return Math.random().toString(36).slice(2, 2 + len);
 }
@@ -61008,8 +61093,24 @@ function unregisterPluginsForWorktree(worktreePath) {
   }
 }
 async function launchWorktreeSession(opts) {
-  const { runtime, name } = opts;
+  const { runtime, name, role: roleName, bead, attach = true } = opts;
   const cwd = process.cwd();
+  let resolvedRole = null;
+  if (roleName) {
+    if (runtime !== "pi") {
+      console.error(kleur_default.red("\n  \u2717 --role is currently only supported for pi\n"));
+      process.exit(1);
+    }
+    try {
+      resolvedRole = resolveRole(roleName);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(kleur_default.red(`
+  \u2717 ${msg}
+`));
+      process.exit(1);
+    }
+  }
   const currentRepoRoot = gitRepoRoot(cwd);
   const mainRepoRoot = gitMainRepoRoot(cwd);
   if (!currentRepoRoot || !mainRepoRoot) {
@@ -61128,6 +61229,15 @@ async function launchWorktreeSession(opts) {
   if (runtime === "pi") {
     await runPiLaunchPreflight(worktreePath, false);
   }
+  if (resolvedRole) {
+    await launchRoleTmuxSession({
+      role: resolvedRole,
+      bead,
+      attach,
+      worktreePath
+    });
+    return;
+  }
   const runtimeCmd = runtime === "claude" ? "claude" : "pi";
   const runtimeArgs = runtime === "claude" ? ["--dangerously-skip-permissions"] : [];
   const launchResult = (0, import_node_child_process.spawnSync)(runtimeCmd, runtimeArgs, {
@@ -61135,6 +61245,69 @@ async function launchWorktreeSession(opts) {
     stdio: "inherit"
   });
   process.exit(launchResult.status ?? 0);
+}
+async function launchRoleTmuxSession(args) {
+  const { role, bead, attach, worktreePath } = args;
+  const promptFile = import_node_path5.default.join(
+    worktreePath,
+    ".xtrm",
+    `role-${slugifyForSession(role.name)}-prompt.md`
+  );
+  (0, import_node_fs.mkdirSync)(import_node_path5.default.dirname(promptFile), { recursive: true });
+  (0, import_node_fs.writeFileSync)(promptFile, role.systemPrompt);
+  const parentSessionId = currentTmuxSessionId();
+  const plan = buildRoleTmuxPlan({ role, bead, parentSessionId, promptFile });
+  const hasSess = (0, import_node_child_process.spawnSync)("tmux", ["has-session", "-t", `=${plan.sessionName}`], {
+    stdio: "pipe"
+  });
+  if (hasSess.status === 0) {
+    process.stderr.write(kleur_default.red(
+      `
+  \u2717 tmux session '${plan.sessionName}' already exists \u2014 kill it or pick a fresh bead
+`
+    ));
+    process.exit(1);
+  }
+  const newSess = (0, import_node_child_process.spawnSync)("tmux", [
+    "new-session",
+    "-d",
+    "-s",
+    plan.sessionName,
+    "-c",
+    worktreePath,
+    plan.piCmdString
+  ], { stdio: "pipe", encoding: "utf8" });
+  if (newSess.status !== 0) {
+    const stderr = (newSess.stderr ?? "").trim() || "unknown error";
+    process.stderr.write(kleur_default.red(`
+  \u2717 tmux new-session failed: ${stderr}
+`));
+    process.exit(1);
+  }
+  const paneQuery = (0, import_node_child_process.spawnSync)("tmux", [
+    "list-panes",
+    "-t",
+    plan.sessionName,
+    "-F",
+    "#{pane_id}"
+  ], { stdio: "pipe", encoding: "utf8" });
+  const paneId = (paneQuery.stdout ?? "").trim().split("\n")[0] ?? "";
+  if (!paneId) {
+    process.stderr.write(kleur_default.red("\n  \u2717 Could not resolve pane id for new session\n"));
+    process.exit(1);
+  }
+  for (const { key, value } of plan.paneOptions) {
+    (0, import_node_child_process.spawnSync)("tmux", ["set-option", "-p", "-t", paneId, key, value], { stdio: "pipe" });
+  }
+  if (!attach) {
+    process.stdout.write(`${plan.sessionName}:${paneId}
+`);
+    process.exit(0);
+  }
+  const attachResult = (0, import_node_child_process.spawnSync)("tmux", ["attach-session", "-t", plan.sessionName], {
+    stdio: "inherit"
+  });
+  process.exit(attachResult.status ?? 0);
 }
 
 // src/utils/confirmation.ts
@@ -61647,6 +61820,7 @@ var import_fs_extra11 = __toESM(require_lib(), 1);
 init_kleur();
 var import_path5 = __toESM(require("path"), 1);
 var import_node_child_process3 = require("child_process");
+var import_node_fs2 = require("fs");
 var import_node_os2 = require("os");
 var PI_AGENT_DIR2 = process.env.PI_AGENT_DIR || import_path5.default.join((0, import_node_os2.homedir)(), ".pi", "agent");
 function ensurePnpm(dryRun) {
@@ -61695,6 +61869,7 @@ async function runPiInstall(dryRun = false, isGlobal = false, projectRoot) {
   }
   ensurePnpm(dryRun);
   await runPiRuntimeSync({ dryRun, isGlobal, projectRoot });
+  seedGitnexusDefaults(dryRun);
   const configFiles = ["models.json", "auth.json", "settings.json"];
   const missingConfig = configFiles.filter((f) => !require("fs").existsSync(import_path5.default.join(PI_AGENT_DIR2, f)));
   if (missingConfig.length > 0) {
@@ -61704,6 +61879,20 @@ async function runPiInstall(dryRun = false, isGlobal = false, projectRoot) {
     console.log(kleur_default.dim("    (API keys, model defaults, OAuth providers)\n"));
   } else {
     console.log("");
+  }
+}
+function seedGitnexusDefaults(dryRun) {
+  const cfgPath = import_path5.default.join((0, import_node_os2.homedir)(), ".pi", "pi-gitnexus.json");
+  if ((0, import_node_fs2.existsSync)(cfgPath)) return;
+  if (dryRun) {
+    console.log(kleur_default.dim(`  [DRY RUN] seed ${cfgPath} { autoAugment: false }`));
+    return;
+  }
+  try {
+    (0, import_node_fs2.writeFileSync)(cfgPath, `${JSON.stringify({ autoAugment: false }, null, 2)}
+`);
+    console.log(kleur_default.dim(`  seeded ${cfgPath} (autoAugment: false)`));
+  } catch {
   }
 }
 
@@ -61904,8 +62093,14 @@ async function getPiProjectPointer(projectRoot) {
   }
 }
 function createPiCommand() {
-  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").action(async (name) => {
-    await launchWorktreeSession({ runtime: "pi", name });
+  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").action(async (name, opts) => {
+    await launchWorktreeSession({
+      runtime: "pi",
+      name,
+      role: opts.role,
+      bead: opts.bead,
+      attach: opts.attach
+    });
   });
   const piSetup = createInstallPiCommand();
   piSetup.name("setup");
@@ -63239,7 +63434,7 @@ var import_fs_extra19 = __toESM(require_lib(), 1);
 // node_modules/conf/dist/source/index.js
 var import_node_util2 = require("util");
 var import_node_process6 = __toESM(require("process"), 1);
-var import_node_fs4 = __toESM(require("fs"), 1);
+var import_node_fs5 = __toESM(require("fs"), 1);
 var import_node_path15 = __toESM(require("path"), 1);
 var import_node_crypto4 = __toESM(require("crypto"), 1);
 var import_node_assert = __toESM(require("assert"), 1);
@@ -63517,12 +63712,12 @@ function envPaths(name, { suffix = "nodejs" } = {}) {
 
 // ../node_modules/atomically/dist/index.js
 var import_node_events = require("events");
-var import_node_fs3 = require("fs");
+var import_node_fs4 = require("fs");
 var import_node_path14 = __toESM(require("path"), 1);
 var import_node_stream = require("stream");
 
 // ../node_modules/stubborn-fs/dist/index.js
-var import_node_fs2 = __toESM(require("fs"), 1);
+var import_node_fs3 = __toESM(require("fs"), 1);
 var import_node_util = require("util");
 
 // ../node_modules/stubborn-utils/dist/attemptify_async.js
@@ -63652,44 +63847,44 @@ var RETRYIFY_OPTIONS = {
 var FS = {
   attempt: {
     /* ASYNC */
-    chmod: attemptify_async_default((0, import_node_util.promisify)(import_node_fs2.default.chmod), ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
-    chown: attemptify_async_default((0, import_node_util.promisify)(import_node_fs2.default.chown), ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
-    close: attemptify_async_default((0, import_node_util.promisify)(import_node_fs2.default.close), ATTEMPTIFY_NOOP_OPTIONS),
-    fsync: attemptify_async_default((0, import_node_util.promisify)(import_node_fs2.default.fsync), ATTEMPTIFY_NOOP_OPTIONS),
-    mkdir: attemptify_async_default((0, import_node_util.promisify)(import_node_fs2.default.mkdir), ATTEMPTIFY_NOOP_OPTIONS),
-    realpath: attemptify_async_default((0, import_node_util.promisify)(import_node_fs2.default.realpath), ATTEMPTIFY_NOOP_OPTIONS),
-    stat: attemptify_async_default((0, import_node_util.promisify)(import_node_fs2.default.stat), ATTEMPTIFY_NOOP_OPTIONS),
-    unlink: attemptify_async_default((0, import_node_util.promisify)(import_node_fs2.default.unlink), ATTEMPTIFY_NOOP_OPTIONS),
+    chmod: attemptify_async_default((0, import_node_util.promisify)(import_node_fs3.default.chmod), ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
+    chown: attemptify_async_default((0, import_node_util.promisify)(import_node_fs3.default.chown), ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
+    close: attemptify_async_default((0, import_node_util.promisify)(import_node_fs3.default.close), ATTEMPTIFY_NOOP_OPTIONS),
+    fsync: attemptify_async_default((0, import_node_util.promisify)(import_node_fs3.default.fsync), ATTEMPTIFY_NOOP_OPTIONS),
+    mkdir: attemptify_async_default((0, import_node_util.promisify)(import_node_fs3.default.mkdir), ATTEMPTIFY_NOOP_OPTIONS),
+    realpath: attemptify_async_default((0, import_node_util.promisify)(import_node_fs3.default.realpath), ATTEMPTIFY_NOOP_OPTIONS),
+    stat: attemptify_async_default((0, import_node_util.promisify)(import_node_fs3.default.stat), ATTEMPTIFY_NOOP_OPTIONS),
+    unlink: attemptify_async_default((0, import_node_util.promisify)(import_node_fs3.default.unlink), ATTEMPTIFY_NOOP_OPTIONS),
     /* SYNC */
-    chmodSync: attemptify_sync_default(import_node_fs2.default.chmodSync, ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
-    chownSync: attemptify_sync_default(import_node_fs2.default.chownSync, ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
-    closeSync: attemptify_sync_default(import_node_fs2.default.closeSync, ATTEMPTIFY_NOOP_OPTIONS),
-    existsSync: attemptify_sync_default(import_node_fs2.default.existsSync, ATTEMPTIFY_NOOP_OPTIONS),
-    fsyncSync: attemptify_sync_default(import_node_fs2.default.fsync, ATTEMPTIFY_NOOP_OPTIONS),
-    mkdirSync: attemptify_sync_default(import_node_fs2.default.mkdirSync, ATTEMPTIFY_NOOP_OPTIONS),
-    realpathSync: attemptify_sync_default(import_node_fs2.default.realpathSync, ATTEMPTIFY_NOOP_OPTIONS),
-    statSync: attemptify_sync_default(import_node_fs2.default.statSync, ATTEMPTIFY_NOOP_OPTIONS),
-    unlinkSync: attemptify_sync_default(import_node_fs2.default.unlinkSync, ATTEMPTIFY_NOOP_OPTIONS)
+    chmodSync: attemptify_sync_default(import_node_fs3.default.chmodSync, ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
+    chownSync: attemptify_sync_default(import_node_fs3.default.chownSync, ATTEMPTIFY_CHANGE_ERROR_OPTIONS),
+    closeSync: attemptify_sync_default(import_node_fs3.default.closeSync, ATTEMPTIFY_NOOP_OPTIONS),
+    existsSync: attemptify_sync_default(import_node_fs3.default.existsSync, ATTEMPTIFY_NOOP_OPTIONS),
+    fsyncSync: attemptify_sync_default(import_node_fs3.default.fsync, ATTEMPTIFY_NOOP_OPTIONS),
+    mkdirSync: attemptify_sync_default(import_node_fs3.default.mkdirSync, ATTEMPTIFY_NOOP_OPTIONS),
+    realpathSync: attemptify_sync_default(import_node_fs3.default.realpathSync, ATTEMPTIFY_NOOP_OPTIONS),
+    statSync: attemptify_sync_default(import_node_fs3.default.statSync, ATTEMPTIFY_NOOP_OPTIONS),
+    unlinkSync: attemptify_sync_default(import_node_fs3.default.unlinkSync, ATTEMPTIFY_NOOP_OPTIONS)
   },
   retry: {
     /* ASYNC */
-    close: retryify_async_default((0, import_node_util.promisify)(import_node_fs2.default.close), RETRYIFY_OPTIONS),
-    fsync: retryify_async_default((0, import_node_util.promisify)(import_node_fs2.default.fsync), RETRYIFY_OPTIONS),
-    open: retryify_async_default((0, import_node_util.promisify)(import_node_fs2.default.open), RETRYIFY_OPTIONS),
-    readFile: retryify_async_default((0, import_node_util.promisify)(import_node_fs2.default.readFile), RETRYIFY_OPTIONS),
-    rename: retryify_async_default((0, import_node_util.promisify)(import_node_fs2.default.rename), RETRYIFY_OPTIONS),
-    stat: retryify_async_default((0, import_node_util.promisify)(import_node_fs2.default.stat), RETRYIFY_OPTIONS),
-    write: retryify_async_default((0, import_node_util.promisify)(import_node_fs2.default.write), RETRYIFY_OPTIONS),
-    writeFile: retryify_async_default((0, import_node_util.promisify)(import_node_fs2.default.writeFile), RETRYIFY_OPTIONS),
+    close: retryify_async_default((0, import_node_util.promisify)(import_node_fs3.default.close), RETRYIFY_OPTIONS),
+    fsync: retryify_async_default((0, import_node_util.promisify)(import_node_fs3.default.fsync), RETRYIFY_OPTIONS),
+    open: retryify_async_default((0, import_node_util.promisify)(import_node_fs3.default.open), RETRYIFY_OPTIONS),
+    readFile: retryify_async_default((0, import_node_util.promisify)(import_node_fs3.default.readFile), RETRYIFY_OPTIONS),
+    rename: retryify_async_default((0, import_node_util.promisify)(import_node_fs3.default.rename), RETRYIFY_OPTIONS),
+    stat: retryify_async_default((0, import_node_util.promisify)(import_node_fs3.default.stat), RETRYIFY_OPTIONS),
+    write: retryify_async_default((0, import_node_util.promisify)(import_node_fs3.default.write), RETRYIFY_OPTIONS),
+    writeFile: retryify_async_default((0, import_node_util.promisify)(import_node_fs3.default.writeFile), RETRYIFY_OPTIONS),
     /* SYNC */
-    closeSync: retryify_sync_default(import_node_fs2.default.closeSync, RETRYIFY_OPTIONS),
-    fsyncSync: retryify_sync_default(import_node_fs2.default.fsyncSync, RETRYIFY_OPTIONS),
-    openSync: retryify_sync_default(import_node_fs2.default.openSync, RETRYIFY_OPTIONS),
-    readFileSync: retryify_sync_default(import_node_fs2.default.readFileSync, RETRYIFY_OPTIONS),
-    renameSync: retryify_sync_default(import_node_fs2.default.renameSync, RETRYIFY_OPTIONS),
-    statSync: retryify_sync_default(import_node_fs2.default.statSync, RETRYIFY_OPTIONS),
-    writeSync: retryify_sync_default(import_node_fs2.default.writeSync, RETRYIFY_OPTIONS),
-    writeFileSync: retryify_sync_default(import_node_fs2.default.writeFileSync, RETRYIFY_OPTIONS)
+    closeSync: retryify_sync_default(import_node_fs3.default.closeSync, RETRYIFY_OPTIONS),
+    fsyncSync: retryify_sync_default(import_node_fs3.default.fsyncSync, RETRYIFY_OPTIONS),
+    openSync: retryify_sync_default(import_node_fs3.default.openSync, RETRYIFY_OPTIONS),
+    readFileSync: retryify_sync_default(import_node_fs3.default.readFileSync, RETRYIFY_OPTIONS),
+    renameSync: retryify_sync_default(import_node_fs3.default.renameSync, RETRYIFY_OPTIONS),
+    statSync: retryify_sync_default(import_node_fs3.default.statSync, RETRYIFY_OPTIONS),
+    writeSync: retryify_sync_default(import_node_fs3.default.writeSync, RETRYIFY_OPTIONS),
+    writeFileSync: retryify_sync_default(import_node_fs3.default.writeFileSync, RETRYIFY_OPTIONS)
   }
 };
 var dist_default = FS;
@@ -63838,9 +64033,9 @@ node_default(Temp.purgeSyncAll);
 var temp_default = Temp;
 
 // ../node_modules/atomically/dist/index.js
-function writeFileSync2(filePath, data, options = DEFAULT_WRITE_OPTIONS) {
+function writeFileSync3(filePath, data, options = DEFAULT_WRITE_OPTIONS) {
   if (isString(options))
-    return writeFileSync2(filePath, data, { encoding: options });
+    return writeFileSync3(filePath, data, { encoding: options });
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_SYNC;
   const retryOptions = { timeout };
   let tempDisposer = null;
@@ -64282,7 +64477,7 @@ var Conf = class {
   }
   get store() {
     try {
-      const data = import_node_fs4.default.readFileSync(this.path, this.#encryptionKey ? null : "utf8");
+      const data = import_node_fs5.default.readFileSync(this.path, this.#encryptionKey ? null : "utf8");
       const dataString = this._encryptData(data);
       const deserializedData = this._deserialize(dataString);
       this._validate(deserializedData);
@@ -64354,7 +64549,7 @@ var Conf = class {
     throw new Error("Config schema violation: " + errors.join("; "));
   }
   _ensureDirectory() {
-    import_node_fs4.default.mkdirSync(import_node_path15.default.dirname(this.path), { recursive: true });
+    import_node_fs5.default.mkdirSync(import_node_path15.default.dirname(this.path), { recursive: true });
   }
   _write(value) {
     let data = this._serialize(value);
@@ -64365,13 +64560,13 @@ var Conf = class {
       data = concatUint8Arrays([initializationVector, stringToUint8Array(":"), cipher.update(stringToUint8Array(data)), cipher.final()]);
     }
     if (import_node_process6.default.env.SNAP) {
-      import_node_fs4.default.writeFileSync(this.path, data, { mode: this.#options.configFileMode });
+      import_node_fs5.default.writeFileSync(this.path, data, { mode: this.#options.configFileMode });
     } else {
       try {
-        writeFileSync2(this.path, data, { mode: this.#options.configFileMode });
+        writeFileSync3(this.path, data, { mode: this.#options.configFileMode });
       } catch (error51) {
         if (error51?.code === "EXDEV") {
-          import_node_fs4.default.writeFileSync(this.path, data, { mode: this.#options.configFileMode });
+          import_node_fs5.default.writeFileSync(this.path, data, { mode: this.#options.configFileMode });
           return;
         }
         throw error51;
@@ -64380,15 +64575,15 @@ var Conf = class {
   }
   _watch() {
     this._ensureDirectory();
-    if (!import_node_fs4.default.existsSync(this.path)) {
+    if (!import_node_fs5.default.existsSync(this.path)) {
       this._write(createPlainObject());
     }
     if (import_node_process6.default.platform === "win32") {
-      import_node_fs4.default.watch(this.path, { persistent: false }, debounce_fn_default(() => {
+      import_node_fs5.default.watch(this.path, { persistent: false }, debounce_fn_default(() => {
         this.events.dispatchEvent(new Event("change"));
       }, { wait: 100 }));
     } else {
-      import_node_fs4.default.watchFile(this.path, { persistent: false }, debounce_fn_default(() => {
+      import_node_fs5.default.watchFile(this.path, { persistent: false }, debounce_fn_default(() => {
         this.events.dispatchEvent(new Event("change"));
       }, { wait: 5e3 }));
     }
@@ -66799,7 +66994,7 @@ function createCleanCommand() {
 // src/commands/end.ts
 init_kleur();
 var import_node_child_process9 = require("child_process");
-var import_node_fs5 = require("fs");
+var import_node_fs6 = require("fs");
 var import_node_path18 = require("path");
 function git(args, cwd) {
   const r = (0, import_node_child_process9.spawnSync)("git", args, { cwd, encoding: "utf8", stdio: "pipe" });
@@ -66825,7 +67020,7 @@ function resolveMainRepoRoot(cwd) {
 function clearStatuslineClaim(repoRoot) {
   try {
     const claimFile = (0, import_node_path18.join)(repoRoot, ".xtrm", "statusline-claim");
-    if ((0, import_node_fs5.existsSync)(claimFile)) (0, import_node_fs5.unlinkSync)(claimFile);
+    if ((0, import_node_fs6.existsSync)(claimFile)) (0, import_node_fs6.unlinkSync)(claimFile);
   } catch {
   }
 }
@@ -66848,7 +67043,7 @@ function cleanupWorktreePath(worktreePath, repoRoot) {
   if (pruneResult.status !== 0 && (pruneResult.stderr ?? "").trim()) {
     warnings.push((pruneResult.stderr ?? "").trim());
   }
-  const isMissing = !(0, import_node_fs5.existsSync)(worktreePath);
+  const isMissing = !(0, import_node_fs6.existsSync)(worktreePath);
   if (isMissing) {
     return {
       removed: true,
@@ -66857,13 +67052,13 @@ function cleanupWorktreePath(worktreePath, repoRoot) {
     };
   }
   try {
-    (0, import_node_fs5.rmSync)(worktreePath, { recursive: true, force: true });
+    (0, import_node_fs6.rmSync)(worktreePath, { recursive: true, force: true });
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     warnings.push(`Could not remove directory ${worktreePath}: ${message}`);
   }
   return {
-    removed: !(0, import_node_fs5.existsSync)(worktreePath),
+    removed: !(0, import_node_fs6.existsSync)(worktreePath),
     alreadyMissing: false,
     warnings
   };
@@ -67221,7 +67416,7 @@ function createEndCommand() {
 // src/commands/worktree.ts
 init_kleur();
 var import_node_child_process10 = require("child_process");
-var import_node_fs6 = require("fs");
+var import_node_fs7 = require("fs");
 var import_node_path19 = require("path");
 function git2(args, cwd) {
   const r = (0, import_node_child_process10.spawnSync)("git", args, { cwd, encoding: "utf8", stdio: "pipe" });
@@ -67298,8 +67493,8 @@ function listXtWorktrees(repoRoot) {
   }));
   for (const wt of worktrees) {
     try {
-      const metaFile = (0, import_node_fs6.existsSync)((0, import_node_path19.join)(wt.path, ".xtrm", "session-meta.json")) ? (0, import_node_path19.join)(wt.path, ".xtrm", "session-meta.json") : (0, import_node_path19.join)(wt.path, ".session-meta.json");
-      const raw = (0, import_node_fs6.readFileSync)(metaFile, "utf8");
+      const metaFile = (0, import_node_fs7.existsSync)((0, import_node_path19.join)(wt.path, ".xtrm", "session-meta.json")) ? (0, import_node_path19.join)(wt.path, ".xtrm", "session-meta.json") : (0, import_node_path19.join)(wt.path, ".session-meta.json");
+      const raw = (0, import_node_fs7.readFileSync)(metaFile, "utf8");
       const meta3 = JSON.parse(raw);
       wt.runtime = meta3.runtime;
       wt.launchedAt = meta3.launchedAt;
@@ -67325,14 +67520,14 @@ function getManagedWorktreeRoot(repoRoot) {
 }
 function listOrphanManagedDirs(repoRoot) {
   const managedRoot = getManagedWorktreeRoot(repoRoot);
-  if (!(0, import_node_fs6.existsSync)(managedRoot)) return [];
+  if (!(0, import_node_fs7.existsSync)(managedRoot)) return [];
   const activePaths = new Set(parseGitWorktreeList(repoRoot).map((wt) => (0, import_node_path19.resolve)(wt.path)));
   const orphans = [];
-  for (const entry of (0, import_node_fs6.readdirSync)(managedRoot)) {
+  for (const entry of (0, import_node_fs7.readdirSync)(managedRoot)) {
     const fullPath = (0, import_node_path19.join)(managedRoot, entry);
     let isDirectory = false;
     try {
-      isDirectory = (0, import_node_fs6.statSync)(fullPath).isDirectory();
+      isDirectory = (0, import_node_fs7.statSync)(fullPath).isDirectory();
     } catch {
       continue;
     }
@@ -68014,7 +68209,7 @@ function createWorktreeCommand() {
     if (opts.orphans) {
       for (const orphan of orphanDirs) {
         try {
-          (0, import_node_fs6.rmSync)(orphan, { recursive: true, force: true });
+          (0, import_node_fs7.rmSync)(orphan, { recursive: true, force: true });
           removedCount += 1;
           unregisterPluginsForWorktree(orphan);
           console.log(t.success(`  \u2713 Removed orphan directory ${orphan}`));
@@ -68076,7 +68271,7 @@ function createWorktreeCommand() {
 function clearStatuslineClaim2(repoRoot) {
   try {
     const claimFile = (0, import_node_path19.join)(repoRoot, ".xtrm", "statusline-claim");
-    if ((0, import_node_fs6.existsSync)(claimFile)) (0, import_node_fs6.unlinkSync)(claimFile);
+    if ((0, import_node_fs7.existsSync)(claimFile)) (0, import_node_fs7.unlinkSync)(claimFile);
   } catch {
   }
 }
@@ -68897,7 +69092,7 @@ ${content}`;
 // src/commands/memory.ts
 init_kleur();
 var import_node_child_process14 = require("child_process");
-var import_node_fs7 = require("fs");
+var import_node_fs8 = require("fs");
 var import_node_path20 = require("path");
 function createMemoryCommand() {
   return new Command("memory").description("Manage project memory (.xtrm/memory.md)").addCommand(createMemoryUpdateCommand());
@@ -68929,7 +69124,7 @@ function createMemoryUpdateCommand() {
     const args = ["run", "memory-processor", "--prompt", prompt];
     if (!opts.beads) args.push("--no-beads");
     const memPath = (0, import_node_path20.join)(cwd, ".xtrm", "memory.md");
-    const spinnerText = opts.dryRun ? "Analyzing memories..." : `${(0, import_node_fs7.existsSync)(memPath) ? "Updating" : "Creating"} .xtrm/memory.md...`;
+    const spinnerText = opts.dryRun ? "Analyzing memories..." : `${(0, import_node_fs8.existsSync)(memPath) ? "Updating" : "Creating"} .xtrm/memory.md...`;
     console.log(kleur_default.bold(`
   xt memory update${opts.dryRun ? " (dry run)" : ""}
 `));
@@ -68949,7 +69144,7 @@ function createMemoryUpdateCommand() {
 // src/commands/merge.ts
 init_kleur();
 var import_node_child_process15 = require("child_process");
-var import_node_fs8 = require("fs");
+var import_node_fs9 = require("fs");
 var import_node_path21 = require("path");
 function createMergeCommand() {
   return new Command("merge").description("Drain the xt worktree PR merge queue via the xt-merge specialist").option("--dry-run", "List queue and CI status without merging", false).option("-y, --yes", "Skip confirmation prompt", false).option("--no-beads", "Skip creating a tracking bead for this run", false).action(async (opts) => {
@@ -69014,7 +69209,7 @@ function createMergeCommand() {
     let jobsBefore;
     try {
       jobsBefore = new Set(
-        (0, import_node_fs8.readdirSync)(jobsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
+        (0, import_node_fs9.readdirSync)(jobsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
       );
     } catch {
       jobsBefore = /* @__PURE__ */ new Set();
@@ -69025,7 +69220,7 @@ function createMergeCommand() {
       const deadline = Date.now() + 15e3;
       while (Date.now() < deadline) {
         try {
-          const entries = (0, import_node_fs8.readdirSync)(jobsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+          const entries = (0, import_node_fs9.readdirSync)(jobsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
           const newId = entries.find((id) => !jobsBefore.has(id));
           if (newId) return newId;
         } catch {
@@ -69050,7 +69245,7 @@ function createMergeCommand() {
 // src/commands/debug.ts
 init_kleur();
 var import_node_child_process16 = require("child_process");
-var import_node_fs9 = require("fs");
+var import_node_fs10 = require("fs");
 var import_node_path22 = require("path");
 var committedLabel = (outcome) => outcome === "error" ? "ACMT-" : "ACMT+";
 var committedColor = (s) => s === "ACMT-" ? kleur_default.red(s) : kleur_default.cyan(s);
@@ -69172,7 +69367,7 @@ function formatLine(event, colorMap) {
 function findDbPath(cwd) {
   let dir = cwd;
   for (let i = 0; i < 10; i++) {
-    if ((0, import_node_fs9.existsSync)((0, import_node_path22.join)(dir, ".beads"))) return (0, import_node_path22.join)(dir, ".xtrm", "debug.db");
+    if ((0, import_node_fs10.existsSync)((0, import_node_path22.join)(dir, ".beads"))) return (0, import_node_path22.join)(dir, ".xtrm", "debug.db");
     const parent = (0, import_node_path22.join)(dir, "..");
     if (parent === dir) break;
     dir = parent;
@@ -69234,7 +69429,7 @@ function createDebugCommand() {
   return new Command("debug").description("Watch xtrm events: tool calls, gate decisions, bd lifecycle").option("-f, --follow", "Follow new events (default)", false).option("--all", "Show full history and exit", false).option("--session <id>", "Filter by session ID (prefix match)").option("--type <domain>", "Filter by domain: tool | gate | bd | session").option("--json", "Output raw JSON lines", false).action((opts) => {
     const cwd = process.cwd();
     const dbPath = findDbPath(cwd);
-    if (!dbPath || !(0, import_node_fs9.existsSync)(dbPath)) return;
+    if (!dbPath || !(0, import_node_fs10.existsSync)(dbPath)) return;
     if (opts.all) {
       const events = queryEvents(dbPath, buildWhere(opts, ""), 1e3);
       const colorMap = buildColorMap(events);
@@ -71061,12 +71256,12 @@ function createUpdateCommand() {
 
 // src/commands/release.ts
 init_kleur();
-var import_node_fs11 = require("fs");
+var import_node_fs12 = require("fs");
 var import_node_child_process22 = require("child_process");
 var import_node_path30 = __toESM(require("path"), 1);
 
 // src/core/xt-reports.ts
-var import_node_fs10 = require("fs");
+var import_node_fs11 = require("fs");
 var import_node_child_process21 = require("child_process");
 var import_node_path29 = __toESM(require("path"), 1);
 var DEFAULT_CAP_BYTES = 5e4;
@@ -71078,7 +71273,7 @@ function getCommitDate(ref, cwd) {
   }).trim();
 }
 function listReportFiles(rootDir) {
-  return (0, import_node_fs10.readdirSync)(import_node_path29.default.join(rootDir, REPORT_DIR)).filter((entry) => entry.endsWith(".md")).sort().map((entry) => import_node_path29.default.join(REPORT_DIR, entry));
+  return (0, import_node_fs11.readdirSync)(import_node_path29.default.join(rootDir, REPORT_DIR)).filter((entry) => entry.endsWith(".md")).sort().map((entry) => import_node_path29.default.join(REPORT_DIR, entry));
 }
 function isDateInRange(date5, since, to) {
   return date5 >= since && date5 <= to;
@@ -71092,7 +71287,7 @@ function listXtReports(options) {
     const date5 = file2.slice(0, 10);
     return { file: relativePath, date: date5, bytes: 0, content: "" };
   }).filter((report) => isDateInRange(report.date, sinceDate, toDate)).map((report) => {
-    const content = (0, import_node_fs10.readFileSync)(import_node_path29.default.join(rootDir, report.file), "utf8");
+    const content = (0, import_node_fs11.readFileSync)(import_node_path29.default.join(rootDir, report.file), "utf8");
     return {
       ...report,
       bytes: Buffer.byteLength(content, "utf8"),
@@ -71154,7 +71349,7 @@ function getLatestTag(cwd) {
   return "HEAD~1";
 }
 function getPackageVersion(cwd) {
-  return JSON.parse((0, import_node_fs11.readFileSync)(import_node_path30.default.join(cwd, "cli", "package.json"), "utf8")).version;
+  return JSON.parse((0, import_node_fs12.readFileSync)(import_node_path30.default.join(cwd, "cli", "package.json"), "utf8")).version;
 }
 function getReleaseTag(cwd) {
   return `v${getPackageVersion(cwd)}`;
@@ -72687,7 +72882,7 @@ async function printBanner(version3) {
 // src/index.ts
 var version2 = "0.0.0";
 try {
-  version2 = JSON.parse((0, import_node_fs12.readFileSync)((0, import_node_path39.resolve)(__dirname, "../package.json"), "utf8")).version;
+  version2 = JSON.parse((0, import_node_fs13.readFileSync)((0, import_node_path39.resolve)(__dirname, "../package.json"), "utf8")).version;
 } catch {
 }
 var program2 = new Command();
