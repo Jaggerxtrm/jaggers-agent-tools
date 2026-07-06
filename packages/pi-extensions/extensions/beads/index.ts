@@ -75,6 +75,41 @@ export default function (pi: ExtensionAPI) {
 		return false;
 	};
 
+	// --- Claim-lookup cache -------------------------------------------------------
+	// getActiveClaim spawns bd kv get (~850ms) + bd show (~300ms); hasTrackableWork spawns
+	// bd list (~350ms). Running these on EVERY mutating tool call added ~1s to each edit.
+	// Cache the resolved values with a short TTL and invalidate on the bd update --claim /
+	// bd close commands we already intercept in the tool_result hook below.
+	let activeClaimCache: { sessionId: string; cwd: string; value: string | null; expiresAt: number } | null = null;
+	let hasTrackableWorkCache: { cwd: string; value: boolean; expiresAt: number } | null = null;
+	const ACTIVE_CLAIM_TTL_MS = 3000;
+	const HAS_TRACKABLE_WORK_TTL_MS = 5000;
+
+	const invalidateClaimCache = (): void => {
+		activeClaimCache = null;
+		hasTrackableWorkCache = null;
+	};
+
+	const getActiveClaimCached = async (sessionId: string, cwd: string): Promise<string | null> => {
+		const now = Date.now();
+		if (activeClaimCache && activeClaimCache.sessionId === sessionId && activeClaimCache.cwd === cwd && activeClaimCache.expiresAt > now) {
+			return activeClaimCache.value;
+		}
+		const value = await getActiveClaim(sessionId, cwd);
+		activeClaimCache = { sessionId, cwd, value, expiresAt: Date.now() + ACTIVE_CLAIM_TTL_MS };
+		return value;
+	};
+
+	const hasTrackableWorkCached = async (cwd: string): Promise<boolean> => {
+		const now = Date.now();
+		if (hasTrackableWorkCache && hasTrackableWorkCache.cwd === cwd && hasTrackableWorkCache.expiresAt > now) {
+			return hasTrackableWorkCache.value;
+		}
+		const value = await hasTrackableWork(cwd);
+		hasTrackableWorkCache = { cwd, value, expiresAt: Date.now() + HAS_TRACKABLE_WORK_TTL_MS };
+		return value;
+	};
+
 	const stripQuoted = (command: string): string => command.replace(/'[^']*'|"[^"]*"/g, "");
 	const isSpecialistsSubprocessCommand = (commandUnquoted: string): boolean =>
 		/\bspecialists\s+(run|resume|result|feed|stop|status)\b/.test(commandUnquoted);
@@ -105,9 +140,9 @@ export default function (pi: ExtensionAPI) {
 		const sessionId = getSessionId(ctx);
 
 		if (EventAdapter.isMutatingFileTool(event)) {
-			const claim = await getActiveClaim(sessionId, cwd);
+			const claim = await getActiveClaimCached(sessionId, cwd);
 			if (!claim) {
-				const hasWork = await hasTrackableWork(cwd);
+				const hasWork = await hasTrackableWorkCached(cwd);
 				if (hasWork) {
 					if (ctx.hasUI) {
 						ctx.ui.notify("Beads: Edit blocked. Claim an issue first.", "warning");
@@ -138,7 +173,7 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			if (/\bgit\s+commit\b/.test(commandUnquoted)) {
-				const claim = await getActiveClaim(sessionId, cwd);
+				const claim = await getActiveClaimCached(sessionId, cwd);
 				if (claim) {
 					return {
 						block: true,
@@ -165,6 +200,7 @@ export default function (pi: ExtensionAPI) {
 				const issueId = issueMatch[1];
 				await SubprocessRunner.run("bd", ["kv", "set", `claimed:${sessionId}`, issueId], { cwd });
 				memoryGateFired = false;
+				invalidateClaimCache();
 				const claimNotice = `\n\n✅ **Beads**: Session \`${sessionId}\` claimed issue \`${issueId}\`. File edits are now unblocked.`;
 				return { content: [...event.content, { type: "text", text: claimNotice }] };
 			}
@@ -177,6 +213,7 @@ export default function (pi: ExtensionAPI) {
 			if (closedIssueId) {
 				await SubprocessRunner.run("bd", ["kv", "set", `closed-this-session:${sessionId}`, closedIssueId], { cwd });
 				memoryGateFired = false;
+				invalidateClaimCache();
 			}
 
 			const memoryGateText = closedIssueId

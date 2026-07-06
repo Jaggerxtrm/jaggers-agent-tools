@@ -34,6 +34,7 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 
 - `bd prime`, `bd ready`, `bd list --status=in_progress`, `bd show <id>`
 - `bd update <id> --claim`, `bd remember "<insight>"`, `bd close <id> --reason="..."`
+- `bd set-state <id> <dim>=<val> --reason="..."`, `bd state <id> <dim>` — operational state labels (e.g. `contract=ready`, `patrol=muted`, `health=healthy`)
 - `bv --robot-triage --format toon`, `bv --robot-next` — never bare `bv`
 - `xt report list` / latest report file, `xt update --apply`, `xt end`
 - `xt worktree --help` — PR/branch/restart audit primitives (`audit-prs`, `branch-gc`, `restart-audit`); pair with specialists `doctor --pr-drift` / `doctor --reap-dead-jobs`. Details: `/using-xtrm`.
@@ -58,6 +59,7 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 - For unfamiliar code, inspect execution flows before broad grep-heavy reads.
 - Before commit or handoff, verify affected scope.
 - Prefer targeted symbol/file reads and precise edits over whole-tree dumps.
+- When Serena is available, prefer symbolic tools (`find_symbol` → `get_symbols_overview` → `replace_symbol_body`; `find_referencing_symbols`/`rename_symbol` for LSP-accurate references) over grep-read-sed for code reads and edits.
 
 ## Context and output management
 
