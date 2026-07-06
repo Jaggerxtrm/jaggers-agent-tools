@@ -139,7 +139,8 @@ const MANAGED_EXTENSIONS: ManagedExtension[] = [
     { id: 'git-checkpoint', displayName: 'git-checkpoint', required: false },
     { id: 'lsp-bootstrap', displayName: 'lsp-bootstrap', required: false },
     { id: 'pi-serena-compact', displayName: 'pi-serena-compact', required: false },
-    { id: 'quality-gates', displayName: 'quality-gates', required: true },
+    // quality-gates disabled at the bundle registry level — broken .claude/hooks
+    // wiring under the managed .xtrm/hooks layout means it never fires. (xtrm-e2vkn)
     { id: 'service-skills', displayName: 'service-skills', required: false },
     { id: 'session-flow', displayName: 'session-flow', required: true },
     { id: 'xtrm-loader', displayName: 'xtrm-loader', required: true },
@@ -1031,11 +1032,36 @@ type PiSettingsShape = Record<string, unknown> & {
     extensions?: unknown;
     skills?: unknown;
     packages?: unknown;
+    serena?: unknown;
 };
+
+const SERENA_DEFAULT_BLOCKED_TOOLS = new Set(['read', 'write', 'edit', 'ls', 'find', 'grep']);
 
 function normalizeStringArray(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
     return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+function normalizeRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+        ? { ...(value as Record<string, unknown>) }
+        : {};
+}
+
+function normalizeSerenaSettings(value: unknown): Record<string, unknown> {
+    const serena = normalizeRecord(value);
+    const blockedTools = normalizeStringArray(serena.blockedTools);
+    const hasCustomBlocklist = blockedTools.some((toolName) => !SERENA_DEFAULT_BLOCKED_TOOLS.has(toolName));
+
+    // pi-serena-tools defaults to blocking native read/write/edit/ls/find/grep
+    // when this key is missing, forcing agents onto Serena read_file and
+    // surfacing relative_path/root errors. Seed [] for fresh projects and migrate
+    // legacy built-in-only lists, but preserve custom lists blocking Serena tools.
+    if (!Array.isArray(serena.blockedTools) || !hasCustomBlocklist) {
+        serena.blockedTools = [];
+    }
+
+    return serena;
 }
 
 export function pruneConflictingPiPackageEntries(entries: readonly string[]): { kept: string[]; removed: string[] } {
@@ -1155,6 +1181,7 @@ export async function updatePiSettings(
         extensions: existingExtensions,
         skills: existingSkills,
         packages: existingPackages,
+        serena: normalizeSerenaSettings(existingSettings.serena),
     };
 
     await fs.writeJson(piSettingsPath, nextSettings, { spaces: 2 });

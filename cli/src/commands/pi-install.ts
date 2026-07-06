@@ -10,6 +10,7 @@
 import kleur from 'kleur';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
+import { existsSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { t } from '../utils/theme.js';
 import { runPiRuntimeSync } from '../core/pi-runtime.js';
@@ -76,6 +77,9 @@ export async function runPiInstall(dryRun: boolean = false, isGlobal: boolean = 
     // Run unified sync
     await runPiRuntimeSync({ dryRun, isGlobal, projectRoot });
 
+    // Seed sane per-package defaults (idempotent — skips if user already has one)
+    seedGitnexusDefaults(dryRun);
+
     // Detect unconfigured Pi — nudge to run setup
     const configFiles = ['models.json', 'auth.json', 'settings.json'];
     const missingConfig = configFiles.filter(f => !require('fs').existsSync(path.join(PI_AGENT_DIR, f)));
@@ -85,5 +89,32 @@ export async function runPiInstall(dryRun: boolean = false, isGlobal: boolean = 
         console.log(kleur.dim('    (API keys, model defaults, OAuth providers)\n'));
     } else {
         console.log('');
+    }
+}
+
+/**
+ * Seed ~/.pi/pi-gitnexus.json with sane defaults on fresh installs.
+ *
+ * pi-gitnexus loads this file at session start; if absent, autoAugment defaults
+ * ON, running up to 3 `gitnexus augment` subprocesses after every grep/read/bash
+ * tool result — the dominant per-tool latency source on navigation-heavy
+ * sessions. auto-augment off by default; on-demand MCP tools
+ * (query/context/impact/detect_changes) remain available per AGENTS.md.
+ *
+ * Only writes when the file is absent — never clobbers user customisation.
+ * (xtrm-e2vkn)
+ */
+function seedGitnexusDefaults(dryRun: boolean): void {
+    const cfgPath = path.join(homedir(), '.pi', 'pi-gitnexus.json');
+    if (existsSync(cfgPath)) return;
+    if (dryRun) {
+        console.log(kleur.dim(`  [DRY RUN] seed ${cfgPath} { autoAugment: false }`));
+        return;
+    }
+    try {
+        writeFileSync(cfgPath, `${JSON.stringify({ autoAugment: false }, null, 2)}\n`);
+        console.log(kleur.dim(`  seeded ${cfgPath} (autoAugment: false)`));
+    } catch {
+        // non-fatal — pi-gitnexus will simply use its built-in default
     }
 }

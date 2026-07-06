@@ -23,7 +23,7 @@ export type ManagedPiExtension = {
   readonly register: (pi: ExtensionAPI) => void;
 };
 
-export const managedPiExtensions: readonly ManagedPiExtension[] = [
+const allManagedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "auto-session-name", register: autoSessionNameExtension },
   { id: "auto-update", register: autoUpdateExtension },
   { id: "beads", register: beadsExtension },
@@ -42,6 +42,17 @@ export const managedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "xtrm-loader", register: xtrmLoaderExtension },
   { id: "xtrm-ui", register: xtrmUiExtension },
 ];
+
+// Extensions disabled by default. Source preserved in ./extensions/ — remove an
+// id from this set to re-enable. (xtrm-e2vkn)
+// - quality-gates: hook-script lookup (.claude/hooks/quality-check.*) is broken
+//   under the managed .xtrm/hooks layout, so it never fires. Disabled until
+//   rewired. (Serena helpers serena-pool / pi-serena-compact stay ACTIVE.)
+const DISABLED_EXTENSIONS = new Set<string>(["quality-gates"]);
+
+export const managedPiExtensions: readonly ManagedPiExtension[] = allManagedPiExtensions.filter(
+    (extension) => !DISABLED_EXTENSIONS.has(extension.id),
+);
 
 function registerManagedExtension(pi: ExtensionAPI, extension: ManagedPiExtension): void {
   try {
