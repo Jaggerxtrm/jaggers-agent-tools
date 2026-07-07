@@ -1,3 +1,5 @@
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
     buildRoleTmuxPlan,
@@ -23,34 +25,71 @@ const SAMPLE_SPECIALIST = JSON.stringify({
 });
 
 describe('parseSpecialistJson', () => {
+    const mainRepoRoot = '/repo/root';
+
     it('extracts system prompt + skill paths', () => {
-        const role = parseSpecialistJson('chain-coordinator', SAMPLE_SPECIALIST);
+        const role = parseSpecialistJson('chain-coordinator', SAMPLE_SPECIALIST, mainRepoRoot);
         expect(role.name).toBe('chain-coordinator');
         expect(role.systemPrompt).toContain('chain coordinator');
         expect(role.skillPaths).toEqual([
-            '.xtrm/skills/active/using-xtrm/SKILL.md',
-            '.xtrm/skills/active/using-specialists-v3/SKILL.md',
+            path.resolve(mainRepoRoot, '.xtrm/skills/active/using-xtrm/SKILL.md'),
+            path.resolve(mainRepoRoot, '.xtrm/skills/active/using-specialists-v3/SKILL.md'),
+        ]);
+    });
+
+    it('resolves relative skill path from mainRepoRoot', () => {
+        const role = parseSpecialistJson('x', JSON.stringify({
+            specialist: {
+                prompt: { system: 'hi' },
+                skills: { paths: ['skills/demo/SKILL.md'] },
+            },
+        }), mainRepoRoot);
+        expect(role.skillPaths).toEqual([
+            path.resolve(mainRepoRoot, 'skills/demo/SKILL.md'),
+        ]);
+    });
+
+    it('preserves absolute skill path unchanged', () => {
+        const absoluteSkillPath = '/abs/skill/SKILL.md';
+        const role = parseSpecialistJson('x', JSON.stringify({
+            specialist: {
+                prompt: { system: 'hi' },
+                skills: { paths: [absoluteSkillPath] },
+            },
+        }), mainRepoRoot);
+        expect(role.skillPaths).toEqual([absoluteSkillPath]);
+    });
+
+    it('expands tilde skill path from homedir', () => {
+        const role = parseSpecialistJson('x', JSON.stringify({
+            specialist: {
+                prompt: { system: 'hi' },
+                skills: { paths: ['~/team/skill/SKILL.md'] },
+            },
+        }), mainRepoRoot);
+        expect(role.skillPaths).toEqual([
+            path.join(os.homedir(), 'team/skill/SKILL.md'),
         ]);
     });
 
     it('throws on missing specialist key', () => {
-        expect(() => parseSpecialistJson('x', '{}')).toThrow(/missing 'specialist' key/);
+        expect(() => parseSpecialistJson('x', '{}', mainRepoRoot)).toThrow(/missing 'specialist' key/);
     });
 
     it('throws on empty system prompt', () => {
         const bad = JSON.stringify({ specialist: { prompt: { system: '   ' } } });
-        expect(() => parseSpecialistJson('x', bad)).toThrow(/prompt.system is empty/);
+        expect(() => parseSpecialistJson('x', bad, mainRepoRoot)).toThrow(/prompt.system is empty/);
     });
 
     it('throws on non-JSON input', () => {
-        expect(() => parseSpecialistJson('x', 'not-json')).toThrow(/did not return JSON/);
+        expect(() => parseSpecialistJson('x', 'not-json', mainRepoRoot)).toThrow(/did not return JSON/);
     });
 
     it('tolerates missing skills section (returns empty array)', () => {
         const minimal = JSON.stringify({
             specialist: { prompt: { system: 'hi' } },
         });
-        const role = parseSpecialistJson('minimal', minimal);
+        const role = parseSpecialistJson('minimal', minimal, mainRepoRoot);
         expect(role.skillPaths).toEqual([]);
     });
 
@@ -61,8 +100,11 @@ describe('parseSpecialistJson', () => {
                 skills: { paths: ['a.md', 42, null, 'b.md'] },
             },
         });
-        const role = parseSpecialistJson('messy', messy);
-        expect(role.skillPaths).toEqual(['a.md', 'b.md']);
+        const role = parseSpecialistJson('messy', messy, mainRepoRoot);
+        expect(role.skillPaths).toEqual([
+            path.resolve(mainRepoRoot, 'a.md'),
+            path.resolve(mainRepoRoot, 'b.md'),
+        ]);
     });
 
     it('honors system_prompt_mode=replace by warning and returning prompt anyway', () => {
@@ -72,7 +114,7 @@ describe('parseSpecialistJson', () => {
                 system_prompt_mode: 'replace',
             },
         });
-        const role = parseSpecialistJson('replacer', replaceMode);
+        const role = parseSpecialistJson('replacer', replaceMode, mainRepoRoot);
         expect(role.systemPrompt).toBe('ignore-base');
     });
 });
