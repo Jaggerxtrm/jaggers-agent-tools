@@ -12,12 +12,104 @@ export interface WorktreeSessionOptions {
     role?: string;
     bead?: string;
     attach?: boolean;
+    /** Explicit --model override for pi role sessions; wins over specialist default. */
+    model?: string;
+    /** Explicit --thinking level override for pi role sessions; wins over specialist default. */
+    thinking?: string;
+    /** Raw argv after `--` on the xt pi command; forwarded verbatim to pi. */
+    passthrough?: string[];
 }
 
 export interface ResolvedRole {
     name: string;
     systemPrompt: string;
     skillPaths: string[];
+    /** specialist.execution.model — default pi --model for role. */
+    model?: string;
+    /** specialist.execution.thinking_level — default pi --thinking for role. */
+    thinkingLevel?: string;
+    /** specialist.execution.extensions — per-role opt-in/opt-out map. */
+    extensions?: Record<string, boolean>;
+}
+
+// Baseline pi extension policy for xt pi --role, per xtmux-2dy design.
+// INCLUDE by default: caveman, pi-nvidia-nim, service-skills, worktree-boundary,
+// @jaggerxtrm/pi-extensions, pi-guardrails. Everything else pi's default
+// discovery finds (pi-serena-tools, pi-gitnexus, structured-return, goal, qwen,
+// lsp, ponytail, context-mode extension, etc.) is EXCLUDED. Specialists can
+// still opt-in via execution.extensions.{name}: true or opt-out via false.
+export const ROLE_DEFAULT_EXTENSIONS: readonly string[] = [
+    'caveman',
+    'pi-nvidia-nim',
+    'service-skills',
+    'worktree-boundary',
+    '@jaggerxtrm/pi-extensions',
+    'pi-guardrails',
+] as const;
+
+// xt-owned flags a passthrough must not clobber. Reject with a clear error if
+// the user tries to pass any of these after `--`. Session naming, prompt, and
+// session-dir are set by the launcher and re-passing them silently would break
+// address routing or duplicate state.
+const ROLE_GUARDED_PI_FLAGS: readonly string[] = [
+    '--session-dir',
+    '--name',
+    '--system-prompt',
+    '--append-system-prompt',
+] as const;
+
+// Pi flags that contradict interactive coordination or invoke pi as a batch
+// tool. Warn but drop rather than fail — the caller may have tried to reuse a
+// script.
+const ROLE_SKIPPED_PI_FLAGS: readonly string[] = [
+    '--print',
+    '--list-models',
+    '--export',
+    '--mode',
+] as const;
+
+export interface PiArgvGuardResult {
+    guardedError?: string;
+    warnings: string[];
+    filteredArgs: string[];
+}
+
+// Pure — no I/O. Split so tests can drive it directly.
+export function guardRolePassthrough(passthrough: string[]): PiArgvGuardResult {
+    const warnings: string[] = [];
+    const filteredArgs: string[] = [];
+    for (let i = 0; i < passthrough.length; i++) {
+        const arg = passthrough[i];
+        const bare = arg.split('=', 1)[0];
+        if (ROLE_GUARDED_PI_FLAGS.includes(bare)) {
+            return {
+                guardedError: `xt pi --role: ${bare} is set by the launcher and cannot be passed after --`,
+                warnings,
+                filteredArgs: [],
+            };
+        }
+        if (ROLE_SKIPPED_PI_FLAGS.includes(bare)) {
+            warnings.push(`xt pi --role: ignoring ${bare} — incompatible with interactive coordination`);
+            // consume value if next arg is not another flag
+            if (!arg.includes('=') && i + 1 < passthrough.length && !passthrough[i + 1].startsWith('-')) {
+                i += 1;
+            }
+            continue;
+        }
+        filteredArgs.push(arg);
+    }
+    return { warnings, filteredArgs };
+}
+
+// Pure — no I/O. Merge baseline defaults with per-role overrides to produce the
+// final -e list. execution.extensions: {name: true} adds; {name: false} drops.
+export function computeRoleExtensions(role: ResolvedRole): string[] {
+    const wanted = new Set<string>(ROLE_DEFAULT_EXTENSIONS);
+    for (const [name, keep] of Object.entries(role.extensions ?? {})) {
+        if (keep) wanted.add(name);
+        else wanted.delete(name);
+    }
+    return [...wanted];
 }
 
 // Exposed for unit testing. sp view <name> --raw is the source of truth for
@@ -51,7 +143,23 @@ export function parseSpecialistJson(name: string, raw: string): ResolvedRole {
             `  ⚠ role '${name}': system_prompt_mode=replace ignored; forcing append\n`,
         ));
     }
-    return { name, systemPrompt, skillPaths };
+
+    // execution.{model,thinking_level,extensions} — all optional. CLI flags win
+    // over these at launch time; specialists set them as sensible defaults.
+    const execution = (spec as { execution?: unknown }).execution as
+        | { model?: unknown; thinking_level?: unknown; extensions?: unknown }
+        | undefined;
+    const model = typeof execution?.model === 'string' && execution.model ? execution.model : undefined;
+    const thinkingLevel = typeof execution?.thinking_level === 'string' && execution.thinking_level ? execution.thinking_level : undefined;
+    let extensions: Record<string, boolean> | undefined;
+    if (execution?.extensions && typeof execution.extensions === 'object' && !Array.isArray(execution.extensions)) {
+        const map: Record<string, boolean> = {};
+        for (const [k, v] of Object.entries(execution.extensions as Record<string, unknown>)) {
+            if (typeof v === 'boolean') map[k] = v;
+        }
+        if (Object.keys(map).length > 0) extensions = map;
+    }
+    return { name, systemPrompt, skillPaths, model, thinkingLevel, extensions };
 }
 
 export function resolveRole(name: string): ResolvedRole {
@@ -88,16 +196,42 @@ export function buildRoleTmuxPlan(args: {
     bead?: string;
     parentSessionId: string;
     promptFile: string;
+    /** CLI --model override; wins over role.model. */
+    modelOverride?: string;
+    /** CLI --thinking override; wins over role.thinkingLevel. */
+    thinkingOverride?: string;
+    /** Argv after `--` on xt pi command line, already guard-checked. */
+    passthrough?: string[];
 }): RoleTmuxPlan {
-    const { role, bead, parentSessionId, promptFile } = args;
+    const { role, bead, parentSessionId, promptFile, modelOverride, thinkingOverride, passthrough } = args;
     const roleSlug = slugifyForSession(role.name);
     const sessionName = bead
         ? `role-${roleSlug}-${slugifyForSession(bead)}`
         : `role-${roleSlug}`;
 
-    const piArgs = ['--append-system-prompt', promptFile];
+    const piArgs: string[] = ['--append-system-prompt', promptFile];
     for (const skill of role.skillPaths) {
         piArgs.push('--skill', skill);
+    }
+
+    // Extension policy: curated allow-list for interactive coordination.
+    // Defaults + specialist opt-in/out (see computeRoleExtensions).
+    piArgs.push('--no-extensions');
+    for (const ext of computeRoleExtensions(role)) {
+        piArgs.push('-e', ext);
+    }
+
+    // Model / thinking: CLI override wins over specialist default. Both
+    // optional — pi resolves its own default when neither is set.
+    const model = modelOverride ?? role.model;
+    if (model) piArgs.push('--model', model);
+    const thinking = thinkingOverride ?? role.thinkingLevel;
+    if (thinking) piArgs.push('--thinking', thinking);
+
+    // Passthrough: append verbatim (caller must have run guardRolePassthrough
+    // first to reject xt-owned flags and drop batch-mode incompatibles).
+    if (passthrough && passthrough.length > 0) {
+        piArgs.push(...passthrough);
     }
 
     const piCmdString = ['pi', ...piArgs].map(shellQuote).join(' ');
@@ -308,7 +442,7 @@ export function unregisterPluginsForWorktree(worktreePath: string): void {
 }
 
 export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promise<void> {
-    const { runtime, name, role: roleName, bead, attach = true } = opts;
+    const { runtime, name, role: roleName, bead, attach = true, model, thinking } = opts;
     const cwd = process.cwd();
 
     // Resolve role up-front so we fail fast on an unknown role name before
@@ -326,6 +460,24 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             console.error(kleur.red(`\n  ✗ ${msg}\n`));
             process.exit(1);
         }
+    } else if (model || thinking || (opts.passthrough && opts.passthrough.length > 0)) {
+        console.error(kleur.red('\n  ✗ --model / --thinking / -- passthrough require --role\n'));
+        process.exit(1);
+    }
+
+    // Guard passthrough up-front — refuse xt-owned flags before we build any
+    // worktree state. Skip-flags produce warnings but continue.
+    let guardedPassthrough: string[] = [];
+    if (resolvedRole && opts.passthrough && opts.passthrough.length > 0) {
+        const guard = guardRolePassthrough(opts.passthrough);
+        if (guard.guardedError) {
+            console.error(kleur.red(`\n  ✗ ${guard.guardedError}\n`));
+            process.exit(1);
+        }
+        for (const w of guard.warnings) {
+            process.stderr.write(kleur.yellow(`  ⚠ ${w}\n`));
+        }
+        guardedPassthrough = guard.filteredArgs;
     }
 
     // Use git to find both current checkout root and common/main repo root.
@@ -514,6 +666,9 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             bead,
             attach,
             worktreePath,
+            modelOverride: model,
+            thinkingOverride: thinking,
+            passthrough: guardedPassthrough,
         });
         return; // launchRoleTmuxSession never returns (calls process.exit)
     }
@@ -534,8 +689,11 @@ async function launchRoleTmuxSession(args: {
     bead?: string;
     attach: boolean;
     worktreePath: string;
+    modelOverride?: string;
+    thinkingOverride?: string;
+    passthrough?: string[];
 }): Promise<never> {
-    const { role, bead, attach, worktreePath } = args;
+    const { role, bead, attach, worktreePath, modelOverride, thinkingOverride, passthrough } = args;
 
     // Transport file for the system prompt. `.xtrm/` is gitignored so this
     // never rides a checkpoint commit.
@@ -548,7 +706,15 @@ async function launchRoleTmuxSession(args: {
     writeFileSync(promptFile, role.systemPrompt);
 
     const parentSessionId = currentTmuxSessionId();
-    const plan = buildRoleTmuxPlan({ role, bead, parentSessionId, promptFile });
+    const plan = buildRoleTmuxPlan({
+        role,
+        bead,
+        parentSessionId,
+        promptFile,
+        modelOverride,
+        thinkingOverride,
+        passthrough,
+    });
 
     // Fail fast if the session name already exists — do not silently attach
     // to a stale session with unknown metadata.

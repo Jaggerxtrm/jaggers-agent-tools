@@ -60915,6 +60915,58 @@ async function runPiRuntimeSync(opts = {}) {
 }
 
 // src/utils/worktree-session.ts
+var ROLE_DEFAULT_EXTENSIONS = [
+  "caveman",
+  "pi-nvidia-nim",
+  "service-skills",
+  "worktree-boundary",
+  "@jaggerxtrm/pi-extensions",
+  "pi-guardrails"
+];
+var ROLE_GUARDED_PI_FLAGS = [
+  "--session-dir",
+  "--name",
+  "--system-prompt",
+  "--append-system-prompt"
+];
+var ROLE_SKIPPED_PI_FLAGS = [
+  "--print",
+  "--list-models",
+  "--export",
+  "--mode"
+];
+function guardRolePassthrough(passthrough) {
+  const warnings = [];
+  const filteredArgs = [];
+  for (let i = 0; i < passthrough.length; i++) {
+    const arg = passthrough[i];
+    const bare = arg.split("=", 1)[0];
+    if (ROLE_GUARDED_PI_FLAGS.includes(bare)) {
+      return {
+        guardedError: `xt pi --role: ${bare} is set by the launcher and cannot be passed after --`,
+        warnings,
+        filteredArgs: []
+      };
+    }
+    if (ROLE_SKIPPED_PI_FLAGS.includes(bare)) {
+      warnings.push(`xt pi --role: ignoring ${bare} \u2014 incompatible with interactive coordination`);
+      if (!arg.includes("=") && i + 1 < passthrough.length && !passthrough[i + 1].startsWith("-")) {
+        i += 1;
+      }
+      continue;
+    }
+    filteredArgs.push(arg);
+  }
+  return { warnings, filteredArgs };
+}
+function computeRoleExtensions(role) {
+  const wanted = new Set(ROLE_DEFAULT_EXTENSIONS);
+  for (const [name, keep] of Object.entries(role.extensions ?? {})) {
+    if (keep) wanted.add(name);
+    else wanted.delete(name);
+  }
+  return [...wanted];
+}
 function parseSpecialistJson(name, raw) {
   let parsed;
   try {
@@ -60941,7 +60993,18 @@ function parseSpecialistJson(name, raw) {
 `
     ));
   }
-  return { name, systemPrompt, skillPaths };
+  const execution = spec.execution;
+  const model = typeof execution?.model === "string" && execution.model ? execution.model : void 0;
+  const thinkingLevel = typeof execution?.thinking_level === "string" && execution.thinking_level ? execution.thinking_level : void 0;
+  let extensions;
+  if (execution?.extensions && typeof execution.extensions === "object" && !Array.isArray(execution.extensions)) {
+    const map2 = {};
+    for (const [k, v] of Object.entries(execution.extensions)) {
+      if (typeof v === "boolean") map2[k] = v;
+    }
+    if (Object.keys(map2).length > 0) extensions = map2;
+  }
+  return { name, systemPrompt, skillPaths, model, thinkingLevel, extensions };
 }
 function resolveRole(name) {
   const r = (0, import_node_child_process.spawnSync)("sp", ["view", name, "--raw"], {
@@ -60962,12 +61025,23 @@ function shellQuote(s) {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 function buildRoleTmuxPlan(args) {
-  const { role, bead, parentSessionId, promptFile } = args;
+  const { role, bead, parentSessionId, promptFile, modelOverride, thinkingOverride, passthrough } = args;
   const roleSlug = slugifyForSession(role.name);
   const sessionName = bead ? `role-${roleSlug}-${slugifyForSession(bead)}` : `role-${roleSlug}`;
   const piArgs = ["--append-system-prompt", promptFile];
   for (const skill of role.skillPaths) {
     piArgs.push("--skill", skill);
+  }
+  piArgs.push("--no-extensions");
+  for (const ext of computeRoleExtensions(role)) {
+    piArgs.push("-e", ext);
+  }
+  const model = modelOverride ?? role.model;
+  if (model) piArgs.push("--model", model);
+  const thinking = thinkingOverride ?? role.thinkingLevel;
+  if (thinking) piArgs.push("--thinking", thinking);
+  if (passthrough && passthrough.length > 0) {
+    piArgs.push(...passthrough);
   }
   const piCmdString = ["pi", ...piArgs].map(shellQuote).join(" ");
   const paneOptions = [
@@ -61093,7 +61167,7 @@ function unregisterPluginsForWorktree(worktreePath) {
   }
 }
 async function launchWorktreeSession(opts) {
-  const { runtime, name, role: roleName, bead, attach = true } = opts;
+  const { runtime, name, role: roleName, bead, attach = true, model, thinking } = opts;
   const cwd = process.cwd();
   let resolvedRole = null;
   if (roleName) {
@@ -61110,6 +61184,24 @@ async function launchWorktreeSession(opts) {
 `));
       process.exit(1);
     }
+  } else if (model || thinking || opts.passthrough && opts.passthrough.length > 0) {
+    console.error(kleur_default.red("\n  \u2717 --model / --thinking / -- passthrough require --role\n"));
+    process.exit(1);
+  }
+  let guardedPassthrough = [];
+  if (resolvedRole && opts.passthrough && opts.passthrough.length > 0) {
+    const guard = guardRolePassthrough(opts.passthrough);
+    if (guard.guardedError) {
+      console.error(kleur_default.red(`
+  \u2717 ${guard.guardedError}
+`));
+      process.exit(1);
+    }
+    for (const w of guard.warnings) {
+      process.stderr.write(kleur_default.yellow(`  \u26A0 ${w}
+`));
+    }
+    guardedPassthrough = guard.filteredArgs;
   }
   const currentRepoRoot = gitRepoRoot(cwd);
   const mainRepoRoot = gitMainRepoRoot(cwd);
@@ -61238,7 +61330,10 @@ async function launchWorktreeSession(opts) {
       role: resolvedRole,
       bead,
       attach,
-      worktreePath
+      worktreePath,
+      modelOverride: model,
+      thinkingOverride: thinking,
+      passthrough: guardedPassthrough
     });
     return;
   }
@@ -61251,7 +61346,7 @@ async function launchWorktreeSession(opts) {
   process.exit(launchResult.status ?? 0);
 }
 async function launchRoleTmuxSession(args) {
-  const { role, bead, attach, worktreePath } = args;
+  const { role, bead, attach, worktreePath, modelOverride, thinkingOverride, passthrough } = args;
   const promptFile = import_node_path5.default.join(
     worktreePath,
     ".xtrm",
@@ -61260,7 +61355,15 @@ async function launchRoleTmuxSession(args) {
   (0, import_node_fs.mkdirSync)(import_node_path5.default.dirname(promptFile), { recursive: true });
   (0, import_node_fs.writeFileSync)(promptFile, role.systemPrompt);
   const parentSessionId = currentTmuxSessionId();
-  const plan = buildRoleTmuxPlan({ role, bead, parentSessionId, promptFile });
+  const plan = buildRoleTmuxPlan({
+    role,
+    bead,
+    parentSessionId,
+    promptFile,
+    modelOverride,
+    thinkingOverride,
+    passthrough
+  });
   const hasSess = (0, import_node_child_process.spawnSync)("tmux", ["has-session", "-t", `=${plan.sessionName}`], {
     stdio: "pipe"
   });
@@ -62097,13 +62200,18 @@ async function getPiProjectPointer(projectRoot) {
   }
 }
 function createPiCommand() {
-  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").action(async (name, opts) => {
+  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to pi (overrides specialist.execution.model)").option("--thinking <level>", "With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)").allowUnknownOption(true).action(async (name, opts) => {
+    const dashIdx = process.argv.indexOf("--");
+    const passthrough = dashIdx >= 0 ? process.argv.slice(dashIdx + 1) : [];
     await launchWorktreeSession({
       runtime: "pi",
       name,
       role: opts.role,
       bead: opts.bead,
-      attach: opts.attach
+      attach: opts.attach,
+      model: opts.model,
+      thinking: opts.thinking,
+      passthrough
     });
   });
   const piSetup = createInstallPiCommand();

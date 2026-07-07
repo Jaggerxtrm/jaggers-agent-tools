@@ -72,13 +72,30 @@ export function createPiCommand(): Command {
         .option('--role <name>', 'Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata')
         .option('--bead <id>', 'Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
-        .action(async (name: string | undefined, opts: { role?: string; bead?: string; attach?: boolean }) => {
+        .option('--model <name>', 'With --role: forward `--model <name>` to pi (overrides specialist.execution.model)')
+        .option('--thinking <level>', 'With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)')
+        .allowUnknownOption(true)
+        .action(async (name: string | undefined, opts: {
+            role?: string;
+            bead?: string;
+            attach?: boolean;
+            model?: string;
+            thinking?: string;
+        }) => {
+            // Everything after `--` is forwarded verbatim to pi (with guards
+            // enforced in the launcher). This is the primary escape hatch for
+            // any pi flag not first-classed here.
+            const dashIdx = process.argv.indexOf('--');
+            const passthrough = dashIdx >= 0 ? process.argv.slice(dashIdx + 1) : [];
             await launchWorktreeSession({
                 runtime: 'pi',
                 name,
                 role: opts.role,
                 bead: opts.bead,
                 attach: opts.attach,
+                model: opts.model,
+                thinking: opts.thinking,
+                passthrough,
             });
         });
 
