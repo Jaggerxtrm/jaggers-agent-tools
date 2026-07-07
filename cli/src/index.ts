@@ -26,6 +26,7 @@ import { createReportCommand } from './commands/report.js';
 import { createSkillsCommand } from './commands/skills.js';
 import { createClaudeSyncCommand } from './commands/claude-sync.js';
 import { createDoctorCommand } from './commands/doctor.js';
+import { createBootstrapCommand } from './commands/bootstrap.js';
 import { createUpdateCommand } from './commands/update.js';
 import { createReleaseCommand } from './commands/release.js';
 import { createSpecCommand } from './commands/spec.js';
@@ -75,6 +76,7 @@ program.addCommand(createReportCommand());
 program.addCommand(createSkillsCommand());
 program.addCommand(createClaudeSyncCommand());
 program.addCommand(createDoctorCommand());
+program.addCommand(createBootstrapCommand());
 program.addCommand(createUpdateCommand());
 program.addCommand(createReleaseCommand());
 program.addCommand(createSpecCommand());
@@ -102,7 +104,7 @@ process.on('unhandledRejection', (reason) => {
 
 // Show banner for setup commands (never for help/version output)
 const isHelpOrVersion = process.argv.some(a => a === '--help' || a === '-h' || a === '--version' || a === '-V');
-const isSetupCommand = ['init'].includes(process.argv[2] ?? '');
+const isSetupCommand = ['init', 'bootstrap'].includes(process.argv[2] ?? '');
 
 (async () => {
     if (!isHelpOrVersion && isSetupCommand) {

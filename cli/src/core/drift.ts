@@ -41,17 +41,24 @@ async function hashFile(filePath: string): Promise<string> {
     return crypto.createHash('sha256').update(content).digest('hex');
 }
 
-export async function checkDrift(registryPath: string, userXtrmDir: string): Promise<DriftReport> {
+export async function checkDrift(
+    registryPath: string,
+    userXtrmDir: string,
+    overrideRoots?: Record<string, string>,
+): Promise<DriftReport> {
     const registry = await fs.readJson(registryPath) as RegistryManifest;
 
     const missing: string[] = [];
     const upToDate: string[] = [];
     const drifted: string[] = [];
 
-    for (const asset of Object.values(registry.assets)) {
+    for (const [assetKey, asset] of Object.entries(registry.assets)) {
+        const assetRoot = overrideRoots?.[assetKey];
         for (const [filePath, entry] of Object.entries(asset.files)) {
             const relativePath = buildUserRelativePath(asset.source_dir, filePath);
-            const userFilePath = path.join(userXtrmDir, relativePath);
+            const userFilePath = assetRoot
+                ? path.join(assetRoot, filePath)
+                : path.join(userXtrmDir, relativePath);
 
             if (!await fs.pathExists(userFilePath)) {
                 missing.push(relativePath);

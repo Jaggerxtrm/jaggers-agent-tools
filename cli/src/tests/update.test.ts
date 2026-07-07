@@ -3,7 +3,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { checkDriftMock, runInstallMock, assureXtManagedPiPackagesMock, resolvePackageRootMock, ensureBdAutoStagePatchMock, runDependencyMaintenanceMock, ensureServiceSkillsMock, reconcileProjectClaudeHooksMock } = vi.hoisted(() => ({
+const {
+  checkDriftMock,
+  runInstallMock,
+  assureXtManagedPiPackagesMock,
+  resolvePackageRootMock,
+  ensureBdAutoStagePatchMock,
+  runDependencyMaintenanceMock,
+  ensureServiceSkillsMock,
+  reconcileProjectClaudeHooksMock,
+  ensureGlobalSkillsBootstrappedMock,
+  logBootstrapTriggerMock,
+} = vi.hoisted(() => ({
   checkDriftMock: vi.fn(),
   runInstallMock: vi.fn(),
   assureXtManagedPiPackagesMock: vi.fn(),
@@ -12,6 +23,8 @@ const { checkDriftMock, runInstallMock, assureXtManagedPiPackagesMock, resolvePa
   runDependencyMaintenanceMock: vi.fn(),
   ensureServiceSkillsMock: vi.fn(),
   reconcileProjectClaudeHooksMock: vi.fn(),
+  ensureGlobalSkillsBootstrappedMock: vi.fn(),
+  logBootstrapTriggerMock: vi.fn(),
 }));
 
 vi.mock('../core/drift.js', () => ({
@@ -49,6 +62,11 @@ vi.mock('../core/claude-runtime-sync.js', () => ({
   reconcileProjectClaudeHooks: reconcileProjectClaudeHooksMock,
 }));
 
+vi.mock('../core/global-skills-bootstrap.js', () => ({
+  ensureGlobalSkillsBootstrapped: ensureGlobalSkillsBootstrappedMock,
+  logBootstrapTrigger: logBootstrapTriggerMock,
+}));
+
 import { createUpdateCommand } from '../commands/update.js';
 
 let tmpDir = '';
@@ -83,6 +101,10 @@ beforeEach(() => {
   ensureServiceSkillsMock.mockResolvedValue({ applicable: false, migratedPacks: [], alreadyCurrent: true, notes: [] });
   reconcileProjectClaudeHooksMock.mockReset();
   reconcileProjectClaudeHooksMock.mockResolvedValue({ settingsPath: '', changed: false, hooksEntries: 0 });
+  ensureGlobalSkillsBootstrappedMock.mockReset();
+  ensureGlobalSkillsBootstrappedMock.mockResolvedValue({ installedVersion: '1.0.0', changed: false });
+  logBootstrapTriggerMock.mockReset();
+  logBootstrapTriggerMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -132,20 +154,22 @@ function writeRepo(root: string, name: string): string {
 describe('xtrm update', () => {
   it('dry-run reports changes when current package registry differs from old installed registry', async () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const repo = writeRepo(tmpDir, 'repo-a');
     resolvePackageRootMock.mockReturnValue(packageRoot);
 
     const result = await runUpdateCli(['--repo', repo]);
 
-    expect(checkDriftMock).toHaveBeenCalledWith(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(repo, '.xtrm'));
+    expect(checkDriftMock).toHaveBeenCalledWith(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(repo, '.xtrm'), undefined);
     expect(runInstallMock).not.toHaveBeenCalled();
     expect(assureXtManagedPiPackagesMock).toHaveBeenCalledWith(false);
     expect(result.logs.join('\n')).toContain('refreshed');
     expect(result.logs.join('\n')).not.toContain('already-current');
   });
 
-  it('dry-run reports refresh when only the bd auto-stage patch is missing', async () => {
+  it('dry-run reports refresh when only bd auto-stage patch is missing', async () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const repo = writeRepo(tmpDir, 'repo-a');
     await fs.ensureDir(path.join(repo, '.beads'));
     resolvePackageRootMock.mockReturnValue(packageRoot);
@@ -161,6 +185,7 @@ describe('xtrm update', () => {
 
   it('apply patches bd auto-stage without running registry install when registry is current', async () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const repo = writeRepo(tmpDir, 'repo-a');
     await fs.ensureDir(path.join(repo, '.beads'));
     await fs.writeFile(path.join(repo, '.beads', 'config.yaml'), 'dolt:\n  shared-server: true\n');
@@ -179,13 +204,14 @@ describe('xtrm update', () => {
 
   it('apply refreshes repo once when current package registry differs from old installed registry', async () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const repo = writeRepo(tmpDir, 'repo-a');
     resolvePackageRootMock.mockReturnValue(packageRoot);
     runInstallMock.mockResolvedValue(undefined);
 
     const result = await runUpdateCli(['--apply', '--repo', repo]);
 
-    expect(checkDriftMock).toHaveBeenCalledWith(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(repo, '.xtrm'));
+    expect(checkDriftMock).toHaveBeenCalledWith(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(repo, '.xtrm'), undefined);
     expect(runInstallMock).toHaveBeenCalledTimes(1);
     expect(assureXtManagedPiPackagesMock).toHaveBeenCalledWith(true);
     expect(result.logs.join('\n')).toContain('refreshed');
@@ -193,6 +219,7 @@ describe('xtrm update', () => {
 
   it('root walk updates every managed repo and continues after failures', async () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const root = path.join(tmpDir, 'root');
     const repoA = writeRepo(root, 'a');
     const repoB = writeRepo(root, 'b');
@@ -208,22 +235,22 @@ describe('xtrm update', () => {
     expect(result.logs.join('\n')).toContain(repoC);
   });
 
-  it('apply reconciles claude settings hooks even when the registry is already current', async () => {
+  it('apply reconciles claude settings hooks even when registry is already current', async () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const repo = writeRepo(tmpDir, 'repo-a');
     resolvePackageRootMock.mockReturnValue(packageRoot);
     checkDriftMock.mockResolvedValue({ missing: [], upToDate: ['asset.txt'], drifted: [] });
 
     await runUpdateCli(['--apply', '--repo', repo]);
 
-    // Reconcile must run on apply regardless of registry drift, so newly-shipped
-    // xtrm-managed hooks (service-skills) reach existing consumers (xtrm-0p7bp).
     expect(reconcileProjectClaudeHooksMock).toHaveBeenCalledWith(repo, { dryRun: false });
     expect(runInstallMock).not.toHaveBeenCalled();
   });
 
-  it('apply self-heals a dormant repo: hook rewiring alone flips already-current to refreshed', async () => {
+  it('apply self-heals dormant repo: hook rewiring alone flips already-current to refreshed', async () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const repo = writeRepo(tmpDir, 'repo-a');
     resolvePackageRootMock.mockReturnValue(packageRoot);
     checkDriftMock.mockResolvedValue({ missing: [], upToDate: ['asset.txt'], drifted: [] });
@@ -238,6 +265,7 @@ describe('xtrm update', () => {
 
   it('json output is valid JSON', async () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const repo = writeRepo(tmpDir, 'repo-a');
     resolvePackageRootMock.mockReturnValue(packageRoot);
     checkDriftMock.mockResolvedValue({ missing: [], upToDate: ['asset.txt'], drifted: [] });
@@ -256,7 +284,8 @@ describe('xtrm update', () => {
 
   it('apply exits non-zero in strict registry env when registry source missing', async () => {
     const repo = writeRepo(tmpDir, 'repo-a');
-    const packageRoot = '/pkg';
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     resolvePackageRootMock.mockReturnValue(packageRoot);
     checkDriftMock.mockResolvedValue({ missing: ['missing/file.md'], upToDate: [], drifted: [] });
     runInstallMock.mockImplementation(async (opts: { strictRegistry?: boolean }) => {
@@ -276,6 +305,58 @@ describe('xtrm update', () => {
       expect(result.logs.join('\n')).not.toContain('/missing/file.md');
     } finally {
       process.env.XTRM_STRICT_REGISTRY = previousStrict;
+    }
+  });
+
+  it('apply bootstraps global skills before drift check', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    const repo = writeRepo(tmpDir, 'repo-a');
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+
+    await runUpdateCli(['--apply', '--repo', repo]);
+
+    expect(logBootstrapTriggerMock).toHaveBeenCalledWith({ command: 'update', cwd: tmpDir, pkgVersion: '1.2.3' });
+    expect(ensureGlobalSkillsBootstrappedMock).toHaveBeenCalledWith(packageRoot);
+    expect(logBootstrapTriggerMock.mock.invocationCallOrder[0]).toBeLessThan(checkDriftMock.mock.invocationCallOrder[0]);
+    expect(ensureGlobalSkillsBootstrappedMock.mock.invocationCallOrder[0]).toBeLessThan(checkDriftMock.mock.invocationCallOrder[0]);
+  });
+
+  it('dry-run skips global bootstrap side effects', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    const repo = writeRepo(tmpDir, 'repo-a');
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+
+    await runUpdateCli(['--repo', repo]);
+
+    expect(logBootstrapTriggerMock).not.toHaveBeenCalled();
+    expect(ensureGlobalSkillsBootstrappedMock).not.toHaveBeenCalled();
+  });
+
+  it('retargets skills drift to global roots on apply when XTRM_GLOBAL_SKILLS=1', async () => {
+    const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
+    const previousHome = process.env.HOME;
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    const repo = writeRepo(tmpDir, 'repo-a');
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+    process.env.HOME = tmpDir;
+
+    try {
+      await runUpdateCli(['--apply', '--repo', repo]);
+      expect(checkDriftMock).toHaveBeenCalledWith(
+        path.join(packageRoot, '.xtrm', 'registry.json'),
+        path.join(repo, '.xtrm'),
+        {
+          skills: path.join(tmpDir, '.xtrm', 'skills', 'default'),
+          skills_optional: path.join(tmpDir, '.xtrm', 'skills', 'optional'),
+        },
+      );
+    } finally {
+      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+      process.env.HOME = previousHome;
     }
   });
 
