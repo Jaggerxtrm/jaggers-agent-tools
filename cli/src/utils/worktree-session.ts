@@ -1,4 +1,5 @@
 import kleur from 'kleur';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, rmSync } from 'node:fs';
@@ -112,10 +113,17 @@ export function computeRoleExtensions(role: ResolvedRole): string[] {
     return [...wanted];
 }
 
+function resolveSkillPath(mainRepoRoot: string, rawPath: string): string {
+    if (path.isAbsolute(rawPath)) return rawPath;
+    if (rawPath === '~') return os.homedir();
+    if (rawPath.startsWith('~/')) return path.join(os.homedir(), rawPath.slice(2));
+    return path.resolve(mainRepoRoot, rawPath);
+}
+
 // Exposed for unit testing. sp view <name> --raw is the source of truth for
 // specialist resolution — do not reimplement its .specialists/user + installed
 // package precedence here.
-export function parseSpecialistJson(name: string, raw: string): ResolvedRole {
+export function parseSpecialistJson(name: string, raw: string, mainRepoRoot: string = process.cwd()): ResolvedRole {
     let parsed: unknown;
     try {
         parsed = JSON.parse(raw);
@@ -134,7 +142,9 @@ export function parseSpecialistJson(name: string, raw: string): ResolvedRole {
     const skillsSection = (spec as { skills?: unknown }).skills as { paths?: unknown } | undefined;
     const rawPaths = skillsSection?.paths;
     const skillPaths = Array.isArray(rawPaths)
-        ? rawPaths.filter((p): p is string => typeof p === 'string' && p.length > 0)
+        ? rawPaths
+            .filter((p): p is string => typeof p === 'string' && p.length > 0)
+            .map((skillPath) => resolveSkillPath(mainRepoRoot, skillPath))
         : [];
     const mode = (spec as { system_prompt_mode?: unknown }).system_prompt_mode;
     if (mode === 'replace') {
@@ -162,7 +172,7 @@ export function parseSpecialistJson(name: string, raw: string): ResolvedRole {
     return { name, systemPrompt, skillPaths, model, thinkingLevel, extensions };
 }
 
-export function resolveRole(name: string): ResolvedRole {
+export function resolveRole(name: string, mainRepoRoot: string = process.cwd()): ResolvedRole {
     const r = spawnSync('sp', ['view', name, '--raw'], {
         encoding: 'utf8',
         stdio: 'pipe',
@@ -171,7 +181,7 @@ export function resolveRole(name: string): ResolvedRole {
         const stderr = (r.stderr ?? '').trim() || 'unknown error';
         throw new Error(`role '${name}' not found via sp view (${stderr})`);
     }
-    return parseSpecialistJson(name, r.stdout ?? '');
+    return parseSpecialistJson(name, r.stdout ?? '', mainRepoRoot);
 }
 
 function slugifyForSession(input: string): string {
@@ -454,7 +464,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             process.exit(1);
         }
         try {
-            resolvedRole = resolveRole(roleName);
+            resolvedRole = resolveRole(roleName, cwd);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error(kleur.red(`\n  ✗ ${msg}\n`));
@@ -582,18 +592,13 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // - Packages: installed globally at ~/.pi/agent/npm/
     // Worktree inherits both from global locations.
 
-    // Shared worktree scaffold — required by any runtime that reads project-
-    // relative skill paths or specialist definitions from cwd. Both `xt claude`
-    // and `xt pi --role` need this; only Claude needs the extra settings write
-    // and status-line wiring below. Without this, pi role sessions launched
-    // from a specialist with `skills.paths: [".xtrm/skills/active/..."]` fail
-    // with "[Skill conflicts]" because `.xtrm/` is gitignored and the fresh
-    // worktree has no scaffold. See xtmux-e1o.
-    const needsSharedScaffold = runtime === 'claude' || Boolean(resolvedRole);
-    if (needsSharedScaffold) {
+    // Claude-only scaffold. Pi role sessions now receive absolute --skill
+    // paths from resolveRole(), so they no longer need worktree-local
+    // .specialists/ or .xtrm/skills/active scaffolds.
+    if (runtime === 'claude') {
         const claudeDir = path.join(worktreePath, '.claude');
 
-        // 1. Rebuild generated runtime skills view and pointer inside the worktree.
+        // 1. Rebuild generated runtime skills view and pointer inside worktree.
         try {
             await ensureAgentsSkillsSymlink(worktreePath);
         } catch (error) {
@@ -618,7 +623,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             }
         }
 
-        // 2. Symlink specialist definition directories into the worktree so
+        // 2. Symlink specialist definition directories into worktree so
         //    SpecialistLoader can resolve .specialists/default|user from cwd.
         try {
             ensureWorktreeSpecialists(worktreePath, mainRepoRoot);
@@ -626,11 +631,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             const message = error instanceof Error ? error.message : String(error);
             console.log(kleur.dim(`  warning: could not provision specialist definitions (${message})`));
         }
-    }
 
-    // Claude-only extras: local settings.json with statusLine wiring.
-    if (runtime === 'claude') {
-        const claudeDir = path.join(worktreePath, '.claude');
         // 3. Write settings.local.json with statusLine bound to this worktree's
         //    hook script path so runtime UI stays available in sandbox sessions.
         const localSettings: Record<string, unknown> = {};
