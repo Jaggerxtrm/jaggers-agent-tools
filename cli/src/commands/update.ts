@@ -5,6 +5,8 @@ import path from 'node:path';
 import fs from 'fs-extra';
 import { checkDrift } from '../core/drift.js';
 import { resolvePackageRoot } from '../core/registry-scaffold.js';
+import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
+import { resolveGlobalSkillsRoot } from '../core/skills-layout.js';
 import { assureXtManagedPiPackages } from '../core/pi-runtime.js';
 import { scanXtrmRepos } from '../core/repo-discovery.js';
 import { isStrictRegistryMode, runInstall } from './install.js';
@@ -61,12 +63,25 @@ async function resolveTargetRepos(opts: Pick<UpdateOpts, 'root' | 'repo' | 'allR
     return { targets: [resolveMainProjectRoot(process.cwd())], incomplete: [] };
 }
 
-function getCurrentPackageRegistryPath(): string {
-    return path.join(resolvePackageRoot(), '.xtrm', 'registry.json');
+function shouldUseGlobalSkills(): boolean {
+    return process.env.XTRM_GLOBAL_SKILLS === '1';
+}
+
+function getGlobalSkillsOverrideRoots(): Record<string, string> | undefined {
+    if (!shouldUseGlobalSkills()) {
+        return undefined;
+    }
+
+    const globalSkillsRoot = resolveGlobalSkillsRoot();
+    return {
+        skills: path.join(globalSkillsRoot, 'default'),
+        skills_optional: path.join(globalSkillsRoot, 'optional'),
+    };
 }
 
 async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdateResult> {
-    const registryPath = getCurrentPackageRegistryPath();
+    const packageRoot = resolvePackageRoot();
+    const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
     const userXtrmDir = path.join(repoRoot, '.xtrm');
 
     try {
@@ -74,7 +89,15 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
             return { repo: repoRoot, status: 'failed', reason: `missing package registry at ${registryPath}` };
         }
 
-        const drift = await checkDrift(registryPath, userXtrmDir);
+        const pkgJson = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };
+        await logBootstrapTrigger({
+            command: 'update',
+            cwd: process.cwd(),
+            pkgVersion: pkgJson.version ?? '0.0.0',
+        });
+        await ensureGlobalSkillsBootstrapped(packageRoot);
+
+        const drift = await checkDrift(registryPath, userXtrmDir, opts.apply ? getGlobalSkillsOverrideRoots() : undefined);
         const hasBeads = await hasBeadsDir(repoRoot);
         const sharedServer = hasBeads
             ? await ensureBeadsSharedServerEnabled(repoRoot, false)

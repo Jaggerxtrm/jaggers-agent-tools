@@ -9,8 +9,9 @@ import { runPiInstall } from './pi-install.js';
 import { runClaudeRuntimeSyncPhase } from '../core/claude-runtime-sync.js';
 import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
 import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
-import { ensureGlobalSkillsBootstrapped } from '../core/global-skills-bootstrap.js';
+import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
 import { assertRuntimeSkillsViews } from '../core/skills-runtime-views.js';
+import { resolveGlobalSkillsRoot } from '../core/skills-layout.js';
 import {
     runMachineBootstrapPhase,
 } from '../core/machine-bootstrap.js';
@@ -127,6 +128,22 @@ export function isStrictRegistryMode(opts: { strictRegistry?: boolean }): boolea
     return opts.strictRegistry ?? process.env.XTRM_STRICT_REGISTRY === '1';
 }
 
+function shouldUseGlobalSkills(): boolean {
+    return process.env.XTRM_GLOBAL_SKILLS === '1';
+}
+
+function getGlobalSkillsOverrideRoots(): Record<string, string> | undefined {
+    if (!shouldUseGlobalSkills()) {
+        return undefined;
+    }
+
+    const globalSkillsRoot = resolveGlobalSkillsRoot();
+    return {
+        skills: path.join(globalSkillsRoot, 'default'),
+        skills_optional: path.join(globalSkillsRoot, 'optional'),
+    };
+}
+
 export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     const {
         dryRun = false,
@@ -160,6 +177,16 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     });
     const userXtrmDir = ctx.targets[0];
 
+    const pkgJson = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };
+    await logBootstrapTrigger({
+        command: 'install',
+        cwd: process.cwd(),
+        pkgVersion: pkgJson.version ?? '0.0.0',
+    });
+    if (!dryRun) {
+        await ensureGlobalSkillsBootstrapped(packageRoot, force ? { force: true } : {});
+    }
+
     const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
     const registry = await fs.readJson(registryPath) as RegistryManifest;
 
@@ -184,6 +211,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
         force,
         yes: effectiveYes,
         strictRegistry,
+        overrideRoots: getGlobalSkillsOverrideRoots(),
     });
 
     if (prune) {
@@ -224,7 +252,6 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     await runPiInstall(dryRun, isGlobal, projectRoot);
 
     if (!dryRun) {
-        await ensureGlobalSkillsBootstrapped(packageRoot, force ? { force: true } : {});
         if (force) {
             await ensureUserAgentsSkillsSymlink({ force: true });
             await ensureAgentsSkillsSymlink(projectRoot, { force: true });

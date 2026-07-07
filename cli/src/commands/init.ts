@@ -15,7 +15,7 @@ import {
 } from '../core/registry-scaffold.js';
 import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
 import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
-import { ensureGlobalSkillsBootstrapped } from '../core/global-skills-bootstrap.js';
+import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
 import { ensureServiceSkills } from '../core/service-skills-ensure.js';
 import { inventoryDeps, renderBootstrapPlan, runMachineBootstrapPhase, type BootstrapPlan } from '../core/machine-bootstrap.js';
 import { runInitVerification, renderVerificationSummary } from '../core/init-verification.js';
@@ -788,6 +788,13 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
 
     // ── Phase 6: Registry scaffold (.xtrm files copy) ───────────────────────
     const packageRoot = getPackageRoot();
+    const pkgJson = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };
+    await logBootstrapTrigger({
+        command: 'init',
+        cwd: process.cwd(),
+        pkgVersion: pkgJson.version ?? '0.0.0',
+    });
+    await ensureGlobalSkillsBootstrapped(packageRoot, opts.force ? { force: true } : {});
     const ctx = await getContext({
         createMissingDirs: true,
         isGlobal: opts.global,
@@ -850,7 +857,6 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
     await runPiInstall(false, Boolean(opts.global), projectRoot);
 
     // ── Phase 6b: Rebuild runtime skills views + wire runtime pointers ───────
-    await ensureGlobalSkillsBootstrapped(packageRoot, opts.force ? { force: true } : {});
     if (opts.force) {
         await ensureUserAgentsSkillsSymlink({ force: true });
     } else {

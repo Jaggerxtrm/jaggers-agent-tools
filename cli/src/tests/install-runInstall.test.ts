@@ -24,6 +24,7 @@ const mocked = vi.hoisted(() => ({
   ensureUserAgentsSkillsSymlink: vi.fn(async () => undefined),
   ensureAgentsSkillsSymlink: vi.fn(async () => undefined),
   ensureGlobalSkillsBootstrapped: vi.fn(async () => ({ installedVersion: '1.0.0', changed: false })),
+  logBootstrapTrigger: vi.fn(async () => undefined),
   assertRuntimeSkillsViews: vi.fn(async () => undefined),
 }));
 
@@ -41,7 +42,10 @@ vi.mock('../core/project-mcp-sync.js', () => ({
 vi.mock('../core/claude-runtime-sync.js', () => ({ runClaudeRuntimeSyncPhase: mocked.runClaudeRuntimeSyncPhase }));
 vi.mock('../core/plugin-era-cleanup.js', () => ({ runPluginEraCleanup: mocked.runPluginEraCleanup }));
 vi.mock('../core/skills-scaffold.js', () => ({ ensureUserAgentsSkillsSymlink: mocked.ensureUserAgentsSkillsSymlink, ensureAgentsSkillsSymlink: mocked.ensureAgentsSkillsSymlink }));
-vi.mock('../core/global-skills-bootstrap.js', () => ({ ensureGlobalSkillsBootstrapped: mocked.ensureGlobalSkillsBootstrapped }));
+vi.mock('../core/global-skills-bootstrap.js', () => ({
+  ensureGlobalSkillsBootstrapped: mocked.ensureGlobalSkillsBootstrapped,
+  logBootstrapTrigger: mocked.logBootstrapTrigger,
+}));
 vi.mock('../core/skills-runtime-views.js', () => ({ assertRuntimeSkillsViews: mocked.assertRuntimeSkillsViews }));
 vi.mock('../commands/pi-install.js', () => ({ runPiInstall: mocked.runPiInstall }));
 
@@ -73,6 +77,7 @@ describe('runInstall broken default symlink repair', () => {
     const targetDir = path.join(tmpDir, '.xtrm', 'skills', 'default');
 
     fs.ensureDirSync(path.join(packageRoot, '.xtrm'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.0.0' });
     fs.writeJsonSync(path.join(packageRoot, '.xtrm', 'registry.json'), { version: '1.0.0', assets: {} });
     fs.ensureDirSync(sourceDir);
     fs.writeFileSync(path.join(sourceDir, 'README.md'), '# skill\n', 'utf8');
@@ -88,6 +93,10 @@ describe('runInstall broken default symlink repair', () => {
       await fs.remove(target).catch(() => undefined);
       await fs.copy(source, target);
       return 'copy';
+    });
+    mocked.ensureGlobalSkillsBootstrapped.mockImplementation(async () => {
+      callOrder.push('ensureGlobalSkillsBootstrapped');
+      return { installedVersion: '1.0.0', changed: false };
     });
     mocked.installFromRegistry.mockImplementation(async () => {
       callOrder.push('installFromRegistry');
@@ -109,7 +118,7 @@ describe('runInstall broken default symlink repair', () => {
       skipClaudeRuntimeSync: true,
     });
 
-    expect(callOrder).toEqual(['scaffoldSkillsDefaultFromPackage', 'installFromRegistry']);
+    expect(callOrder).toEqual(['ensureGlobalSkillsBootstrapped', 'scaffoldSkillsDefaultFromPackage', 'installFromRegistry']);
     expect((await fs.lstat(targetDir)).isSymbolicLink()).toBe(false);
     expect(await fs.readFile(path.join(targetDir, 'README.md'), 'utf8')).toBe('# skill\n');
   });
@@ -120,6 +129,7 @@ describe('runInstall broken default symlink repair', () => {
     const sourceDir = path.join(packageRoot, '.xtrm', 'skills', 'default');
 
     fs.ensureDirSync(path.join(packageRoot, '.xtrm'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.0.0' });
     fs.writeJsonSync(path.join(packageRoot, '.xtrm', 'registry.json'), { version: '1.0.0', assets: {} });
     fs.ensureDirSync(sourceDir);
     fs.writeFileSync(path.join(sourceDir, 'README.md'), '# dev skill\n', 'utf8');
@@ -154,6 +164,7 @@ describe('runInstall broken default symlink repair', () => {
     const targetDir = path.join(tmpDir, '.xtrm', 'skills', 'default');
 
     fs.ensureDirSync(path.join(packageRoot, '.xtrm'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.0.0' });
     fs.writeJsonSync(path.join(packageRoot, '.xtrm', 'registry.json'), { version: '1.0.0', assets: {} });
     fs.ensureDirSync(sourceDir);
     fs.writeFileSync(path.join(sourceDir, 'README.md'), '# skill\n', 'utf8');
@@ -191,6 +202,7 @@ describe('runInstall broken default symlink repair', () => {
   it('throws in strict registry mode when installFromRegistry reports missing source files', async () => {
     const packageRoot = path.join(tmpDir, 'pkg');
     fs.ensureDirSync(path.join(packageRoot, '.xtrm'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.0.0' });
     fs.writeJsonSync(path.join(packageRoot, '.xtrm', 'registry.json'), { version: '1.0.0', assets: {} });
     mocked.installFromRegistry.mockResolvedValue({
       installed: 0,

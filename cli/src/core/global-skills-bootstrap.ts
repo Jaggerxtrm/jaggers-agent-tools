@@ -18,11 +18,13 @@ interface BootstrapLogEvent {
   readonly component: 'skills-bootstrap';
   readonly event: string;
   readonly pkgVersion: string;
-  readonly source: string;
-  readonly target: string;
-  readonly filesCopied: number;
-  readonly durationMs: number;
-  readonly outcome: 'ok' | 'skipped' | 'error';
+  readonly source?: string;
+  readonly target?: string;
+  readonly filesCopied?: number;
+  readonly durationMs?: number;
+  readonly outcome?: 'ok' | 'skipped' | 'error';
+  readonly command?: string;
+  readonly cwd?: string;
 }
 
 const COPY_FILTER = (sourcePath: string): boolean => !sourcePath.endsWith('__pycache__');
@@ -41,6 +43,21 @@ async function appendLog(event: BootstrapLogEvent): Promise<void> {
   const logPath = path.join(path.dirname(resolveGlobalSkillsRoot()), 'logs', 'skills-migration.jsonl');
   await fs.ensureDir(path.dirname(logPath));
   await fs.appendFile(logPath, `${JSON.stringify(event)}\n`);
+}
+
+export async function logBootstrapTrigger(params: {
+  readonly command: string;
+  readonly cwd: string;
+  readonly pkgVersion: string;
+}): Promise<void> {
+  await appendLog({
+    timestamp: new Date().toISOString(),
+    component: 'skills-bootstrap',
+    event: 'bootstrap.trigger',
+    command: params.command,
+    cwd: params.cwd,
+    pkgVersion: params.pkgVersion,
+  });
 }
 
 async function countCopiedFiles(root: string): Promise<number> {

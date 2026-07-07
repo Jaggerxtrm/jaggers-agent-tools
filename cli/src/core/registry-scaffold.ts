@@ -145,11 +145,12 @@ export async function installFromRegistry(params: {
     force: boolean;
     yes: boolean;
     strictRegistry?: boolean;
+    overrideRoots?: Record<string, string>;
 }): Promise<InstallStats> {
-    const { packageRoot, registry, userXtrmDir, dryRun, force, yes, strictRegistry = false } = params;
+    const { packageRoot, registry, userXtrmDir, dryRun, force, yes, strictRegistry = false, overrideRoots } = params;
     const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
 
-    const drift = await checkDrift(registryPath, userXtrmDir);
+    const drift = await checkDrift(registryPath, userXtrmDir, overrideRoots);
     const expectedHashes = buildExpectedHashes(registry);
 
     const missingSet = new Set(drift.missing);
@@ -214,11 +215,14 @@ export async function installFromRegistry(params: {
     let missingSourceSkipped = 0;
     const missingSources: string[] = [];
 
-    for (const asset of Object.values(registry.assets)) {
+    for (const [assetKey, asset] of Object.entries(registry.assets)) {
+        const assetRoot = overrideRoots?.[assetKey];
         for (const [filePath] of Object.entries(asset.files)) {
             const relativePath = toUserRelativePath(asset.source_dir, filePath);
             const sourcePath = path.join(packageRoot, asset.source_dir, filePath);
-            const targetPath = path.join(userXtrmDir, relativePath);
+            const targetPath = assetRoot
+                ? path.join(assetRoot, filePath)
+                : path.join(userXtrmDir, relativePath);
 
             if (isUserOwnedPath(relativePath)) {
                 continue;
