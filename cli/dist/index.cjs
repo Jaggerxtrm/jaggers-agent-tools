@@ -61178,13 +61178,14 @@ async function launchWorktreeSession(opts) {
 `));
   console.log(kleur_default.dim("  note: clean git worktrees do not include ignored dependency dirs like node_modules/ or .venv/"));
   console.log(kleur_default.dim("        if lint/tests need them, run this repo's normal bootstrap inside the worktree (make bootstrap, just setup, npm ci, uv sync, etc.)\n"));
-  if (runtime === "claude") {
+  const needsSharedScaffold = runtime === "claude" || Boolean(resolvedRole);
+  if (needsSharedScaffold) {
     const claudeDir = import_node_path5.default.join(worktreePath, ".claude");
     try {
       await ensureAgentsSkillsSymlink(worktreePath);
     } catch (error51) {
       const message = error51 instanceof Error ? error51.message : String(error51);
-      console.log(kleur_default.dim(`  warning: could not rebuild active Claude skills view (${message})`));
+      console.log(kleur_default.dim(`  warning: could not rebuild active skills view (${message})`));
       const wtSkillsDir = import_node_path5.default.join(claudeDir, "skills");
       const claudeSkillsTarget = import_node_path5.default.join("..", ".xtrm", "skills", "active");
       try {
@@ -61208,6 +61209,9 @@ async function launchWorktreeSession(opts) {
       const message = error51 instanceof Error ? error51.message : String(error51);
       console.log(kleur_default.dim(`  warning: could not provision specialist definitions (${message})`));
     }
+  }
+  if (runtime === "claude") {
+    const claudeDir = import_node_path5.default.join(worktreePath, ".claude");
     const localSettings = {};
     const statuslinePath = resolveStatuslineScript(worktreePath);
     if (statuslinePath) {
