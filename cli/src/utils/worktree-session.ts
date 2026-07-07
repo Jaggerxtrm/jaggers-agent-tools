@@ -430,9 +430,15 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // - Packages: installed globally at ~/.pi/agent/npm/
     // Worktree inherits both from global locations.
 
-    // Claude worktree: symlink gitignored dirs so the session has the same
-    // environment as the main repo and wire local statusLine to .xtrm hooks.
-    if (runtime === 'claude') {
+    // Shared worktree scaffold — required by any runtime that reads project-
+    // relative skill paths or specialist definitions from cwd. Both `xt claude`
+    // and `xt pi --role` need this; only Claude needs the extra settings write
+    // and status-line wiring below. Without this, pi role sessions launched
+    // from a specialist with `skills.paths: [".xtrm/skills/active/..."]` fail
+    // with "[Skill conflicts]" because `.xtrm/` is gitignored and the fresh
+    // worktree has no scaffold. See xtmux-e1o.
+    const needsSharedScaffold = runtime === 'claude' || Boolean(resolvedRole);
+    if (needsSharedScaffold) {
         const claudeDir = path.join(worktreePath, '.claude');
 
         // 1. Rebuild generated runtime skills view and pointer inside the worktree.
@@ -440,7 +446,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             await ensureAgentsSkillsSymlink(worktreePath);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.log(kleur.dim(`  warning: could not rebuild active Claude skills view (${message})`));
+            console.log(kleur.dim(`  warning: could not rebuild active skills view (${message})`));
 
             // Best-effort fallback symlink if rebuild fails.
             const wtSkillsDir = path.join(claudeDir, 'skills');
@@ -468,7 +474,11 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             const message = error instanceof Error ? error.message : String(error);
             console.log(kleur.dim(`  warning: could not provision specialist definitions (${message})`));
         }
+    }
 
+    // Claude-only extras: local settings.json with statusLine wiring.
+    if (runtime === 'claude') {
+        const claudeDir = path.join(worktreePath, '.claude');
         // 3. Write settings.local.json with statusLine bound to this worktree's
         //    hook script path so runtime UI stays available in sandbox sessions.
         const localSettings: Record<string, unknown> = {};
