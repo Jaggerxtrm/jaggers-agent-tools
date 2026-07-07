@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 import autoSessionNameExtension from "./extensions/auto-session-name.ts";
 import autoUpdateExtension from "./extensions/auto-update.ts";
@@ -8,13 +8,11 @@ import customFooterExtension from "./extensions/custom-footer.ts";
 import customProviderQwenCliExtension from "./extensions/custom-provider-qwen-cli.ts";
 import gitCheckpointExtension from "./extensions/git-checkpoint.ts";
 import lspBootstrapExtension from "./extensions/lsp-bootstrap.ts";
-import piSerenaCompactExtension from "./extensions/pi-serena-compact.ts";
 import serenaPoolExtension from "./extensions/serena-pool.ts";
 import qualityGatesExtension from "./extensions/quality-gates.ts";
 import serviceSkillsExtension from "./extensions/service-skills.ts";
 import sessionFlowExtension from "./extensions/session-flow.ts";
 import spTerminalOverlayExtension from "./extensions/sp-terminal-overlay.ts";
-import xtprompt from "./extensions/xtprompt.ts";
 import xtrmLoaderExtension from "./extensions/xtrm-loader.ts";
 import xtrmUiExtension from "./extensions/xtrm-ui.ts";
 
@@ -33,12 +31,10 @@ const allManagedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "git-checkpoint", register: gitCheckpointExtension },
   { id: "serena-pool", register: serenaPoolExtension },
   { id: "lsp-bootstrap", register: lspBootstrapExtension },
-  { id: "pi-serena-compact", register: piSerenaCompactExtension },
   { id: "quality-gates", register: qualityGatesExtension },
   { id: "service-skills", register: serviceSkillsExtension },
   { id: "session-flow", register: sessionFlowExtension },
   { id: "sp-terminal-overlay", register: spTerminalOverlayExtension },
-  { id: "xtprompt", register: xtprompt },
   { id: "xtrm-loader", register: xtrmLoaderExtension },
   { id: "xtrm-ui", register: xtrmUiExtension },
 ];
@@ -47,7 +43,6 @@ const allManagedPiExtensions: readonly ManagedPiExtension[] = [
 // id from this set to re-enable. (xtrm-e2vkn)
 // - quality-gates: hook-script lookup (.claude/hooks/quality-check.*) is broken
 //   under the managed .xtrm/hooks layout, so it never fires. Disabled until
-//   rewired. (Serena helpers serena-pool / pi-serena-compact stay ACTIVE.)
 const DISABLED_EXTENSIONS = new Set<string>(["quality-gates"]);
 
 export const managedPiExtensions: readonly ManagedPiExtension[] = allManagedPiExtensions.filter(
