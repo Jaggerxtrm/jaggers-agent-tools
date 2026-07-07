@@ -393,13 +393,34 @@ function stableHookHash(wrapper: HookWrapper): string {
     return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
-function tagOwnedWrapper(wrapper: HookWrapper, installedVersion: string, installedAt: string): HookWrapper {
+function tagOwnedWrapper(
+    wrapper: HookWrapper,
+    installedVersion: string,
+    installedAt: string,
+    existingWrapper?: HookWrapper,
+): HookWrapper {
+    const existingInstalledAt = hasSameCanonicalHooks(existingWrapper, wrapper)
+        ? existingWrapper?._xtrm?.installedAt
+        : undefined;
+
     return {
         ...wrapper,
         _source: XTRM_GLOBAL_SOURCE,
-        _xtrm: { version: installedVersion, installedAt, hash: stableHookHash(wrapper) },
+        _xtrm: {
+            version: installedVersion,
+            installedAt: existingInstalledAt ?? installedAt,
+            hash: stableHookHash(wrapper),
+        },
         hooks: wrapper.hooks.map((hook) => ({ ...hook })),
     };
+}
+
+function hasSameCanonicalHooks(left?: HookWrapper, right?: HookWrapper): boolean {
+    if (!left || !right) {
+        return false;
+    }
+
+    return stableHookHash(left) === stableHookHash(right);
 }
 
 function isOwnedWrapper(wrapper: HookWrapper, canonicalHashes: Set<string>): boolean {
@@ -436,17 +457,30 @@ export async function safeMergeOwnedHookSettings(
 ): Promise<SafeMergeResult> {
     const installedVersion = await readInstalledVersion();
     const installedAt = new Date().toISOString();
+    const currentHooks = currentSettings.hooks ?? {};
     const taggedHooks = Object.fromEntries(
-        Object.entries(generatedHooks).map(([eventName, wrappers]) => [eventName, wrappers.map((wrapper) => tagOwnedWrapper(wrapper, installedVersion, installedAt))]),
+        Object.entries(generatedHooks).map(([eventName, wrappers]) => {
+            const existingWrappers = currentHooks[eventName] ?? [];
+            return [
+                eventName,
+                wrappers.map((wrapper) => tagOwnedWrapper(
+                    wrapper,
+                    installedVersion,
+                    installedAt,
+                    existingWrappers.find((existingWrapper) => hasSameCanonicalHooks(existingWrapper, wrapper)),
+                )),
+            ];
+        }),
     ) as Record<string, HookWrapper[]>;
     const canonicalHashes = new Set(Object.values(taggedHooks).flat().map((wrapper) => wrapper._xtrm?.hash ?? stableHookHash(wrapper)));
     const mergedHooks: Record<string, HookWrapper[]> = {};
+    const globalHooksRoot = path.resolve(os.homedir(), '.xtrm', 'hooks');
 
     for (const [eventName, wrappers] of Object.entries(taggedHooks)) {
         mergedHooks[eventName] = [...wrappers];
     }
 
-    for (const [eventName, wrappers] of Object.entries(currentSettings.hooks ?? {})) {
+    for (const [eventName, wrappers] of Object.entries(currentHooks)) {
         const mergedWrappers = mergedHooks[eventName] ?? [];
         for (const wrapper of wrappers) {
             const entryHash = stableHookHash(wrapper);
@@ -455,7 +489,7 @@ export async function safeMergeOwnedHookSettings(
                 continue;
             }
 
-            if (conflictsWithCanonical(wrapper, canonicalHashes)) {
+            if (conflictsWithCanonical(wrapper, globalHooksRoot)) {
                 console.warn(`[hook.entry.foreign] ${eventName} ${hashValue(entryHash)}`);
                 await appendHookLog({ timestamp: new Date().toISOString(), component: 'hooks-migration', event: 'hook.entry.foreign-preserved', entryKey: eventName, source: hashValue(entryHash), action: 'preserve', outcome: 'ok', durationMs: 0 });
             }
@@ -479,12 +513,43 @@ export async function safeMergeOwnedHookSettings(
     return { settings: nextSettings, changed: changed && !opts.dryRun, hooksEntries: countHookEntries(taggedHooks) };
 }
 
-function conflictsWithCanonical(wrapper: HookWrapper, canonicalHashes: Set<string>): boolean {
+function conflictsWithCanonical(wrapper: HookWrapper, globalHooksRoot: string): boolean {
+    if (wrapper._source === XTRM_GLOBAL_SOURCE) {
+        return true;
+    }
+
     if (!Array.isArray(wrapper.hooks)) {
         return false;
     }
 
-    return wrapper.hooks.some((hook) => typeof hook.command === 'string' && canonicalHashes.size > 0 && /beads-|quality-check|specialists-agent-guard|using-xtrm-reminder|worktree-boundary|xtrm-.*logger|gitnexus\//.test(hook.command));
+    return wrapper.hooks.some((hook) => typeof hook.command === 'string' && commandTargetsGlobalHook(hook.command, globalHooksRoot));
+}
+
+function commandTargetsGlobalHook(command: string, globalHooksRoot: string): boolean {
+    for (const token of extractCommandPathTokens(command)) {
+        const resolvedTokenPath = path.resolve(expandTilde(token));
+        const relativePath = path.relative(globalHooksRoot, resolvedTokenPath);
+        if (relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function extractCommandPathTokens(command: string): string[] {
+    const matches = command.match(/"([^"]+)"|'([^']+)'|([^\s]+)/g) ?? [];
+    return matches
+        .map((match) => match.replace(/^['"]|['"]$/g, ''))
+        .filter((token) => token.includes('.xtrm/hooks/'));
+}
+
+function expandTilde(targetPath: string): string {
+    if (!targetPath.startsWith('~/')) {
+        return targetPath;
+    }
+
+    return path.join(os.homedir(), targetPath.slice(2));
 }
 
 async function readExistingHooks(settingsPath: string): Promise<Record<string, HookWrapper[]>> {

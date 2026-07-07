@@ -40229,13 +40229,24 @@ function stableHookHash(wrapper) {
   };
   return import_node_crypto2.default.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
-function tagOwnedWrapper(wrapper, installedVersion, installedAt) {
+function tagOwnedWrapper(wrapper, installedVersion, installedAt, existingWrapper) {
+  const existingInstalledAt = hasSameCanonicalHooks(existingWrapper, wrapper) ? existingWrapper?._xtrm?.installedAt : void 0;
   return {
     ...wrapper,
     _source: XTRM_GLOBAL_SOURCE,
-    _xtrm: { version: installedVersion, installedAt, hash: stableHookHash(wrapper) },
+    _xtrm: {
+      version: installedVersion,
+      installedAt: existingInstalledAt ?? installedAt,
+      hash: stableHookHash(wrapper)
+    },
     hooks: wrapper.hooks.map((hook) => ({ ...hook }))
   };
+}
+function hasSameCanonicalHooks(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+  return stableHookHash(left) === stableHookHash(right);
 }
 function isOwnedWrapper(wrapper, canonicalHashes) {
   if (wrapper._source === XTRM_GLOBAL_SOURCE) {
@@ -40261,15 +40272,28 @@ function filterGlobalOwnedProjectHooks(existingHooks, generatedHooks) {
 async function safeMergeOwnedHookSettings(currentSettings, generatedHooks, opts = {}) {
   const installedVersion = await readInstalledVersion2();
   const installedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const currentHooks = currentSettings.hooks ?? {};
   const taggedHooks = Object.fromEntries(
-    Object.entries(generatedHooks).map(([eventName, wrappers]) => [eventName, wrappers.map((wrapper) => tagOwnedWrapper(wrapper, installedVersion, installedAt))])
+    Object.entries(generatedHooks).map(([eventName, wrappers]) => {
+      const existingWrappers = currentHooks[eventName] ?? [];
+      return [
+        eventName,
+        wrappers.map((wrapper) => tagOwnedWrapper(
+          wrapper,
+          installedVersion,
+          installedAt,
+          existingWrappers.find((existingWrapper) => hasSameCanonicalHooks(existingWrapper, wrapper))
+        ))
+      ];
+    })
   );
   const canonicalHashes = new Set(Object.values(taggedHooks).flat().map((wrapper) => wrapper._xtrm?.hash ?? stableHookHash(wrapper)));
   const mergedHooks = {};
+  const globalHooksRoot = import_path2.default.resolve(import_os.default.homedir(), ".xtrm", "hooks");
   for (const [eventName, wrappers] of Object.entries(taggedHooks)) {
     mergedHooks[eventName] = [...wrappers];
   }
-  for (const [eventName, wrappers] of Object.entries(currentSettings.hooks ?? {})) {
+  for (const [eventName, wrappers] of Object.entries(currentHooks)) {
     const mergedWrappers = mergedHooks[eventName] ?? [];
     for (const wrapper of wrappers) {
       const entryHash = stableHookHash(wrapper);
@@ -40277,7 +40301,7 @@ async function safeMergeOwnedHookSettings(currentSettings, generatedHooks, opts 
         await appendHookLog({ timestamp: (/* @__PURE__ */ new Date()).toISOString(), component: "hooks-migration", event: "hook.entry.owned-replaced", entryKey: eventName, source: hashValue(entryHash), action: "replace", outcome: "ok", durationMs: 0 });
         continue;
       }
-      if (conflictsWithCanonical(wrapper, canonicalHashes)) {
+      if (conflictsWithCanonical(wrapper, globalHooksRoot)) {
         console.warn(`[hook.entry.foreign] ${eventName} ${hashValue(entryHash)}`);
         await appendHookLog({ timestamp: (/* @__PURE__ */ new Date()).toISOString(), component: "hooks-migration", event: "hook.entry.foreign-preserved", entryKey: eventName, source: hashValue(entryHash), action: "preserve", outcome: "ok", durationMs: 0 });
       }
@@ -40296,11 +40320,34 @@ async function safeMergeOwnedHookSettings(currentSettings, generatedHooks, opts 
   const changed = JSON.stringify(currentSettings) !== JSON.stringify(nextSettings);
   return { settings: nextSettings, changed: changed && !opts.dryRun, hooksEntries: countHookEntries(taggedHooks) };
 }
-function conflictsWithCanonical(wrapper, canonicalHashes) {
+function conflictsWithCanonical(wrapper, globalHooksRoot) {
+  if (wrapper._source === XTRM_GLOBAL_SOURCE) {
+    return true;
+  }
   if (!Array.isArray(wrapper.hooks)) {
     return false;
   }
-  return wrapper.hooks.some((hook) => typeof hook.command === "string" && canonicalHashes.size > 0 && /beads-|quality-check|specialists-agent-guard|using-xtrm-reminder|worktree-boundary|xtrm-.*logger|gitnexus\//.test(hook.command));
+  return wrapper.hooks.some((hook) => typeof hook.command === "string" && commandTargetsGlobalHook(hook.command, globalHooksRoot));
+}
+function commandTargetsGlobalHook(command, globalHooksRoot) {
+  for (const token of extractCommandPathTokens(command)) {
+    const resolvedTokenPath = import_path2.default.resolve(expandTilde(token));
+    const relativePath = import_path2.default.relative(globalHooksRoot, resolvedTokenPath);
+    if (relativePath !== "" && !relativePath.startsWith("..") && !import_path2.default.isAbsolute(relativePath)) {
+      return true;
+    }
+  }
+  return false;
+}
+function extractCommandPathTokens(command) {
+  const matches = command.match(/"([^"]+)"|'([^']+)'|([^\s]+)/g) ?? [];
+  return matches.map((match) => match.replace(/^['"]|['"]$/g, "")).filter((token) => token.includes(".xtrm/hooks/"));
+}
+function expandTilde(targetPath) {
+  if (!targetPath.startsWith("~/")) {
+    return targetPath;
+  }
+  return import_path2.default.join(import_os.default.homedir(), targetPath.slice(2));
 }
 async function readExistingHooks(settingsPath) {
   const settings = await readSettings(settingsPath);
@@ -59004,7 +59051,7 @@ var import_node_path13 = __toESM(require("path"), 1);
 async function reconcileGlobalPiHooks(opts = {}) {
   const { dryRun = false } = opts;
   const startedAt = Date.now();
-  const settingsPath = import_node_path13.default.join(import_node_os9.default.homedir(), ".pi", "settings.json");
+  const settingsPath = import_node_path13.default.join(import_node_os9.default.homedir(), ".pi", "agent", "settings.json");
   const hooksConfig = await readGlobalHooksConfig(resolveGlobalHooksConfigPath());
   const generatedHooks = resolveHooksForGlobalRuntime(hooksConfig.hooks ?? {}, resolveGlobalHooksRoot());
   await appendHookLog({

@@ -21,6 +21,7 @@ describe('global-hooks-bootstrap', () => {
     const pkgRoot = path.join(tempDir, 'pkg');
     vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
 
+    await fs.ensureDir(pkgRoot);
     await fs.writeJson(path.join(pkgRoot, 'package.json'), { version: '1.2.3' });
     await fs.outputFile(path.join(pkgRoot, '.xtrm', 'hooks', 'beads-claim-sync.mjs'), '#!/usr/bin/env node\n');
     await fs.outputFile(path.join(pkgRoot, '.xtrm', 'hooks', 'gitnexus', 'gitnexus-hook.cjs'), 'module.exports = {};\n');

@@ -13,7 +13,7 @@ export interface ReconcileGlobalPiHooksResult {
 export async function reconcileGlobalPiHooks(opts: { dryRun?: boolean } = {}): Promise<ReconcileGlobalPiHooksResult> {
   const { dryRun = false } = opts;
   const startedAt = Date.now();
-  const settingsPath = path.join(os.homedir(), '.pi', 'settings.json');
+  const settingsPath = path.join(os.homedir(), '.pi', 'agent', 'settings.json');
   const hooksConfig = await readGlobalHooksConfig(resolveGlobalHooksConfigPath());
   const generatedHooks = resolveHooksForGlobalRuntime(hooksConfig.hooks ?? {}, resolveGlobalHooksRoot());
 
