@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createDoctorCommand } from '../src/commands/doctor.js';
 
 let tmpDir: string;
+let previousHome: string | undefined;
 
 function sha256(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -16,6 +17,12 @@ async function writeFile(relativePath: string, content: string): Promise<void> {
 }
 
 async function setupCleanRepo(): Promise<void> {
+  const homeDir = process.env.HOME as string;
+  await fs.ensureDir(path.join(homeDir, '.xtrm', 'skills', 'active'));
+  await fs.ensureDir(path.join(homeDir, '.claude'));
+  await fs.ensureDir(path.join(homeDir, '.pi', 'agent'));
+  await fs.symlink(path.join(homeDir, '.xtrm', 'skills', 'active'), path.join(homeDir, '.claude', 'skills'));
+  await fs.symlink(path.join(homeDir, '.xtrm', 'skills', 'active'), path.join(homeDir, '.pi', 'agent', 'skills'));
   await fs.ensureDir(path.join(tmpDir, '.xtrm', 'skills', 'default', 'clean-code'));
   await fs.writeFile(path.join(tmpDir, '.xtrm', 'skills', 'default', 'clean-code', 'SKILL.md'), '# clean\n');
   await fs.ensureDir(path.join(tmpDir, '.xtrm', 'skills', 'default', 'fresh-skill'));
@@ -73,9 +80,16 @@ async function runDoctor(args: string[] = []): Promise<{ stdout: string; stderr:
 
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-doctor-'));
+  previousHome = process.env.HOME;
+  process.env.HOME = path.join(tmpDir, 'home');
 });
 
 afterEach(async () => {
+  if (previousHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = previousHome;
+  }
   await fs.remove(tmpDir);
 });
 
@@ -88,7 +102,7 @@ describe('doctor command', () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed.catB.skills.every((row: { status: string }) => row.status === 'in-sync')).toBe(true);
     expect(parsed.catB.hooks.every((row: { status: string }) => row.status === 'in-sync')).toBe(true);
-    expect(parsed.catB.runtimeView).toMatchObject({ activeReady: true, claudePointerReady: true, piPointerReady: true });
+    expect(parsed.catB.runtimeView).toMatchObject({ activeReady: true, globalClaudePointerReady: true, globalPiPointerReady: true, projectClaudePointerState: 'ready', projectPiPointerState: 'ready' });
     expect(parsed.catB.duplicates).toEqual([]);
   });
 

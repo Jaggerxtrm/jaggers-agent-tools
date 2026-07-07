@@ -101,8 +101,8 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', 
 
     const check = await checkRuntimeSkillsViews(projectRoot);
     expect(check.activeReady).toBe(true);
-    expect(check.claudePointerReady).toBe(true);
-    expect(check.piPointerReady).toBe(true);
+    expect(check.projectClaudePointerState).toBe('ready');
+    expect(check.projectPiPointerState).toBe('ready');
   });
 
   it('aborts before swapping active view when runtime collisions are detected', async () => {
@@ -138,9 +138,9 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', 
 
     const check = await checkRuntimeSkillsViews(projectRoot);
     expect(check.activeReady).toBe(true);
-    expect(check.piPointerReady).toBe(false);
+    expect(check.projectPiPointerState).toBe('missing');
 
-    await expect(assertRuntimeSkillsViews(projectRoot)).rejects.toThrow(
+    await expect(assertRuntimeSkillsViews(projectRoot, { scope: 'project' })).rejects.toThrow(
       /\.pi\/settings\.json\.skills does not include \.\.\/\.xtrm\/skills\/active/,
     );
   });

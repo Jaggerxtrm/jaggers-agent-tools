@@ -228,8 +228,10 @@ function formatStatus(status: DriftState): string {
 function formatRuntimeView(check: RuntimeViewCheckResult): string {
   return [
     `activeReady=${check.activeReady}`,
-    `claudePointerReady=${check.claudePointerReady}`,
-    `piPointerReady=${check.piPointerReady}`,
+    `globalClaudePointerReady=${check.globalClaudePointerReady}`,
+    `globalPiPointerReady=${check.globalPiPointerReady}`,
+    `projectClaudePointerState=${check.projectClaudePointerState}`,
+    `projectPiPointerState=${check.projectPiPointerState}`,
   ].join(' ');
 }
 
@@ -243,7 +245,13 @@ async function buildCatBJson(registry: RegistryManifest, cwd: string, drift: Dri
     return acc;
   }, { ok: 0, warnings: 0, errors: 0 });
 
-  if (!runtimeView.activeReady || !runtimeView.claudePointerReady || !runtimeView.piPointerReady) {
+  if (
+    !runtimeView.activeReady
+    || !runtimeView.globalClaudePointerReady
+    || !runtimeView.globalPiPointerReady
+    || runtimeView.projectClaudePointerState === 'missing'
+    || runtimeView.projectPiPointerState === 'missing'
+  ) {
     summary.errors += 1;
   } else {
     summary.ok += 1;
@@ -272,6 +280,11 @@ function renderCatB(report: CatBJson): void {
 
   section('Cat B — Runtime view');
   console.log(`  ${formatRuntimeView(report.runtimeView)}`);
+  console.log(`  ${report.runtimeView.globalClaudePointerReady && report.runtimeView.globalPiPointerReady ? kleur.green('✓') : kleur.yellow('○')} Global skills pointer: ${report.runtimeView.globalClaudePointerReady && report.runtimeView.globalPiPointerReady ? 'ok' : 'missing'}`);
+  const projectPointerState = report.runtimeView.projectClaudePointerState === 'missing' || report.runtimeView.projectPiPointerState === 'missing'
+    ? 'missing'
+    : (report.runtimeView.projectClaudePointerState === 'skipped' && report.runtimeView.projectPiPointerState === 'skipped' ? 'skipped (empty)' : 'ok');
+  console.log(`  ${projectPointerState === 'ok' ? kleur.green('✓') : kleur.yellow('○')} Project skills pointer: ${projectPointerState}`);
 
   section('Cat B — Duplicate canonical names');
   if (report.duplicates.length === 0) {
@@ -313,8 +326,10 @@ function hasCatBIssues(report: CatBJson): boolean {
   return report.skills.some(row => row.status !== 'in-sync')
     || report.hooks.some(row => row.status !== 'in-sync')
     || !report.runtimeView.activeReady
-    || !report.runtimeView.claudePointerReady
-    || !report.runtimeView.piPointerReady
+    || !report.runtimeView.globalClaudePointerReady
+    || !report.runtimeView.globalPiPointerReady
+    || report.runtimeView.projectClaudePointerState === 'missing'
+    || report.runtimeView.projectPiPointerState === 'missing'
     || report.duplicates.length > 0;
 }
 

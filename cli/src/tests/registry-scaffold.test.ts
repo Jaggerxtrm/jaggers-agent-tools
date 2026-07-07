@@ -12,7 +12,7 @@ import {
   toPosix,
   toUserRelativePath,
 } from '../core/registry-scaffold.js';
-import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
+import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 
 const tempDirs: string[] = [];
 
@@ -27,6 +27,12 @@ async function createTempDir(): Promise<string> {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-scaffold-test-'));
   tempDirs.push(tempDir);
   return tempDir;
+}
+
+async function writeSkill(root: string, name: string): Promise<void> {
+  const skillRoot = path.join(root, name);
+  await fs.ensureDir(skillRoot);
+  await fs.writeFile(path.join(skillRoot, 'SKILL.md'), `# ${name}\n`, 'utf8');
 }
 
 describe('registry-scaffold path helpers', () => {
@@ -473,14 +479,49 @@ describe('installFromRegistry', () => {
   });
 });
 
-describe('ensureAgentsSkillsSymlink', () => {
+describe('ensureUserAgentsSkillsSymlink', () => {
   const itIfSymlinkSupported = process.platform === 'win32' ? it.skip : it;
 
-  async function writeSkill(root: string, name: string): Promise<void> {
-    const skillRoot = path.join(root, name);
-    await fs.ensureDir(skillRoot);
-    await fs.writeFile(path.join(skillRoot, 'SKILL.md'), `# ${name}\n`, 'utf8');
-  }
+  itIfSymlinkSupported('wires ~/.claude/skills and ~/.pi/agent/skills to global active with absolute targets', async () => {
+    const tempHome = await createTempDir();
+    const previousHome = process.env.HOME;
+    process.env.HOME = tempHome;
+
+    try {
+      const globalActiveRoot = path.join(tempHome, '.xtrm', 'skills', 'active');
+      await writeSkill(globalActiveRoot, 'alpha');
+
+      await ensureUserAgentsSkillsSymlink();
+
+      expect(await fs.readlink(path.join(tempHome, '.claude', 'skills'))).toBe(globalActiveRoot);
+      expect(await fs.readlink(path.join(tempHome, '.pi', 'agent', 'skills'))).toBe(globalActiveRoot);
+    } finally {
+      process.env.HOME = previousHome;
+    }
+  });
+
+  itIfSymlinkSupported('refuses to replace existing real ~/.claude/skills directory without force', async () => {
+    const tempHome = await createTempDir();
+    const previousHome = process.env.HOME;
+    process.env.HOME = tempHome;
+
+    try {
+      const globalActiveRoot = path.join(tempHome, '.xtrm', 'skills', 'active');
+      const claudeSkillsDir = path.join(tempHome, '.claude', 'skills');
+      await writeSkill(globalActiveRoot, 'alpha');
+      await fs.ensureDir(claudeSkillsDir);
+      await fs.writeFile(path.join(claudeSkillsDir, 'foreign.txt'), 'foreign', 'utf8');
+
+      await expect(ensureUserAgentsSkillsSymlink()).rejects.toThrowError(/Refusing to replace existing ~\/\.claude\/skills/);
+      expect((await fs.lstat(claudeSkillsDir)).isSymbolicLink()).toBe(false);
+    } finally {
+      process.env.HOME = previousHome;
+    }
+  });
+});
+
+describe('ensureAgentsSkillsSymlink', () => {
+  const itIfSymlinkSupported = process.platform === 'win32' ? it.skip : it;
 
   itIfSymlinkSupported('rebuilds active view and points .claude/skills at active', async () => {
     const tempDir = await createTempDir();

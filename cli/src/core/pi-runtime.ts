@@ -17,9 +17,10 @@ import kleur from 'kleur';
 import path from 'path';
 import { homedir } from 'node:os';
 import { t, sym } from '../utils/theme.js';
-import { resolveSkillsRoot } from './skills-layout.js';
+import { resolveSkillsRoot, resolveUserPacksRoot } from './skills-layout.js';
 import { validateSkillsInvariants } from './skill-discovery.js';
 import { rebuildAllRuntimeActiveViews } from './skills-materializer.js';
+import { hasServiceRegistry } from './service-skills-ensure.js';
 
 // Resolve xtrm-tools package root from __dirname (cli/dist/ -> ../..)
 declare const __dirname: string;
@@ -80,11 +81,7 @@ async function resolveGlobalNpmRootDir(): Promise<string | null> {
 }
 const PROJECT_EXTENSIONS_ENTRY = '../.xtrm/extensions';
 const PROJECT_SKILLS_ENTRY = '../.xtrm/skills/active';
-// User-level fallback: skills installed at user scope live under
-// ~/.xtrm/skills/default/ and must resolve when a project doesn't
-// vendor a copy (xtrm-4h6u). Pi resolves entries in order, so project
-// active always wins; user default is the last-chance fallback.
-const USER_DEFAULT_SKILLS_ENTRY = '~/.xtrm/skills/default';
+const USER_DEFAULT_SKILLS_ENTRY = '~/.xtrm/skills/active';
 const PROJECT_EXTENSION_PACKAGE_ID = 'npm:@jaggerxtrm/pi-extensions';
 const PROJECT_EXTENSION_PACKAGE: ManagedPackage = {
     id: PROJECT_EXTENSION_PACKAGE_ID,
@@ -1064,6 +1061,50 @@ function normalizeSerenaSettings(value: unknown): Record<string, unknown> {
     return serena;
 }
 
+async function hasProjectScopedSkillsContent(projectRoot: string): Promise<boolean> {
+    const packsRoot = resolveUserPacksRoot(resolveSkillsRoot(projectRoot));
+    const packEntries = await fs.readdir(packsRoot, { withFileTypes: true }).catch(() => [] as fs.Dirent[]);
+    if (packEntries.some((entry) => entry.isDirectory())) {
+        return true;
+    }
+
+    return hasServiceRegistry(projectRoot);
+}
+
+function normalizePiSkillsEntries(existingSkills: readonly string[], includeProjectEntry: boolean): string[] {
+    const preserved = existingSkills.filter((entry, index) => (
+        existingSkills.indexOf(entry) === index
+        && entry !== PROJECT_SKILLS_ENTRY
+        && entry !== '~/.xtrm/skills/default'
+        && entry !== USER_DEFAULT_SKILLS_ENTRY
+    ));
+
+    return includeProjectEntry
+        ? [PROJECT_SKILLS_ENTRY, ...preserved, USER_DEFAULT_SKILLS_ENTRY]
+        : [USER_DEFAULT_SKILLS_ENTRY, ...preserved];
+}
+
+async function appendSkillsPointerLog(event: {
+    readonly scope: 'global' | 'project';
+    readonly target: string;
+    readonly existing: string | null;
+    readonly action: 'normalize';
+    readonly outcome: 'ok';
+}): Promise<void> {
+    const logPath = path.join(homedir(), '.xtrm', 'logs', 'skills-migration.jsonl');
+    await fs.ensureDir(path.dirname(logPath));
+    await fs.appendFile(logPath, `${JSON.stringify({
+        timestamp: new Date().toISOString(),
+        component: 'skills-bootstrap',
+        event: `pointer.${event.action}`,
+        scope: event.scope,
+        target: event.target,
+        existing: event.existing,
+        action: event.action,
+        outcome: event.outcome,
+    })}\n`);
+}
+
 export function pruneConflictingPiPackageEntries(entries: readonly string[]): { kept: string[]; removed: string[] } {
     const kept: string[] = [];
     const removed: string[] = [];
@@ -1161,17 +1202,20 @@ export async function updatePiSettings(
         existingPackages.push(PROJECT_EXTENSION_PACKAGE_ID);
     }
 
-    // Skills resolution order:
-    //   1. PROJECT_SKILLS_ENTRY (../.xtrm/skills/active) — project-local
-    //   2. (user-added entries preserved here in middle)
-    //   3. USER_DEFAULT_SKILLS_ENTRY (~/.xtrm/skills/default) — fallback
-    // Pi picks the first match per skill name; without #3, specialists
-    // that reference skills not vendored into the project fail to resolve
-    // (xtrm-4h6u).
-    const existingSkills = normalizeStringArray(existingSettings.skills)
-        .filter((entry) => entry !== PROJECT_SKILLS_ENTRY && entry !== USER_DEFAULT_SKILLS_ENTRY);
-    existingSkills.unshift(PROJECT_SKILLS_ENTRY);
-    existingSkills.push(USER_DEFAULT_SKILLS_ENTRY);
+    const existingSkills = normalizeStringArray(existingSettings.skills);
+    const normalizedSkills = normalizePiSkillsEntries(
+        existingSkills,
+        await hasProjectScopedSkillsContent(projectRoot),
+    );
+    if (JSON.stringify(existingSkills) !== JSON.stringify(normalizedSkills)) {
+        await appendSkillsPointerLog({
+            scope: 'project',
+            target: normalizedSkills.join(','),
+            existing: existingSkills.join(',') || null,
+            action: 'normalize',
+            outcome: 'ok',
+        });
+    }
 
     const existingExtensions = normalizeStringArray(existingSettings.extensions)
         .filter((entry) => !LEGACY_PROJECT_EXTENSION_ENTRIES.has(entry));
@@ -1179,13 +1223,13 @@ export async function updatePiSettings(
     const nextSettings: PiSettingsShape = {
         ...existingSettings,
         extensions: existingExtensions,
-        skills: existingSkills,
+        skills: normalizedSkills,
         packages: existingPackages,
         serena: normalizeSerenaSettings(existingSettings.serena),
     };
 
     await fs.writeJson(piSettingsPath, nextSettings, { spaces: 2 });
-    log?.(kleur.dim(`Updated .pi/settings.json → ${PROJECT_EXTENSION_PACKAGE_ID} + ${PROJECT_SKILLS_ENTRY} + ${USER_DEFAULT_SKILLS_ENTRY}`));
+    log?.(kleur.dim(`Updated .pi/settings.json → ${PROJECT_EXTENSION_PACKAGE_ID} + ${normalizedSkills.join(' + ')}`));
 }
 
 /**
