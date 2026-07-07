@@ -17,7 +17,7 @@ interface HunkCursor {
   newLine: number;
 }
 
-export function shortenHome(path: string): string {
+function shortenHome(path: string): string {
   const home = process.env.HOME;
   if (home && path.startsWith(home)) return `~${path.slice(home.length)}`;
   return path;
