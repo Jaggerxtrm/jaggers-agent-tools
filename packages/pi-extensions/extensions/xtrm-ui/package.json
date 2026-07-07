@@ -15,7 +15,7 @@
       "./index.ts"
     ],
     "themes": [
-      "./themes"
+      "../../themes/xtrm-ui"
     ]
   }
 }
