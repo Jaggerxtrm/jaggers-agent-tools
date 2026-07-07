@@ -4,6 +4,7 @@ import path from 'node:path';
 import { rmSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  hashFile,
   installFromRegistry,
   isSkillsDefaultPath,
   isUserOwnedPath,
@@ -476,6 +477,54 @@ describe('installFromRegistry', () => {
       strictRegistry: true,
     })).rejects.toThrowError(/Registry\/source mismatch: missing package source files\./);
     await expect(fs.pathExists(path.join(userXtrmDir, 'skills', 'default', 'alpha', 'SKILL.md'))).resolves.toBe(true);
+  });
+
+  it('reads drifted override-root skills from global target paths', async () => {
+    const tempDir = await createTempDir();
+    const packageRoot = path.join(tempDir, 'pkg');
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const globalSkillsRoot = path.join(tempDir, 'global-skills');
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    const sourcePath = path.join(packageRoot, '.xtrm', 'skills', 'default', 'alpha', 'SKILL.md');
+    const globalTargetPath = path.join(globalSkillsRoot, 'default', 'alpha', 'SKILL.md');
+    await fs.ensureDir(path.dirname(sourcePath));
+    await fs.ensureDir(path.dirname(globalTargetPath));
+    await fs.writeFile(sourcePath, 'expected', 'utf8');
+    await fs.writeFile(globalTargetPath, 'drifted', 'utf8');
+
+    const registry = {
+      version: '1.0.0',
+      assets: {
+        skills: {
+          source_dir: '.xtrm/skills/default',
+          install_mode: 'copy' as const,
+          files: {
+            'alpha/SKILL.md': { hash: await hashFile(sourcePath), version: '1.0.0' },
+          },
+        },
+      },
+    };
+
+    await fs.ensureDir(path.join(packageRoot, '.xtrm'));
+    await fs.writeJson(path.join(packageRoot, '.xtrm', 'registry.json'), registry);
+
+    await installFromRegistry({
+      packageRoot,
+      registry,
+      userXtrmDir,
+      dryRun: false,
+      force: false,
+      yes: true,
+      overrideRoots: {
+        skills: path.join(globalSkillsRoot, 'default'),
+      },
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('skills/default/alpha/SKILL.md'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('actual '));
+    expect(await fs.readFile(globalTargetPath, 'utf8')).toBe('drifted');
+    consoleSpy.mockRestore();
   });
 });
 

@@ -55136,6 +55136,9 @@ async function discoverDirectSkills2(root) {
   }
   return skills;
 }
+async function rebuildGlobalActiveView(globalSkillsRoot) {
+  return rebuildActiveViewInternal(globalSkillsRoot);
+}
 async function rebuildAllRuntimeActiveViews(skillsRoot) {
   return rebuildActiveViewInternal(skillsRoot);
 }
@@ -58007,6 +58010,21 @@ function toUserRelativePath(sourceDir, filePath) {
 function isSkillsDefaultPath(relativePath) {
   return relativePath.startsWith("skills/default/");
 }
+function resolveInstalledPath(userXtrmDir, relativePath, overrideRoots) {
+  if (relativePath.startsWith("skills/default/")) {
+    const skillsRoot = overrideRoots?.skills;
+    if (skillsRoot) {
+      return import_path8.default.join(skillsRoot, relativePath.slice("skills/default/".length));
+    }
+  }
+  if (relativePath.startsWith("skills/optional/")) {
+    const optionalSkillsRoot = overrideRoots?.skills_optional;
+    if (optionalSkillsRoot) {
+      return import_path8.default.join(optionalSkillsRoot, relativePath.slice("skills/optional/".length));
+    }
+  }
+  return import_path8.default.join(userXtrmDir, relativePath);
+}
 async function hashFile2(filePath) {
   const content = await import_fs_extra14.default.readFile(filePath);
   return import_node_crypto3.default.createHash("sha256").update(content).digest("hex");
@@ -58062,7 +58080,7 @@ async function installFromRegistry(params) {
     if (driftedSkills.length > 0) {
       console.log(kleur_default.yellow("\n  \u26A0 Drift detected in .xtrm files (local modifications preserved by default):"));
       for (const relativePath of driftedSkills.slice(0, 10)) {
-        const absolutePath = import_path8.default.join(userXtrmDir, relativePath);
+        const absolutePath = resolveInstalledPath(userXtrmDir, relativePath, overrideRoots);
         const actualHash = await hashFile2(absolutePath);
         const expectedHash = expectedHashes.get(relativePath) ?? "unknown";
         console.log(kleur_default.yellow(`    \u2022 ${relativePath}`));
@@ -58075,7 +58093,7 @@ async function installFromRegistry(params) {
         console.log(kleur_default.yellow("\n  \u26A0 Drift detected in .xtrm files (local modifications preserved by default):"));
       }
       for (const relativePath of nonSkillDrifted.slice(0, 20)) {
-        const absolutePath = import_path8.default.join(userXtrmDir, relativePath);
+        const absolutePath = resolveInstalledPath(userXtrmDir, relativePath, overrideRoots);
         const actualHash = await hashFile2(absolutePath);
         const expectedHash = expectedHashes.get(relativePath) ?? "unknown";
         console.log(kleur_default.yellow(`    \u2022 ${relativePath}`));
@@ -58642,6 +58660,7 @@ async function ensureGlobalSkillsBootstrapped(pkgRoot, opts = {}) {
         outcome: "ok"
       });
     }
+    await rebuildGlobalActiveView(globalSkillsRoot);
     const currentStateForMetadata = await readSkillsState(globalSkillsRoot);
     await import_fs_extra16.default.writeJson(statePath, {
       schemaVersion: SKILLS_STATE_SCHEMA_VERSION,
@@ -67217,12 +67236,14 @@ async function updateRepo(repoRoot, opts) {
       return { repo: repoRoot, status: "failed", reason: `missing package registry at ${registryPath}` };
     }
     const pkgJson = await import_fs_extra42.default.readJson(import_node_path30.default.join(packageRoot, "package.json"));
-    await logBootstrapTrigger({
-      command: "update",
-      cwd: process.cwd(),
-      pkgVersion: pkgJson.version ?? "0.0.0"
-    });
-    await ensureGlobalSkillsBootstrapped(packageRoot);
+    if (opts.apply) {
+      await logBootstrapTrigger({
+        command: "update",
+        cwd: process.cwd(),
+        pkgVersion: pkgJson.version ?? "0.0.0"
+      });
+      await ensureGlobalSkillsBootstrapped(packageRoot);
+    }
     const drift = await checkDrift(registryPath, userXtrmDir, opts.apply ? getGlobalSkillsOverrideRoots2() : void 0);
     const hasBeads = await hasBeadsDir(repoRoot);
     const sharedServer = hasBeads ? await ensureBeadsSharedServerEnabled(repoRoot, false) : { changed: false, state: "not-applicable" };

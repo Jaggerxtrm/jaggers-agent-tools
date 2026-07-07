@@ -52,6 +52,10 @@ describe('global-skills-bootstrap', () => {
     expect(first).toEqual({ installedVersion: '9.9.9', changed: true });
     expect(second).toEqual({ installedVersion: '9.9.9', changed: false });
 
+    const activeEntries = (await fs.readdir(path.join(fakeHome, '.xtrm', 'skills', 'active'))).sort();
+    expect(activeEntries).toEqual(['default-skill']);
+    expect((await fs.lstat(path.join(fakeHome, '.xtrm', 'skills', 'active', 'default-skill'))).isSymbolicLink()).toBe(true);
+
     const state = await fs.readJson(path.join(fakeHome, '.xtrm', 'skills', 'state.json')) as {
       schemaVersion: string;
       installedVersion: string;

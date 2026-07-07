@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { resolveGlobalSkillsRoot, resolveStateFilePath, SKILLS_STATE_SCHEMA_VERSION } from './skills-layout.js';
+import { rebuildGlobalActiveView } from './skills-materializer.js';
 import { readSkillsState } from './skills-state.js';
 
 interface BootstrapOptions {
@@ -153,6 +154,8 @@ export async function ensureGlobalSkillsBootstrapped(pkgRoot: string, opts: Boot
         outcome: 'ok',
       });
     }
+
+    await rebuildGlobalActiveView(globalSkillsRoot);
 
     const currentStateForMetadata = await readSkillsState(globalSkillsRoot);
     await fs.writeJson(statePath, {

@@ -90,12 +90,14 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
         }
 
         const pkgJson = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };
-        await logBootstrapTrigger({
-            command: 'update',
-            cwd: process.cwd(),
-            pkgVersion: pkgJson.version ?? '0.0.0',
-        });
-        await ensureGlobalSkillsBootstrapped(packageRoot);
+        if (opts.apply) {
+            await logBootstrapTrigger({
+                command: 'update',
+                cwd: process.cwd(),
+                pkgVersion: pkgJson.version ?? '0.0.0',
+            });
+            await ensureGlobalSkillsBootstrapped(packageRoot);
+        }
 
         const drift = await checkDrift(registryPath, userXtrmDir, opts.apply ? getGlobalSkillsOverrideRoots() : undefined);
         const hasBeads = await hasBeadsDir(repoRoot);

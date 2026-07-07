@@ -318,6 +318,20 @@ describe('xtrm update', () => {
 
     expect(logBootstrapTriggerMock).toHaveBeenCalledWith({ command: 'update', cwd: tmpDir, pkgVersion: '1.2.3' });
     expect(ensureGlobalSkillsBootstrappedMock).toHaveBeenCalledWith(packageRoot);
+    expect(logBootstrapTriggerMock.mock.invocationCallOrder[0]).toBeLessThan(checkDriftMock.mock.invocationCallOrder[0]);
+    expect(ensureGlobalSkillsBootstrappedMock.mock.invocationCallOrder[0]).toBeLessThan(checkDriftMock.mock.invocationCallOrder[0]);
+  });
+
+  it('dry-run skips global bootstrap side effects', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    const repo = writeRepo(tmpDir, 'repo-a');
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+
+    await runUpdateCli(['--repo', repo]);
+
+    expect(logBootstrapTriggerMock).not.toHaveBeenCalled();
+    expect(ensureGlobalSkillsBootstrappedMock).not.toHaveBeenCalled();
   });
 
   it('retargets skills drift to global roots on apply when XTRM_GLOBAL_SKILLS=1', async () => {
