@@ -53,9 +53,6 @@ function assertNoRuntimeCollisions(runtime: SkillsRuntime, skills: readonly Disc
   const firstSeenByName = new Map<string, string>();
 
   for (const skill of sortByName(skills)) {
-    // Collision + active-view identity use the RUNTIME name (frontmatter `name:`),
-    // not the directory name, so e.g. a pack umbrella dir `service-skills` declaring
-    // `name: <repo>-services` does not collide with the default `service-skills` skill.
     const firstPath = firstSeenByName.get(skill.runtimeName);
     if (firstPath) {
       throw new Error(
@@ -157,23 +154,29 @@ async function findNonSymlinkEntries(runtimeRoot: string): Promise<string[]> {
   return nonSymlinkEntryNames;
 }
 
+async function warnOnNonSymlinkEntries(activeRuntimeRoot: string): Promise<void> {
+  await fs.ensureDir(path.dirname(activeRuntimeRoot));
+
+  const nonSymlinkEntryNames = await findNonSymlinkEntries(activeRuntimeRoot);
+  if (nonSymlinkEntryNames.length === 0) {
+    return;
+  }
+
+  console.log(
+    `[xtrm] Warning: ${activeRuntimeRoot} contains non-symlink entries (${nonSymlinkEntryNames.join(', ')}). ` +
+    'These entries will be evicted during runtime view rebuild. ' +
+    'Do not write skills to .claude/skills directly; write to .xtrm/skills/default or packs.',
+  );
+}
+
 export async function rebuildRuntimeActiveView(
   runtime: SkillsRuntime,
   skillsRoot: string,
 ): Promise<RuntimeActiveViewResult> {
   const selection = await selectRuntimeSkills(runtime, skillsRoot);
-
   const activeRuntimeRoot = resolveActiveRuntimeRoot(skillsRoot);
-  await fs.ensureDir(path.dirname(activeRuntimeRoot));
 
-  const nonSymlinkEntryNames = await findNonSymlinkEntries(activeRuntimeRoot);
-  if (nonSymlinkEntryNames.length > 0) {
-    console.log(
-      `[xtrm] Warning: ${activeRuntimeRoot} contains non-symlink entries (${nonSymlinkEntryNames.join(', ')}). ` +
-      'These entries will be evicted during runtime view rebuild. ' +
-      'Do not write skills to .claude/skills directly; write to .xtrm/skills/default or packs.',
-    );
-  }
+  await warnOnNonSymlinkEntries(activeRuntimeRoot);
 
   const tempRoot = await buildRuntimeTempView(runtime, skillsRoot, selection.skills);
   await atomicSwapDirectory(tempRoot, activeRuntimeRoot);
@@ -186,7 +189,10 @@ export async function rebuildRuntimeActiveView(
   };
 }
 
-export async function rebuildAllRuntimeActiveViews(skillsRoot: string): Promise<RuntimeActiveViewResult[]> {
+export async function rebuildActiveViewInternal(
+  skillsRoot: string,
+  extraSourceRoots: readonly string[] = [],
+): Promise<RuntimeActiveViewResult[]> {
   const state = await readSkillsState(skillsRoot);
   const mergedEnabledPacks = [...new Set([
     ...state.enabledPacks.claude,
@@ -195,21 +201,13 @@ export async function rebuildAllRuntimeActiveViews(skillsRoot: string): Promise<
 
   const defaultSkills = await discoverDefaultSkills(skillsRoot);
   const enabledPackSkills = await collectEnabledPackSkills(skillsRoot, mergedEnabledPacks);
-  const mergedSkills = sortByName([...defaultSkills, ...enabledPackSkills]);
+  const extraSkills = (await Promise.all(extraSourceRoots.map((root) => discoverDirectSkills(root)))).flat();
+  const mergedSkills = sortByName([...defaultSkills, ...enabledPackSkills, ...extraSkills]);
 
   assertNoRuntimeCollisions('claude', mergedSkills);
 
   const activeRuntimeRoot = resolveActiveRuntimeRoot(skillsRoot);
-  await fs.ensureDir(path.dirname(activeRuntimeRoot));
-
-  const nonSymlinkEntryNames = await findNonSymlinkEntries(activeRuntimeRoot);
-  if (nonSymlinkEntryNames.length > 0) {
-    console.log(
-      `[xtrm] Warning: ${activeRuntimeRoot} contains non-symlink entries (${nonSymlinkEntryNames.join(', ')}). ` +
-      'These entries will be evicted during runtime view rebuild. ' +
-      'Do not write skills to .claude/skills directly; write to .xtrm/skills/default or packs.',
-    );
-  }
+  await warnOnNonSymlinkEntries(activeRuntimeRoot);
 
   const tempRoot = await buildRuntimeTempView('claude', skillsRoot, mergedSkills);
   await atomicSwapDirectory(tempRoot, activeRuntimeRoot);
@@ -220,4 +218,43 @@ export async function rebuildAllRuntimeActiveViews(skillsRoot: string): Promise<
     discoveredSkillCount: mergedSkills.length,
     symlinkNames: mergedSkills.map((skill) => skill.runtimeName),
   }];
+}
+
+async function discoverDirectSkills(root: string): Promise<DiscoveredSkill[]> {
+  const stat = await fs.lstat(root).catch(() => null);
+  if (!stat?.isDirectory()) {
+    return [];
+  }
+
+  const names = (await fs.readdir(root)).sort((a, b) => a.localeCompare(b));
+  const skills: DiscoveredSkill[] = [];
+
+  for (const name of names) {
+    const entryPath = path.join(root, name);
+    const entryStat = await fs.lstat(entryPath).catch(() => null);
+    if (!entryStat?.isSymbolicLink()) {
+      continue;
+    }
+
+    const resolvedTarget = path.resolve(root, await fs.readlink(entryPath));
+    skills.push({ name, runtimeName: name, path: resolvedTarget });
+  }
+
+  return skills;
+}
+
+export async function rebuildGlobalActiveView(globalSkillsRoot: string): Promise<RuntimeActiveViewResult[]> {
+  return rebuildActiveViewInternal(globalSkillsRoot);
+}
+
+export async function rebuildProjectActiveView(
+  projectSkillsRoot: string,
+  options: { globalSkillsRoot: string },
+): Promise<RuntimeActiveViewResult[]> {
+  const globalActiveRoot = resolveActiveRuntimeRoot(options.globalSkillsRoot);
+  return rebuildActiveViewInternal(projectSkillsRoot, [globalActiveRoot]);
+}
+
+export async function rebuildAllRuntimeActiveViews(skillsRoot: string): Promise<RuntimeActiveViewResult[]> {
+  return rebuildActiveViewInternal(skillsRoot);
 }

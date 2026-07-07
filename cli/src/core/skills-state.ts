@@ -24,6 +24,9 @@ const skillsStateSchema = z.strictObject({
     error: `skills state schemaVersion must be ${SKILLS_STATE_SCHEMA_VERSION}`,
   }),
   enabledPacks: runtimeEnabledPacksSchema,
+  installedVersion: z.string().min(1).optional(),
+  installedFrom: z.string().min(1).optional(),
+  installedAt: z.string().datetime().optional(),
 });
 
 export type SkillsState = z.infer<typeof skillsStateSchema>;
@@ -39,6 +42,9 @@ function normalizeState(state: SkillsState): SkillsState {
       claude: normalizePackList(state.enabledPacks.claude),
       pi: normalizePackList(state.enabledPacks.pi),
     },
+    ...(state.installedVersion ? { installedVersion: state.installedVersion } : {}),
+    ...(state.installedFrom ? { installedFrom: state.installedFrom } : {}),
+    ...(state.installedAt ? { installedAt: state.installedAt } : {}),
   };
 }
 

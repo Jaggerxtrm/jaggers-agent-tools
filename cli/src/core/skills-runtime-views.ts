@@ -1,4 +1,5 @@
 import fs from 'fs-extra';
+import os from 'node:os';
 import path from 'node:path';
 
 interface PiSettings {
@@ -13,8 +14,11 @@ export interface RuntimeViewCheckResult {
   readonly hasDeprecatedAgentsSkillsPath: boolean;
 }
 
-const CLAUDE_POINTER_TARGET = path.join('..', '.xtrm', 'skills', 'active');
-const PI_SKILLS_ENTRY = '../.xtrm/skills/active';
+export function getRuntimePointerTarget(options: { scope: 'global' | 'project' }): string {
+  return options.scope === 'global'
+    ? path.join(os.homedir(), '.xtrm', 'skills', 'active')
+    : path.join('..', '.xtrm', 'skills', 'active');
+}
 
 async function readSymlinkTarget(linkPath: string): Promise<string | null> {
   const stat = await fs.lstat(linkPath).catch(() => null);
@@ -61,7 +65,7 @@ async function hasPiSkillsPointer(projectRoot: string): Promise<boolean> {
   }
 
   const settings = await fs.readJson(settingsPath).catch(() => ({} as PiSettings)) as PiSettings;
-  return Array.isArray(settings.skills) && settings.skills.includes(PI_SKILLS_ENTRY);
+  return Array.isArray(settings.skills) && settings.skills.includes(getRuntimePointerTarget({ scope: 'project' }));
 }
 
 export async function checkRuntimeSkillsViews(projectRoot: string): Promise<RuntimeViewCheckResult> {
@@ -72,7 +76,7 @@ export async function checkRuntimeSkillsViews(projectRoot: string): Promise<Runt
   const activeReady = activeEntries.length > 0
     && await hasOnlyValidSymlinkEntries(activeRoot, activeEntries);
 
-  const claudePointerReady = await readSymlinkTarget(path.join(projectRoot, '.claude', 'skills')) === CLAUDE_POINTER_TARGET;
+  const claudePointerReady = await readSymlinkTarget(path.join(projectRoot, '.claude', 'skills')) === getRuntimePointerTarget({ scope: 'project' });
   const piPointerReady = await hasPiSkillsPointer(projectRoot);
 
   const hasDeprecatedAgentsSkillsPath = await fs.pathExists(path.join(projectRoot, '.agents', 'skills'));
@@ -91,8 +95,8 @@ export async function assertRuntimeSkillsViews(projectRoot: string): Promise<voi
 
   const failures: string[] = [];
   if (!check.activeReady) failures.push('active view is missing, empty, or contains invalid links');
-  if (!check.claudePointerReady) failures.push('.claude/skills is not linked to ../.xtrm/skills/active');
-  if (!check.piPointerReady) failures.push('.pi/settings.json.skills does not include ../.xtrm/skills/active');
+  if (!check.claudePointerReady) failures.push(`.claude/skills is not linked to ${getRuntimePointerTarget({ scope: 'project' })}`);
+  if (!check.piPointerReady) failures.push(`.pi/settings.json.skills does not include ${getRuntimePointerTarget({ scope: 'project' })}`);
 
   if (failures.length > 0) {
     throw new Error(`Runtime skills view validation failed: ${failures.join('; ')}`);
