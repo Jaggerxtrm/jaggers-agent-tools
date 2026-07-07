@@ -24,7 +24,7 @@
       "response_format": "markdown",
       "output_type": "research",
       "permission_required": "MEDIUM",
-      "interactive": true,
+      "interactive": null,
       "max_retries": 0
     },
     "mandatory_rules": {
