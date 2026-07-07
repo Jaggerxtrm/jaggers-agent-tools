@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { t } from '../utils/theme.js';
 import { checkDrift } from './drift.js';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
+import { shouldUseGlobalSkills } from './global-skills-flag.js';
 import { resolveGlobalSkillsRoot } from './skills-layout.js';
 
 declare const __dirname: string;
@@ -79,10 +80,6 @@ export function toUserRelativePath(sourceDir: string, filePath: string): string 
 
 export function isSkillsDefaultPath(relativePath: string): boolean {
     return relativePath.startsWith('skills/default/');
-}
-
-function shouldUseGlobalSkills(): boolean {
-    return process.env.XTRM_GLOBAL_SKILLS === '1';
 }
 
 function resolveInstalledPath(userXtrmDir: string, relativePath: string, overrideRoots?: Record<string, string>): string {
@@ -291,7 +288,7 @@ export async function installFromRegistry(params: {
     for (const [assetKey, asset] of Object.entries(registry.assets)) {
         const installScope = getAssetInstallScope(asset);
         const isGlobalManaged = shouldUseGlobalSkills() && installScope === 'global';
-        const assetRoot = isGlobalManaged ? overrideRoots?.[assetKey] : overrideRoots?.[assetKey];
+        const assetRoot = overrideRoots?.[assetKey];
 
         if (isGlobalManaged) {
             await appendGlobalSkillsSkipLog(assetKey, Object.keys(asset.files).length);

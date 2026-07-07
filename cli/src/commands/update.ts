@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import { checkDrift } from '../core/drift.js';
 import { resolvePackageRoot } from '../core/registry-scaffold.js';
 import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
-import { resolveGlobalSkillsRoot } from '../core/skills-layout.js';
+import { getGlobalSkillsOverrideRoots, shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { assureXtManagedPiPackages } from '../core/pi-runtime.js';
 import { scanXtrmRepos } from '../core/repo-discovery.js';
 import { isStrictRegistryMode, runInstall } from './install.js';
@@ -62,22 +62,6 @@ async function resolveTargetRepos(opts: Pick<UpdateOpts, 'root' | 'repo' | 'allR
     // that into hook command strings in .claude/settings.json crashes every hook
     // once the worktree is removed.
     return { targets: [resolveMainProjectRoot(process.cwd())], incomplete: [] };
-}
-
-function shouldUseGlobalSkills(): boolean {
-    return process.env.XTRM_GLOBAL_SKILLS === '1';
-}
-
-function getGlobalSkillsOverrideRoots(): Record<string, string> | undefined {
-    if (!shouldUseGlobalSkills()) {
-        return undefined;
-    }
-
-    const globalSkillsRoot = resolveGlobalSkillsRoot();
-    return {
-        skills: path.join(globalSkillsRoot, 'default'),
-        skills_optional: path.join(globalSkillsRoot, 'optional'),
-    };
 }
 
 async function printSkillsMigrationNudge(repoRoot: string): Promise<void> {

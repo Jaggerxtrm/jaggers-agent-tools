@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, rmSync, readdirSync } from 'node:fs';
 
+import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { runPiLaunchPreflight } from '../core/pi-runtime.js';
 
@@ -19,10 +20,6 @@ export interface WorktreeSessionOptions {
     thinking?: string;
     /** Raw argv after `--` on the xt pi command; forwarded verbatim to pi. */
     passthrough?: string[];
-}
-
-function shouldUseGlobalSkills(): boolean {
-    return process.env.XTRM_GLOBAL_SKILLS === '1';
 }
 
 function worktreeHasProjectUserPacks(worktreePath: string): boolean {
