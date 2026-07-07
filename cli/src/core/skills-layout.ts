@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 
 export const SKILLS_STATE_SCHEMA_VERSION = '1' as const;
@@ -17,6 +18,10 @@ export const STATE_FILE_NAME = 'state.json';
 
 export function resolveSkillsRoot(scopeRoot: string): string {
   return path.join(scopeRoot, '.xtrm', 'skills');
+}
+
+export function resolveGlobalSkillsRoot(): string {
+  return path.join(os.homedir(), '.xtrm', 'skills');
 }
 
 export function resolveDefaultTierRoot(skillsRoot: string): string {

@@ -3,7 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { rebuildAllRuntimeActiveViews, rebuildRuntimeActiveView } from '../core/skills-materializer.js';
+import {
+  rebuildAllRuntimeActiveViews,
+  rebuildGlobalActiveView,
+  rebuildProjectActiveView,
+  rebuildRuntimeActiveView,
+} from '../core/skills-materializer.js';
 
 const tempDirs: string[] = [];
 
@@ -112,6 +117,59 @@ describe('skills-materializer', () => {
     ]);
 
     expect((await fs.readdir(path.join(skillsRoot, 'active'))).sort()).toEqual(['always-on', 'claude-skill', 'pi-skill']);
+  });
+
+  it('rebuilds global active view from global skills root', async () => {
+    const tempDir = await createTempDir();
+    const skillsRoot = path.join(tempDir, '.xtrm', 'skills');
+
+    await writeSkill(path.join(skillsRoot, 'default'), 'global-default');
+    await writePack(skillsRoot, 'optional', 'global-pack', ['global-optional']);
+    await fs.writeJson(path.join(skillsRoot, 'state.json'), {
+      schemaVersion: '1',
+      enabledPacks: { claude: ['global-pack'], pi: [] },
+    });
+
+    const results = await rebuildGlobalActiveView(skillsRoot);
+
+    expect(results[0]?.symlinkNames).toEqual(['global-default', 'global-optional']);
+    expect((await fs.readdir(path.join(skillsRoot, 'active'))).sort()).toEqual(['global-default', 'global-optional']);
+  });
+
+  it('rebuilds project active view as superset of global active + local skills', async () => {
+    const tempDir = await createTempDir();
+    const globalSkillsRoot = path.join(tempDir, 'home', '.xtrm', 'skills');
+    const projectSkillsRoot = path.join(tempDir, 'repo', '.xtrm', 'skills');
+
+    await writeSkill(path.join(globalSkillsRoot, 'default'), 'global-default');
+    await writePack(globalSkillsRoot, 'optional', 'global-pack', ['global-pack-skill']);
+    await fs.writeJson(path.join(globalSkillsRoot, 'state.json'), {
+      schemaVersion: '1',
+      enabledPacks: { claude: ['global-pack'], pi: [] },
+    });
+    await rebuildGlobalActiveView(globalSkillsRoot);
+
+    await writeSkill(path.join(projectSkillsRoot, 'default'), 'project-default');
+    await writePack(projectSkillsRoot, 'user', 'project-pack', ['project-pack-skill']);
+    await fs.writeJson(path.join(projectSkillsRoot, 'state.json'), {
+      schemaVersion: '1',
+      enabledPacks: { claude: ['project-pack'], pi: [] },
+    });
+
+    const results = await rebuildProjectActiveView(projectSkillsRoot, { globalSkillsRoot });
+
+    expect(results[0]?.symlinkNames).toEqual([
+      'global-default',
+      'global-pack-skill',
+      'project-default',
+      'project-pack-skill',
+    ]);
+    expect((await fs.readdir(path.join(projectSkillsRoot, 'active'))).sort()).toEqual([
+      'global-default',
+      'global-pack-skill',
+      'project-default',
+      'project-pack-skill',
+    ]);
   });
 
   it('keeps rebuildAllRuntimeActiveViews idempotent across repeated calls', async () => {
