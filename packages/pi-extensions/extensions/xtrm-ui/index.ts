@@ -1707,7 +1707,7 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
 // ============================================================================
 
 function isXtrmTheme(name: string | undefined): boolean {
-  return name === "pidex-dark" || name === "pidex-light";
+  return name === "pidex-dark" || name === "pidex-light" || name === "pidex-dark-flattools" || name === "pidex-light-flattools";
 }
 
 export default function xtrmUiExtension(pi: ExtensionAPI): void {
