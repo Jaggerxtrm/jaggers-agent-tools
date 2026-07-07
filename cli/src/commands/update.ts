@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import { checkDrift } from '../core/drift.js';
 import { resolvePackageRoot } from '../core/registry-scaffold.js';
 import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
-import { resolveGlobalSkillsRoot } from '../core/skills-layout.js';
+import { getGlobalSkillsOverrideRoots, shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { assureXtManagedPiPackages } from '../core/pi-runtime.js';
 import { scanXtrmRepos } from '../core/repo-discovery.js';
 import { isStrictRegistryMode, runInstall } from './install.js';
@@ -16,6 +16,7 @@ import { printDependencyMaintenanceSummary, runDependencyMaintenance, type Depen
 import { ensureServiceSkills } from '../core/service-skills-ensure.js';
 import { reconcileProjectClaudeHooks } from '../core/claude-runtime-sync.js';
 import { resolveMainProjectRoot } from '../utils/repo-root.js';
+import { printNudgeOnce } from '../utils/nudge.js';
 
 type UpdateStatus = 'refreshed' | 'already-current' | 'failed' | 'skipped' | 'incomplete';
 
@@ -63,20 +64,20 @@ async function resolveTargetRepos(opts: Pick<UpdateOpts, 'root' | 'repo' | 'allR
     return { targets: [resolveMainProjectRoot(process.cwd())], incomplete: [] };
 }
 
-function shouldUseGlobalSkills(): boolean {
-    return process.env.XTRM_GLOBAL_SKILLS === '1';
-}
+async function printSkillsMigrationNudge(repoRoot: string): Promise<void> {
+    const legacyDefaultRoot = path.join(repoRoot, '.xtrm', 'skills', 'default');
+    const legacyOptionalRoot = path.join(repoRoot, '.xtrm', 'skills', 'optional');
+    const hasLegacyProjectSkills = await fs.pathExists(legacyDefaultRoot) || await fs.pathExists(legacyOptionalRoot);
 
-function getGlobalSkillsOverrideRoots(): Record<string, string> | undefined {
-    if (!shouldUseGlobalSkills()) {
-        return undefined;
+    if (!hasLegacyProjectSkills) {
+        return;
     }
 
-    const globalSkillsRoot = resolveGlobalSkillsRoot();
-    return {
-        skills: path.join(globalSkillsRoot, 'default'),
-        skills_optional: path.join(globalSkillsRoot, 'optional'),
-    };
+    await printNudgeOnce('skills-global-migration', [
+        kleur.yellow('  ⚠ Project-scoped default/optional skills remain on disk; xt update no longer re-syncs them when XTRM_GLOBAL_SKILLS=1.'),
+        kleur.yellow('    Run `xt migrate skills` to clean legacy project payloads.'),
+        kleur.yellow('    Docs: https://github.com/Jaggerxtrm/xtrm-tools/blob/main/docs/skills-registry-exploration.md'),
+    ]);
 }
 
 async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdateResult> {
@@ -97,6 +98,9 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
                 pkgVersion: pkgJson.version ?? '0.0.0',
             });
             await ensureGlobalSkillsBootstrapped(packageRoot);
+            if (shouldUseGlobalSkills()) {
+                await printSkillsMigrationNudge(repoRoot);
+            }
         }
 
         const drift = await checkDrift(registryPath, userXtrmDir, opts.apply ? getGlobalSkillsOverrideRoots() : undefined);

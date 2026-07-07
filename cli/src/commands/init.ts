@@ -20,6 +20,7 @@ import { ensureServiceSkills } from '../core/service-skills-ensure.js';
 import { inventoryDeps, renderBootstrapPlan, runMachineBootstrapPhase, type BootstrapPlan } from '../core/machine-bootstrap.js';
 import { runInitVerification, renderVerificationSummary } from '../core/init-verification.js';
 import { assertRuntimeSkillsViews } from '../core/skills-runtime-views.js';
+import { getGlobalSkillsOverrideRoots } from '../core/global-skills-flag.js';
 import { syncPiMcpConfig, syncProjectMcpConfig } from '../core/project-mcp-sync.js';
 import { getContext } from '../core/context.js';
 import { calculateDiff } from '../core/diff.js';
@@ -811,6 +812,7 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
         dryRun: false,
         force: false,
         yes: true,
+        overrideRoots: getGlobalSkillsOverrideRoots(),
     });
     if (registryInstallStats.missingSourceSkipped > 0) {
         console.log(kleur.yellow(`  ⚠ Registry/source mismatch: skipped ${registryInstallStats.missingSourceSkipped} missing source file${registryInstallStats.missingSourceSkipped === 1 ? '' : 's'}.`));

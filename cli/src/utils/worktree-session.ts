@@ -2,8 +2,9 @@ import kleur from 'kleur';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, rmSync, readdirSync } from 'node:fs';
 
+import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { runPiLaunchPreflight } from '../core/pi-runtime.js';
 
@@ -19,6 +20,29 @@ export interface WorktreeSessionOptions {
     thinking?: string;
     /** Raw argv after `--` on the xt pi command; forwarded verbatim to pi. */
     passthrough?: string[];
+}
+
+function worktreeHasProjectUserPacks(worktreePath: string): boolean {
+    const userPacksRoot = path.join(worktreePath, '.xtrm', 'skills', 'user', 'packs');
+    if (!existsSync(userPacksRoot)) {
+        return false;
+    }
+
+    return readdirSync(userPacksRoot).length > 0;
+}
+
+function verifyGlobalPointer(): void {
+    const pointerPath = path.join(os.homedir(), '.claude', 'skills');
+    const stat = lstatSync(pointerPath);
+    if (!stat.isSymbolicLink()) {
+        throw new Error(`global skills pointer is not a symlink: ${pointerPath}`);
+    }
+
+    const targetPath = readlinkSync(pointerPath);
+    const resolvedTarget = path.resolve(path.dirname(pointerPath), targetPath);
+    if (!existsSync(resolvedTarget)) {
+        throw new Error(`global skills pointer target missing: ${resolvedTarget}`);
+    }
 }
 
 export interface ResolvedRole {
@@ -600,7 +624,11 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
 
         // 1. Rebuild generated runtime skills view and pointer inside worktree.
         try {
-            await ensureAgentsSkillsSymlink(worktreePath);
+            if (shouldUseGlobalSkills() && !worktreeHasProjectUserPacks(worktreePath)) {
+                verifyGlobalPointer();
+            } else {
+                await ensureAgentsSkillsSymlink(worktreePath);
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.log(kleur.dim(`  warning: could not rebuild active skills view (${message})`));

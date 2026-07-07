@@ -223,6 +223,36 @@ describe('scaffoldSkillsDefaultFromPackage', () => {
     expect(result).toBe('noop');
     expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'default'))).toBe(false);
   });
+
+  it('under XTRM_GLOBAL_SKILLS only ensures user packs when global tree already exists', async () => {
+    const tempDir = await createTempDir();
+    const packageRoot = path.join(tempDir, 'pkg');
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const previousHome = process.env.HOME;
+    const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
+
+    process.env.HOME = tempDir;
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+
+    try {
+      await fs.ensureDir(path.join(packageRoot, '.xtrm', 'skills', 'default'));
+      await fs.ensureDir(path.join(tempDir, '.xtrm', 'skills', 'default'));
+      await fs.ensureDir(path.join(tempDir, '.xtrm', 'skills', 'optional'));
+
+      const result = await scaffoldSkillsDefaultFromPackage({
+        packageRoot,
+        userXtrmDir,
+        dryRun: false,
+      });
+
+      expect(result).toBe('noop');
+      expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'default'))).toBe(false);
+      expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'user', 'packs'))).toBe(true);
+    } finally {
+      process.env.HOME = previousHome;
+      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+    }
+  });
 });
 
 describe('installFromRegistry', () => {
@@ -291,6 +321,14 @@ describe('installFromRegistry', () => {
             'hooks/post-tool-use.mjs': { hash: 'hook-hash', version: '1.0.0' },
           },
         },
+        skills: {
+          source_dir: '.xtrm/skills/default',
+          install_mode: 'copy' as const,
+          install_scope: 'global' as const,
+          files: {
+            'alpha/SKILL.md': { hash: 'skill-hash', version: '1.0.0' },
+          },
+        },
       },
     };
 
@@ -310,6 +348,24 @@ describe('installFromRegistry', () => {
     expect(await fs.pathExists(targetRegistryPath)).toBe(true);
     const written = await fs.readJson(targetRegistryPath);
     expect(written).toEqual(registry);
+
+    const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+    try {
+      await installFromRegistry({
+        packageRoot,
+        registry,
+        userXtrmDir,
+        dryRun: false,
+        force: true,
+        yes: true,
+      });
+      const filtered = await fs.readJson(targetRegistryPath);
+      expect(filtered.assets.skills).toBeUndefined();
+      expect(filtered.assets.core).toBeTruthy();
+    } finally {
+      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+    }
   });
 
   it('skips registry.json snapshot in dry-run mode (xtrm-ya2i)', async () => {
@@ -525,6 +581,62 @@ describe('installFromRegistry', () => {
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('actual '));
     expect(await fs.readFile(globalTargetPath, 'utf8')).toBe('drifted');
     consoleSpy.mockRestore();
+  });
+
+  it('routes global-scope skills assets to override roots and logs skip event when XTRM_GLOBAL_SKILLS=1', async () => {
+    const tempDir = await createTempDir();
+    const packageRoot = path.join(tempDir, 'pkg');
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const globalSkillsRoot = path.join(tempDir, 'global-skills');
+    const previousHome = process.env.HOME;
+    const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
+
+    process.env.HOME = tempDir;
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+
+    try {
+      const sourcePath = path.join(packageRoot, '.xtrm', 'skills', 'default', 'alpha', 'SKILL.md');
+      await fs.ensureDir(path.dirname(sourcePath));
+      await fs.writeFile(sourcePath, '# alpha\n', 'utf8');
+
+      const registry = {
+        version: '1.0.0',
+        assets: {
+          skills: {
+            source_dir: '.xtrm/skills/default',
+            install_mode: 'copy' as const,
+            install_scope: 'global' as const,
+            files: {
+              'alpha/SKILL.md': { hash: await hashFile(sourcePath), version: '1.0.0' },
+            },
+          },
+        },
+      };
+
+      await fs.ensureDir(path.join(packageRoot, '.xtrm'));
+      await fs.writeJson(path.join(packageRoot, '.xtrm', 'registry.json'), registry);
+
+      await installFromRegistry({
+        packageRoot,
+        registry,
+        userXtrmDir,
+        dryRun: false,
+        force: true,
+        yes: true,
+        overrideRoots: {
+          skills: path.join(globalSkillsRoot, 'default'),
+        },
+      });
+
+      expect(await fs.pathExists(path.join(globalSkillsRoot, 'default', 'alpha', 'SKILL.md'))).toBe(true);
+      expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'default', 'alpha', 'SKILL.md'))).toBe(false);
+      const logPath = path.join(tempDir, '.xtrm', 'logs', 'skills-migration.jsonl');
+      const logLines = (await fs.readFile(logPath, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+      expect(logLines.some(line => line.event === 'install.skip.global-managed' && line.asset === 'skills' && line.count === 1)).toBe(true);
+    } finally {
+      process.env.HOME = previousHome;
+      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+    }
   });
 });
 

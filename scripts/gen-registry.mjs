@@ -17,18 +17,22 @@ const assets = {
   hooks: {
     source_dir: '.xtrm/hooks',
     install_mode: 'copy',
+    install_scope: 'project',
   },
   skills: {
     source_dir: '.xtrm/skills/default',
     install_mode: 'copy',
+    install_scope: 'global',
   },
   skills_optional: {
     source_dir: '.xtrm/skills/optional',
     install_mode: 'copy',
+    install_scope: 'global',
   },
   config: {
     source_dir: '.xtrm/config',
     install_mode: 'copy',
+    install_scope: 'project',
   },
 };
 

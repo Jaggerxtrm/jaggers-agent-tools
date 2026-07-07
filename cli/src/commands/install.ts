@@ -11,7 +11,7 @@ import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
 import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
 import { assertRuntimeSkillsViews } from '../core/skills-runtime-views.js';
-import { resolveGlobalSkillsRoot } from '../core/skills-layout.js';
+import { getGlobalSkillsOverrideRoots } from '../core/global-skills-flag.js';
 import {
     runMachineBootstrapPhase,
 } from '../core/machine-bootstrap.js';
@@ -126,22 +126,6 @@ function getProjectRoot(): string {
 
 export function isStrictRegistryMode(opts: { strictRegistry?: boolean }): boolean {
     return opts.strictRegistry ?? process.env.XTRM_STRICT_REGISTRY === '1';
-}
-
-function shouldUseGlobalSkills(): boolean {
-    return process.env.XTRM_GLOBAL_SKILLS === '1';
-}
-
-function getGlobalSkillsOverrideRoots(): Record<string, string> | undefined {
-    if (!shouldUseGlobalSkills()) {
-        return undefined;
-    }
-
-    const globalSkillsRoot = resolveGlobalSkillsRoot();
-    return {
-        skills: path.join(globalSkillsRoot, 'default'),
-        skills_optional: path.join(globalSkillsRoot, 'optional'),
-    };
 }
 
 export async function runInstall(opts: InstallOpts = {}): Promise<void> {

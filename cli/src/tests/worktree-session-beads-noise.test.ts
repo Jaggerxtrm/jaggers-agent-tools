@@ -5,10 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocked = vi.hoisted(() => ({
   spawnSync: vi.fn(),
+  ensureAgentsSkillsSymlink: vi.fn(async () => undefined),
 }));
 
 vi.mock('node:child_process', () => ({
   spawnSync: mocked.spawnSync,
+}));
+
+vi.mock('../core/skills-scaffold.js', () => ({
+  ensureAgentsSkillsSymlink: mocked.ensureAgentsSkillsSymlink,
 }));
 
 describe('worktree session .beads handling (no symlink; skip-worktree only)', () => {
@@ -19,6 +24,8 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-worktree-beads-'));
     previousCwd = process.cwd();
     mocked.spawnSync.mockReset();
+    mocked.ensureAgentsSkillsSymlink.mockReset();
+    mocked.ensureAgentsSkillsSymlink.mockResolvedValue(undefined);
     vi.resetModules();
   });
 
@@ -170,5 +177,56 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     );
 
     expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('with XTRM_GLOBAL_SKILLS=1 verifies global pointer and skips project skills rebuild when worktree has no user packs', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-claude-global1');
+    const gitDir = path.join(worktreePath, '.git');
+    const previousHome = process.env.HOME;
+    const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
+
+    process.env.HOME = tempRoot;
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+
+    await fs.ensureDir(repoRoot);
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    await fs.ensureDir(path.join(repoRoot, '.xtrm', 'worktrees'));
+    await fs.ensureDir(path.join(tempRoot, '.xtrm', 'skills', 'active'));
+    await fs.ensureDir(path.join(tempRoot, '.claude'));
+    await fs.symlink(path.join(tempRoot, '.xtrm', 'skills', 'active'), path.join(tempRoot, '.claude', 'skills'));
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        fs.ensureDirSync(worktreePath);
+        fs.ensureDirSync(gitDir);
+        fs.ensureDirSync(path.join(worktreePath, '.beads'));
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === `-C ${worktreePath} ls-files -- .beads`) {
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const exitSpy = mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    try {
+      await expect(launchWorktreeSession({ runtime: 'claude', name: 'global1' })).rejects.toThrow('exit:0');
+      expect(mocked.ensureAgentsSkillsSymlink).not.toHaveBeenCalled();
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    } finally {
+      process.env.HOME = previousHome;
+      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+    }
   });
 });

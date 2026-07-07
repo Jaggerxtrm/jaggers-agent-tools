@@ -340,12 +340,13 @@ describe('xtrm update', () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
     fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const repo = writeRepo(tmpDir, 'repo-a');
+    fs.ensureDirSync(path.join(repo, '.xtrm', 'skills', 'default'));
     resolvePackageRootMock.mockReturnValue(packageRoot);
     process.env.XTRM_GLOBAL_SKILLS = '1';
     process.env.HOME = tmpDir;
 
     try {
-      await runUpdateCli(['--apply', '--repo', repo]);
+      const result = await runUpdateCli(['--apply', '--repo', repo]);
       expect(checkDriftMock).toHaveBeenCalledWith(
         path.join(packageRoot, '.xtrm', 'registry.json'),
         path.join(repo, '.xtrm'),
@@ -354,6 +355,7 @@ describe('xtrm update', () => {
           skills_optional: path.join(tmpDir, '.xtrm', 'skills', 'optional'),
         },
       );
+      expect(result.logs.join('\n')).toMatch(/Run `xt migrate skills`/);
     } finally {
       process.env.XTRM_GLOBAL_SKILLS = previousFlag;
       process.env.HOME = previousHome;
