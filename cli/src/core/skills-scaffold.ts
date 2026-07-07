@@ -146,7 +146,8 @@ export async function ensureSkillsSymlink(
     if (existing) {
         if (existing.isSymbolicLink()) {
             const current = await fs.readlink(linkPath);
-            if (current === symlinkTarget) {
+            const resolvedTarget = path.resolve(path.dirname(linkPath), current);
+            if (current === symlinkTarget && await fs.pathExists(resolvedTarget)) {
                 console.log(kleur.dim(`  ✓ ${label} symlink already in place`));
                 return;
             }
@@ -210,13 +211,25 @@ async function hasReadyGlobalRuntimePointers(): Promise<boolean> {
         return false;
     }
 
-    const claudeTarget = await fs.readlink(path.join(os.homedir(), '.claude', 'skills')).catch(() => null);
-    const piTarget = await fs.readlink(path.join(os.homedir(), '.pi', 'agent', 'skills')).catch(() => null);
-    return claudeTarget === globalActiveRoot && piTarget === globalActiveRoot;
+    const claudePointerPath = path.join(os.homedir(), '.claude', 'skills');
+    const piPointerPath = path.join(os.homedir(), '.pi', 'agent', 'skills');
+    const claudeTarget = await fs.readlink(claudePointerPath).catch(() => null);
+    const piTarget = await fs.readlink(piPointerPath).catch(() => null);
+    if (claudeTarget !== globalActiveRoot || piTarget !== globalActiveRoot) {
+        return false;
+    }
+
+    const claudeResolvedTarget = path.resolve(path.dirname(claudePointerPath), claudeTarget);
+    const piResolvedTarget = path.resolve(path.dirname(piPointerPath), piTarget);
+    return await fs.pathExists(claudeResolvedTarget) && await fs.pathExists(piResolvedTarget);
 }
 
 export async function ensureUserAgentsSkillsSymlink(options: EnsureSkillsSymlinkOptions = {}): Promise<void> {
     const globalActiveRoot = path.join(resolveGlobalSkillsRoot(), 'active');
+    if (!await fs.pathExists(globalActiveRoot)) {
+        throw new Error(`Global runtime skills root missing: ${globalActiveRoot}`);
+    }
+
     await ensureSkillsSymlink(
         path.join(os.homedir(), '.claude', 'skills'),
         globalActiveRoot,

@@ -36,6 +36,16 @@ async function readSymlinkTarget(linkPath: string): Promise<string | null> {
   return fs.readlink(linkPath);
 }
 
+async function hasExpectedSymlink(linkPath: string, expectedTarget: string): Promise<boolean> {
+  const currentTarget = await readSymlinkTarget(linkPath);
+  if (currentTarget !== expectedTarget) {
+    return false;
+  }
+
+  const resolvedTarget = path.resolve(path.dirname(linkPath), currentTarget);
+  return fs.pathExists(resolvedTarget);
+}
+
 async function listRuntimeEntries(runtimeRoot: string): Promise<string[]> {
   const stat = await fs.lstat(runtimeRoot).catch(() => null);
   if (!stat?.isDirectory()) {
@@ -88,10 +98,19 @@ export async function checkRuntimeSkillsViews(projectRoot: string): Promise<Runt
   const activeEntries = await listRuntimeEntries(activeRoot);
   const activeReady = activeEntries.length > 0 && await hasOnlyValidSymlinkEntries(activeRoot, activeEntries);
 
-  const globalClaudePointerReady = await readSymlinkTarget(path.join(os.homedir(), '.claude', 'skills')) === getRuntimePointerTarget({ scope: 'global' });
-  const globalPiPointerReady = await readSymlinkTarget(path.join(os.homedir(), '.pi', 'agent', 'skills')) === getRuntimePointerTarget({ scope: 'global' });
+  const globalClaudePointerReady = await hasExpectedSymlink(
+    path.join(os.homedir(), '.claude', 'skills'),
+    getRuntimePointerTarget({ scope: 'global' }),
+  );
+  const globalPiPointerReady = await hasExpectedSymlink(
+    path.join(os.homedir(), '.pi', 'agent', 'skills'),
+    getRuntimePointerTarget({ scope: 'global' }),
+  );
 
-  const projectClaudePointerReady = await readSymlinkTarget(path.join(projectRoot, '.claude', 'skills')) === getRuntimePointerTarget({ scope: 'project' });
+  const projectClaudePointerReady = await hasExpectedSymlink(
+    path.join(projectRoot, '.claude', 'skills'),
+    getRuntimePointerTarget({ scope: 'project' }),
+  );
   const projectPiSkills = await readPiSkillsEntries(projectRoot);
   const projectPiPointerReady = projectPiSkills.includes(getRuntimePointerTarget({ scope: 'project' }));
   const projectHasLocalSkills = await hasProjectScopedSkillsContent(projectRoot);
