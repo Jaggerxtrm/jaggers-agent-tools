@@ -49,8 +49,10 @@ export interface VerificationResult {
     };
     skillsRuntime: {
         activeReady: boolean;
-        claudePointerReady: boolean;
-        piPointerReady: boolean;
+        globalClaudePointerReady: boolean;
+        globalPiPointerReady: boolean;
+        projectClaudePointerState: 'ready' | 'skipped' | 'missing';
+        projectPiPointerState: 'ready' | 'skipped' | 'missing';
         hasDeprecatedAgentsSkillsPath: boolean;
     };
     projectBootstrap: {
@@ -215,8 +217,10 @@ export async function runInitVerification(projectRoot: string): Promise<Verifica
         claudeResult.hooksWired &&
         piPlan.allRequiredPresent &&
         skillsRuntimeResult.activeReady &&
-        skillsRuntimeResult.claudePointerReady &&
-        skillsRuntimeResult.piPointerReady &&
+        skillsRuntimeResult.globalClaudePointerReady &&
+        skillsRuntimeResult.globalPiPointerReady &&
+        skillsRuntimeResult.projectClaudePointerState !== 'missing' &&
+        skillsRuntimeResult.projectPiPointerState !== 'missing' &&
         projectResult.beadsInitialized;
 
     return {
@@ -232,8 +236,10 @@ export async function runInitVerification(projectRoot: string): Promise<Verifica
         },
         skillsRuntime: {
             activeReady: skillsRuntimeResult.activeReady,
-            claudePointerReady: skillsRuntimeResult.claudePointerReady,
-            piPointerReady: skillsRuntimeResult.piPointerReady,
+            globalClaudePointerReady: skillsRuntimeResult.globalClaudePointerReady,
+            globalPiPointerReady: skillsRuntimeResult.globalPiPointerReady,
+            projectClaudePointerState: skillsRuntimeResult.projectClaudePointerState,
+            projectPiPointerState: skillsRuntimeResult.projectPiPointerState,
             hasDeprecatedAgentsSkillsPath: skillsRuntimeResult.hasDeprecatedAgentsSkillsPath,
         },
         projectBootstrap: projectResult,
@@ -285,8 +291,10 @@ export function renderVerificationSummary(result: VerificationResult): void {
     // Skills runtime
     const skillsParts: string[] = [];
     if (!result.skillsRuntime.activeReady) skillsParts.push('active');
-    if (!result.skillsRuntime.claudePointerReady) skillsParts.push('.claude/skills pointer');
-    if (!result.skillsRuntime.piPointerReady) skillsParts.push('.pi settings skills pointer');
+    if (!result.skillsRuntime.globalClaudePointerReady) skillsParts.push('~/.claude/skills pointer');
+    if (!result.skillsRuntime.globalPiPointerReady) skillsParts.push('~/.pi/agent/skills pointer');
+    if (result.skillsRuntime.projectClaudePointerState === 'missing') skillsParts.push('.claude/skills pointer');
+    if (result.skillsRuntime.projectPiPointerState === 'missing') skillsParts.push('.pi settings skills pointer');
     const srIcon = skillsParts.length === 0 ? sym.ok : sym.warn;
     if (skillsParts.length === 0) {
         console.log(`  ${srIcon} Skills Runtime`);

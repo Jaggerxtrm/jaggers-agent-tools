@@ -307,7 +307,7 @@ describe('pi runtime safeguards', () => {
   });
 
   describe('updatePiSettings — pi skills resolution paths (xtrm-4h6u)', () => {
-    it('seeds both project active and user default into a fresh .pi/settings.json', async () => {
+    it('uses global active only when repo has no project-scoped packs', async () => {
       const { updatePiSettings } = await import('../core/pi-runtime.js');
       const projectRoot = path.join(tempRoot, 'fresh-project');
       await fs.ensureDir(projectRoot);
@@ -316,18 +316,18 @@ describe('pi runtime safeguards', () => {
 
       const settings = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
       expect(settings.skills).toEqual([
-        '../.xtrm/skills/active',
-        '~/.xtrm/skills/default',
+        '~/.xtrm/skills/active',
       ]);
     });
 
-    it('preserves user-added skill paths between the two managed entries', async () => {
+    it('preserves user-added skill paths after canonical entries normalize to active', async () => {
       const { updatePiSettings } = await import('../core/pi-runtime.js');
       const projectRoot = path.join(tempRoot, 'with-user-paths');
       await fs.ensureDir(path.join(projectRoot, '.pi'));
+      await fs.ensureDir(path.join(projectRoot, '.xtrm', 'skills', 'user', 'packs', 'local-pack'));
 
       await fs.writeJson(path.join(projectRoot, '.pi', 'settings.json'), {
-        skills: ['./my-custom-skills', '/abs/team-skills'],
+        skills: ['../.xtrm/skills/active', './my-custom-skills', '/abs/team-skills', '~/.xtrm/skills/default'],
       });
 
       await updatePiSettings(projectRoot, false);
@@ -337,7 +337,7 @@ describe('pi runtime safeguards', () => {
         '../.xtrm/skills/active',
         './my-custom-skills',
         '/abs/team-skills',
-        '~/.xtrm/skills/default',
+        '~/.xtrm/skills/active',
       ]);
     });
 
@@ -351,8 +351,7 @@ describe('pi runtime safeguards', () => {
 
       const settings = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
       expect(settings.skills).toEqual([
-        '../.xtrm/skills/active',
-        '~/.xtrm/skills/default',
+        '~/.xtrm/skills/active',
       ]);
     });
 

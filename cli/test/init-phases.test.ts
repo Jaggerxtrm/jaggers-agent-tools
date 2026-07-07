@@ -37,6 +37,7 @@ const mocked = vi.hoisted(() => {
     const scaffoldSkillsDefaultFromPackage = vi.fn(async () => 'noop');
     const runPiInstall = vi.fn(async () => undefined);
     const runPluginEraCleanup = vi.fn(async () => undefined);
+    const ensureUserAgentsSkillsSymlink = vi.fn(async () => undefined);
     const ensureAgentsSkillsSymlink = vi.fn(async () => ({
         activatedClaudeSkills: 0,
         activatedPiSkills: 0,
@@ -71,6 +72,7 @@ const mocked = vi.hoisted(() => {
         scaffoldSkillsDefaultFromPackage,
         runPiInstall,
         runPluginEraCleanup,
+        ensureUserAgentsSkillsSymlink,
         ensureAgentsSkillsSymlink,
         assertRuntimeSkillsViews,
         syncProjectMcpConfig,
@@ -127,6 +129,7 @@ vi.mock('../src/core/plugin-era-cleanup.js', () => ({
 }));
 
 vi.mock('../src/core/skills-scaffold.js', () => ({
+    ensureUserAgentsSkillsSymlink: mocked.ensureUserAgentsSkillsSymlink,
     ensureAgentsSkillsSymlink: mocked.ensureAgentsSkillsSymlink,
 }));
 

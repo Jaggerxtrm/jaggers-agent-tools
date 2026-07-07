@@ -1,9 +1,11 @@
+import os from 'node:os';
 import path from 'path';
 import fs from 'fs-extra';
 import kleur from 'kleur';
 import { rebuildAllRuntimeActiveViews } from './skills-materializer.js';
-import { resolveSkillsRoot } from './skills-layout.js';
+import { resolveGlobalSkillsRoot, resolveSkillsRoot, resolveUserPacksRoot } from './skills-layout.js';
 import { validateSkillsInvariants } from './skill-discovery.js';
+import { hasServiceRegistry } from './service-skills-ensure.js';
 
 export interface SkillsActivationResult {
     readonly activatedClaudeSkills: number;
@@ -13,6 +15,10 @@ export interface SkillsActivationResult {
 interface EnsureSkillsSymlinkOptions {
     readonly force?: boolean;
 }
+
+type PointerScope = 'global' | 'project';
+
+type PointerAction = 'create' | 'refuse' | 'normalize';
 
 async function collectFileSnapshot(rootDir: string): Promise<Map<string, string>> {
     const snapshot = new Map<string, string>();
@@ -51,6 +57,48 @@ async function backupManagedSkillsDirectory(linkPath: string): Promise<string> {
     return backupPath;
 }
 
+async function appendPointerLog(event: {
+    readonly scope: PointerScope;
+    readonly action: PointerAction;
+    readonly outcome: 'ok' | 'refused';
+    readonly target: string;
+    readonly existing: string | null;
+}): Promise<void> {
+    const logPath = path.join(os.homedir(), '.xtrm', 'logs', 'skills-migration.jsonl');
+    await fs.ensureDir(path.dirname(logPath));
+    await fs.appendFile(logPath, `${JSON.stringify({
+        timestamp: new Date().toISOString(),
+        component: 'skills-bootstrap',
+        event: `pointer.${event.action}`,
+        scope: event.scope,
+        target: event.target,
+        existing: event.existing,
+        action: event.action,
+        outcome: event.outcome,
+    })}\n`);
+}
+
+async function describeExistingPath(linkPath: string): Promise<string | null> {
+    const existing = await fs.lstat(linkPath).catch(() => null);
+    if (!existing) {
+        return null;
+    }
+
+    if (existing.isSymbolicLink()) {
+        return `symlink:${await fs.readlink(linkPath)}`;
+    }
+
+    if (existing.isDirectory()) {
+        return 'directory';
+    }
+
+    if (existing.isFile()) {
+        return 'file';
+    }
+
+    return 'other';
+}
+
 function isSkillsMigrationForced(options: EnsureSkillsSymlinkOptions): boolean {
     return options.force || ['1', 'true', 'yes'].includes(String(process.env.XTRM_FORCE_SKILLS_MIGRATION ?? '').toLowerCase());
 }
@@ -59,6 +107,7 @@ async function replaceRealDirectoryWithSymlink(
     linkPath: string,
     symlinkTarget: string,
     label: string,
+    scope: PointerScope,
     options: EnsureSkillsSymlinkOptions,
 ): Promise<void> {
     if (label === '.claude/skills') {
@@ -76,6 +125,13 @@ async function replaceRealDirectoryWithSymlink(
     await fs.remove(linkPath);
     await fs.mkdirp(path.dirname(linkPath));
     await fs.symlink(symlinkTarget, linkPath);
+    await appendPointerLog({
+        scope,
+        action: 'normalize',
+        outcome: 'ok',
+        target: symlinkTarget,
+        existing: 'directory',
+    });
     console.log(kleur.yellow(`  ⚠ ${label} real path replaced with managed symlink`));
 }
 
@@ -83,6 +139,7 @@ export async function ensureSkillsSymlink(
     linkPath: string,
     symlinkTarget: string,
     label: string,
+    scope: PointerScope,
     options: EnsureSkillsSymlinkOptions = {},
 ): Promise<void> {
     const existing = await fs.lstat(linkPath).catch(() => null);
@@ -94,25 +151,86 @@ export async function ensureSkillsSymlink(
                 return;
             }
             await fs.remove(linkPath);
+            await appendPointerLog({
+                scope,
+                action: 'normalize',
+                outcome: 'ok',
+                target: symlinkTarget,
+                existing: `symlink:${current}`,
+            });
         } else {
             const targetSnapshot = await collectFileSnapshot(path.resolve(path.dirname(linkPath), symlinkTarget));
             const existingSnapshot = await collectFileSnapshot(linkPath);
             const matchesManagedView = targetSnapshot.size === existingSnapshot.size && [...targetSnapshot.entries()].every(([relativePath, content]) => existingSnapshot.get(relativePath) === content);
 
             if (!matchesManagedView && !isSkillsMigrationForced(options)) {
+                await appendPointerLog({
+                    scope,
+                    action: 'refuse',
+                    outcome: 'refused',
+                    target: symlinkTarget,
+                    existing: await describeExistingPath(linkPath),
+                });
                 throw new Error(
                     `Refusing to replace existing ${label}. Backup existing files from ${label}, then re-run with --force. See docs/cat-b-distribution.md.`,
                 );
             }
 
-            await replaceRealDirectoryWithSymlink(linkPath, symlinkTarget, label, options);
+            await replaceRealDirectoryWithSymlink(linkPath, symlinkTarget, label, scope, options);
             return;
         }
     }
 
     await fs.mkdirp(path.dirname(linkPath));
     await fs.symlink(symlinkTarget, linkPath);
+    await appendPointerLog({
+        scope,
+        action: 'create',
+        outcome: 'ok',
+        target: symlinkTarget,
+        existing: null,
+    });
     console.log(`${kleur.green('  ✓')} ${label} → ${symlinkTarget}`);
+}
+
+async function hasProjectScopedSkillsContent(projectRoot: string): Promise<boolean> {
+    const skillsRoot = resolveSkillsRoot(projectRoot);
+    const packsRoot = resolveUserPacksRoot(skillsRoot);
+    const packEntries = await fs.readdir(packsRoot, { withFileTypes: true }).catch(() => [] as fs.Dirent[]);
+    if (packEntries.some((entry) => entry.isDirectory())) {
+        return true;
+    }
+
+    return hasServiceRegistry(projectRoot);
+}
+
+async function hasReadyGlobalRuntimePointers(): Promise<boolean> {
+    const globalActiveRoot = path.join(resolveGlobalSkillsRoot(), 'active');
+    if (!await fs.pathExists(globalActiveRoot)) {
+        return false;
+    }
+
+    const claudeTarget = await fs.readlink(path.join(os.homedir(), '.claude', 'skills')).catch(() => null);
+    const piTarget = await fs.readlink(path.join(os.homedir(), '.pi', 'agent', 'skills')).catch(() => null);
+    return claudeTarget === globalActiveRoot && piTarget === globalActiveRoot;
+}
+
+export async function ensureUserAgentsSkillsSymlink(options: EnsureSkillsSymlinkOptions = {}): Promise<void> {
+    const globalActiveRoot = path.join(resolveGlobalSkillsRoot(), 'active');
+    await ensureSkillsSymlink(
+        path.join(os.homedir(), '.claude', 'skills'),
+        globalActiveRoot,
+        '~/.claude/skills',
+        'global',
+        options,
+    );
+    await ensureSkillsSymlink(
+        path.join(os.homedir(), '.pi', 'agent', 'skills'),
+        globalActiveRoot,
+        '~/.pi/agent/skills',
+        'global',
+        options,
+    );
 }
 
 export async function ensureAgentsSkillsSymlink(projectRoot: string, options: EnsureSkillsSymlinkOptions = {}): Promise<SkillsActivationResult> {
@@ -134,12 +252,26 @@ export async function ensureAgentsSkillsSymlink(projectRoot: string, options: En
     const activatedClaudeSkills = materializedViews[0]?.discoveredSkillCount ?? 0;
     const activatedPiSkills = activatedClaudeSkills;
 
-    await ensureSkillsSymlink(
-        path.join(projectRoot, '.claude', 'skills'),
-        path.join('..', '.xtrm', 'skills', 'active'),
-        '.claude/skills',
-        options,
-    );
+    const shouldUseProjectPointer = await hasProjectScopedSkillsContent(projectRoot);
+    if (shouldUseProjectPointer) {
+        await ensureSkillsSymlink(
+            path.join(projectRoot, '.claude', 'skills'),
+            path.join('..', '.xtrm', 'skills', 'active'),
+            '.claude/skills',
+            'project',
+            options,
+        );
+    } else if (await hasReadyGlobalRuntimePointers()) {
+        console.log(kleur.dim('  ○ project-scope skills pointer skipped (using global)'));
+    } else {
+        await ensureSkillsSymlink(
+            path.join(projectRoot, '.claude', 'skills'),
+            path.join('..', '.xtrm', 'skills', 'active'),
+            '.claude/skills',
+            'project',
+            options,
+        );
+    }
 
     const agentsSkillsPath = path.join(projectRoot, '.agents', 'skills');
     if (await fs.pathExists(agentsSkillsPath)) {

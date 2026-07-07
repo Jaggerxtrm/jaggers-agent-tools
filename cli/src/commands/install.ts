@@ -8,7 +8,7 @@ import { t } from '../utils/theme.js';
 import { runPiInstall } from './pi-install.js';
 import { runClaudeRuntimeSyncPhase } from '../core/claude-runtime-sync.js';
 import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
-import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
+import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { assertRuntimeSkillsViews } from '../core/skills-runtime-views.js';
 import {
     runMachineBootstrapPhase,
@@ -224,11 +224,13 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
 
     if (!dryRun) {
         if (force) {
+            await ensureUserAgentsSkillsSymlink({ force: true });
             await ensureAgentsSkillsSymlink(projectRoot, { force: true });
         } else {
+            await ensureUserAgentsSkillsSymlink();
             await ensureAgentsSkillsSymlink(projectRoot);
         }
-        await assertRuntimeSkillsViews(projectRoot);
+        await assertRuntimeSkillsViews(projectRoot, { scope: 'both' });
         await ensureBeadsSharedServerEnabled(projectRoot, true);
     }
 

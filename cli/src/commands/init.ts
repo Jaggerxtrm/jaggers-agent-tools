@@ -14,7 +14,7 @@ import {
     type RegistryManifest,
 } from '../core/registry-scaffold.js';
 import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
-import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
+import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { ensureServiceSkills } from '../core/service-skills-ensure.js';
 import { inventoryDeps, renderBootstrapPlan, runMachineBootstrapPhase, type BootstrapPlan } from '../core/machine-bootstrap.js';
 import { runInitVerification, renderVerificationSummary } from '../core/init-verification.js';
@@ -849,6 +849,11 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
     await runPiInstall(false, Boolean(opts.global), projectRoot);
 
     // ── Phase 6b: Rebuild runtime skills views + wire runtime pointers ───────
+    if (opts.force) {
+        await ensureUserAgentsSkillsSymlink({ force: true });
+    } else {
+        await ensureUserAgentsSkillsSymlink();
+    }
     const skillsActivation = opts.force
         ? await ensureAgentsSkillsSymlink(projectRoot, { force: true })
         : await ensureAgentsSkillsSymlink(projectRoot);
@@ -857,7 +862,7 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
     } else {
         console.log(kleur.green(`  ✓ Activated runtime skills → claude:${skillsActivation.activatedClaudeSkills}, pi:${skillsActivation.activatedPiSkills}`));
     }
-    await assertRuntimeSkillsViews(projectRoot);
+    await assertRuntimeSkillsViews(projectRoot, { scope: 'both' });
 
     // ── Phase 7: Project Bootstrap ───────────────────────────────────────────
     // Initialize beads workspace, inject CLAUDE.md/AGENTS.md instruction

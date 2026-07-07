@@ -21,6 +21,7 @@ const mocked = vi.hoisted(() => ({
   syncPiMcpConfig: vi.fn(async () => ({ wroteFile: false, createdFile: false, mcpPath: '.pi/mcp.json', addedServers: [], missingEnvWarnings: [] })),
   runClaudeRuntimeSyncPhase: vi.fn(async () => undefined),
   runPluginEraCleanup: vi.fn(async () => undefined),
+  ensureUserAgentsSkillsSymlink: vi.fn(async () => undefined),
   ensureAgentsSkillsSymlink: vi.fn(async () => undefined),
   assertRuntimeSkillsViews: vi.fn(async () => undefined),
 }));
@@ -38,7 +39,7 @@ vi.mock('../core/project-mcp-sync.js', () => ({
 }));
 vi.mock('../core/claude-runtime-sync.js', () => ({ runClaudeRuntimeSyncPhase: mocked.runClaudeRuntimeSyncPhase }));
 vi.mock('../core/plugin-era-cleanup.js', () => ({ runPluginEraCleanup: mocked.runPluginEraCleanup }));
-vi.mock('../core/skills-scaffold.js', () => ({ ensureAgentsSkillsSymlink: mocked.ensureAgentsSkillsSymlink }));
+vi.mock('../core/skills-scaffold.js', () => ({ ensureUserAgentsSkillsSymlink: mocked.ensureUserAgentsSkillsSymlink, ensureAgentsSkillsSymlink: mocked.ensureAgentsSkillsSymlink }));
 vi.mock('../core/skills-runtime-views.js', () => ({ assertRuntimeSkillsViews: mocked.assertRuntimeSkillsViews }));
 vi.mock('../commands/pi-install.js', () => ({ runPiInstall: mocked.runPiInstall }));
 

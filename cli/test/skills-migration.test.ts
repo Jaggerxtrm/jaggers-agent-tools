@@ -45,8 +45,10 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills migration boundary contracts', () =
 
     const verification = await runInitVerification(projectRoot);
     expect(verification.skillsRuntime.activeReady).toBe(true);
-    expect(verification.skillsRuntime.claudePointerReady).toBe(true);
-    expect(verification.skillsRuntime.piPointerReady).toBe(true);
+    expect(verification.skillsRuntime.globalClaudePointerReady).toBe(false);
+    expect(verification.skillsRuntime.globalPiPointerReady).toBe(false);
+    expect(verification.skillsRuntime.projectClaudePointerState).toBe('ready');
+    expect(verification.skillsRuntime.projectPiPointerState).toBe('ready');
     expect(verification.skillsRuntime.hasDeprecatedAgentsSkillsPath).toBe(true);
   });
 });

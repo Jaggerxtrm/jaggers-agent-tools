@@ -1,15 +1,22 @@
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
+import { hasServiceRegistry } from './service-skills-ensure.js';
+import { resolveGlobalSkillsRoot, resolveSkillsRoot, resolveUserPacksRoot } from './skills-layout.js';
 
 interface PiSettings {
   skills?: string[];
 }
 
+type RuntimePointerState = 'ready' | 'skipped' | 'missing';
+type RuntimeScope = 'global' | 'project' | 'both';
+
 export interface RuntimeViewCheckResult {
   readonly activeReady: boolean;
-  readonly claudePointerReady: boolean;
-  readonly piPointerReady: boolean;
+  readonly globalClaudePointerReady: boolean;
+  readonly globalPiPointerReady: boolean;
+  readonly projectClaudePointerState: RuntimePointerState;
+  readonly projectPiPointerState: RuntimePointerState;
   readonly activeEntries: string[];
   readonly hasDeprecatedAgentsSkillsPath: boolean;
 }
@@ -35,8 +42,7 @@ async function listRuntimeEntries(runtimeRoot: string): Promise<string[]> {
     return [];
   }
 
-  const names = (await fs.readdir(runtimeRoot)).sort((a, b) => a.localeCompare(b));
-  return names;
+  return (await fs.readdir(runtimeRoot)).sort((a, b) => a.localeCompare(b));
 }
 
 async function hasOnlyValidSymlinkEntries(runtimeRoot: string, names: readonly string[]): Promise<boolean> {
@@ -57,46 +63,70 @@ async function hasOnlyValidSymlinkEntries(runtimeRoot: string, names: readonly s
   return true;
 }
 
-async function hasPiSkillsPointer(projectRoot: string): Promise<boolean> {
+async function readPiSkillsEntries(projectRoot: string): Promise<string[]> {
   const settingsPath = path.join(projectRoot, '.pi', 'settings.json');
-  const exists = await fs.pathExists(settingsPath);
-  if (!exists) {
-    return false;
+  if (!await fs.pathExists(settingsPath)) {
+    return [];
   }
 
   const settings = await fs.readJson(settingsPath).catch(() => ({} as PiSettings)) as PiSettings;
-  return Array.isArray(settings.skills) && settings.skills.includes(getRuntimePointerTarget({ scope: 'project' }));
+  return Array.isArray(settings.skills) ? settings.skills : [];
+}
+
+async function hasProjectScopedSkillsContent(projectRoot: string): Promise<boolean> {
+  const packsRoot = resolveUserPacksRoot(resolveSkillsRoot(projectRoot));
+  const packEntries = await fs.readdir(packsRoot, { withFileTypes: true }).catch(() => [] as fs.Dirent[]);
+  if (packEntries.some((entry) => entry.isDirectory())) {
+    return true;
+  }
+
+  return hasServiceRegistry(projectRoot);
 }
 
 export async function checkRuntimeSkillsViews(projectRoot: string): Promise<RuntimeViewCheckResult> {
   const activeRoot = path.join(projectRoot, '.xtrm', 'skills', 'active');
-
   const activeEntries = await listRuntimeEntries(activeRoot);
+  const activeReady = activeEntries.length > 0 && await hasOnlyValidSymlinkEntries(activeRoot, activeEntries);
 
-  const activeReady = activeEntries.length > 0
-    && await hasOnlyValidSymlinkEntries(activeRoot, activeEntries);
+  const globalClaudePointerReady = await readSymlinkTarget(path.join(os.homedir(), '.claude', 'skills')) === getRuntimePointerTarget({ scope: 'global' });
+  const globalPiPointerReady = await readSymlinkTarget(path.join(os.homedir(), '.pi', 'agent', 'skills')) === getRuntimePointerTarget({ scope: 'global' });
 
-  const claudePointerReady = await readSymlinkTarget(path.join(projectRoot, '.claude', 'skills')) === getRuntimePointerTarget({ scope: 'project' });
-  const piPointerReady = await hasPiSkillsPointer(projectRoot);
+  const projectClaudePointerReady = await readSymlinkTarget(path.join(projectRoot, '.claude', 'skills')) === getRuntimePointerTarget({ scope: 'project' });
+  const projectPiSkills = await readPiSkillsEntries(projectRoot);
+  const projectPiPointerReady = projectPiSkills.includes(getRuntimePointerTarget({ scope: 'project' }));
+  const projectHasLocalSkills = await hasProjectScopedSkillsContent(projectRoot);
+  const projectCanUseGlobal = await fs.pathExists(path.join(resolveGlobalSkillsRoot(), 'active')) && globalClaudePointerReady && globalPiPointerReady;
+
+  const projectClaudePointerState = projectHasLocalSkills
+    ? (projectClaudePointerReady ? 'ready' : 'missing')
+    : (projectClaudePointerReady ? 'ready' : (projectCanUseGlobal ? 'skipped' : 'missing'));
+  const projectPiPointerState = projectHasLocalSkills
+    ? (projectPiPointerReady ? 'ready' : 'missing')
+    : (projectPiPointerReady ? 'ready' : (projectCanUseGlobal ? 'skipped' : 'missing'));
 
   const hasDeprecatedAgentsSkillsPath = await fs.pathExists(path.join(projectRoot, '.agents', 'skills'));
 
   return {
     activeReady,
-    claudePointerReady,
-    piPointerReady,
+    globalClaudePointerReady,
+    globalPiPointerReady,
+    projectClaudePointerState,
+    projectPiPointerState,
     activeEntries,
     hasDeprecatedAgentsSkillsPath,
   };
 }
 
-export async function assertRuntimeSkillsViews(projectRoot: string): Promise<void> {
+export async function assertRuntimeSkillsViews(projectRoot: string, options: { scope?: RuntimeScope } = {}): Promise<void> {
+  const scope = options.scope ?? 'both';
   const check = await checkRuntimeSkillsViews(projectRoot);
 
   const failures: string[] = [];
   if (!check.activeReady) failures.push('active view is missing, empty, or contains invalid links');
-  if (!check.claudePointerReady) failures.push(`.claude/skills is not linked to ${getRuntimePointerTarget({ scope: 'project' })}`);
-  if (!check.piPointerReady) failures.push(`.pi/settings.json.skills does not include ${getRuntimePointerTarget({ scope: 'project' })}`);
+  if ((scope === 'global' || scope === 'both') && !check.globalClaudePointerReady) failures.push(`~/.claude/skills is not linked to ${getRuntimePointerTarget({ scope: 'global' })}`);
+  if ((scope === 'global' || scope === 'both') && !check.globalPiPointerReady) failures.push(`~/.pi/agent/skills is not linked to ${getRuntimePointerTarget({ scope: 'global' })}`);
+  if ((scope === 'project' || scope === 'both') && check.projectClaudePointerState === 'missing') failures.push(`.claude/skills is not linked to ${getRuntimePointerTarget({ scope: 'project' })}`);
+  if ((scope === 'project' || scope === 'both') && check.projectPiPointerState === 'missing') failures.push(`.pi/settings.json.skills does not include ${getRuntimePointerTarget({ scope: 'project' })}`);
 
   if (failures.length > 0) {
     throw new Error(`Runtime skills view validation failed: ${failures.join('; ')}`);
