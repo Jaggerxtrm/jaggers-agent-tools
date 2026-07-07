@@ -19,7 +19,7 @@ const runtimeEnabledPacksSchema = z.strictObject({
   }).default([]),
 });
 
-const skillsStateSchema = z.strictObject({
+const skillsStateSchema = z.object({
   schemaVersion: z.literal(SKILLS_STATE_SCHEMA_VERSION, {
     error: `skills state schemaVersion must be ${SKILLS_STATE_SCHEMA_VERSION}`,
   }),
