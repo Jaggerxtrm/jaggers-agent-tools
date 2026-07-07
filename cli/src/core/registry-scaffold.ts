@@ -365,6 +365,7 @@ export async function installFromRegistry(params: {
     // operator manually copies registry.json from the xtrm-tools package
     // (see xtrm-ya2i).
     if (!dryRun) {
+        await fs.ensureDir(userXtrmDir);
         // Both inputs internal: userXtrmDir resolved by getContext from package
         // config; 'registry.json' is a hardcoded filename. No user input here.
         // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal

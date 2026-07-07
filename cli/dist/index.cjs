@@ -58260,6 +58260,7 @@ async function installFromRegistry(params) {
     ].join("\n"));
   }
   if (!dryRun) {
+    await import_fs_extra14.default.ensureDir(userXtrmDir);
     const targetRegistryPath = import_path8.default.join(userXtrmDir, "registry.json");
     await import_fs_extra14.default.writeJson(targetRegistryPath, createProjectRegistrySnapshot(registry2), { spaces: 2 });
     await import_fs_extra14.default.appendFile(targetRegistryPath, "\n");
