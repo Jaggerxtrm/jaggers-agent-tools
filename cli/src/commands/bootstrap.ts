@@ -3,6 +3,10 @@ import kleur from 'kleur';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
+import { ensureGlobalHooksBootstrapped } from '../core/global-hooks-bootstrap.js';
+import { reconcileGlobalClaudeHooks } from '../core/claude-runtime-sync.js';
+import { reconcileGlobalPiHooks } from '../core/pi-runtime-hooks.js';
+import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { resolvePackageRoot } from '../core/registry-scaffold.js';
 import { resolveGlobalSkillsRoot, resolveStateFilePath } from '../core/skills-layout.js';
 
@@ -12,7 +16,7 @@ interface BootstrapOptions {
 
 export function createBootstrapCommand(): Command {
     return new Command('bootstrap')
-        .description('Populate ~/.xtrm/skills from running xt package payload')
+        .description('Populate ~/.xtrm global payloads from running xt package payload')
         .option('--force', 'Re-copy global skills payload even when version matches', false)
         .action(async (opts: BootstrapOptions) => {
             try {
@@ -22,6 +26,11 @@ export function createBootstrapCommand(): Command {
                 await logBootstrapTrigger({ command: 'bootstrap', cwd: process.cwd(), pkgVersion });
 
                 const result = await ensureGlobalSkillsBootstrapped(packageRoot, opts.force ? { force: true } : {});
+                if (shouldUseGlobalHooks()) {
+                    await ensureGlobalHooksBootstrapped(packageRoot, opts.force ? { force: true } : {});
+                    await reconcileGlobalClaudeHooks();
+                    await reconcileGlobalPiHooks();
+                }
                 const globalSkillsRoot = resolveGlobalSkillsRoot();
                 const statePath = resolveStateFilePath(globalSkillsRoot);
                 const state = await fs.readJson(statePath);

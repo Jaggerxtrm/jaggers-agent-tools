@@ -6,7 +6,11 @@ import fs from 'fs-extra';
 import { checkDrift } from '../core/drift.js';
 import { resolvePackageRoot } from '../core/registry-scaffold.js';
 import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
+import { ensureGlobalHooksBootstrapped } from '../core/global-hooks-bootstrap.js';
 import { getGlobalSkillsOverrideRoots, shouldUseGlobalSkills } from '../core/global-skills-flag.js';
+import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
+import { reconcileGlobalClaudeHooks } from '../core/claude-runtime-sync.js';
+import { reconcileGlobalPiHooks } from '../core/pi-runtime-hooks.js';
 import { assureXtManagedPiPackages } from '../core/pi-runtime.js';
 import { scanXtrmRepos } from '../core/repo-discovery.js';
 import { isStrictRegistryMode, runInstall } from './install.js';
@@ -98,6 +102,11 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
                 pkgVersion: pkgJson.version ?? '0.0.0',
             });
             await ensureGlobalSkillsBootstrapped(packageRoot);
+            if (shouldUseGlobalHooks()) {
+                await ensureGlobalHooksBootstrapped(packageRoot);
+                await reconcileGlobalClaudeHooks();
+                await reconcileGlobalPiHooks();
+            }
             if (shouldUseGlobalSkills()) {
                 await printSkillsMigrationNudge(repoRoot);
             }

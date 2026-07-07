@@ -24,6 +24,9 @@ const mocked = vi.hoisted(() => ({
   ensureUserAgentsSkillsSymlink: vi.fn(async () => undefined),
   ensureAgentsSkillsSymlink: vi.fn(async () => undefined),
   ensureGlobalSkillsBootstrapped: vi.fn(async () => ({ installedVersion: '1.0.0', changed: false })),
+  ensureGlobalHooksBootstrapped: vi.fn(async () => ({ installedVersion: '1.0.0', changed: false })),
+  reconcileGlobalClaudeHooks: vi.fn(async () => ({ settingsPath: '', changed: false, hooksEntries: 0 })),
+  reconcileGlobalPiHooks: vi.fn(async () => ({ settingsPath: '', changed: false, hooksEntries: 0 })),
   logBootstrapTrigger: vi.fn(async () => undefined),
   assertRuntimeSkillsViews: vi.fn(async () => undefined),
 }));
@@ -39,13 +42,16 @@ vi.mock('../core/project-mcp-sync.js', () => ({
   syncProjectMcpConfig: mocked.syncProjectMcpConfig,
   syncPiMcpConfig: mocked.syncPiMcpConfig,
 }));
-vi.mock('../core/claude-runtime-sync.js', () => ({ runClaudeRuntimeSyncPhase: mocked.runClaudeRuntimeSyncPhase }));
 vi.mock('../core/plugin-era-cleanup.js', () => ({ runPluginEraCleanup: mocked.runPluginEraCleanup }));
 vi.mock('../core/skills-scaffold.js', () => ({ ensureUserAgentsSkillsSymlink: mocked.ensureUserAgentsSkillsSymlink, ensureAgentsSkillsSymlink: mocked.ensureAgentsSkillsSymlink }));
 vi.mock('../core/global-skills-bootstrap.js', () => ({
   ensureGlobalSkillsBootstrapped: mocked.ensureGlobalSkillsBootstrapped,
   logBootstrapTrigger: mocked.logBootstrapTrigger,
 }));
+vi.mock('../core/global-hooks-bootstrap.js', () => ({ ensureGlobalHooksBootstrapped: mocked.ensureGlobalHooksBootstrapped }));
+vi.mock('../core/claude-runtime-sync.js', () => ({ runClaudeRuntimeSyncPhase: mocked.runClaudeRuntimeSyncPhase, reconcileGlobalClaudeHooks: mocked.reconcileGlobalClaudeHooks }));
+vi.mock('../core/pi-runtime-hooks.js', () => ({ reconcileGlobalPiHooks: mocked.reconcileGlobalPiHooks }));
+vi.mock('../core/global-hooks-flag.js', () => ({ shouldUseGlobalHooks: () => process.env.XTRM_GLOBAL_HOOKS === '1' }));
 vi.mock('../core/skills-runtime-views.js', () => ({ assertRuntimeSkillsViews: mocked.assertRuntimeSkillsViews }));
 vi.mock('../commands/pi-install.js', () => ({ runPiInstall: mocked.runPiInstall }));
 

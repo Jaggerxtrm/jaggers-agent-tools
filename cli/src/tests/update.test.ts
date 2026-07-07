@@ -13,6 +13,9 @@ const {
   ensureServiceSkillsMock,
   reconcileProjectClaudeHooksMock,
   ensureGlobalSkillsBootstrappedMock,
+  ensureGlobalHooksBootstrappedMock,
+  reconcileGlobalClaudeHooksMock,
+  reconcileGlobalPiHooksMock,
   logBootstrapTriggerMock,
 } = vi.hoisted(() => ({
   checkDriftMock: vi.fn(),
@@ -24,6 +27,9 @@ const {
   ensureServiceSkillsMock: vi.fn(),
   reconcileProjectClaudeHooksMock: vi.fn(),
   ensureGlobalSkillsBootstrappedMock: vi.fn(),
+  ensureGlobalHooksBootstrappedMock: vi.fn(),
+  reconcileGlobalClaudeHooksMock: vi.fn(),
+  reconcileGlobalPiHooksMock: vi.fn(),
   logBootstrapTriggerMock: vi.fn(),
 }));
 
@@ -60,11 +66,24 @@ vi.mock('../core/service-skills-ensure.js', () => ({
 
 vi.mock('../core/claude-runtime-sync.js', () => ({
   reconcileProjectClaudeHooks: reconcileProjectClaudeHooksMock,
+  reconcileGlobalClaudeHooks: reconcileGlobalClaudeHooksMock,
 }));
 
 vi.mock('../core/global-skills-bootstrap.js', () => ({
   ensureGlobalSkillsBootstrapped: ensureGlobalSkillsBootstrappedMock,
   logBootstrapTrigger: logBootstrapTriggerMock,
+}));
+
+vi.mock('../core/global-hooks-bootstrap.js', () => ({
+  ensureGlobalHooksBootstrapped: ensureGlobalHooksBootstrappedMock,
+}));
+
+vi.mock('../core/pi-runtime-hooks.js', () => ({
+  reconcileGlobalPiHooks: reconcileGlobalPiHooksMock,
+}));
+
+vi.mock('../core/global-hooks-flag.js', () => ({
+  shouldUseGlobalHooks: () => process.env.XTRM_GLOBAL_HOOKS === '1',
 }));
 
 import { createUpdateCommand } from '../commands/update.js';
@@ -103,6 +122,12 @@ beforeEach(() => {
   reconcileProjectClaudeHooksMock.mockResolvedValue({ settingsPath: '', changed: false, hooksEntries: 0 });
   ensureGlobalSkillsBootstrappedMock.mockReset();
   ensureGlobalSkillsBootstrappedMock.mockResolvedValue({ installedVersion: '1.0.0', changed: false });
+  ensureGlobalHooksBootstrappedMock.mockReset();
+  ensureGlobalHooksBootstrappedMock.mockResolvedValue({ installedVersion: '1.0.0', changed: false });
+  reconcileGlobalClaudeHooksMock.mockReset();
+  reconcileGlobalClaudeHooksMock.mockResolvedValue({ settingsPath: '', changed: false, hooksEntries: 0 });
+  reconcileGlobalPiHooksMock.mockReset();
+  reconcileGlobalPiHooksMock.mockResolvedValue({ settingsPath: '', changed: false, hooksEntries: 0 });
   logBootstrapTriggerMock.mockReset();
   logBootstrapTriggerMock.mockResolvedValue(undefined);
 });

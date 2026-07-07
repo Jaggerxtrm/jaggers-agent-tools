@@ -10,6 +10,10 @@ import { runClaudeRuntimeSyncPhase } from '../core/claude-runtime-sync.js';
 import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
 import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
+import { ensureGlobalHooksBootstrapped } from '../core/global-hooks-bootstrap.js';
+import { reconcileGlobalClaudeHooks } from '../core/claude-runtime-sync.js';
+import { reconcileGlobalPiHooks } from '../core/pi-runtime-hooks.js';
+import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { assertRuntimeSkillsViews } from '../core/skills-runtime-views.js';
 import { getGlobalSkillsOverrideRoots } from '../core/global-skills-flag.js';
 import {
@@ -169,6 +173,11 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     });
     if (!dryRun) {
         await ensureGlobalSkillsBootstrapped(packageRoot, force ? { force: true } : {});
+        if (shouldUseGlobalHooks()) {
+            await ensureGlobalHooksBootstrapped(packageRoot, force ? { force: true } : {});
+            await reconcileGlobalClaudeHooks();
+            await reconcileGlobalPiHooks();
+        }
     }
 
     const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
