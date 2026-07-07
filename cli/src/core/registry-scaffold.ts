@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { t } from '../utils/theme.js';
 import { checkDrift } from './drift.js';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
+import { resolveGlobalSkillsRoot } from './skills-layout.js';
 
 declare const __dirname: string;
 
@@ -16,6 +17,7 @@ export interface RegistryFileEntry {
 export interface RegistryAsset {
     source_dir: string;
     install_mode: 'copy' | 'symlink';
+    install_scope?: 'global' | 'project';
     files: Record<string, RegistryFileEntry>;
 }
 
@@ -79,6 +81,10 @@ export function isSkillsDefaultPath(relativePath: string): boolean {
     return relativePath.startsWith('skills/default/');
 }
 
+function shouldUseGlobalSkills(): boolean {
+    return process.env.XTRM_GLOBAL_SKILLS === '1';
+}
+
 function resolveInstalledPath(userXtrmDir: string, relativePath: string, overrideRoots?: Record<string, string>): string {
     if (relativePath.startsWith('skills/default/')) {
         const skillsRoot = overrideRoots?.skills;
@@ -117,6 +123,18 @@ export async function scaffoldSkillsDefaultFromPackage(params: {
     const sourceDir = path.join(packageRoot, '.xtrm', 'skills', 'default');
     const targetDir = path.join(userXtrmDir, 'skills', 'default');
 
+    if (shouldUseGlobalSkills()) {
+        const globalSkillsRoot = resolveGlobalSkillsRoot();
+        const hasGlobalTree = await fs.pathExists(path.join(globalSkillsRoot, 'default'))
+            && await fs.pathExists(path.join(globalSkillsRoot, 'optional'));
+        if (hasGlobalTree) {
+            if (!dryRun) {
+                await fs.ensureDir(path.join(userXtrmDir, 'skills', 'user', 'packs'));
+            }
+            return 'noop';
+        }
+    }
+
     const stat = await fs.lstat(targetDir).catch(() => null);
     if (stat) {
         if (stat.isSymbolicLink()) {
@@ -147,6 +165,37 @@ export async function scaffoldSkillsDefaultFromPackage(params: {
     await fs.ensureDir(path.dirname(targetDir));
     await fs.copy(sourceDir, targetDir);
     return 'copy';
+}
+
+function getAssetInstallScope(asset: RegistryAsset): 'global' | 'project' {
+    return asset.install_scope ?? 'project';
+}
+
+async function appendGlobalSkillsSkipLog(asset: string, count: number): Promise<void> {
+    const logPath = path.join(path.dirname(resolveGlobalSkillsRoot()), 'logs', 'skills-migration.jsonl');
+    await fs.ensureDir(path.dirname(logPath));
+    await fs.appendFile(logPath, `${JSON.stringify({
+        timestamp: new Date().toISOString(),
+        component: 'skills-bootstrap',
+        event: 'install.skip.global-managed',
+        asset,
+        count,
+    })}\n`);
+}
+
+function createProjectRegistrySnapshot(registry: RegistryManifest): RegistryManifest {
+    if (!shouldUseGlobalSkills()) {
+        return registry;
+    }
+
+    const assets = Object.fromEntries(
+        Object.entries(registry.assets).filter(([, asset]) => getAssetInstallScope(asset) !== 'global'),
+    );
+
+    return {
+        ...registry,
+        assets,
+    };
 }
 
 export function buildExpectedHashes(registry: RegistryManifest): Map<string, string> {
@@ -240,7 +289,14 @@ export async function installFromRegistry(params: {
     const missingSources: string[] = [];
 
     for (const [assetKey, asset] of Object.entries(registry.assets)) {
-        const assetRoot = overrideRoots?.[assetKey];
+        const installScope = getAssetInstallScope(asset);
+        const isGlobalManaged = shouldUseGlobalSkills() && installScope === 'global';
+        const assetRoot = isGlobalManaged ? overrideRoots?.[assetKey] : overrideRoots?.[assetKey];
+
+        if (isGlobalManaged) {
+            await appendGlobalSkillsSkipLog(assetKey, Object.keys(asset.files).length);
+        }
+
         for (const [filePath] of Object.entries(asset.files)) {
             const relativePath = toUserRelativePath(asset.source_dir, filePath);
             const sourcePath = path.join(packageRoot, asset.source_dir, filePath);
@@ -316,7 +372,8 @@ export async function installFromRegistry(params: {
         // config; 'registry.json' is a hardcoded filename. No user input here.
         // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         const targetRegistryPath = path.join(userXtrmDir, 'registry.json');
-        await fs.copy(registryPath, targetRegistryPath, { overwrite: true });
+        await fs.writeJson(targetRegistryPath, createProjectRegistrySnapshot(registry), { spaces: 2 });
+        await fs.appendFile(targetRegistryPath, '\n');
     }
 
     return {

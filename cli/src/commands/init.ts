@@ -20,6 +20,7 @@ import { ensureServiceSkills } from '../core/service-skills-ensure.js';
 import { inventoryDeps, renderBootstrapPlan, runMachineBootstrapPhase, type BootstrapPlan } from '../core/machine-bootstrap.js';
 import { runInitVerification, renderVerificationSummary } from '../core/init-verification.js';
 import { assertRuntimeSkillsViews } from '../core/skills-runtime-views.js';
+import { resolveGlobalSkillsRoot } from '../core/skills-layout.js';
 import { syncPiMcpConfig, syncProjectMcpConfig } from '../core/project-mcp-sync.js';
 import { getContext } from '../core/context.js';
 import { calculateDiff } from '../core/diff.js';
@@ -37,6 +38,22 @@ function getPackageRoot(): string {
 
 function getMcpCoreConfigPath(): string {
     return path.join(getPackageRoot(), '.xtrm', 'config', 'claude.mcp.json');
+}
+
+function shouldUseGlobalSkills(): boolean {
+    return process.env.XTRM_GLOBAL_SKILLS === '1';
+}
+
+function getGlobalSkillsOverrideRoots(): Record<string, string> | undefined {
+    if (!shouldUseGlobalSkills()) {
+        return undefined;
+    }
+
+    const globalSkillsRoot = resolveGlobalSkillsRoot();
+    return {
+        skills: path.join(globalSkillsRoot, 'default'),
+        skills_optional: path.join(globalSkillsRoot, 'optional'),
+    };
 }
 
 function getInstructionsDir(): string {
@@ -811,6 +828,7 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
         dryRun: false,
         force: false,
         yes: true,
+        overrideRoots: getGlobalSkillsOverrideRoots(),
     });
     if (registryInstallStats.missingSourceSkipped > 0) {
         console.log(kleur.yellow(`  ⚠ Registry/source mismatch: skipped ${registryInstallStats.missingSourceSkipped} missing source file${registryInstallStats.missingSourceSkipped === 1 ? '' : 's'}.`));

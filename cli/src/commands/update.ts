@@ -16,6 +16,7 @@ import { printDependencyMaintenanceSummary, runDependencyMaintenance, type Depen
 import { ensureServiceSkills } from '../core/service-skills-ensure.js';
 import { reconcileProjectClaudeHooks } from '../core/claude-runtime-sync.js';
 import { resolveMainProjectRoot } from '../utils/repo-root.js';
+import { printNudgeOnce } from '../utils/nudge.js';
 
 type UpdateStatus = 'refreshed' | 'already-current' | 'failed' | 'skipped' | 'incomplete';
 
@@ -79,6 +80,22 @@ function getGlobalSkillsOverrideRoots(): Record<string, string> | undefined {
     };
 }
 
+async function printSkillsMigrationNudge(repoRoot: string): Promise<void> {
+    const legacyDefaultRoot = path.join(repoRoot, '.xtrm', 'skills', 'default');
+    const legacyOptionalRoot = path.join(repoRoot, '.xtrm', 'skills', 'optional');
+    const hasLegacyProjectSkills = await fs.pathExists(legacyDefaultRoot) || await fs.pathExists(legacyOptionalRoot);
+
+    if (!hasLegacyProjectSkills) {
+        return;
+    }
+
+    await printNudgeOnce('skills-global-migration', [
+        kleur.yellow('  ⚠ Project-scoped default/optional skills remain on disk; xt update no longer re-syncs them when XTRM_GLOBAL_SKILLS=1.'),
+        kleur.yellow('    Run `xt migrate skills` to clean legacy project payloads.'),
+        kleur.yellow('    Docs: https://github.com/Jaggerxtrm/xtrm-tools/blob/main/docs/skills-registry-exploration.md'),
+    ]);
+}
+
 async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdateResult> {
     const packageRoot = resolvePackageRoot();
     const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
@@ -97,6 +114,9 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
                 pkgVersion: pkgJson.version ?? '0.0.0',
             });
             await ensureGlobalSkillsBootstrapped(packageRoot);
+            if (shouldUseGlobalSkills()) {
+                await printSkillsMigrationNudge(repoRoot);
+            }
         }
 
         const drift = await checkDrift(registryPath, userXtrmDir, opts.apply ? getGlobalSkillsOverrideRoots() : undefined);

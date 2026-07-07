@@ -37,6 +37,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.XTRM_GLOBAL_SKILLS;
   process.chdir(previousCwd);
   fs.removeSync(tmpDir);
   vi.restoreAllMocks();
@@ -172,6 +173,30 @@ describe('xtrm install integration', () => {
     expect(logs.some(line => line.includes('[DRY RUN] would install'))).toBe(true);
     expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm'))).toBe(false);
     expect(fs.pathExistsSync(path.join(tmpDir, '.claude', 'settings.json'))).toBe(false);
+  });
+
+  it('with XTRM_GLOBAL_SKILLS=1 installs default and optional skills only to global root', async () => {
+    const previousHome = process.env.HOME;
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+    process.env.HOME = tmpDir;
+
+    try {
+      await runInstallCli(['--yes']);
+
+      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'default'))).toBe(false);
+      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'optional'))).toBe(false);
+      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'user', 'packs'))).toBe(true);
+      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'active'))).toBe(true);
+      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'state.json'))).toBe(true);
+      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'INVARIANTS.md'))).toBe(true);
+
+      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'registry.json'))).toBe(true);
+      const registry = fs.readJsonSync(path.join(tmpDir, '.xtrm', 'registry.json')) as { assets: Record<string, unknown> };
+      expect(registry.assets.skills).toBeUndefined();
+      expect(registry.assets.skills_optional).toBeUndefined();
+    } finally {
+      process.env.HOME = previousHome;
+    }
   });
 
   it('hook wiring includes all hooks and preserves existing permissions.allow on reinstall', async () => {

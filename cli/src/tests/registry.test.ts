@@ -14,6 +14,7 @@ interface RegistryFileEntry {
 interface RegistryAsset {
   source_dir: string;
   install_mode: 'copy' | 'symlink';
+  install_scope?: 'global' | 'project';
   files: Record<string, RegistryFileEntry>;
 }
 
@@ -73,6 +74,10 @@ function parseRegistryManifest(input: unknown): RegistryManifest {
 
     if (asset.install_mode !== 'copy' && asset.install_mode !== 'symlink') {
       throw new Error(`asset ${assetName} has invalid install_mode`);
+    }
+
+    if (asset.install_scope !== undefined && asset.install_scope !== 'global' && asset.install_scope !== 'project') {
+      throw new Error(`asset ${assetName} has invalid install_scope`);
     }
 
     if (!asset.files || typeof asset.files !== 'object') {
@@ -203,6 +208,9 @@ describe('gen-registry idempotence', () => {
 
     const parsed = parseRegistryManifest(JSON.parse(secondOutput));
     expect(Object.keys(parsed.assets).sort()).toEqual(['config', 'hooks', 'skills', 'skills_optional']);
+    expect(parsed.assets.skills.install_scope).toBe('global');
+    expect(parsed.assets.skills_optional.install_scope).toBe('global');
+    expect(parsed.assets.config.install_scope).toBe('project');
     expect(parsed.assets.skills_optional.files).toEqual({});
   });
 });
