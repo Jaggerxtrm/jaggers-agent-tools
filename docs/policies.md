@@ -67,7 +67,7 @@ Other event groups retain the standard wrapper shape without the `script` field.
 | `gitnexus.json` | claude | GitNexus augmentation for Bash/Grep/Read/Glob + Serena tools |
 | `xtrm-debug-logger.json` | claude | Session/tool lifecycle logging into `.xtrm/debug.db` |
 | `specialists-agent-guard.json` | claude | Blocks raw Agent tool calls when a using-specialists workflow is active — routes work through specialists CLI |
-| `service-skills.json` | pi | Service skill catalog + drift checks in Pi extension runtime |
+| `service-skills.json` | pi | Service skill catalog + drift checks in Pi extension runtime. Resolves via composed active view (`.xtrm/skills/active/` → global + local). |
 
 ## Add / Update Workflow
 

@@ -24,7 +24,7 @@ A live statusline renders in every Claude Code session: active claim, open issue
 
 ### Specialists
 
-Specialists are first-class in v0.7.19. `xtrm-tools` vendors specialist skills into `.xtrm/skills/default/`, keeps user fallback under `~/.xtrm/skills/default/`, and runs the release-contract handshake through `.github/workflows/specialists-validation.yml`. `sp` is a runtime prerequisite for specialist commands.
+Specialists are first-class in v0.7.19. `xtrm-tools` vendors specialist skills into `~/.xtrm/skills/default/` (global SSOT), keeps user fallback under `~/.xtrm/skills/user/packs/`, and runs the release-contract handshake through `.github/workflows/specialists-validation.yml`. `sp` is a runtime prerequisite for specialist commands.
 
 ---
 
@@ -43,7 +43,8 @@ Specialists are first-class in v0.7.19. `xtrm-tools` vendors specialist skills i
 | [docs/release.md](docs/release.md) | Release contract — specialists handshake, publish gates, runtime prereqs |
 | [docs/skills-ownership.md](docs/skills-ownership.md) | Skills ownership — vendored vs owned skills, publish contract |
 | [docs/xtrm-directory.md](docs/xtrm-directory.md) | `.xtrm/` directory layout — managed assets and user fallback |
-| [docs/skills-tier-architecture.md](docs/skills-tier-architecture.md) | Skills tiers — default, optional, user fallback |
+| [docs/skills-tier-architecture.md](docs/skills-tier-architecture.md) | Skills tiers — global SSOT + project residual state |
+| [docs/plans/global-skills-migration.md](docs/plans/global-skills-migration.md) | Global skills migration — architecture and operator workflow |
 | [docs/pi-extensions.md](docs/pi-extensions.md) | Pi extensions — managed sync, authoring, parity notes |
 | [docs/worktrees.md](docs/worktrees.md) | xt worktrees — `xt claude/pi`, `xt attach`, `xt end`, isolation model |
 | [docs/mcp-servers.md](docs/mcp-servers.md) | MCP servers — gitnexus, github-grep, deepwiki, official plugins |
@@ -62,6 +63,9 @@ Specialists are first-class in v0.7.19. `xtrm-tools` vendors specialist skills i
 ```bash
 # Install globally (one-time)
 npm install -g xtrm-tools
+
+# Bootstrap global skills tree (one-time per HOME)
+xt bootstrap
 
 # Set up xtrm in your project
 xtrm init
@@ -127,10 +131,27 @@ xt init -y
 xt update --apply --repo .
 
 # Verify a shipped skill landed and is active
-ls .xtrm/skills/default/issue-triage/SKILL.md
-ls -l .xtrm/skills/active/issue-triage
-ls -l .claude/skills/issue-triage
+ls ~/.xtrm/skills/default/issue-triage/SKILL.md    # Global SSOT
+ls -l ~/.xtrm/skills/active/issue-triage           # Global active view
+ls -l .xtrm/skills/active/issue-triage             # Project composed view
+ls -l .claude/skills/issue-triage                  # Claude runtime pointer
 ```
+
+### Global Skills Migration
+
+Migrate existing per-repo skills to global SSOT:
+
+```bash
+# Bootstrap global tree (one-time per HOME)
+xt bootstrap
+
+# Per-repo migration (dry-run first)
+cd <repo>
+xt migrate skills --dry-run
+xt migrate skills --apply
+```
+
+Full workflow: [docs/plans/global-skills-migration.md](docs/plans/global-skills-migration.md)
 
 Check specialists runtime drift separately from xtrm-managed skills/hooks:
 
