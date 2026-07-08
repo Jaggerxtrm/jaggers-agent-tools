@@ -29,7 +29,7 @@ async function createTempProjectRoot(): Promise<string> {
 // `service-skills` skill, Claude hooks now ship via the global service-skills policy
 // (not a per-repo settings.json writer), and the service-skills-set bundle is gone.
 describe.skipIf(SYMLINK_UNSUPPORTED)('skills migration boundary contracts', () => {
-  it('init verification reports runtime readiness and deprecated .agents/skills as warning-only signal', async () => {
+  it('init verification reports runtime readiness', async () => {
     const projectRoot = await createTempProjectRoot();
     const projectSkillsRoot = path.join(projectRoot, '.xtrm', 'skills');
 
@@ -41,14 +41,11 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills migration boundary contracts', () =
       skills: ['../.xtrm/skills/active'],
     });
 
-    await fs.ensureDir(path.join(projectRoot, '.agents', 'skills'));
-
     const verification = await runInitVerification(projectRoot);
     expect(verification.skillsRuntime.activeReady).toBe(true);
     expect(verification.skillsRuntime.globalClaudePointerReady).toBe(false);
     expect(verification.skillsRuntime.globalPiPointerReady).toBe(false);
     expect(verification.skillsRuntime.projectClaudePointerState).toBe('ready');
     expect(verification.skillsRuntime.projectPiPointerState).toBe('ready');
-    expect(verification.skillsRuntime.hasDeprecatedAgentsSkillsPath).toBe(true);
   });
 });

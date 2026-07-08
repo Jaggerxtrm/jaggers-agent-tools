@@ -55749,10 +55749,6 @@ async function ensureAgentsSkillsSymlink(projectRoot, options = {}) {
       options
     );
   }
-  const agentsSkillsPath = import_path3.default.join(projectRoot, ".agents", "skills");
-  if (await import_fs_extra9.default.pathExists(agentsSkillsPath)) {
-    console.log(kleur_default.dim("  \u25CB .agents/skills is deprecated; runtime skills are generated under .xtrm/skills/active"));
-  }
   return {
     activatedClaudeSkills,
     activatedPiSkills
@@ -58739,13 +58735,6 @@ async function planGlobalOperations(managedAgentSkills) {
     managedNames: XTRM_MANAGED_PI_EXTENSIONS,
     labelPrefix: "~/.pi/agent/extensions/"
   }));
-  const agentsSkillsDir = import_path9.default.join(import_os2.default.homedir(), ".agents", "skills");
-  operations.push(...await planManagedDirectoryEntryDeletes({
-    scope: "global",
-    baseDir: agentsSkillsDir,
-    managedNames: managedAgentSkills,
-    labelPrefix: "~/.agents/skills/"
-  }));
   return operations;
 }
 async function planProjectOperations(repoRoot) {
@@ -59199,15 +59188,13 @@ async function checkRuntimeSkillsViews(projectRoot) {
   const projectCanUseGlobal = await import_fs_extra19.default.pathExists(import_node_path14.default.join(resolveGlobalSkillsRoot(), "active")) && globalClaudePointerReady && globalPiPointerReady;
   const projectClaudePointerState = projectHasLocalSkills ? projectClaudePointerReady ? "ready" : "missing" : projectClaudePointerReady ? "ready" : projectCanUseGlobal ? "skipped" : "missing";
   const projectPiPointerState = projectHasLocalSkills ? projectPiPointerReady ? "ready" : "missing" : projectPiPointerReady ? "ready" : projectCanUseGlobal ? "skipped" : "missing";
-  const hasDeprecatedAgentsSkillsPath = await import_fs_extra19.default.pathExists(import_node_path14.default.join(projectRoot, ".agents", "skills"));
   return {
     activeReady,
     globalClaudePointerReady,
     globalPiPointerReady,
     projectClaudePointerState,
     projectPiPointerState,
-    activeEntries,
-    hasDeprecatedAgentsSkillsPath
+    activeEntries
   };
 }
 async function assertRuntimeSkillsViews(projectRoot, options = {}) {
@@ -59347,8 +59334,7 @@ async function runInitVerification(projectRoot) {
       globalClaudePointerReady: skillsRuntimeResult.globalClaudePointerReady,
       globalPiPointerReady: skillsRuntimeResult.globalPiPointerReady,
       projectClaudePointerState: skillsRuntimeResult.projectClaudePointerState,
-      projectPiPointerState: skillsRuntimeResult.projectPiPointerState,
-      hasDeprecatedAgentsSkillsPath: skillsRuntimeResult.hasDeprecatedAgentsSkillsPath
+      projectPiPointerState: skillsRuntimeResult.projectPiPointerState
     },
     projectBootstrap: projectResult,
     allPassed
@@ -59397,9 +59383,6 @@ function renderVerificationSummary(result) {
     console.log(`  ${srIcon} Skills Runtime`);
   } else {
     console.log(`  ${srIcon} Skills Runtime \u2014 incomplete: ${skillsParts.join(", ")}`);
-  }
-  if (result.skillsRuntime.hasDeprecatedAgentsSkillsPath) {
-    console.log(`  ${sym.warn} Deprecated path present: .agents/skills`);
   }
   const pbParts = [];
   if (!result.projectBootstrap.beadsInitialized) pbParts.push("beads");
@@ -61252,8 +61235,6 @@ var PruneModeReadError = class extends Error {
 async function calculateDiff(repoRoot, systemRoot, pruneMode = false) {
   const adapter = detectAdapter(systemRoot);
   const isClaude = adapter?.toolName === "claude-code";
-  const normalizedRoot = (0, import_path14.normalize)(systemRoot).replace(/\\/g, "/");
-  const isAgentsSkills = normalizedRoot.includes(".agents/skills");
   const changeSet = {
     skills: { missing: [], outdated: [], drifted: [], total: 0 },
     hooks: { missing: [], outdated: [], drifted: [], total: 0 },
@@ -61270,16 +61251,6 @@ async function calculateDiff(repoRoot, systemRoot, pruneMode = false) {
       }
     }
   } catch {
-  }
-  if (isAgentsSkills) {
-    const repoPath = (0, import_path14.join)(repoRoot, "skills");
-    if (!await import_fs_extra24.default.pathExists(repoPath)) return changeSet;
-    const items = (await import_fs_extra24.default.readdir(repoPath)).filter((i) => !IGNORED_ITEMS.has(i));
-    changeSet.skills.total = items.length;
-    for (const item of items) {
-      await compareItem("skills", item, (0, import_path14.join)(repoPath, item), (0, import_path14.join)(systemRoot, item), changeSet, pruneMode, installedHashes);
-    }
-    return changeSet;
   }
   const folders = ["skills", "hooks"];
   if (!isClaude) folders.push("commands");
@@ -62577,11 +62548,6 @@ async function filterHooksByInstalledScripts(hooksConfig) {
   return hooksConfig;
 }
 async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun = false, options) {
-  const normalizedRoot = import_path18.default.normalize(systemRoot).replace(/\\/g, "/");
-  const isAgentsSkills = normalizedRoot.includes(".agents/skills");
-  if (isAgentsSkills) {
-    return executeSyncAgentsSkills(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun);
-  }
   const categories = ["skills", "hooks", "config"];
   let count = 0;
   const adapter = new ConfigAdapter(systemRoot);
@@ -62725,55 +62691,6 @@ async function executeSync(repoRoot, systemRoot, changeSet, mode, actionType, is
     for (const backup of backups) {
       await cleanupBackup(backup);
     }
-    return count;
-  } catch (error51) {
-    console.error(kleur_default.red(`
-Sync failed, rolling back ${backups.length} changes...`));
-    for (const backup of backups) {
-      try {
-        await restoreBackup(backup);
-      } finally {
-        await cleanupBackup(backup);
-      }
-    }
-    throw error51;
-  }
-}
-async function executeSyncAgentsSkills(repoRoot, systemRoot, changeSet, mode, actionType, isDryRun) {
-  let count = 0;
-  const backups = [];
-  try {
-    const repoSkillsPath = import_path18.default.join(repoRoot, "skills");
-    const itemsToProcess = [];
-    if (actionType === "sync") {
-      itemsToProcess.push(...changeSet.skills.missing, ...changeSet.skills.outdated);
-    } else if (actionType === "backport") {
-      itemsToProcess.push(...changeSet.skills.drifted);
-    }
-    for (const item of itemsToProcess) {
-      const src = actionType === "backport" ? import_path18.default.join(systemRoot, item) : import_path18.default.join(repoSkillsPath, item);
-      const dest = actionType === "backport" ? import_path18.default.join(repoSkillsPath, item) : import_path18.default.join(systemRoot, item);
-      console.log(kleur_default.gray(`  ${actionType === "backport" ? "<--" : "-->"} ${item}`));
-      if (!isDryRun) {
-        if (await import_fs_extra30.default.pathExists(dest)) backups.push(await createBackup(dest));
-        await import_fs_extra30.default.ensureDir(import_path18.default.dirname(dest));
-        if (mode === "symlink" && actionType === "sync") {
-          if (process.platform === "win32") {
-            console.log(kleur_default.yellow("  \u26A0 Symlinks require Developer Mode on Windows \u2014 falling back to copy."));
-            await import_fs_extra30.default.remove(dest);
-            await import_fs_extra30.default.copy(src, dest);
-          } else {
-            await import_fs_extra30.default.remove(dest);
-            await import_fs_extra30.default.ensureSymlink(src, dest);
-          }
-        } else {
-          await import_fs_extra30.default.remove(dest);
-          await import_fs_extra30.default.copy(src, dest);
-        }
-      }
-      count++;
-    }
-    for (const backup of backups) await cleanupBackup(backup);
     return count;
   } catch (error51) {
     console.error(kleur_default.red(`
@@ -63187,7 +63104,6 @@ var CANONICAL_HOOKS = /* @__PURE__ */ new Set([
   // directory
   "README.md"
 ]);
-var ACTIVE_SKILLS_RUNTIMES = ["claude", "pi"];
 var IGNORED_ITEMS2 = /* @__PURE__ */ new Set([
   "__pycache__",
   ".DS_Store",
@@ -63229,11 +63145,8 @@ async function cleanHooks(dryRun) {
 async function cleanSkills(dryRun) {
   const removed = [];
   const skillsRoot = import_path21.default.join((0, import_os7.homedir)(), ".xtrm", "skills");
-  for (const runtime of ACTIVE_SKILLS_RUNTIMES) {
-    const activeRoot = import_path21.default.join(skillsRoot, "active", runtime);
-    if (!await import_fs_extra32.default.pathExists(activeRoot)) {
-      continue;
-    }
+  const activeRoot = import_path21.default.join(skillsRoot, "active");
+  if (await import_fs_extra32.default.pathExists(activeRoot)) {
     const entries = await import_fs_extra32.default.readdir(activeRoot);
     for (const entry of entries) {
       if (IGNORED_ITEMS2.has(entry)) {
@@ -63248,7 +63161,7 @@ async function cleanSkills(dryRun) {
         if (!dryRun) {
           await import_fs_extra32.default.remove(entryPath);
         }
-        removed.push(`active/${runtime}/${entry} (non-symlink)`);
+        removed.push(`active/${entry} (non-symlink)`);
         continue;
       }
       const linkTarget = await import_fs_extra32.default.readlink(entryPath).catch(() => null);
@@ -63256,7 +63169,7 @@ async function cleanSkills(dryRun) {
         if (!dryRun) {
           await import_fs_extra32.default.remove(entryPath);
         }
-        removed.push(`active/${runtime}/${entry} (broken-link)`);
+        removed.push(`active/${entry} (broken-link)`);
         continue;
       }
       const resolvedTarget = import_path21.default.resolve(import_path21.default.dirname(entryPath), linkTarget);
@@ -63264,16 +63177,9 @@ async function cleanSkills(dryRun) {
         if (!dryRun) {
           await import_fs_extra32.default.remove(entryPath);
         }
-        removed.push(`active/${runtime}/${entry} (dangling)`);
+        removed.push(`active/${entry} (dangling)`);
       }
     }
-  }
-  const legacyAgentsSkills = import_path21.default.join((0, import_os7.homedir)(), ".agents", "skills");
-  if (await import_fs_extra32.default.pathExists(legacyAgentsSkills)) {
-    if (!dryRun) {
-      await import_fs_extra32.default.remove(legacyAgentsSkills);
-    }
-    removed.push(".agents/skills (deprecated)");
   }
   return removed;
 }
@@ -63424,7 +63330,7 @@ function createCleanCommand() {
       }
     }
     if (!hooksOnly) {
-      console.log(kleur_default.bold("\n  Scanning ~/.xtrm/skills/active and deprecated ~/.agents/skills/..."));
+      console.log(kleur_default.bold("\n  Scanning ~/.xtrm/skills/active/..."));
       result.skillsRemoved = await cleanSkills(dryRun);
       if (result.skillsRemoved.length > 0) {
         for (const d of result.skillsRemoved) {

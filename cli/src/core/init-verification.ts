@@ -53,7 +53,6 @@ export interface VerificationResult {
         globalPiPointerReady: boolean;
         projectClaudePointerState: 'ready' | 'skipped' | 'missing';
         projectPiPointerState: 'ready' | 'skipped' | 'missing';
-        hasDeprecatedAgentsSkillsPath: boolean;
     };
     projectBootstrap: {
         beadsInitialized: boolean;
@@ -240,7 +239,7 @@ export async function runInitVerification(projectRoot: string): Promise<Verifica
             globalPiPointerReady: skillsRuntimeResult.globalPiPointerReady,
             projectClaudePointerState: skillsRuntimeResult.projectClaudePointerState,
             projectPiPointerState: skillsRuntimeResult.projectPiPointerState,
-            hasDeprecatedAgentsSkillsPath: skillsRuntimeResult.hasDeprecatedAgentsSkillsPath,
+
         },
         projectBootstrap: projectResult,
         allPassed,
@@ -301,9 +300,7 @@ export function renderVerificationSummary(result: VerificationResult): void {
     } else {
         console.log(`  ${srIcon} Skills Runtime — incomplete: ${skillsParts.join(', ')}`);
     }
-    if (result.skillsRuntime.hasDeprecatedAgentsSkillsPath) {
-        console.log(`  ${sym.warn} Deprecated path present: .agents/skills`);
-    }
+
 
     // Project bootstrap
     const pbParts: string[] = [];

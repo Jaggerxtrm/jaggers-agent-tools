@@ -26,8 +26,9 @@ describe("XTRM Loader Extension", () => {
 	});
 
 	it("injects using-xtrm content into system prompt at before_agent_start", async () => {
+		// Batch G+: only project-local .pi/skills path is checked
 		(fs.existsSync as any).mockImplementation((p: string) => {
-			if (p === "/home/test/.agents/skills/using-xtrm/SKILL.md") return true;
+			if (p === "/workspace/project/.pi/skills/using-xtrm/SKILL.md") return true;
 			if (p.endsWith("ROADMAP.md")) return false;
 			if (p.endsWith(".claude/rules")) return false;
 			if (p.endsWith(".claude/skills")) return false;
@@ -35,7 +36,7 @@ describe("XTRM Loader Extension", () => {
 		});
 
 		(fs.readFileSync as any).mockImplementation((p: string) => {
-			if (p === "/home/test/.agents/skills/using-xtrm/SKILL.md") {
+			if (p === "/workspace/project/.pi/skills/using-xtrm/SKILL.md") {
 				return "---\nname: using-xtrm\n---\n# Manual\nUse bd prime";
 			}
 			return "";
@@ -48,24 +49,5 @@ describe("XTRM Loader Extension", () => {
 		expect(result?.systemPrompt).toContain("XTRM Session Operating Manual");
 		expect(result?.systemPrompt).toContain("Use bd prime");
 		expect(result?.systemPrompt).not.toContain("name: using-xtrm");
-	});
-
-	it("falls back to ~/.pi/agent/skills when ~/.agents path is missing", async () => {
-		(fs.existsSync as any).mockImplementation((p: string) => {
-			if (p === "/home/test/.agents/skills/using-xtrm/SKILL.md") return false;
-			if (p === "/home/test/.pi/agent/skills/using-xtrm/SKILL.md") return true;
-			if (p.endsWith("ROADMAP.md")) return false;
-			if (p.endsWith(".claude/rules")) return false;
-			if (p.endsWith(".claude/skills")) return false;
-			return false;
-		});
-
-		(fs.readFileSync as any).mockReturnValue("# Manual\nPi fallback path");
-
-		xtrmLoaderExtension(harness.pi);
-		await harness.emit("session_start", {});
-		const result = await harness.emit("before_agent_start", { systemPrompt: "Base" });
-
-		expect(result?.systemPrompt).toContain("Pi fallback path");
 	});
 });

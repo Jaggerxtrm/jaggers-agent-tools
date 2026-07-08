@@ -286,10 +286,7 @@ export async function ensureAgentsSkillsSymlink(projectRoot: string, options: En
         );
     }
 
-    const agentsSkillsPath = path.join(projectRoot, '.agents', 'skills');
-    if (await fs.pathExists(agentsSkillsPath)) {
-        console.log(kleur.dim('  ○ .agents/skills is deprecated; runtime skills are generated under .xtrm/skills/active'));
-    }
+
 
     return {
         activatedClaudeSkills,

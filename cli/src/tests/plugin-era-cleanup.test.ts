@@ -65,8 +65,7 @@ async function seedPluginEraArtifacts(params: { projectRoot: string; homeDir: st
   await fs.ensureDir(path.join(homeDir, '.pi', 'agent', 'extensions', 'beads'));
   await fs.ensureDir(path.join(homeDir, '.pi', 'agent', 'extensions', 'custom-ext'));
 
-  await fs.ensureDir(path.join(homeDir, '.agents', 'skills', 'clean-code'));
-  await fs.ensureDir(path.join(homeDir, '.agents', 'skills', 'my-custom-skill'));
+  // Batch G: .agents/skills cleanup removed - legacy path handling deleted
 
   await fs.ensureDir(path.join(projectRoot, '.claude'));
   await fs.writeJson(path.join(projectRoot, '.claude', 'settings.json'), {
@@ -148,8 +147,7 @@ describe('runPluginEraCleanup', () => {
     expect(await fs.pathExists(path.join(homeDir, '.pi', 'agent', 'extensions', 'beads'))).toBe(false);
     expect(await fs.pathExists(path.join(homeDir, '.pi', 'agent', 'extensions', 'custom-ext'))).toBe(true);
 
-    expect(await fs.pathExists(path.join(homeDir, '.agents', 'skills', 'clean-code'))).toBe(false);
-    expect(await fs.pathExists(path.join(homeDir, '.agents', 'skills', 'my-custom-skill'))).toBe(true);
+    // Batch G: .agents/skills cleanup code removed - no assertions on legacy path
 
     const projectSettings = await fs.readJson(path.join(projectRoot, '.claude', 'settings.json')) as Record<string, unknown>;
     expect(projectSettings.enabledPlugins).toEqual({ 'serena@claude-plugins-official': true });
