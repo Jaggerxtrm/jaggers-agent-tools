@@ -329,7 +329,7 @@ describe('xt skills JSON CLI integration', () => {
     expect(piRuntime?.activeSkills).not.toContain('new-pack-skill');
   });
 
-  it('uses project-local scope by default when no scope flag is provided', () => {
+  it('defaults to --global for list and --local for create-pack when no scope flag is provided', () => {
     const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-skills-local-'));
 
     try {
@@ -340,17 +340,19 @@ describe('xt skills JSON CLI integration', () => {
       writeJson(path.join(projectSkillsRoot, 'state.json'), {
         schemaVersion: '1',
         enabledPacks: {
-          claude: [],
+          claude: ['project-pack'],
           pi: [],
         },
       });
+      createPack(path.join(projectSkillsRoot, 'optional'), 'project-pack', ['project-skill']);
 
       const homeSkillsRoot = path.join(tmpHome, '.xtrm', 'skills');
       createSkill(path.join(homeSkillsRoot, 'default'), 'home-default');
+      createPack(path.join(homeSkillsRoot, 'optional'), 'home-pack', ['home-skill']);
       writeJson(path.join(homeSkillsRoot, 'state.json'), {
         schemaVersion: '1',
         enabledPacks: {
-          claude: [],
+          claude: ['home-pack'],
           pi: [],
         },
       });
@@ -362,12 +364,30 @@ describe('xt skills JSON CLI integration', () => {
       expect(listResult.status).toBe(0);
 
       const listPayload = JSON.parse(listResult.stdout) as {
+        scope: string;
         skillsRoot: string;
         defaultSkills: string[];
+        packs: Array<{ name: string; source?: string }>;
       };
 
-      expect(listPayload.skillsRoot).toBe(projectSkillsRoot);
-      expect(listPayload.defaultSkills).toEqual(['project-default']);
+      expect(listPayload.scope).toBe('global');
+      expect(listPayload.skillsRoot).toBe(homeSkillsRoot);
+      expect(listPayload.defaultSkills).toEqual(['home-default']);
+
+      const listLocalResult = run(['skills', 'list', '--local', '--json'], {
+        cwd: projectRoot,
+        env: { HOME: tmpHome },
+      });
+      expect(listLocalResult.status).toBe(0);
+      const listLocalPayload = JSON.parse(listLocalResult.stdout) as {
+        scope: string;
+        skillsRoot: string;
+        defaultSkills: string[];
+        packs: Array<{ name: string; source?: string }>;
+      };
+      expect(listLocalPayload.scope).toBe('local');
+      expect(listLocalPayload.skillsRoot).toBe(projectSkillsRoot);
+      expect(listLocalPayload.defaultSkills).toEqual(['project-default']);
 
       const createPackResult = run(['skills', 'create-pack', 'local-pack', '--json'], {
         cwd: projectRoot,
