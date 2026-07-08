@@ -26,25 +26,25 @@ xtrm-dev/core/.github/workflows/service-skills-drift-sweep.yml@main  (reusable)
     │
     └── auto-reconcile job  (Phase B — gated on reconcile-enabled + drift > 0)
           pip install httpx==0.28.1
-          python3 .xtrm/skills/default/service-skills/scripts/reconcile.py --json
+          python3 ~/.xtrm/skills/default/service-skills/scripts/reconcile.py --json
           peter-evans/create-pull-request@<v7-SHA>  →  xtrm-auto-reconcile/<sha>
 ```
 
 The reconcile script lives in the consumer repo at
-`.xtrm/skills/default/service-skills/scripts/reconcile.py` (installed by
+`~/.xtrm/skills/default/service-skills/scripts/reconcile.py` (installed by
 `xt update --apply`).
 
 ## Per-repo enablement
 
 ### 0. Vendor the reconcile script (do this first)
 
-The reusable workflow runs `python3 .xtrm/skills/default/service-skills/scripts/reconcile.py` against the consumer repo's working tree. Make sure that file is present and current before opting in:
+The reusable workflow runs `python3 ~/.xtrm/skills/default/service-skills/scripts/reconcile.py` against the consumer repo's working tree. Make sure that file is present and current before opting in:
 
 ```sh
 xt update --apply
 ```
 
-If the consumer repo's `.xtrm/skills/default/service-skills/scripts/` only contains `drift_detector.py` (older snapshot), Step 1+ will succeed but the auto-reconcile job will exit 2 with `No such file or directory`. Re-run `xt update --apply` whenever `xtrm-tools` ships changes to that directory.
+If the consumer repo's `~/.xtrm/skills/default/service-skills/scripts/` only contains `drift_detector.py` (older snapshot), Step 1+ will succeed but the auto-reconcile job will exit 2 with `No such file or directory`. Re-run `xt update --apply` whenever `xtrm-tools` ships changes to that directory.
 
 ### 1. Configure the API key secret
 
@@ -129,7 +129,7 @@ secret can stay configured.
 | Provider base URL | input `provider-base-url` | `https://nano-gpt.com/api/v1` |
 | Provider model | input `provider-model` | `moonshotai/kimi-k2.6` |
 | Token cost cap | env `XTRM_AUTO_RECONCILE_COST_LIMIT_TOKENS` on the auto-reconcile job | unset (no cap) |
-| Drift detector source path | input `scripts-path` | `.xtrm/skills/default/service-skills/scripts` |
+| Drift detector source path | input `scripts-path` | `~/.xtrm/skills/default/service-skills/scripts` |
 | Sticky-comment marker | input `comment-marker` | `<!-- service-skills-drift-sweep -->` |
 
 Cost cap example:
@@ -185,13 +185,13 @@ the auto-reconcile job is skipped via this guard — no loop.
 |---|---|---|
 | Phase A comment present, no auto-PR | `reconcile-enabled` not `true`, secret absent, or reconcile error | Auto-reconcile job logs — annotation explains |
 | Auto-PR opens but workflow doesn't run on it | GitHub Actions security: GITHUB_TOKEN commits don't trigger workflows | Use "Approve and run" on the PR |
-| reconcile job fails on `import drift_detector` | Repo missing `.xtrm/skills/default/service-skills/scripts/` | Run `xt update --apply` in repo |
+| reconcile job fails on `import drift_detector` | Repo missing `~/.xtrm/skills/default/service-skills/scripts/` | Run `xt update --apply` in repo |
 | reconcile job 401/403 from nano-gpt | Wrong / revoked API key | Rotate `NANO_GPT_API_KEY` repo secret |
 | Workflow queued forever | Another run in same concurrency group still active | Wait or cancel the head run |
 
 ## Refs
 
 - Workflow: `xtrm-dev/core/.github/workflows/service-skills-drift-sweep.yml`
-- Reconcile script: `.xtrm/skills/default/service-skills/scripts/reconcile.py`
+- Reconcile script: `~/.xtrm/skills/default/service-skills/scripts/reconcile.py`
 - Bead epic: `xtrm-lwpcn`
 - Bead: `xtrm-pm5d8`

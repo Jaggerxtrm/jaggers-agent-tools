@@ -56,8 +56,8 @@ For full xtrm/beads workflow details, load `/using-xtrm` and use `bd --help`, `b
 - `policies/` — source of hook/policy wiring; compile to `.xtrm/config/hooks.json`.
 - `.xtrm/config/` — generated/runtime config payload installed into consumer projects.
 - `.xtrm/hooks/` — hook payloads copied to projects.
-- `.xtrm/skills/default/` — canonical xtrm skill payloads installed to consumers.
-- `.xtrm/skills/optional/` — optional skill packs.
+- `.xtrm/skills/default/` — legacy per-repo path; canonical now at `~/.xtrm/skills/default/` (global SSOT).
+- `.xtrm/skills/optional/` — legacy per-repo path; canonical now at `~/.xtrm/skills/optional/` (global SSOT).
 - `.xtrm/ext-src/` and `packages/pi-extensions/extensions/` — Pi extension sources and packaged extension workspace.
 - `skills/` — legacy/source skill mirror used by some checks and docs.
 - `scripts/` — registry, packaging, policy, hygiene, and release helper scripts.
@@ -172,12 +172,13 @@ This project is indexed by GitNexus as **xtrm-tools**. Use the GitNexus MCP tool
 ## Current gotchas
 
 - `xt` has no `install` subcommand; fresh bootstrap is `xt init -y`, ongoing refresh is `xt update --apply`.
-- Runtime skills view is flat `.xtrm/skills/active`; legacy `active/claude` or `active/pi` paths are stale.
-- New skills go under `.xtrm/skills/default/<name>/`; run `npm run gen-registry` and validate pack/registry parity.
-- Specialist-owned skills must be edited in the specialists repo first, then vendored into xtrm-tools.
+- Runtime skills view is flat `.xtrm/skills/active` (composed) and `~/.xtrm/skills/active` (global); legacy `active/claude` or `active/pi` paths are stale.
+- New skills go under `~/.xtrm/skills/default/<name>/` (global SSOT); run `npm run gen-registry` and validate pack/registry parity.
+- Specialist-owned skills must be edited in the specialists repo first, then vendored into xtrm-tools and shipped to `~/.xtrm/skills/default/`.
 - Pi npm-provided skills (for example GitNexus skills) may need exclusion from Pi runtime views to avoid collisions.
 - Worktrees do not carry ignored dependencies (`node_modules`, `.venv`); run the repo bootstrap inside the worktree when needed.
 - `.xtrm/reports/` is gitignored; use `git add -f` only when a report should be committed.
+- Per-repo `default/` and `optional/` are deprecated; migrate with `xt migrate skills --apply`.
 
 ## Quality gates
 
@@ -194,5 +195,6 @@ Run targeted validation relevant to the files changed. Common checks:
 - `XTRM-GUIDE.md` — full workflow reference.
 - `docs/release.md` — release/operator playbook.
 - `docs/skills-ownership.json` and `docs/skills-ownership.md` — skill ownership and vendoring rules.
-- `.xtrm/skills/default/using-xtrm/SKILL.md` — current xtrm workflow behavior.
-- `.xtrm/skills/default/agent-docs-maintainer/SKILL.md` — how to keep this file compact.
+- `docs/plans/global-skills-migration.md` — global skills migration architecture and operator workflow.
+- `~/.xtrm/skills/default/using-xtrm/SKILL.md` — current xtrm workflow behavior (global SSOT).
+- `~/.xtrm/skills/default/agent-docs-maintainer/SKILL.md` — how to keep this file compact.

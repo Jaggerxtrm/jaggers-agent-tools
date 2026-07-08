@@ -52,7 +52,7 @@ XTRM-Tools is a **dual-runtime workflow system** — a Claude Code plugin and a 
 ├──────────────────────────┤     ├─────────────────────────────────┤
 │ Plugin hooks (hooks/)    │     │ Extensions (config/pi/          │
 │ MCP Servers (.mcp.json)  │     │   extensions/)                  │
-│                          │     │ Skills (.xtrm/skills/)          │
+│                          │     │ Skills (~/.xtrm/skills/ global + .xtrm/skills/ project)          │
 │                          │     │ MCP Servers (.mcp.json)         │
 └──────────────────────────┘     └─────────────────────────────────┘
 ```
@@ -220,9 +220,20 @@ Enriches tool output with knowledge graph context via `gitnexus augment`.
 
 ## Skills Catalog
 
-### Skills Tier Architecture (`.xtrm/skills/`)
+### Skills Tier Architecture (Global + Project)
 
-Three-tier layout: `default` (bundled baseline), `optional` (managed packs), and `user` (local overlays).
+**Global SSOT** (`~/.xtrm/skills/`):
+- `default/` — Baseline skills from xtrm package
+- `optional/` — Managed optional packs
+- `user/packs/` — Global user-authored packs
+- `active/` — Global runtime active view
+
+**Project residual** (`.xtrm/skills/`):
+- `user/packs/` — Project-specific user packs
+- `active/` — Composed runtime view (global + local)
+- `state.json` — Project delta overrides
+
+See [docs/plans/global-skills-migration.md](docs/plans/global-skills-migration.md) for the canonical migration architecture.
 
 #### Optional Packs (installed)
 

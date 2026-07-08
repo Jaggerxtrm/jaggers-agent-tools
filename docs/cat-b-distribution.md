@@ -20,7 +20,7 @@ These skills stay canonical in `specialists` and ship as vendored copies at publ
 - `using-specialists-auto`
 - `using-script-specialists`
 
-Publish flow refreshes `.xtrm/skills/default/` from `specialists` before registry generation. The publish workflow (`publish.yml`) additionally verifies the vendored mirror against the specialists-side `dist/asset-contract.json` (deterministic sha256 manifest) via `scripts/verify-asset-contract.mjs`, so drift between the npm tarball payload and the specialists release cannot ship. See [`release.md`](release.md) for the full gate chain.
+Publish flow refreshes `~/.xtrm/skills/default/` (global SSOT) from `specialists` before registry generation. The publish workflow (`publish.yml`) additionally verifies the vendored mirror against the specialists-side `dist/asset-contract.json` (deterministic sha256 manifest) via `scripts/verify-asset-contract.mjs`, so drift between the npm tarball payload and the specialists release cannot ship. See [`release.md`](release.md) for the full gate chain.
 
 ## Migration policy
 
@@ -42,7 +42,7 @@ Recommended before migration:
 2. Move hand-curated content into `.xtrm/skills/user/`.
 3. Re-run `xt init` or `xt update`.
 
-Post-migration, user-authored content belongs under `.xtrm/skills/user/`, not under `.claude/skills/`.
+Post-migration, user-authored content belongs under `.xtrm/skills/user/` (project) or `~/.xtrm/skills/user/` (global), not under `.claude/skills/`.
 
 ## Windows stance
 
