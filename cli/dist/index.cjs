@@ -69417,9 +69417,11 @@ async function verifySkillsIdentity(repoSkillsRoot, assetType) {
   const globalFiles = await walkDir(globalTierRoot);
   const repoFileSet = new Set(repoFiles.map((f) => import_node_path46.default.relative(repoTierRoot, f)));
   const globalFileSet = new Set(globalFiles.map((f) => import_node_path46.default.relative(globalTierRoot, f)));
+  const tierPrefix = assetType === "default" ? "default/" : "optional/";
   for (const relPath of repoFileSet) {
+    const prefixedRelPath = tierPrefix + relPath;
     if (!globalFileSet.has(relPath)) {
-      divergedFiles.push(relPath);
+      divergedFiles.push(prefixedRelPath);
       continue;
     }
     const repoFilePath = import_node_path46.default.join(repoTierRoot, relPath);
@@ -69427,7 +69429,7 @@ async function verifySkillsIdentity(repoSkillsRoot, assetType) {
     const repoHash = hashFile4(repoFilePath);
     const globalHash = hashFile4(globalFilePath);
     if (repoHash !== globalHash) {
-      divergedFiles.push(relPath);
+      divergedFiles.push(prefixedRelPath);
     }
   }
   return {
@@ -69487,7 +69489,9 @@ async function migrateSkills(repoPath, opts) {
       const defaultTierRoot2 = resolveDefaultTierRoot(repoSkillsRoot);
       const optionalTierRoot2 = resolveOptionalTierRoot(repoSkillsRoot);
       for (const relPath of divergedFiles) {
-        const sourcePath = relPath.startsWith("optional/") ? import_node_path46.default.join(optionalTierRoot2, relPath) : import_node_path46.default.join(defaultTierRoot2, relPath);
+        const tierPrefix = relPath.startsWith("optional/") ? "optional/" : "default/";
+        const pathInTier = relPath.slice(tierPrefix.length);
+        const sourcePath = relPath.startsWith("optional/") ? import_node_path46.default.join(optionalTierRoot2, pathInTier) : import_node_path46.default.join(defaultTierRoot2, pathInTier);
         const destPath = import_node_path46.default.join(legacyRoot, import_node_path46.default.basename(relPath));
         if (await import_fs_extra55.default.pathExists(sourcePath)) {
           await import_fs_extra55.default.copy(sourcePath, destPath);

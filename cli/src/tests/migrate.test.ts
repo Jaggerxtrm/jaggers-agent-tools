@@ -196,6 +196,27 @@ describe('xt migrate command', () => {
     expect(legacyFileExists).toBe(true);
   });
 
+  it('preserves diverged files from optional tier as override', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const globalSkillsRoot = await createGlobalSkillsRoot(tmpHome);
+
+    const divergedPath = path.join(repoDir, '.xtrm', 'skills', 'optional', 'optional-diverged.md');
+    await fs.writeFile(divergedPath, 'optional diverged content');
+
+    const globalDivergedPath = path.join(globalSkillsRoot, 'optional', 'optional-diverged.md');
+    await fs.writeFile(globalDivergedPath, 'global optional content');
+
+    const result = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('diverged');
+    expect(result.stdout).toContain('preserving as override');
+
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyFileExists = await fs.pathExists(path.join(legacyRoot, 'optional-diverged.md'));
+    expect(legacyFileExists).toBe(true);
+  });
+
   it('fails on non-xtrm repo', async () => {
     const nonXtrmDir = await createTempDir();
     try {

@@ -113,9 +113,12 @@ async function verifySkillsIdentity(
   const repoFileSet = new Set(repoFiles.map((f) => path.relative(repoTierRoot, f)));
   const globalFileSet = new Set(globalFiles.map((f) => path.relative(globalTierRoot, f)));
 
+  const tierPrefix = assetType === 'default' ? 'default/' : 'optional/';
+
   for (const relPath of repoFileSet) {
+    const prefixedRelPath = tierPrefix + relPath;
     if (!globalFileSet.has(relPath)) {
-      divergedFiles.push(relPath);
+      divergedFiles.push(prefixedRelPath);
       continue;
     }
 
@@ -126,7 +129,7 @@ async function verifySkillsIdentity(
     const globalHash = hashFile(globalFilePath);
 
     if (repoHash !== globalHash) {
-      divergedFiles.push(relPath);
+      divergedFiles.push(prefixedRelPath);
     }
   }
 
@@ -201,9 +204,11 @@ async function migrateSkills(
       const optionalTierRoot = resolveOptionalTierRoot(repoSkillsRoot);
 
       for (const relPath of divergedFiles) {
+        const tierPrefix = relPath.startsWith('optional/') ? 'optional/' : 'default/';
+        const pathInTier = relPath.slice(tierPrefix.length);
         const sourcePath = relPath.startsWith('optional/')
-          ? path.join(optionalTierRoot, relPath)
-          : path.join(defaultTierRoot, relPath);
+          ? path.join(optionalTierRoot, pathInTier)
+          : path.join(defaultTierRoot, pathInTier);
 
         const destPath = path.join(legacyRoot, path.basename(relPath));
         if (await fs.pathExists(sourcePath)) {
