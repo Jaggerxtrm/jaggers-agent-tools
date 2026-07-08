@@ -1,9 +1,12 @@
+import crypto from 'node:crypto';
 import kleur from 'kleur';
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { t } from '../utils/theme.js';
+import { appendHookLog, hashValue, resolveGlobalHooksConfigPath, resolveGlobalHooksRoot } from './global-hooks-bootstrap.js';
+import { shouldUseGlobalHooks } from './global-hooks-flag.js';
 
 declare const __dirname: string;
 
@@ -18,14 +21,33 @@ interface CommandHook {
     type: 'command';
     command: string;
     timeout?: number;
+    _source?: string;
+    _xtrm?: HookOwnershipMetadata;
+}
+
+interface HookOwnershipMetadata {
+    version: string;
+    installedAt: string;
+    hash: string;
 }
 
 interface HookWrapper {
     matcher?: string;
     hooks: CommandHook[];
+    _source?: string;
+    _xtrm?: HookOwnershipMetadata;
 }
 
-interface ClaudeSettings {
+export interface HookRuntimeSettingsShape {
+    hooks?: Record<string, HookWrapper[]>;
+    statusLine?: {
+        type: 'command';
+        command: string;
+    };
+    [key: string]: unknown;
+}
+
+interface ClaudeSettings extends HookRuntimeSettingsShape {
     permissions?: {
         allow?: string[];
         defaultMode?: string;
@@ -34,12 +56,6 @@ interface ClaudeSettings {
     skillSuggestions?: {
         enabled?: boolean;
     };
-    hooks?: Record<string, HookWrapper[]>;
-    statusLine?: {
-        type: 'command';
-        command: string;
-    };
-    [key: string]: unknown;
 }
 
 export interface ClaudeRuntimeSyncOptions {
@@ -56,6 +72,26 @@ export interface ClaudeRuntimeSyncResult {
     wroteSettings: boolean;
 }
 
+export interface ReconcileProjectHooksResult {
+    settingsPath: string;
+    changed: boolean;
+    hooksEntries: number;
+}
+
+export interface ReconcileGlobalClaudeHooksResult {
+    settingsPath: string;
+    changed: boolean;
+    hooksEntries: number;
+}
+
+interface SafeMergeResult {
+    readonly settings: HookRuntimeSettingsShape;
+    readonly changed: boolean;
+    readonly hooksEntries: number;
+}
+
+const XTRM_GLOBAL_SOURCE = 'xtrm-global';
+
 export function renderClaudeRuntimePlanSummary(): void {
     console.log(kleur.bold('\n  Claude Runtime Sync'));
     console.log(`${kleur.cyan('  •')}  read canonical hooks: .xtrm/config/hooks.json`);
@@ -70,27 +106,18 @@ export async function runClaudeRuntimeSyncPhase(opts: ClaudeRuntimeSyncOptions):
     console.log(t.bold('\n  ⚙  xtrm-tools  (Claude hooks wiring)'));
     warnIfOutdated();
 
-    const packageRoot = await resolvePackageRoot();
-    const hooksConfigPath = path.join(packageRoot, '.xtrm', 'config', 'hooks.json');
-    const settingsTemplatePath = path.join(packageRoot, '.xtrm', 'config', 'settings.json');
-
-    const hooksConfig = await fs.readJson(hooksConfigPath) as NativeHooksConfig;
-    const projectHooksDir = path.join(repoRoot, '.xtrm', 'hooks');
-    const generatedHooks = resolveHooksForProjectRuntime(hooksConfig.hooks ?? {}, projectHooksDir);
-    const generatedStatusLine = resolveStatusLineForProjectRuntime(hooksConfig.statusLine, projectHooksDir);
-
-    const settingsPath = isGlobal
-        ? path.join(os.homedir(), '.claude', 'settings.json')
-        : path.join(repoRoot, '.claude', 'settings.json');
-
-    // xtrm-il7ov: every xtrm-managed hook references <projectRoot>/.xtrm/hooks/ —
-    // they are project-scoped by definition. A global install must NOT replace the
-    // user's ~/.claude/settings.json hooks section with paths that hardcode the
-    // current repo, or every previously-configured global hook (PreCompact bd prime,
-    // SessionStart context-mode-cache-heal, etc.) gets wiped and project hooks fire
-    // twice. Refresh the statusLine wiring (separate concern, already idempotent)
-    // and return early without touching hooks.
     if (isGlobal) {
+        const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+        if (shouldUseGlobalHooks()) {
+            const hookResult = await reconcileGlobalClaudeHooks({ dryRun });
+            return {
+                settingsPath: hookResult.settingsPath,
+                hooksEventsWritten: hookResult.changed ? 1 : 0,
+                hooksEntriesWritten: hookResult.hooksEntries,
+                wroteSettings: hookResult.changed,
+            };
+        }
+
         console.log(t.muted('  ↻ Global install: skipping hook sync (project .claude/settings.json owns hooks)'));
         console.log(t.label(`  • global settings preserved: ${settingsPath}`));
         await ensureGlobalStatusLine();
@@ -102,13 +129,25 @@ export async function runClaudeRuntimeSyncPhase(opts: ClaudeRuntimeSyncOptions):
         };
     }
 
+    const packageRoot = await resolvePackageRoot();
+    const hooksConfigPath = path.join(packageRoot, '.xtrm', 'config', 'hooks.json');
+    const settingsTemplatePath = path.join(packageRoot, '.xtrm', 'config', 'settings.json');
+    const hooksConfig = await fs.readJson(hooksConfigPath) as NativeHooksConfig;
+    const projectHooksDir = path.join(repoRoot, '.xtrm', 'hooks');
+    const generatedHooks = resolveHooksForProjectRuntime(hooksConfig.hooks ?? {}, projectHooksDir);
+    const generatedStatusLine = resolveStatusLineForProjectRuntime(hooksConfig.statusLine, projectHooksDir);
+    const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
+
     const hasExistingSettings = await fs.pathExists(settingsPath);
     const baseSettings = await readBaseSettings(settingsTemplatePath);
     const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
+    const filteredHooks = shouldUseGlobalHooks()
+        ? filterGlobalOwnedProjectHooks(existingSettings.hooks ?? {}, generatedHooks)
+        : generatedHooks;
 
     const mergedSettings: ClaudeSettings = hasExistingSettings
-        ? { ...existingSettings, hooks: generatedHooks }
-        : { ...baseSettings, hooks: generatedHooks };
+        ? { ...existingSettings, hooks: filteredHooks }
+        : { ...baseSettings, hooks: filteredHooks };
 
     if (generatedStatusLine) {
         mergedSettings.statusLine = generatedStatusLine;
@@ -119,82 +158,28 @@ export async function runClaudeRuntimeSyncPhase(opts: ClaudeRuntimeSyncOptions):
         delete mergedSettings.extraKnownMarketplaces;
     }
 
-    const hooksEventsWritten = Object.keys(generatedHooks).length;
-    const hooksEntriesWritten = countHookEntries(generatedHooks);
-
-    console.log(t.label(`  • hooks source: ${hooksConfigPath}`));
-
-    console.log(t.label(`  • target settings: ${settingsPath}`));
-
-    if (hasExistingSettings) {
-        console.log(t.muted('  ↻ Existing settings found; merging and replacing only hooks section'));
-        if (Array.isArray(existingSettings.permissions?.allow)) {
-            console.log(t.muted(`  ↻ Preserved permissions.allow (${existingSettings.permissions.allow.length} entries)`));
-        }
-        if (typeof existingSettings.model === 'string') {
-            console.log(t.muted(`  ↻ Preserved model (${existingSettings.model})`));
-        }
-        if (typeof existingSettings.skillSuggestions?.enabled === 'boolean') {
-            console.log(t.muted(`  ↻ Preserved skillSuggestions.enabled (${existingSettings.skillSuggestions.enabled})`));
-        }
-    } else {
-        console.log(t.muted('  ↻ No existing settings found; creating with template defaults + generated hooks'));
-    }
+    const hooksEventsWritten = Object.keys(filteredHooks).length;
+    const hooksEntriesWritten = countHookEntries(filteredHooks);
 
     if (dryRun) {
-        console.log(kleur.dim(`  [DRY RUN] Would write ${hooksEntriesWritten} hook commands across ${hooksEventsWritten} events`));
-        console.log(kleur.dim('  [DRY RUN] Hooks section would be replaced entirely'));
-        if (prune) {
-            console.log(kleur.dim('  [DRY RUN] Plugin-era settings keys would be removed (enabledPlugins, extraKnownMarketplaces)'));
-        }
-        console.log('');
-        return {
-            settingsPath,
-            hooksEventsWritten,
-            hooksEntriesWritten,
-            wroteSettings: false,
-        };
+        return { settingsPath, hooksEventsWritten, hooksEntriesWritten, wroteSettings: false };
+    }
+
+    const existingSerialized = hasExistingSettings ? JSON.stringify(existingSettings) : '';
+    const mergedSerialized = JSON.stringify(mergedSettings);
+    if (existingSerialized === mergedSerialized) {
+        await ensureGlobalStatusLine();
+        return { settingsPath, hooksEventsWritten, hooksEntriesWritten, wroteSettings: false };
     }
 
     await fs.ensureDir(path.dirname(settingsPath));
     await fs.writeJson(settingsPath, mergedSettings, { spaces: 2 });
-
-    console.log(t.success(`  ✓ Wrote ${hooksEntriesWritten} hook commands across ${hooksEventsWritten} events`));
-    if (prune) {
-        console.log(t.success('  ✓ Removed plugin-era settings keys (enabledPlugins, extraKnownMarketplaces)'));
-    }
-    console.log(t.success('  ✓ Claude settings hooks synced\n'));
-
+    await fs.appendFile(settingsPath, '\n');
     await ensureGlobalStatusLine();
 
-    return {
-        settingsPath,
-        hooksEventsWritten,
-        hooksEntriesWritten,
-        wroteSettings: true,
-    };
+    return { settingsPath, hooksEventsWritten, hooksEntriesWritten, wroteSettings: true };
 }
 
-export interface ReconcileProjectHooksResult {
-    settingsPath: string;
-    changed: boolean;
-    hooksEntries: number;
-}
-
-/**
- * Reconcile a project's .claude/settings.json hooks section against the canonical
- * .xtrm/config/hooks.json, idempotently.
- *
- * `xt update --apply` copies the canonical hooks.json into the consumer's .xtrm but
- * skips the heavy claude-runtime-sync phase, so newly-added xtrm-managed hooks (e.g.
- * the service-skills SessionStart/PreToolUse/PostToolUse hooks shipped in 0.8.2) never
- * reach the consumer's settings.json and stay dormant (xtrm-0p7bp). This focused
- * reconciler wires them on every apply: it preserves all non-hook settings keys
- * (permissions/model/skillSuggestions/etc.), is a quiet no-op when the wired hooks
- * already match canonical, and does NOT perform the npm-version check or global
- * statusLine side effects that runClaudeRuntimeSyncPhase does — so it is cheap to run
- * per-repo across a fleet update.
- */
 export async function reconcileProjectClaudeHooks(
     repoRoot: string,
     opts: { dryRun?: boolean } = {},
@@ -203,23 +188,26 @@ export async function reconcileProjectClaudeHooks(
     const packageRoot = await resolvePackageRoot();
     const hooksConfigPath = path.join(packageRoot, '.xtrm', 'config', 'hooks.json');
     const settingsTemplatePath = path.join(packageRoot, '.xtrm', 'config', 'settings.json');
-    // repoRoot is the xt-managed project root; segments are literals — not user-controlled.
-    const settingsPath = path.join(repoRoot, '.claude', 'settings.json'); // nosemgrep
+    const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
 
     const hooksConfig = await fs.readJson(hooksConfigPath) as NativeHooksConfig;
-    const projectHooksDir = path.join(repoRoot, '.xtrm', 'hooks'); // nosemgrep
+    const projectHooksDir = path.join(repoRoot, '.xtrm', 'hooks');
     const generatedHooks = resolveHooksForProjectRuntime(hooksConfig.hooks ?? {}, projectHooksDir);
     const generatedStatusLine = resolveStatusLineForProjectRuntime(hooksConfig.statusLine, projectHooksDir);
-    const hooksEntries = countHookEntries(generatedHooks);
+    const hooksToWrite = shouldUseGlobalHooks()
+        ? filterGlobalOwnedProjectHooks(await readExistingHooks(settingsPath), generatedHooks)
+        : generatedHooks;
+    const hooksEntries = countHookEntries(hooksToWrite);
 
     const hasExistingSettings = await fs.pathExists(settingsPath);
     const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
     const baseSettings = hasExistingSettings ? existingSettings : await readBaseSettings(settingsTemplatePath);
+    const nextSettings: ClaudeSettings = { ...baseSettings, hooks: hooksToWrite };
+    if (generatedStatusLine && !nextSettings.statusLine) {
+        nextSettings.statusLine = generatedStatusLine;
+    }
 
-    // Idempotency: skip the write entirely when the wired hooks already match canonical.
-    const hooksAlreadyCurrent = hasExistingSettings
-        && JSON.stringify(existingSettings.hooks ?? {}) === JSON.stringify(generatedHooks);
-    if (hooksAlreadyCurrent) {
+    if (JSON.stringify(existingSettings) === JSON.stringify(nextSettings)) {
         return { settingsPath, changed: false, hooksEntries };
     }
 
@@ -227,34 +215,75 @@ export async function reconcileProjectClaudeHooks(
         return { settingsPath, changed: true, hooksEntries };
     }
 
-    const mergedSettings: ClaudeSettings = { ...baseSettings, hooks: generatedHooks };
-    if (generatedStatusLine && !mergedSettings.statusLine) {
-        mergedSettings.statusLine = generatedStatusLine;
-    }
-
     await fs.ensureDir(path.dirname(settingsPath));
-    await fs.writeJson(settingsPath, mergedSettings, { spaces: 2 });
-
+    await fs.writeJson(settingsPath, nextSettings, { spaces: 2 });
+    await fs.appendFile(settingsPath, '\n');
     return { settingsPath, changed: true, hooksEntries };
 }
 
-/**
- * Wire ~/.xtrm/hooks/statusline.mjs into ~/.claude/settings.json as the statusLine command.
- * Runs on every Claude runtime sync (global and project-level) to keep the global setting current.
- */
+export async function reconcileGlobalClaudeHooks(opts: { dryRun?: boolean } = {}): Promise<ReconcileGlobalClaudeHooksResult> {
+    const { dryRun = false } = opts;
+    const startedAt = Date.now();
+    const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+    const hooksConfig = await readGlobalHooksConfig(resolveGlobalHooksConfigPath());
+    const generatedHooks = resolveHooksForGlobalRuntime(hooksConfig.hooks ?? {}, resolveGlobalHooksRoot());
+
+    await appendHookLog({
+        timestamp: new Date().toISOString(),
+        component: 'hooks-migration',
+        event: 'hook.reconcile.start',
+        source: hashValue(settingsPath),
+        action: 'claude',
+        outcome: 'ok',
+        durationMs: 0,
+    });
+
+    const currentSettings = await readSettings(settingsPath);
+    const mergeResult = await safeMergeOwnedHookSettings(currentSettings, generatedHooks, { dryRun });
+    if (!mergeResult.changed) {
+        await ensureGlobalStatusLine();
+        await appendHookLog({
+            timestamp: new Date().toISOString(),
+            component: 'hooks-migration',
+            event: 'hook.reconcile.ok',
+            source: hashValue(settingsPath),
+            action: 'claude',
+            outcome: 'skipped',
+            durationMs: Date.now() - startedAt,
+        });
+        return { settingsPath, changed: false, hooksEntries: mergeResult.hooksEntries };
+    }
+
+    if (!dryRun) {
+        await fs.ensureDir(path.dirname(settingsPath));
+        await fs.writeJson(settingsPath, mergeResult.settings, { spaces: 2 });
+        await fs.appendFile(settingsPath, '\n');
+    }
+
+    await ensureGlobalStatusLine();
+    await appendHookLog({
+        timestamp: new Date().toISOString(),
+        component: 'hooks-migration',
+        event: 'hook.reconcile.ok',
+        source: hashValue(settingsPath),
+        action: 'claude',
+        outcome: 'ok',
+        durationMs: Date.now() - startedAt,
+    });
+    return { settingsPath, changed: !dryRun, hooksEntries: mergeResult.hooksEntries };
+}
+
 async function ensureGlobalStatusLine(): Promise<void> {
     const homeDir = os.homedir();
     const statuslineHookPath = path.join(homeDir, '.xtrm', 'hooks', 'statusline.mjs');
     const globalSettingsPath = path.join(homeDir, '.claude', 'settings.json');
-
     if (!await fs.pathExists(statuslineHookPath)) {
         return;
     }
 
-    const expectedCommand = `node "${statuslineHookPath}"`;
     const settings = await readSettings(globalSettingsPath);
+    const expectedCommand = `node "${statuslineHookPath}"`;
     const currentCommand = (settings.statusLine as { command?: string } | undefined)?.command;
-
     if (currentCommand === expectedCommand) {
         return;
     }
@@ -262,30 +291,34 @@ async function ensureGlobalStatusLine(): Promise<void> {
     settings.statusLine = { type: 'command', command: expectedCommand };
     await fs.ensureDir(path.dirname(globalSettingsPath));
     await fs.writeJson(globalSettingsPath, settings, { spaces: 2 });
-    console.log(t.success(`  ✓ Wired statusline → ~/.xtrm/hooks/statusline.mjs`));
+    await fs.appendFile(globalSettingsPath, '\n');
 }
 
+export async function readGlobalHooksConfig(hooksConfigPath: string): Promise<NativeHooksConfig> {
+    return await fs.readJson(hooksConfigPath) as NativeHooksConfig;
+}
+
+export function resolveHooksForGlobalRuntime(hooks: Record<string, HookWrapper[]>, globalHooksDir: string): Record<string, HookWrapper[]> {
+    const normalizedHooksDir = normalizeHookCommandPath(globalHooksDir);
+    return resolveHooksForRuntime(hooks, normalizedHooksDir);
+}
 
 function resolveHooksForProjectRuntime(hooks: Record<string, HookWrapper[]>, projectHooksDir: string): Record<string, HookWrapper[]> {
     const normalizedHooksDir = normalizeHookCommandPath(projectHooksDir);
-    const rewrittenHooks: Record<string, HookWrapper[]> = {};
+    return resolveHooksForRuntime(hooks, normalizedHooksDir);
+}
 
+function resolveHooksForRuntime(hooks: Record<string, HookWrapper[]>, hooksDir: string): Record<string, HookWrapper[]> {
+    const rewrittenHooks: Record<string, HookWrapper[]> = {};
     for (const [eventName, wrappers] of Object.entries(hooks)) {
         const wrapperList = Array.isArray(wrappers) ? wrappers : [wrappers as HookWrapper];
-        rewrittenHooks[eventName] = wrapperList.map(wrapper => ({
+        rewrittenHooks[eventName] = wrapperList.map((wrapper) => ({
             ...wrapper,
-            hooks: wrapper.hooks.map(hook => {
-                if (hook.type !== 'command') {
-                    return hook;
-                }
-                return {
-                    ...hook,
-                    command: rewritePluginRootCommandToProjectHookPath(hook.command, normalizedHooksDir),
-                };
-            }),
+            hooks: wrapper.hooks.map((hook) => hook.type !== 'command'
+                ? hook
+                : { ...hook, command: rewritePluginRootCommandToProjectHookPath(hook.command, hooksDir) }),
         }));
     }
-
     return rewrittenHooks;
 }
 
@@ -349,13 +382,186 @@ function normalizeHookCommandPath(targetPath: string): string {
 }
 
 function countHookEntries(hooks: Record<string, HookWrapper[]>): number {
-    let count = 0;
-    for (const wrappers of Object.values(hooks)) {
-        count += wrappers.length;
-    }
-    return count;
+    return Object.values(hooks).reduce((count, wrappers) => count + wrappers.length, 0);
 }
 
+function stableHookHash(wrapper: HookWrapper): string {
+    const canonical = {
+        matcher: wrapper.matcher ?? null,
+        hooks: wrapper.hooks.map((hook) => ({ type: hook.type, command: hook.command, timeout: hook.timeout ?? null })),
+    };
+    return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+}
+
+function tagOwnedWrapper(
+    wrapper: HookWrapper,
+    installedVersion: string,
+    installedAt: string,
+    existingWrapper?: HookWrapper,
+): HookWrapper {
+    const existingInstalledAt = hasSameCanonicalHooks(existingWrapper, wrapper)
+        ? existingWrapper?._xtrm?.installedAt
+        : undefined;
+
+    return {
+        ...wrapper,
+        _source: XTRM_GLOBAL_SOURCE,
+        _xtrm: {
+            version: installedVersion,
+            installedAt: existingInstalledAt ?? installedAt,
+            hash: stableHookHash(wrapper),
+        },
+        hooks: wrapper.hooks.map((hook) => ({ ...hook })),
+    };
+}
+
+function hasSameCanonicalHooks(left?: HookWrapper, right?: HookWrapper): boolean {
+    if (!left || !right) {
+        return false;
+    }
+
+    return stableHookHash(left) === stableHookHash(right);
+}
+
+function isOwnedWrapper(wrapper: HookWrapper, canonicalHashes: Set<string>): boolean {
+    if (wrapper._source === XTRM_GLOBAL_SOURCE) {
+        return true;
+    }
+
+    const wrapperHash = wrapper._xtrm?.hash ?? stableHookHash(wrapper);
+    return canonicalHashes.has(wrapperHash);
+}
+
+function filterGlobalOwnedProjectHooks(existingHooks: Record<string, HookWrapper[]>, generatedHooks: Record<string, HookWrapper[]>): Record<string, HookWrapper[]> {
+    const canonicalHashes = new Set(Object.values(generatedHooks).flat().map((wrapper) => stableHookHash(wrapper)));
+    const filtered: Record<string, HookWrapper[]> = {};
+
+    for (const [eventName, wrappers] of Object.entries(existingHooks)) {
+        const kept = wrappers.filter((wrapper) => !isOwnedWrapper(wrapper, canonicalHashes));
+        if (kept.length > 0) {
+            filtered[eventName] = kept;
+        }
+    }
+
+    for (const [eventName, wrappers] of Object.entries(generatedHooks)) {
+        filtered[eventName] = filtered[eventName] ? [...wrappers, ...filtered[eventName]] : wrappers;
+    }
+
+    return filtered;
+}
+
+export async function safeMergeOwnedHookSettings(
+    currentSettings: HookRuntimeSettingsShape,
+    generatedHooks: Record<string, HookWrapper[]>,
+    opts: { dryRun?: boolean } = {},
+): Promise<SafeMergeResult> {
+    const installedVersion = await readInstalledVersion();
+    const installedAt = new Date().toISOString();
+    const currentHooks = currentSettings.hooks ?? {};
+    const taggedHooks = Object.fromEntries(
+        Object.entries(generatedHooks).map(([eventName, wrappers]) => {
+            const existingWrappers = currentHooks[eventName] ?? [];
+            return [
+                eventName,
+                wrappers.map((wrapper) => tagOwnedWrapper(
+                    wrapper,
+                    installedVersion,
+                    installedAt,
+                    existingWrappers.find((existingWrapper) => hasSameCanonicalHooks(existingWrapper, wrapper)),
+                )),
+            ];
+        }),
+    ) as Record<string, HookWrapper[]>;
+    const canonicalHashes = new Set(Object.values(taggedHooks).flat().map((wrapper) => wrapper._xtrm?.hash ?? stableHookHash(wrapper)));
+    const mergedHooks: Record<string, HookWrapper[]> = {};
+    const globalHooksRoot = path.resolve(os.homedir(), '.xtrm', 'hooks');
+
+    for (const [eventName, wrappers] of Object.entries(taggedHooks)) {
+        mergedHooks[eventName] = [...wrappers];
+    }
+
+    for (const [eventName, wrappers] of Object.entries(currentHooks)) {
+        const mergedWrappers = mergedHooks[eventName] ?? [];
+        for (const wrapper of wrappers) {
+            const entryHash = stableHookHash(wrapper);
+            if (wrapper._source === XTRM_GLOBAL_SOURCE || canonicalHashes.has(entryHash) || canonicalHashes.has(wrapper._xtrm?.hash ?? '')) {
+                await appendHookLog({ timestamp: new Date().toISOString(), component: 'hooks-migration', event: 'hook.entry.owned-replaced', entryKey: eventName, source: hashValue(entryHash), action: 'replace', outcome: 'ok', durationMs: 0 });
+                continue;
+            }
+
+            if (conflictsWithCanonical(wrapper, globalHooksRoot)) {
+                console.warn(`[hook.entry.foreign] ${eventName} ${hashValue(entryHash)}`);
+                await appendHookLog({ timestamp: new Date().toISOString(), component: 'hooks-migration', event: 'hook.entry.foreign-preserved', entryKey: eventName, source: hashValue(entryHash), action: 'preserve', outcome: 'ok', durationMs: 0 });
+            }
+
+            mergedWrappers.push(wrapper);
+        }
+
+        if (mergedWrappers.length > 0) {
+            mergedHooks[eventName] = mergedWrappers;
+        }
+    }
+
+    for (const [eventName, wrappers] of Object.entries(taggedHooks)) {
+        for (const wrapper of wrappers) {
+            await appendHookLog({ timestamp: new Date().toISOString(), component: 'hooks-migration', event: 'hook.entry.new-added', entryKey: eventName, source: hashValue(wrapper._xtrm?.hash ?? stableHookHash(wrapper)), action: 'add', outcome: 'ok', durationMs: 0 });
+        }
+    }
+
+    const nextSettings: HookRuntimeSettingsShape = { ...currentSettings, hooks: mergedHooks };
+    const changed = JSON.stringify(currentSettings) !== JSON.stringify(nextSettings);
+    return { settings: nextSettings, changed: changed && !opts.dryRun, hooksEntries: countHookEntries(taggedHooks) };
+}
+
+function conflictsWithCanonical(wrapper: HookWrapper, globalHooksRoot: string): boolean {
+    if (wrapper._source === XTRM_GLOBAL_SOURCE) {
+        return true;
+    }
+
+    if (!Array.isArray(wrapper.hooks)) {
+        return false;
+    }
+
+    return wrapper.hooks.some((hook) => typeof hook.command === 'string' && commandTargetsGlobalHook(hook.command, globalHooksRoot));
+}
+
+function commandTargetsGlobalHook(command: string, globalHooksRoot: string): boolean {
+    for (const token of extractCommandPathTokens(command)) {
+        const resolvedTokenPath = path.resolve(expandTilde(token));
+        const relativePath = path.relative(globalHooksRoot, resolvedTokenPath);
+        if (relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function extractCommandPathTokens(command: string): string[] {
+    const matches = command.match(/"([^"]+)"|'([^']+)'|([^\s]+)/g) ?? [];
+    return matches
+        .map((match) => match.replace(/^['"]|['"]$/g, ''))
+        .filter((token) => token.includes('.xtrm/hooks/'));
+}
+
+function expandTilde(targetPath: string): string {
+    if (!targetPath.startsWith('~/')) {
+        return targetPath;
+    }
+
+    return path.join(os.homedir(), targetPath.slice(2));
+}
+
+async function readExistingHooks(settingsPath: string): Promise<Record<string, HookWrapper[]>> {
+    const settings = await readSettings(settingsPath);
+    return settings.hooks ?? {};
+}
+
+async function readInstalledVersion(): Promise<string> {
+    const packageRoot = await resolvePackageRoot();
+    const pkg = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };
+    return pkg.version ?? '0.0.0';
+}
 
 async function readSettings(settingsPath: string): Promise<ClaudeSettings> {
     try {
@@ -369,24 +575,12 @@ async function readBaseSettings(settingsTemplatePath: string): Promise<ClaudeSet
     try {
         return await fs.readJson(settingsTemplatePath) as ClaudeSettings;
     } catch {
-        return {
-            permissions: {
-                allow: [],
-                defaultMode: 'default',
-            },
-            skillSuggestions: {
-                enabled: true,
-            },
-        };
+        return { permissions: { allow: [], defaultMode: 'default' }, skillSuggestions: { enabled: true } };
     }
 }
 
 async function resolvePackageRoot(): Promise<string> {
-    const candidates = [
-        path.resolve(__dirname, '../..'),
-        path.resolve(__dirname, '../../..'),
-    ];
-
+    const candidates = [path.resolve(__dirname, '../..'), path.resolve(__dirname, '../../..')];
     for (const candidate of candidates) {
         const hooksConfigPath = path.join(candidate, '.xtrm', 'config', 'hooks.json');
         if (await fs.pathExists(hooksConfigPath)) {
@@ -400,15 +594,11 @@ async function resolvePackageRoot(): Promise<string> {
 function warnIfOutdated(): void {
     try {
         const localPkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'));
-        const result = spawnSync('npm', ['show', 'xtrm-tools', 'version', '--json'], {
-            encoding: 'utf8',
-            stdio: 'pipe',
-            timeout: 5000,
-        });
+        const result = spawnSync('npm', ['show', 'xtrm-tools', 'version', '--json'], { encoding: 'utf8', stdio: 'pipe', timeout: 5000 });
         if (result.status !== 0 || !result.stdout) return;
 
         const npmVersion: string = JSON.parse(result.stdout.trim());
-        const parse = (v: string) => v.split('.').map(Number);
+        const parse = (value: string) => value.split('.').map(Number);
         const [lMaj, lMin, lPat] = parse(localPkg.version);
         const [rMaj, rMin, rPat] = parse(npmVersion);
         const isNewer = rMaj > lMaj || (rMaj === lMaj && rMin > lMin) || (rMaj === lMaj && rMin === lMin && rPat > lPat);
