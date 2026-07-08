@@ -18,7 +18,6 @@ export interface RuntimeViewCheckResult {
   readonly projectClaudePointerState: RuntimePointerState;
   readonly projectPiPointerState: RuntimePointerState;
   readonly activeEntries: string[];
-  readonly hasDeprecatedAgentsSkillsPath: boolean;
 }
 
 export function getRuntimePointerTarget(options: { scope: 'global' | 'project' }): string {
@@ -123,8 +122,6 @@ export async function checkRuntimeSkillsViews(projectRoot: string): Promise<Runt
     ? (projectPiPointerReady ? 'ready' : 'missing')
     : (projectPiPointerReady ? 'ready' : (projectCanUseGlobal ? 'skipped' : 'missing'));
 
-  const hasDeprecatedAgentsSkillsPath = await fs.pathExists(path.join(projectRoot, '.agents', 'skills'));
-
   return {
     activeReady,
     globalClaudePointerReady,
@@ -132,7 +129,6 @@ export async function checkRuntimeSkillsViews(projectRoot: string): Promise<Runt
     projectClaudePointerState,
     projectPiPointerState,
     activeEntries,
-    hasDeprecatedAgentsSkillsPath,
   };
 }
 

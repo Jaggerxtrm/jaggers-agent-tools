@@ -17,8 +17,6 @@ export class PruneModeReadError extends Error {
 export async function calculateDiff(repoRoot: string, systemRoot: string, pruneMode: boolean = false): Promise<ChangeSet> {
     const adapter = detectAdapter(systemRoot);
     const isClaude = adapter?.toolName === 'claude-code';
-    const normalizedRoot = normalize(systemRoot).replace(/\\/g, '/');
-    const isAgentsSkills = normalizedRoot.includes('.agents/skills');
 
     const changeSet: ChangeSet = {
         skills: { missing: [], outdated: [], drifted: [], total: 0 },
@@ -39,20 +37,6 @@ export async function calculateDiff(repoRoot: string, systemRoot: string, pruneM
         }
     } catch {
         // Manifest unreadable — fall back to mtime heuristic
-    }
-
-    // ~/.agents/skills: skills-only, mapped directly (repoRoot/skills/* → systemRoot/*)
-    if (isAgentsSkills) {
-        const repoPath = join(repoRoot, 'skills');
-        if (!(await fs.pathExists(repoPath))) return changeSet;
-
-        const items = (await fs.readdir(repoPath)).filter(i => !IGNORED_ITEMS.has(i));
-        changeSet.skills.total = items.length;
-
-        for (const item of items) {
-            await compareItem('skills', item, join(repoPath, item), join(systemRoot, item), changeSet, pruneMode, installedHashes);
-        }
-        return changeSet;
     }
 
     // 1. Folders: Skills & Hooks & Commands
