@@ -15,7 +15,7 @@ import { reconcileGlobalClaudeHooks } from '../core/claude-runtime-sync.js';
 import { reconcileGlobalPiHooks } from '../core/pi-runtime-hooks.js';
 import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { assertRuntimeSkillsViews } from '../core/skills-runtime-views.js';
-import { getGlobalSkillsOverrideRoots } from '../core/global-skills-flag.js';
+import { getGlobalSkillsOverrideRoots, shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import {
     runMachineBootstrapPhase,
 } from '../core/machine-bootstrap.js';
@@ -252,7 +252,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
             await ensureUserAgentsSkillsSymlink();
             await ensureAgentsSkillsSymlink(projectRoot);
         }
-        await assertRuntimeSkillsViews(projectRoot, { scope: 'both' });
+        await assertRuntimeSkillsViews(projectRoot, { scope: shouldUseGlobalSkills() ? 'global' : 'both' });
         await ensureBeadsSharedServerEnabled(projectRoot, true);
     }
 

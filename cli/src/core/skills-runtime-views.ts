@@ -137,7 +137,10 @@ export async function assertRuntimeSkillsViews(projectRoot: string, options: { s
   const check = await checkRuntimeSkillsViews(projectRoot);
 
   const failures: string[] = [];
-  if (!check.activeReady) failures.push('active view is missing, empty, or contains invalid links');
+  // Project active view is only asserted when the project is expected to
+  // materialise its own skills (scope !== 'global'). Under XTRM_GLOBAL_SKILLS,
+  // the project active view is legitimately empty.
+  if (scope !== 'global' && !check.activeReady) failures.push('active view is missing, empty, or contains invalid links');
   if ((scope === 'global' || scope === 'both') && !check.globalClaudePointerReady) failures.push(`~/.claude/skills is not linked to ${getRuntimePointerTarget({ scope: 'global' })}`);
   if ((scope === 'global' || scope === 'both') && !check.globalPiPointerReady) failures.push(`~/.pi/agent/skills is not linked to ${getRuntimePointerTarget({ scope: 'global' })}`);
   if ((scope === 'project' || scope === 'both') && check.projectClaudePointerState === 'missing') failures.push(`.claude/skills is not linked to ${getRuntimePointerTarget({ scope: 'project' })}`);

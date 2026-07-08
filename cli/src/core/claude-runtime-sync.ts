@@ -1,12 +1,14 @@
 import crypto from 'node:crypto';
 import kleur from 'kleur';
 import fs from 'fs-extra';
+import fsSync from 'node:fs';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { t } from '../utils/theme.js';
 import { appendHookLog, hashValue, resolveGlobalHooksConfigPath, resolveGlobalHooksRoot } from './global-hooks-bootstrap.js';
 import { shouldUseGlobalHooks } from './global-hooks-flag.js';
+import { writeJsonAtomic } from '../utils/atomic-write.js';
 
 declare const __dirname: string;
 
@@ -27,7 +29,6 @@ interface CommandHook {
 
 interface HookOwnershipMetadata {
     version: string;
-    installedAt: string;
     hash: string;
 }
 
@@ -172,9 +173,7 @@ export async function runClaudeRuntimeSyncPhase(opts: ClaudeRuntimeSyncOptions):
         return { settingsPath, hooksEventsWritten, hooksEntriesWritten, wroteSettings: false };
     }
 
-    await fs.ensureDir(path.dirname(settingsPath));
-    await fs.writeJson(settingsPath, mergedSettings, { spaces: 2 });
-    await fs.appendFile(settingsPath, '\n');
+    await writeJsonAtomic(settingsPath, mergedSettings);
     await ensureGlobalStatusLine();
 
     return { settingsPath, hooksEventsWritten, hooksEntriesWritten, wroteSettings: true };
@@ -215,9 +214,7 @@ export async function reconcileProjectClaudeHooks(
         return { settingsPath, changed: true, hooksEntries };
     }
 
-    await fs.ensureDir(path.dirname(settingsPath));
-    await fs.writeJson(settingsPath, nextSettings, { spaces: 2 });
-    await fs.appendFile(settingsPath, '\n');
+    await writeJsonAtomic(settingsPath, nextSettings);
     return { settingsPath, changed: true, hooksEntries };
 }
 
@@ -255,9 +252,7 @@ export async function reconcileGlobalClaudeHooks(opts: { dryRun?: boolean } = {}
     }
 
     if (!dryRun) {
-        await fs.ensureDir(path.dirname(settingsPath));
-        await fs.writeJson(settingsPath, mergeResult.settings, { spaces: 2 });
-        await fs.appendFile(settingsPath, '\n');
+        await writeJsonAtomic(settingsPath, mergeResult.settings);
     }
 
     await ensureGlobalStatusLine();
@@ -289,9 +284,7 @@ async function ensureGlobalStatusLine(): Promise<void> {
     }
 
     settings.statusLine = { type: 'command', command: expectedCommand };
-    await fs.ensureDir(path.dirname(globalSettingsPath));
-    await fs.writeJson(globalSettingsPath, settings, { spaces: 2 });
-    await fs.appendFile(globalSettingsPath, '\n');
+    await writeJsonAtomic(globalSettingsPath, settings);
 }
 
 export async function readGlobalHooksConfig(hooksConfigPath: string): Promise<NativeHooksConfig> {
@@ -396,19 +389,13 @@ function stableHookHash(wrapper: HookWrapper): string {
 function tagOwnedWrapper(
     wrapper: HookWrapper,
     installedVersion: string,
-    installedAt: string,
-    existingWrapper?: HookWrapper,
+    _existingWrapper?: HookWrapper,
 ): HookWrapper {
-    const existingInstalledAt = hasSameCanonicalHooks(existingWrapper, wrapper)
-        ? existingWrapper?._xtrm?.installedAt
-        : undefined;
-
     return {
         ...wrapper,
         _source: XTRM_GLOBAL_SOURCE,
         _xtrm: {
             version: installedVersion,
-            installedAt: existingInstalledAt ?? installedAt,
             hash: stableHookHash(wrapper),
         },
         hooks: wrapper.hooks.map((hook) => ({ ...hook })),
@@ -456,7 +443,6 @@ export async function safeMergeOwnedHookSettings(
     opts: { dryRun?: boolean } = {},
 ): Promise<SafeMergeResult> {
     const installedVersion = await readInstalledVersion();
-    const installedAt = new Date().toISOString();
     const currentHooks = currentSettings.hooks ?? {};
     const taggedHooks = Object.fromEntries(
         Object.entries(generatedHooks).map(([eventName, wrappers]) => {
@@ -466,7 +452,6 @@ export async function safeMergeOwnedHookSettings(
                 wrappers.map((wrapper) => tagOwnedWrapper(
                     wrapper,
                     installedVersion,
-                    installedAt,
                     existingWrappers.find((existingWrapper) => hasSameCanonicalHooks(existingWrapper, wrapper)),
                 )),
             ];
@@ -526,9 +511,26 @@ function conflictsWithCanonical(wrapper: HookWrapper, globalHooksRoot: string): 
 }
 
 function commandTargetsGlobalHook(command: string, globalHooksRoot: string): boolean {
+    let realRoot: string;
+    try {
+        realRoot = fsSync.realpathSync(globalHooksRoot);
+    } catch {
+        realRoot = path.resolve(globalHooksRoot);
+    }
+
     for (const token of extractCommandPathTokens(command)) {
         const resolvedTokenPath = path.resolve(expandTilde(token));
-        const relativePath = path.relative(globalHooksRoot, resolvedTokenPath);
+        let realTokenPath: string;
+        try {
+            realTokenPath = fsSync.realpathSync(resolvedTokenPath);
+        } catch {
+            // Missing file — treat lexical path as authoritative for containment;
+            // a canonical hook path that resolves cleanly is trustworthy even if
+            // the file has not been materialised yet.
+            realTokenPath = resolvedTokenPath;
+        }
+
+        const relativePath = path.relative(realRoot, realTokenPath);
         if (relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
             return true;
         }

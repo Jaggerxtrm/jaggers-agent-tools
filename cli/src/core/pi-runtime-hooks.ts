@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { appendHookLog, hashValue, resolveGlobalHooksConfigPath, resolveGlobalHooksRoot } from './global-hooks-bootstrap.js';
 import { readGlobalHooksConfig, resolveHooksForGlobalRuntime, safeMergeOwnedHookSettings, type HookRuntimeSettingsShape } from './claude-runtime-sync.js';
+import { writeJsonAtomic } from '../utils/atomic-write.js';
 
 export interface ReconcileGlobalPiHooksResult {
   readonly settingsPath: string;
@@ -44,9 +45,7 @@ export async function reconcileGlobalPiHooks(opts: { dryRun?: boolean } = {}): P
   }
 
   if (!dryRun) {
-    await fs.ensureDir(path.dirname(settingsPath));
-    await fs.writeJson(settingsPath, result.settings, { spaces: 2 });
-    await fs.appendFile(settingsPath, '\n');
+    await writeJsonAtomic(settingsPath, result.settings);
   }
 
   await appendHookLog({

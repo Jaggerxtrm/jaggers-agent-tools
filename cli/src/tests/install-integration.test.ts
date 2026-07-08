@@ -29,15 +29,23 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 let tmpDir = '';
 let previousCwd = '';
+let previousHome = '';
 
 beforeEach(() => {
   previousCwd = process.cwd();
+  previousHome = process.env.HOME ?? '';
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-install-test-'));
+  // Isolate HOME to a subdir so global-scope writes (~/.claude/skills, ~/.xtrm)
+  // do not collide with per-repo assertions rooted at tmpDir.
+  process.env.HOME = path.join(tmpDir, 'home');
+  fs.ensureDirSync(process.env.HOME);
   process.chdir(tmpDir);
 });
 
 afterEach(() => {
   delete process.env.XTRM_GLOBAL_SKILLS;
+  if (previousHome) process.env.HOME = previousHome;
+  else delete process.env.HOME;
   process.chdir(previousCwd);
   fs.removeSync(tmpDir);
   vi.restoreAllMocks();
@@ -111,19 +119,23 @@ describe('xtrm install integration', () => {
   it('creates active runtime pointers for Claude and Pi and is idempotent across reruns', async () => {
     await runInstallCli(['--yes']);
 
-    const claudeSkillsPath = path.join(tmpDir, '.claude', 'skills');
-    const activePath = path.join(tmpDir, '.xtrm', 'skills', 'active');
+    // Global-skills migration (xtrm-bq7yd): Claude/Pi pointers now live under
+    // $HOME (absolute), targeting the global active view. Project .xtrm/skills
+    // still holds the per-repo user tier.
+    const homeDir = process.env.HOME!;
+    const claudeSkillsPath = path.join(homeDir, '.claude', 'skills');
+    const globalActivePath = path.join(homeDir, '.xtrm', 'skills', 'active');
     const piSettingsPath = path.join(tmpDir, '.pi', 'settings.json');
 
     const claudeLinkStat = fs.lstatSync(claudeSkillsPath);
-
     expect(claudeLinkStat.isSymbolicLink()).toBe(true);
-    expect(fs.readlinkSync(claudeSkillsPath)).toBe(path.join('..', '.xtrm', 'skills', 'active'));
-    expect(fs.pathExistsSync(activePath)).toBe(true);
+    expect(fs.readlinkSync(claudeSkillsPath)).toBe(globalActivePath);
+    expect(fs.pathExistsSync(globalActivePath)).toBe(true);
 
     const piSettings = fs.readJsonSync(piSettingsPath) as { skills?: string[] };
     expect(Array.isArray(piSettings.skills)).toBe(true);
-    expect(piSettings.skills).toContain('../.xtrm/skills/active');
+    // Pi settings entry points at the global active view via HOME expansion.
+    expect(piSettings.skills!.some(s => s.includes('.xtrm/skills/active'))).toBe(true);
 
     const claudeMtimeBefore = claudeLinkStat.mtimeMs;
 
@@ -131,7 +143,6 @@ describe('xtrm install integration', () => {
     await runInstallCli(['--yes']);
 
     const claudeMtimeAfter = fs.lstatSync(claudeSkillsPath).mtimeMs;
-
     expect(claudeMtimeAfter).toBe(claudeMtimeBefore);
   });
 
@@ -176,27 +187,27 @@ describe('xtrm install integration', () => {
   });
 
   it('with XTRM_GLOBAL_SKILLS=1 installs default and optional skills only to global root', async () => {
-    const previousHome = process.env.HOME;
+    // HOME is already isolated to path.join(tmpDir, 'home') by beforeEach — the
+    // project root is tmpDir; the global tree lives under $HOME/.xtrm.
     process.env.XTRM_GLOBAL_SKILLS = '1';
-    process.env.HOME = tmpDir;
 
-    try {
-      await runInstallCli(['--yes']);
+    await runInstallCli(['--yes']);
 
-      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'default'))).toBe(false);
-      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'optional'))).toBe(false);
-      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'user', 'packs'))).toBe(true);
-      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'active'))).toBe(true);
-      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'state.json'))).toBe(true);
-      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'INVARIANTS.md'))).toBe(true);
+    // Per-repo default/optional/active are NOT materialised under the flag —
+    // skills live only in $HOME/.xtrm/skills. Project retains the user tier
+    // (empty scaffold) but nothing else under skills/.
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'default'))).toBe(false);
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'optional'))).toBe(false);
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'user', 'packs'))).toBe(true);
 
-      expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'registry.json'))).toBe(true);
-      const registry = fs.readJsonSync(path.join(tmpDir, '.xtrm', 'registry.json')) as { assets: Record<string, unknown> };
-      expect(registry.assets.skills).toBeUndefined();
-      expect(registry.assets.skills_optional).toBeUndefined();
-    } finally {
-      process.env.HOME = previousHome;
-    }
+    // Global tree is where the payload actually landed.
+    const homeDir = process.env.HOME!;
+    expect(fs.pathExistsSync(path.join(homeDir, '.xtrm', 'skills', 'default'))).toBe(true);
+
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'registry.json'))).toBe(true);
+    const registry = fs.readJsonSync(path.join(tmpDir, '.xtrm', 'registry.json')) as { assets: Record<string, unknown> };
+    expect(registry.assets.skills).toBeUndefined();
+    expect(registry.assets.skills_optional).toBeUndefined();
   });
 
   it('hook wiring includes all hooks and preserves existing permissions.allow on reinstall', async () => {

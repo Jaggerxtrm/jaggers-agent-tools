@@ -32,7 +32,7 @@ const assets = {
   config: {
     source_dir: '.xtrm/config',
     install_mode: 'copy',
-    install_scope: 'global',
+    install_scope: 'project',
   },
 };
 

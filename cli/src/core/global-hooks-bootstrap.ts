@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
+import { writeJsonAtomic } from '../utils/atomic-write.js';
 
 interface GlobalHooksBootstrapOptions {
   readonly force?: boolean;
@@ -105,12 +106,10 @@ export async function ensureGlobalHooksBootstrapped(pkgRoot: string, opts: Globa
     await fs.copy(sourceHooksRoot, targetHooksRoot, { filter: COPY_FILTER });
     await fs.ensureDir(path.dirname(targetHooksConfigPath));
     await fs.copy(sourceHooksConfigPath, targetHooksConfigPath);
-    await fs.writeJson(statePath, {
+    await writeJsonAtomic(statePath, {
       installedVersion,
       installedFrom: pkgRoot,
-      installedAt: new Date().toISOString(),
-    }, { spaces: 2 });
-    await fs.appendFile(statePath, '\n');
+    }, { expectedRoot: targetHooksRoot });
 
     await appendHookLog({
       timestamp: new Date().toISOString(),

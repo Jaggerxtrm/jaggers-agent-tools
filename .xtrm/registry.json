@@ -4,6 +4,7 @@
     "hooks": {
       "source_dir": ".xtrm/hooks",
       "install_mode": "copy",
+      "install_scope": "global",
       "files": {
         "beads-claim-sync.mjs": {
           "hash": "a9663671113f8fd540e6588d6825963a0301679bac8a661c9cc35a2d6b474eed",
@@ -110,6 +111,7 @@
     "skills": {
       "source_dir": ".xtrm/skills/default",
       "install_mode": "copy",
+      "install_scope": "global",
       "files": {
         "agent-docs-maintainer/references/agents-template.md": {
           "hash": "3782e8389f689e4786418920f997010af3fbe11bf616615e707154b5423e65c5",
@@ -1076,6 +1078,7 @@
     "skills_optional": {
       "source_dir": ".xtrm/skills/optional",
       "install_mode": "copy",
+      "install_scope": "global",
       "files": {
         "architecture-design/architecture-patterns/references/advanced-patterns.md": {
           "hash": "e1cb31c83b532e579991de277836a1ea5e3d88b2ca30fc8ac16f6047ceca439e",
@@ -1362,6 +1365,7 @@
     "config": {
       "source_dir": ".xtrm/config",
       "install_mode": "copy",
+      "install_scope": "project",
       "files": {
         ".env.example": {
           "hash": "70e6af83cb0faf13a74676a5a3b79551ac60997cccd226e14c8dbc5887c047d5",
@@ -1380,11 +1384,11 @@
           "version": "0.9.1"
         },
         "instructions/agents-top.md": {
-          "hash": "af3cc32c3a401bb366753fcaa8567212726cd54e110f3bdcecd91fde0a80ba91",
+          "hash": "f0bdc59485d8fcf2ac9ee98072b1612fe16ca0c4648e7ead747e83a18b9663f6",
           "version": "0.9.1"
         },
         "instructions/claude-top.md": {
-          "hash": "27012693e1be7629b26ef99f476527c519c22c4030af087efea6ed23f13c84f9",
+          "hash": "2a4e8679d03504229e30b434f1027c5df40fd125ac4636ac27ed6ffefd676421",
           "version": "0.9.1"
         },
         "pi.mcp.json": {

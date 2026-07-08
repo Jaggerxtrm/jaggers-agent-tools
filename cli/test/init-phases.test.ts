@@ -221,6 +221,16 @@ describe('xtrm init phased orchestrator', () => {
         const packageRoot = '/tmp/xtrm-pkg-root';
         await fs.ensureDir(path.join(packageRoot, '.xtrm'));
         await fs.writeJson(path.join(packageRoot, '.xtrm', 'registry.json'), { version: '1.0.0', assets: {} });
+        // Batch B/J bootstrap logging reads pkgJson.version — mock package.json.
+        await fs.writeJson(path.join(packageRoot, 'package.json'), { name: 'xtrm-tools', version: '0.0.0-test' });
+        // Batch A global-skills bootstrap copies from packageRoot/.xtrm/skills/{default,optional,user};
+        // mock empty tiers so ensureGlobalSkillsBootstrapped has something to walk.
+        await fs.ensureDir(path.join(packageRoot, '.xtrm', 'skills', 'default'));
+        await fs.ensureDir(path.join(packageRoot, '.xtrm', 'skills', 'optional'));
+        // Batch J global-hooks bootstrap copies packageRoot/.xtrm/hooks and packageRoot/.xtrm/config/hooks.json.
+        await fs.ensureDir(path.join(packageRoot, '.xtrm', 'hooks'));
+        await fs.ensureDir(path.join(packageRoot, '.xtrm', 'config'));
+        await fs.writeJson(path.join(packageRoot, '.xtrm', 'config', 'hooks.json'), { hooks: {} });
 
         consoleLogSpy = vi.spyOn(console, 'log').mockImplementation((...args) => {
             logs.push(args.join(' '));
