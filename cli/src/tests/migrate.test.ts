@@ -9,6 +9,7 @@ const CLI_PATH = path.join(__dirname, '../../dist/index.cjs');
 
 function runCli(args: string[], cwd?: string): { stdout: string; stderr: string; exitCode: number | null } {
   try {
+    // semgrep-ignore-next-line: command-injection - test fixture, args are controlled by test code
     const result = execSync(`node ${CLI_PATH} ${args.join(' ')}`, {
       cwd,
       encoding: 'utf8',
