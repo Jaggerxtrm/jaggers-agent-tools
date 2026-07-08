@@ -336,6 +336,21 @@ async function mutatePacks(opts: {
   scope: Scope;
 }) {
   const { skillsRoot, action, packArg, runtimes, scope } = opts;
+
+  // When disabling with --local scope, check if pack is globally enabled
+  if (action === 'disable' && scope === 'local') {
+    const globalSkillsRoot = resolveSkillsRoot(os.homedir());
+    const globalState = await readStateOrDefault(globalSkillsRoot);
+    const isGloballyEnabled = globalState.enabledPacks.claude.includes(packArg)
+      || globalState.enabledPacks.pi.includes(packArg);
+
+    if (isGloballyEnabled) {
+      throw new Error(
+        `Pack "${packArg}" is globally enabled; use --global to disable everywhere, or leave alone and add a local override.`
+      );
+    }
+  }
+
   const requestedPacks = await resolveRequestedPacks(skillsRoot, packArg, action);
   const beforeState = await readSkillsState(skillsRoot);
 

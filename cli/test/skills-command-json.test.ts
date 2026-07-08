@@ -400,4 +400,33 @@ describe('xt skills JSON CLI integration', () => {
       fs.rmSync(projectRoot, { recursive: true, force: true });
     }
   });
+
+  it('disable --local on globally-enabled pack gives helpful error', () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-skills-disable-local-'));
+
+    try {
+      fs.mkdirSync(path.join(projectRoot, '.git'), { recursive: true });
+
+      const homeSkillsRoot = path.join(tmpHome, '.xtrm', 'skills');
+      createPack(path.join(homeSkillsRoot, 'optional'), 'global-pack', ['global-skill']);
+      writeJson(path.join(homeSkillsRoot, 'state.json'), {
+        schemaVersion: '1',
+        enabledPacks: {
+          claude: ['global-pack'],
+          pi: ['global-pack'],
+        },
+      });
+
+      const result = run(['skills', 'disable', 'global-pack', '--local', '--json'], {
+        cwd: projectRoot,
+        env: { HOME: tmpHome },
+      });
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('Pack "global-pack" is globally enabled');
+      expect(result.stderr).toContain('use --global to disable everywhere, or leave alone and add a local override');
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
 });
