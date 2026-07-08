@@ -26,15 +26,19 @@ function sortByName<T extends { name: string }>(entries: readonly T[]): T[] {
 }
 
 async function collectEnabledPackSkills(
-  skillsRoot: string,
+  skillsRoots: readonly string[],
   enabledPackNames: readonly string[],
 ): Promise<DiscoveredSkill[]> {
-  const optionalPacks = await discoverTierPacks(skillsRoot, 'optional');
-  const userPacks = await discoverTierPacks(skillsRoot, 'user');
   const availablePacks = new Map<string, { path: string; skills: DiscoveredSkill[] }>();
 
-  for (const pack of [...optionalPacks, ...userPacks]) {
-    availablePacks.set(pack.name, { path: pack.path, skills: pack.skills });
+  for (const root of skillsRoots) {
+    const optionalPacks = await discoverTierPacks(root, 'optional');
+    const userPacks = await discoverTierPacks(root, 'user');
+    for (const pack of [...optionalPacks, ...userPacks]) {
+      if (!availablePacks.has(pack.name)) {
+        availablePacks.set(pack.name, { path: pack.path, skills: pack.skills });
+      }
+    }
   }
 
   const enabledSkills: DiscoveredSkill[] = [];
@@ -67,12 +71,15 @@ function assertNoRuntimeCollisions(runtime: SkillsRuntime, skills: readonly Disc
 export async function selectRuntimeSkills(
   runtime: SkillsRuntime,
   skillsRoot: string,
+  providedState?: { enabledPacks: { claude: string[]; pi: string[] } },
+  additionalSkillsRoots?: readonly string[],
 ): Promise<RuntimeSkillSelection> {
-  const state = await readSkillsState(skillsRoot);
+  const state = providedState ?? await readSkillsState(skillsRoot);
   const enabledPacks = state.enabledPacks[runtime];
 
   const defaultSkills = await discoverDefaultSkills(skillsRoot);
-  const enabledPackSkills = await collectEnabledPackSkills(skillsRoot, enabledPacks);
+  const rootsToSearch = additionalSkillsRoots ? [skillsRoot, ...additionalSkillsRoots] : [skillsRoot];
+  const enabledPackSkills = await collectEnabledPackSkills(rootsToSearch, enabledPacks);
   const allSkills = sortByName([...defaultSkills, ...enabledPackSkills]);
 
   assertNoRuntimeCollisions(runtime, allSkills);
@@ -200,7 +207,8 @@ export async function rebuildActiveViewInternal(
   ])].sort((a, b) => a.localeCompare(b));
 
   const defaultSkills = await discoverDefaultSkills(skillsRoot);
-  const enabledPackSkills = await collectEnabledPackSkills(skillsRoot, mergedEnabledPacks);
+  const rootsToSearch = extraSourceRoots.length > 0 ? [skillsRoot, ...extraSourceRoots] : [skillsRoot];
+  const enabledPackSkills = await collectEnabledPackSkills(rootsToSearch, mergedEnabledPacks);
   const extraSkills = (await Promise.all(extraSourceRoots.map((root) => discoverDirectSkills(root)))).flat();
   const mergedSkills = sortByName([...defaultSkills, ...enabledPackSkills, ...extraSkills]);
 

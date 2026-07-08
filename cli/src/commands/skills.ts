@@ -5,6 +5,16 @@ import path from 'node:path';
 import kleur from 'kleur';
 import { findProjectRoot } from '../utils/repo-root.js';
 import { sym } from '../utils/theme.js';
+
+function resolveSkillsLogPath(): string {
+  return path.join(os.homedir(), '.xtrm', 'logs', 'skills-state.jsonl');
+}
+
+async function appendSkillsLog(event: Record<string, unknown>): Promise<void> {
+  const logPath = resolveSkillsLogPath();
+  await fs.ensureDir(path.dirname(logPath));
+  await fs.appendFile(logPath, `${JSON.stringify({ timestamp: new Date().toISOString(), ...event })}\n`);
+}
 import {
   SKILLS_RUNTIMES,
   type SkillsRuntime,
@@ -41,16 +51,19 @@ type ListPackEntry = {
     readonly filesystemOnlySkills: string[];
   };
   readonly enabledIn: SkillsRuntime[];
+  readonly source?: 'global' | 'local' | 'both';
 };
 
 const PACK_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-function resolveScope(opts: { global?: boolean; local?: boolean }): Scope {
+function resolveScope(opts: { global?: boolean; local?: boolean }, defaultScope: Scope = 'global'): Scope {
   if (opts.global && opts.local) {
     throw new Error('Choose exactly one scope: --global or --local');
   }
 
-  return opts.global ? 'global' : 'local';
+  if (opts.global) return 'global';
+  if (opts.local) return 'local';
+  return defaultScope;
 }
 
 async function resolveScopeRoot(scope: Scope): Promise<string> {
@@ -103,23 +116,76 @@ async function assertSkillsInvariants(
 async function collectListState(
   skillsRoot: string,
   runtimes: readonly SkillsRuntime[],
+  scope: Scope,
 ): Promise<{
   defaultSkills: string[];
   packs: ListPackEntry[];
   runtimeStatus: RuntimeStatus[];
+  scope: Scope;
 }> {
-  const [defaultSkills, optionalPacks, userPacks, state] = await Promise.all([
-    discoverDefaultSkills(skillsRoot),
-    discoverTierPacks(skillsRoot, 'optional'),
-    discoverTierPacks(skillsRoot, 'user'),
-    readStateOrDefault(skillsRoot),
+  const globalSkillsRoot = resolveSkillsRoot(os.homedir());
+  const isLocalScope = scope === 'local' && skillsRoot !== globalSkillsRoot;
+  const [globalState, localState, globalDefaultSkills, localDefaultSkills, globalOptionalPacks, localOptionalPacks, globalUserPacks, localUserPacks] = await Promise.all([
+    fs.pathExists(resolveStateFilePath(globalSkillsRoot)).then(exists => exists ? readSkillsState(globalSkillsRoot) : createDefaultSkillsState()),
+    isLocalScope ? readStateOrDefault(skillsRoot) : null,
+    discoverDefaultSkills(globalSkillsRoot),
+    isLocalScope ? discoverDefaultSkills(skillsRoot) : null,
+    discoverTierPacks(globalSkillsRoot, 'optional'),
+    isLocalScope ? discoverTierPacks(skillsRoot, 'optional') : null,
+    discoverTierPacks(globalSkillsRoot, 'user'),
+    isLocalScope ? discoverTierPacks(skillsRoot, 'user') : null,
   ]);
 
-  const allPacks = [...optionalPacks, ...userPacks].sort((a, b) => a.name.localeCompare(b.name));
+  const effectiveState = isLocalScope && localState
+    ? composeState(globalState, localState)
+    : globalState;
+
+  const defaultSkills = isLocalScope && localDefaultSkills
+    ? [...localDefaultSkills]
+    : globalDefaultSkills;
+  const optionalPacks = isLocalScope && localOptionalPacks
+    ? [...globalOptionalPacks, ...localOptionalPacks]
+    : globalOptionalPacks;
+  const userPacks = isLocalScope && localUserPacks
+    ? [...globalUserPacks, ...localUserPacks]
+    : globalUserPacks;
+
+  const allPacksMap = new Map<string, { tier: 'optional' | 'user'; path: string; skills: any[]; metadataMismatch: any; source: 'global' | 'local' | 'both' }>();
+  for (const pack of globalOptionalPacks) {
+    allPacksMap.set(pack.name, { ...pack, tier: 'optional' as const, source: 'global' as const });
+  }
+  for (const pack of globalUserPacks) {
+    allPacksMap.set(pack.name, { ...pack, tier: 'user' as const, source: 'global' as const });
+  }
+  if (isLocalScope) {
+    for (const pack of localOptionalPacks ?? []) {
+      if (allPacksMap.has(pack.name)) {
+        const existing = allPacksMap.get(pack.name)!;
+        existing.source = 'both';
+      } else {
+        allPacksMap.set(pack.name, { ...pack, tier: 'optional' as const, source: 'local' as const });
+      }
+    }
+    for (const pack of localUserPacks ?? []) {
+      if (allPacksMap.has(pack.name)) {
+        const existing = allPacksMap.get(pack.name)!;
+        existing.source = 'both';
+      } else {
+        allPacksMap.set(pack.name, { ...pack, tier: 'user' as const, source: 'local' as const });
+      }
+    }
+  }
+
+  const allPacks = [...allPacksMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 
   const runtimeStatus: RuntimeStatus[] = [];
   for (const runtime of runtimes) {
-    const selected = await selectRuntimeSkills(runtime, skillsRoot);
+    const selected = await selectRuntimeSkills(
+      runtime,
+      isLocalScope ? skillsRoot : globalSkillsRoot,
+      effectiveState,
+      isLocalScope ? [globalSkillsRoot] : undefined,
+    );
     runtimeStatus.push({
       runtime,
       enabledPacks: selected.enabledPacks,
@@ -128,7 +194,18 @@ async function collectListState(
   }
 
   const packs: ListPackEntry[] = allPacks.map(pack => {
-    const enabledIn = SKILLS_RUNTIMES.filter(runtime => state.enabledPacks[runtime].includes(pack.name));
+    const globalEnabled = globalState.enabledPacks;
+    const localEnabled = localState?.enabledPacks;
+    const enabledIn: SkillsRuntime[] = [];
+
+    for (const runtime of SKILLS_RUNTIMES) {
+      const inGlobal = globalEnabled[runtime].includes(pack.name);
+      const inLocal = localEnabled?.[runtime].includes(pack.name);
+
+      if (inGlobal || inLocal) {
+        enabledIn.push(runtime);
+      }
+    }
 
     return {
       name: pack.name,
@@ -137,6 +214,7 @@ async function collectListState(
       skills: pack.skills.map(skill => skill.name).sort((a, b) => a.localeCompare(b)),
       metadataMismatch: pack.metadataMismatch,
       enabledIn,
+      source: pack.source,
     };
   });
 
@@ -144,6 +222,16 @@ async function collectListState(
     defaultSkills: defaultSkills.map(skill => skill.name),
     packs,
     runtimeStatus,
+    scope,
+  };
+}
+
+function composeState(globalState: { enabledPacks: { claude: string[]; pi: string[] } }, localState: { enabledPacks: { claude: string[]; pi: string[] } }): { enabledPacks: { claude: string[]; pi: string[] } } {
+  return {
+    enabledPacks: {
+      claude: [...new Set([...globalState.enabledPacks.claude, ...localState.enabledPacks.claude])].sort((a, b) => a.localeCompare(b)),
+      pi: [...new Set([...globalState.enabledPacks.pi, ...localState.enabledPacks.pi])].sort((a, b) => a.localeCompare(b)),
+    },
   };
 }
 
@@ -152,8 +240,11 @@ function printListSummary(skillsRoot: string, data: {
   packs: ListPackEntry[];
   runtimeStatus: RuntimeStatus[];
   warnings: string[];
+  scope: Scope;
 }): void {
-  console.log(kleur.bold(`\n  xt skills list`));
+  const scopeLabel = data.scope === 'global' ? 'global' : 'local (composed)';
+  console.log(kleur.bold(`\n  xt skills list --${data.scope}`));
+  console.log(kleur.gray(`  scope: ${scopeLabel}`));
   console.log(kleur.gray(`  root: ${skillsRoot}`));
 
   console.log(`\n  ${kleur.bold('Default skills')} (${data.defaultSkills.length})`);
@@ -175,7 +266,11 @@ function printListSummary(skillsRoot: string, data: {
         : 'disabled';
       const mismatch = pack.metadataMismatch.metadataOnlySkills.length > 0 || pack.metadataMismatch.filesystemOnlySkills.length > 0;
       const mismatchText = mismatch ? kleur.yellow(' metadata-mismatch') : '';
-      console.log(`  - ${kleur.bold(pack.name)} [${pack.tier}] enabled: ${enabledText}${mismatchText}`);
+      const sourceLabel = data.scope === 'local' && pack.source === 'global' ? ' [global]'
+        : data.scope === 'local' && pack.source === 'local' ? ' [local]'
+        : data.scope === 'local' && pack.source === 'both' ? ' [global+local]'
+        : '';
+      console.log(`  - ${kleur.bold(pack.name)} [${pack.tier}] enabled: ${enabledText}${mismatchText}${sourceLabel}`);
     }
   }
 
@@ -238,8 +333,24 @@ async function mutatePacks(opts: {
   action: 'enable' | 'disable';
   packArg: string;
   runtimes: readonly SkillsRuntime[];
+  scope: Scope;
 }) {
-  const { skillsRoot, action, packArg, runtimes } = opts;
+  const { skillsRoot, action, packArg, runtimes, scope } = opts;
+
+  // When disabling with --local scope, check if pack is globally enabled
+  if (action === 'disable' && scope === 'local') {
+    const globalSkillsRoot = resolveSkillsRoot(os.homedir());
+    const globalState = await readStateOrDefault(globalSkillsRoot);
+    const isGloballyEnabled = globalState.enabledPacks.claude.includes(packArg)
+      || globalState.enabledPacks.pi.includes(packArg);
+
+    if (isGloballyEnabled) {
+      throw new Error(
+        `Pack "${packArg}" is globally enabled; use --global to disable everywhere, or leave alone and add a local override.`
+      );
+    }
+  }
+
   const requestedPacks = await resolveRequestedPacks(skillsRoot, packArg, action);
   const beforeState = await readSkillsState(skillsRoot);
 
@@ -263,6 +374,18 @@ async function mutatePacks(opts: {
   }
 
   const afterState = await readSkillsState(skillsRoot);
+
+  for (const runtime of runtimes) {
+    await appendSkillsLog({
+      event: 'skills-state.mutation',
+      scope,
+      action,
+      pack: packArg,
+      runtime,
+      before: beforeState.enabledPacks[runtime],
+      after: afterState.enabledPacks[runtime],
+    });
+  }
 
   return {
     action,
@@ -358,15 +481,15 @@ export function createSkillsCommand(): Command {
 
   skills
     .command('list')
-    .description('Show tiered skill inventory and runtime active resolution')
+    .description('Show tiered skill inventory and runtime active resolution (default: --global)')
     .option('--global', 'Use user-global scope (~/.xtrm/skills)', false)
-    .option('--local', 'Use project-local scope (./.xtrm/skills)', false)
+    .option('--local', 'Use project-local scope (./.xtrm/skills) with global composition', false)
     .option('--claude', 'Show Claude runtime view', false)
     .option('--pi', 'Show Pi runtime view', false)
     .option('--json', 'Output JSON', false)
     .action(async (opts: { global?: boolean; local?: boolean; claude?: boolean; pi?: boolean; json?: boolean }) => {
       try {
-        const scope = resolveScope(opts);
+        const scope = resolveScope(opts, 'global');
         const scopeRoot = await resolveScopeRoot(scope);
         const skillsRoot = resolveSkillsRoot(scopeRoot);
         const runtimes = resolveTargetRuntimes(opts);
@@ -396,7 +519,7 @@ export function createSkillsCommand(): Command {
         const warningViolations = await assertSkillsInvariants(skillsRoot, {
           nonBlockingCodes: ['PACK_METADATA_MISMATCH'],
         });
-        const listData = await collectListState(skillsRoot, runtimes);
+        const listData = await collectListState(skillsRoot, runtimes, scope);
 
         const warnings = [
           ...warningViolations.map(violation => violation.message),
@@ -430,7 +553,7 @@ export function createSkillsCommand(): Command {
 
   skills
     .command('enable <pack>')
-    .description('Enable a skill pack for Claude, Pi, or both runtimes')
+    .description('Enable a skill pack (default: --global)')
     .option('--global', 'Use user-global scope (~/.xtrm/skills)', false)
     .option('--local', 'Use project-local scope (./.xtrm/skills)', false)
     .option('--claude', 'Target Claude runtime', false)
@@ -438,7 +561,7 @@ export function createSkillsCommand(): Command {
     .option('--json', 'Output JSON', false)
     .action(async (pack: string, opts: { global?: boolean; local?: boolean; claude?: boolean; pi?: boolean; json?: boolean }) => {
       try {
-        const scope = resolveScope(opts);
+        const scope = resolveScope(opts, 'global');
         const scopeRoot = await resolveScopeRoot(scope);
         const skillsRoot = resolveSkillsRoot(scopeRoot);
         const runtimes = resolveTargetRuntimes(opts);
@@ -450,6 +573,7 @@ export function createSkillsCommand(): Command {
           action: 'enable',
           packArg: pack,
           runtimes,
+          scope,
         });
 
         if (opts.json) {
@@ -476,7 +600,7 @@ export function createSkillsCommand(): Command {
 
   skills
     .command('disable <pack>')
-    .description('Disable a skill pack for Claude, Pi, or both runtimes')
+    .description('Disable a skill pack (default: --global)')
     .option('--global', 'Use user-global scope (~/.xtrm/skills)', false)
     .option('--local', 'Use project-local scope (./.xtrm/skills)', false)
     .option('--claude', 'Target Claude runtime', false)
@@ -484,7 +608,7 @@ export function createSkillsCommand(): Command {
     .option('--json', 'Output JSON', false)
     .action(async (pack: string, opts: { global?: boolean; local?: boolean; claude?: boolean; pi?: boolean; json?: boolean }) => {
       try {
-        const scope = resolveScope(opts);
+        const scope = resolveScope(opts, 'global');
         const scopeRoot = await resolveScopeRoot(scope);
         const skillsRoot = resolveSkillsRoot(scopeRoot);
         const runtimes = resolveTargetRuntimes(opts);
@@ -495,6 +619,7 @@ export function createSkillsCommand(): Command {
           action: 'disable',
           packArg: pack,
           runtimes,
+          scope,
         });
 
         if (opts.json) {
@@ -517,13 +642,13 @@ export function createSkillsCommand(): Command {
 
   skills
     .command('create-pack <name>')
-    .description('Create a user skill pack scaffold under .xtrm/skills/user/packs/<name>/')
+    .description('Create a user skill pack scaffold under .xtrm/skills/user/packs/<name>/ (default: --local)')
     .option('--global', 'Use user-global scope (~/.xtrm/skills)', false)
     .option('--local', 'Use project-local scope (./.xtrm/skills)', false)
     .option('--json', 'Output JSON', false)
     .action(async (name: string, opts: { global?: boolean; local?: boolean; json?: boolean }) => {
       try {
-        const scope = resolveScope(opts);
+        const scope = resolveScope(opts, 'local');
         const scopeRoot = await resolveScopeRoot(scope);
         const skillsRoot = resolveSkillsRoot(scopeRoot);
 
