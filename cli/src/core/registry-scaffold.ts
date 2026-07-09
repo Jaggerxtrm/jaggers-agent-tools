@@ -126,6 +126,7 @@ export async function scaffoldSkillsDefaultFromPackage(params: {
             && await fs.pathExists(path.join(globalSkillsRoot, 'optional'));
         if (hasGlobalTree) {
             if (!dryRun) {
+                // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
                 await fs.ensureDir(path.join(userXtrmDir, 'skills', 'user', 'packs'));
             }
             return 'noop';

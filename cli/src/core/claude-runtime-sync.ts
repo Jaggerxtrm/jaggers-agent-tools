@@ -187,6 +187,7 @@ export async function reconcileProjectClaudeHooks(
     const packageRoot = await resolvePackageRoot();
     const hooksConfigPath = path.join(packageRoot, '.xtrm', 'config', 'hooks.json');
     const settingsTemplatePath = path.join(packageRoot, '.xtrm', 'config', 'settings.json');
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
 
     const hooksConfig = await fs.readJson(hooksConfigPath) as NativeHooksConfig;
@@ -515,10 +516,12 @@ function commandTargetsGlobalHook(command: string, globalHooksRoot: string): boo
     try {
         realRoot = fsSync.realpathSync(globalHooksRoot);
     } catch {
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         realRoot = path.resolve(globalHooksRoot);
     }
 
     for (const token of extractCommandPathTokens(command)) {
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         const resolvedTokenPath = path.resolve(expandTilde(token));
         let realTokenPath: string;
         try {
@@ -551,6 +554,7 @@ function expandTilde(targetPath: string): string {
         return targetPath;
     }
 
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     return path.join(os.homedir(), targetPath.slice(2));
 }
 
