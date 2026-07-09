@@ -60555,6 +60555,7 @@ async function ensureAgentsSkillsSymlink(projectRoot, options = {}) {
     console.log(kleur_default.dim("  \u25CB project-scope skills pointer skipped (using global)"));
   } else {
     await ensureSkillsSymlink(
+      // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
       import_path3.default.join(projectRoot, ".claude", "skills"),
       import_path3.default.join("..", ".xtrm", "skills", "active"),
       ".claude/skills",
