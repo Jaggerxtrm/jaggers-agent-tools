@@ -139,6 +139,10 @@
           "hash": "1b212a0a59f8162587a681b16e20af5bd793e4f6c7fb7c7af2d32a7deef553fb",
           "version": "0.9.1"
         },
+        "code-review/SKILL.md": {
+          "hash": "46447b0a5db2bb2f0d2243a3fca4de377d2c475a3edf91b0a259d1863505f750",
+          "version": "0.9.1"
+        },
         "deepwiki/SKILL.md": {
           "hash": "cd0dadf31266cdf2ecbe9c129357133f105078d93e9c714d929378feaf3c4e63",
           "version": "0.9.1"
@@ -153,6 +157,10 @@
         },
         "delegating/SKILL.md": {
           "hash": "bb1c8ed316735afb98d1d5b8f32e07f869091f8a56d079c9a1ac359f8ee67a9b",
+          "version": "0.9.1"
+        },
+        "deploy-monitor/SKILL.md": {
+          "hash": "fd9811df13b8df52322cc1643aa69233e51b16a56a36397fade871cb4bad61ac",
           "version": "0.9.1"
         },
         "documenting/CHANGELOG.md": {
@@ -611,12 +619,20 @@
           "hash": "c1ae480365a5f2e39bac0a96fd74c335b80d90487ffac55b8d0bee25fef7c28a",
           "version": "0.9.1"
         },
+        "multiplexing/scripts/verify-deploy-applied.sh": {
+          "hash": "6c9f88c53bfd858313d0547bc266e0fb27911800bed679953137ea11a26c5946",
+          "version": "0.9.1"
+        },
         "multiplexing/SKILL.md": {
-          "hash": "03bd9524c61ca85ce3e777c649e78f1c276bad6436c0098d509620a95fa60a2c",
+          "hash": "682cdd29118e6981473f26999b9aab34f540d472ce794c87ed95606ed52cfa0f",
           "version": "0.9.1"
         },
         "planning/SKILL.md": {
           "hash": "a9f1d578c03aee5b3dc130ebf1e50458e1feb20c5669dbdfbff3c0282eecc99c",
+          "version": "0.9.1"
+        },
+        "pr-reviewer/SKILL.md": {
+          "hash": "4f9f28b97077b34bc08349c7a82d489fc17b8f6a96af0052b1a827768ea6922a",
           "version": "0.9.1"
         },
         "premortem/SKILL.md": {
@@ -1380,11 +1396,11 @@
           "version": "0.9.1"
         },
         "instructions/agents-top.md": {
-          "hash": "af3cc32c3a401bb366753fcaa8567212726cd54e110f3bdcecd91fde0a80ba91",
+          "hash": "f0bdc59485d8fcf2ac9ee98072b1612fe16ca0c4648e7ead747e83a18b9663f6",
           "version": "0.9.1"
         },
         "instructions/claude-top.md": {
-          "hash": "27012693e1be7629b26ef99f476527c519c22c4030af087efea6ed23f13c84f9",
+          "hash": "2a4e8679d03504229e30b434f1027c5df40fd125ac4636ac27ed6ffefd676421",
           "version": "0.9.1"
         },
         "pi.mcp.json": {
