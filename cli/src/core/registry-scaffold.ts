@@ -5,6 +5,8 @@ import crypto from 'node:crypto';
 import { t } from '../utils/theme.js';
 import { checkDrift } from './drift.js';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
+import { shouldUseGlobalSkills } from './global-skills-flag.js';
+import { resolveGlobalSkillsRoot } from './skills-layout.js';
 
 declare const __dirname: string;
 
@@ -16,6 +18,7 @@ export interface RegistryFileEntry {
 export interface RegistryAsset {
     source_dir: string;
     install_mode: 'copy' | 'symlink';
+    install_scope?: 'global' | 'project';
     files: Record<string, RegistryFileEntry>;
 }
 
@@ -79,6 +82,30 @@ export function isSkillsDefaultPath(relativePath: string): boolean {
     return relativePath.startsWith('skills/default/');
 }
 
+function resolveInstalledPath(userXtrmDir: string, relativePath: string, overrideRoots?: Record<string, string>): string {
+    if (relativePath.startsWith('skills/default/')) {
+        const skillsRoot = overrideRoots?.skills;
+        if (skillsRoot) {
+            // Canonical registry relative paths generated from package payload.
+            // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+            return path.join(skillsRoot, relativePath.slice('skills/default/'.length));
+        }
+    }
+
+    if (relativePath.startsWith('skills/optional/')) {
+        const optionalSkillsRoot = overrideRoots?.skills_optional;
+        if (optionalSkillsRoot) {
+            // Canonical registry relative paths generated from package payload.
+            // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+            return path.join(optionalSkillsRoot, relativePath.slice('skills/optional/'.length));
+        }
+    }
+
+    // Canonical registry relative paths generated from package payload.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    return path.join(userXtrmDir, relativePath);
+}
+
 export async function hashFile(filePath: string): Promise<string> {
     const content = await fs.readFile(filePath);
     return crypto.createHash('sha256').update(content).digest('hex');
@@ -92,6 +119,19 @@ export async function scaffoldSkillsDefaultFromPackage(params: {
     const { packageRoot, userXtrmDir, dryRun } = params;
     const sourceDir = path.join(packageRoot, '.xtrm', 'skills', 'default');
     const targetDir = path.join(userXtrmDir, 'skills', 'default');
+
+    if (shouldUseGlobalSkills()) {
+        const globalSkillsRoot = resolveGlobalSkillsRoot();
+        const hasGlobalTree = await fs.pathExists(path.join(globalSkillsRoot, 'default'))
+            && await fs.pathExists(path.join(globalSkillsRoot, 'optional'));
+        if (hasGlobalTree) {
+            if (!dryRun) {
+                // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+                await fs.ensureDir(path.join(userXtrmDir, 'skills', 'user', 'packs'));
+            }
+            return 'noop';
+        }
+    }
 
     const stat = await fs.lstat(targetDir).catch(() => null);
     if (stat) {
@@ -125,6 +165,37 @@ export async function scaffoldSkillsDefaultFromPackage(params: {
     return 'copy';
 }
 
+function getAssetInstallScope(asset: RegistryAsset): 'global' | 'project' {
+    return asset.install_scope ?? 'project';
+}
+
+async function appendGlobalSkillsSkipLog(asset: string, count: number): Promise<void> {
+    const logPath = path.join(path.dirname(resolveGlobalSkillsRoot()), 'logs', 'skills-migration.jsonl');
+    await fs.ensureDir(path.dirname(logPath));
+    await fs.appendFile(logPath, `${JSON.stringify({
+        timestamp: new Date().toISOString(),
+        component: 'skills-bootstrap',
+        event: 'install.skip.global-managed',
+        asset,
+        count,
+    })}\n`);
+}
+
+function createProjectRegistrySnapshot(registry: RegistryManifest): RegistryManifest {
+    if (!shouldUseGlobalSkills()) {
+        return registry;
+    }
+
+    const assets = Object.fromEntries(
+        Object.entries(registry.assets).filter(([, asset]) => getAssetInstallScope(asset) !== 'global'),
+    );
+
+    return {
+        ...registry,
+        assets,
+    };
+}
+
 export function buildExpectedHashes(registry: RegistryManifest): Map<string, string> {
     const expected = new Map<string, string>();
 
@@ -145,11 +216,12 @@ export async function installFromRegistry(params: {
     force: boolean;
     yes: boolean;
     strictRegistry?: boolean;
+    overrideRoots?: Record<string, string>;
 }): Promise<InstallStats> {
-    const { packageRoot, registry, userXtrmDir, dryRun, force, yes, strictRegistry = false } = params;
+    const { packageRoot, registry, userXtrmDir, dryRun, force, yes, strictRegistry = false, overrideRoots } = params;
     const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
 
-    const drift = await checkDrift(registryPath, userXtrmDir);
+    const drift = await checkDrift(registryPath, userXtrmDir, overrideRoots);
     const expectedHashes = buildExpectedHashes(registry);
 
     const missingSet = new Set(drift.missing);
@@ -161,7 +233,7 @@ export async function installFromRegistry(params: {
         if (driftedSkills.length > 0) {
             console.log(kleur.yellow('\n  ⚠ Drift detected in .xtrm files (local modifications preserved by default):'));
             for (const relativePath of driftedSkills.slice(0, 10)) {
-                const absolutePath = path.join(userXtrmDir, relativePath);
+                const absolutePath = resolveInstalledPath(userXtrmDir, relativePath, overrideRoots);
                 const actualHash = await hashFile(absolutePath);
                 const expectedHash = expectedHashes.get(relativePath) ?? 'unknown';
                 console.log(kleur.yellow(`    • ${relativePath}`));
@@ -175,7 +247,7 @@ export async function installFromRegistry(params: {
                 console.log(kleur.yellow('\n  ⚠ Drift detected in .xtrm files (local modifications preserved by default):'));
             }
             for (const relativePath of nonSkillDrifted.slice(0, 20)) {
-                const absolutePath = path.join(userXtrmDir, relativePath);
+                const absolutePath = resolveInstalledPath(userXtrmDir, relativePath, overrideRoots);
                 const actualHash = await hashFile(absolutePath);
                 const expectedHash = expectedHashes.get(relativePath) ?? 'unknown';
                 console.log(kleur.yellow(`    • ${relativePath}`));
@@ -214,11 +286,25 @@ export async function installFromRegistry(params: {
     let missingSourceSkipped = 0;
     const missingSources: string[] = [];
 
-    for (const asset of Object.values(registry.assets)) {
+    for (const [assetKey, asset] of Object.entries(registry.assets)) {
+        const installScope = getAssetInstallScope(asset);
+        const isGlobalManaged = shouldUseGlobalSkills() && installScope === 'global';
+        const assetRoot = overrideRoots?.[assetKey];
+
+        if (isGlobalManaged) {
+            await appendGlobalSkillsSkipLog(assetKey, Object.keys(asset.files).length);
+        }
+
         for (const [filePath] of Object.entries(asset.files)) {
             const relativePath = toUserRelativePath(asset.source_dir, filePath);
             const sourcePath = path.join(packageRoot, asset.source_dir, filePath);
-            const targetPath = path.join(userXtrmDir, relativePath);
+            const targetPath = assetRoot
+                // Canonical registry paths from package payload + controlled override roots.
+                // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+                ? path.join(assetRoot, filePath)
+                // Canonical registry relative paths generated from package payload.
+                // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+                : path.join(userXtrmDir, relativePath);
 
             if (isUserOwnedPath(relativePath)) {
                 continue;
@@ -280,11 +366,13 @@ export async function installFromRegistry(params: {
     // operator manually copies registry.json from the xtrm-tools package
     // (see xtrm-ya2i).
     if (!dryRun) {
+        await fs.ensureDir(userXtrmDir);
         // Both inputs internal: userXtrmDir resolved by getContext from package
         // config; 'registry.json' is a hardcoded filename. No user input here.
         // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         const targetRegistryPath = path.join(userXtrmDir, 'registry.json');
-        await fs.copy(registryPath, targetRegistryPath, { overwrite: true });
+        await fs.writeJson(targetRegistryPath, createProjectRegistrySnapshot(registry), { spaces: 2 });
+        await fs.appendFile(targetRegistryPath, '\n');
     }
 
     return {

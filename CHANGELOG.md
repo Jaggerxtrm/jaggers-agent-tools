@@ -9,6 +9,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Global Skills Migration (Epic xtrm-bq7yd)
+
+**Batches A–F shipped; Batch H docs sweep complete.**
+
+Skills have migrated from per-repo materialization to a global source of truth at `~/.xtrm/skills/`. This eliminates N-copy drift across a fleet of N repos and centralizes skill updates.
+
+#### Operator Workflow
+
+```bash
+# One-time global bootstrap
+xt bootstrap
+
+# Per-repo migration
+cd <repo>
+xt migrate skills --dry-run   # Preview
+xt migrate skills --apply     # Execute
+```
+
+#### What Changed
+
+- **Global SSOT**: `~/.xtrm/skills/{default,optional,user,active}/` — baseline skills, optional packs, user-authored packs, composed runtime view
+- **Project residual**: `.xtrm/skills/{user,active,state.json}/` — only user packs, service-skills output, and composed active view
+- **Runtime pointers**: `~/.claude/skills → ~/.xtrm/skills/active` (absolute symlink), `.pi/settings.json.skills` array points to global active
+- **CLI scope flip**: `xt skills list/enable/disable` default to `--global`; `xt skills create-pack` defaults to `--local`
+- **Migration tool**: `xt migrate skills` performs SHA-256 verification, tarball backup, idempotent cleanup, and audit logging to `~/.xtrm/logs/skills-migration.jsonl`
+
+#### Batches
+
+- **Batch A** (xtrm-bq7yd.1): Global scaffold primitives (skills-layout, materializer, runtime-views split)
+- **Batch B** (xtrm-bq7yd.2): `xt bootstrap` command + lazy self-heal wiring in install/init/update
+- **Batch C** (xtrm-bq7yd.3): Retire per-repo default/optional scaffold under `XTRM_GLOBAL_SKILLS=1`
+- **Batch D** (xtrm-bq7yd.4): Runtime pointers global (`~/.claude/skills`, `~/.pi/agent/skills`)
+- **Batch E** (xtrm-bq7yd.5): Migration skill (`xt migrate skills|hooks|all`)
+- **Batch F** (xtrm-bq7yd.6): `xt skills` scope flip (list/enable/disable default to `--global`)
+- **Batch H** (xtrm-bq7yd.8): Docs sweep (this changelog entry)
+
+#### Documentation
+
+- [docs/plans/global-skills-migration.md](docs/plans/global-skills-migration.md) — Canonical migration architecture and operator workflow
+- [docs/skills.md](docs/skills.md) — Updated skills catalog with global + project model
+- [docs/skills-tier-architecture.md](docs/skills-tier-architecture.md) — Updated tier architecture reference
+- [docs/project-skills.md](docs/project-skills.md) — Reframed as residual per-repo state
+- [docs/xtrm-directory.md](docs/xtrm-directory.md) — Updated with global scope (`~/.xtrm/`) alongside project scope
+
+#### Feature Flag Lifecycle
+
+| Version | Default | Behavior |
+|---------|---------|----------|
+| v-next-1 (preview) | OFF | Per-repo scaffold unchanged; `XTRM_GLOBAL_SKILLS=1` opts in |
+| v-next-2 (default) | ON | Global bootstrap runs; per-repo scaffold skipped with migration nudge |
+| v-next-3 (enforced) | ON (locked) | Per-repo scaffold code removed; global-only model |
+
 ### Changed
 
 - **Add `## Code restraint (when implementing directly)` to `agents-top.md` and `claude-top.md`.** Companion to specialists PR #173 (unitAI-pzmwf) which introduced a unified code-restraint discipline at the mandatory-rule level and in the orchestrator skill. This layer is for when the agent implements directly without delegating to a specialist. Compact 3-bullet section fits the "managed block" style the file's own header enforces (`This is a compact managed block. Use CLI --help and skills for details; do not paste full manuals here.`): the ladder in one line (YAGNI → reuse → stdlib → native → one line → minimum), the "never simplify away" boundary (input validation at trust boundaries, error handling that prevents data loss, security, accessibility, explicitly requested behavior, understanding the problem), and the deliberate-shortcut marker `// SIMPLIFIED: <ceiling>. upgrade when <trigger>.` The full ladder + rules + tag vocabulary specifics live in the specialists mandatory rule and are not repeated here (reuse over rewrite — the same discipline being taught). Identical text in both files so all downstream propagation (~30 consumer repos via existing `xt update` flow) picks up the same rule regardless of runtime. Zero external plugin brand references in shipped text.

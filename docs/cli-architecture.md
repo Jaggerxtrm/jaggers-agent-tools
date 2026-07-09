@@ -43,6 +43,11 @@ xt / xtrm
 ├── status           → commands/status.ts
 ├── update           → commands/update.ts → core/registry-scaffold.ts + core/pi-runtime.ts
 ├── doctor           → commands/doctor.ts → core/drift.ts + core/pi-runtime.ts
+├── bootstrap        → commands/bootstrap.ts → core/global-skills-bootstrap.ts
+├── migrate          → commands/migrate.ts → core/global-hooks-bootstrap.ts, utils/known-repos.ts
+│   ├── migrate skills    → SHA-verify, backup, delete per-repo default/optional
+│   ├── migrate hooks     → Migrate per-repo hooks to global
+│   └── migrate all       → Migrate both skills and hooks
 ├── docs             → commands/docs.ts
 │   ├── docs show         → displays frontmatter for README, CHANGELOG, docs/*.md
 │   ├── docs list         → inventories markdown docs with metadata and cache support
@@ -56,10 +61,10 @@ xt / xtrm
 │   ├── report list        → list all reports with frontmatter summary
 │   └── report diff        → compare two reports
 ├── skills           → commands/skills.ts
-│   ├── skills list       → lists installed skills from .xtrm/skills tiers (default/optional/user)
-│   ├── skills enable     → enable pack for Claude/Pi, rebuild active view
-│   ├── skills disable    → disable pack for Claude/Pi, rebuild active view
-│   └── skills create-pack → create user pack scaffold with PACK.json
+│   ├── skills list       → lists installed skills from global + project tiers (default: --global)
+│   ├── skills enable     → enable pack for Claude/Pi, rebuild active view (default: --global)
+│   ├── skills disable    → disable pack for Claude/Pi, rebuild active view (default: --global)
+│   └── skills create-pack → create user pack scaffold with PACK.json (default: --local)
 └── help             → commands/help.ts
 ```
 

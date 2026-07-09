@@ -4,6 +4,7 @@ import path from 'node:path';
 import { rmSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  hashFile,
   installFromRegistry,
   isSkillsDefaultPath,
   isUserOwnedPath,
@@ -12,7 +13,7 @@ import {
   toPosix,
   toUserRelativePath,
 } from '../core/registry-scaffold.js';
-import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
+import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 
 const tempDirs: string[] = [];
 
@@ -27,6 +28,12 @@ async function createTempDir(): Promise<string> {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-scaffold-test-'));
   tempDirs.push(tempDir);
   return tempDir;
+}
+
+async function writeSkill(root: string, name: string): Promise<void> {
+  const skillRoot = path.join(root, name);
+  await fs.ensureDir(skillRoot);
+  await fs.writeFile(path.join(skillRoot, 'SKILL.md'), `# ${name}\n`, 'utf8');
 }
 
 describe('registry-scaffold path helpers', () => {
@@ -216,6 +223,36 @@ describe('scaffoldSkillsDefaultFromPackage', () => {
     expect(result).toBe('noop');
     expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'default'))).toBe(false);
   });
+
+  it('under XTRM_GLOBAL_SKILLS only ensures user packs when global tree already exists', async () => {
+    const tempDir = await createTempDir();
+    const packageRoot = path.join(tempDir, 'pkg');
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const previousHome = process.env.HOME;
+    const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
+
+    process.env.HOME = tempDir;
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+
+    try {
+      await fs.ensureDir(path.join(packageRoot, '.xtrm', 'skills', 'default'));
+      await fs.ensureDir(path.join(tempDir, '.xtrm', 'skills', 'default'));
+      await fs.ensureDir(path.join(tempDir, '.xtrm', 'skills', 'optional'));
+
+      const result = await scaffoldSkillsDefaultFromPackage({
+        packageRoot,
+        userXtrmDir,
+        dryRun: false,
+      });
+
+      expect(result).toBe('noop');
+      expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'default'))).toBe(false);
+      expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'user', 'packs'))).toBe(true);
+    } finally {
+      process.env.HOME = previousHome;
+      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+    }
+  });
 });
 
 describe('installFromRegistry', () => {
@@ -284,6 +321,14 @@ describe('installFromRegistry', () => {
             'hooks/post-tool-use.mjs': { hash: 'hook-hash', version: '1.0.0' },
           },
         },
+        skills: {
+          source_dir: '.xtrm/skills/default',
+          install_mode: 'copy' as const,
+          install_scope: 'global' as const,
+          files: {
+            'alpha/SKILL.md': { hash: 'skill-hash', version: '1.0.0' },
+          },
+        },
       },
     };
 
@@ -303,6 +348,24 @@ describe('installFromRegistry', () => {
     expect(await fs.pathExists(targetRegistryPath)).toBe(true);
     const written = await fs.readJson(targetRegistryPath);
     expect(written).toEqual(registry);
+
+    const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+    try {
+      await installFromRegistry({
+        packageRoot,
+        registry,
+        userXtrmDir,
+        dryRun: false,
+        force: true,
+        yes: true,
+      });
+      const filtered = await fs.readJson(targetRegistryPath);
+      expect(filtered.assets.skills).toBeUndefined();
+      expect(filtered.assets.core).toBeTruthy();
+    } finally {
+      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+    }
   });
 
   it('skips registry.json snapshot in dry-run mode (xtrm-ya2i)', async () => {
@@ -471,16 +534,155 @@ describe('installFromRegistry', () => {
     })).rejects.toThrowError(/Registry\/source mismatch: missing package source files\./);
     await expect(fs.pathExists(path.join(userXtrmDir, 'skills', 'default', 'alpha', 'SKILL.md'))).resolves.toBe(true);
   });
+
+  it('reads drifted override-root skills from global target paths', async () => {
+    const tempDir = await createTempDir();
+    const packageRoot = path.join(tempDir, 'pkg');
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const globalSkillsRoot = path.join(tempDir, 'global-skills');
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    const sourcePath = path.join(packageRoot, '.xtrm', 'skills', 'default', 'alpha', 'SKILL.md');
+    const globalTargetPath = path.join(globalSkillsRoot, 'default', 'alpha', 'SKILL.md');
+    await fs.ensureDir(path.dirname(sourcePath));
+    await fs.ensureDir(path.dirname(globalTargetPath));
+    await fs.writeFile(sourcePath, 'expected', 'utf8');
+    await fs.writeFile(globalTargetPath, 'drifted', 'utf8');
+
+    const registry = {
+      version: '1.0.0',
+      assets: {
+        skills: {
+          source_dir: '.xtrm/skills/default',
+          install_mode: 'copy' as const,
+          files: {
+            'alpha/SKILL.md': { hash: await hashFile(sourcePath), version: '1.0.0' },
+          },
+        },
+      },
+    };
+
+    await fs.ensureDir(path.join(packageRoot, '.xtrm'));
+    await fs.writeJson(path.join(packageRoot, '.xtrm', 'registry.json'), registry);
+
+    await installFromRegistry({
+      packageRoot,
+      registry,
+      userXtrmDir,
+      dryRun: false,
+      force: false,
+      yes: true,
+      overrideRoots: {
+        skills: path.join(globalSkillsRoot, 'default'),
+      },
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('skills/default/alpha/SKILL.md'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('actual '));
+    expect(await fs.readFile(globalTargetPath, 'utf8')).toBe('drifted');
+    consoleSpy.mockRestore();
+  });
+
+  it('routes global-scope skills assets to override roots and logs skip event when XTRM_GLOBAL_SKILLS=1', async () => {
+    const tempDir = await createTempDir();
+    const packageRoot = path.join(tempDir, 'pkg');
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const globalSkillsRoot = path.join(tempDir, 'global-skills');
+    const previousHome = process.env.HOME;
+    const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
+
+    process.env.HOME = tempDir;
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+
+    try {
+      const sourcePath = path.join(packageRoot, '.xtrm', 'skills', 'default', 'alpha', 'SKILL.md');
+      await fs.ensureDir(path.dirname(sourcePath));
+      await fs.writeFile(sourcePath, '# alpha\n', 'utf8');
+
+      const registry = {
+        version: '1.0.0',
+        assets: {
+          skills: {
+            source_dir: '.xtrm/skills/default',
+            install_mode: 'copy' as const,
+            install_scope: 'global' as const,
+            files: {
+              'alpha/SKILL.md': { hash: await hashFile(sourcePath), version: '1.0.0' },
+            },
+          },
+        },
+      };
+
+      await fs.ensureDir(path.join(packageRoot, '.xtrm'));
+      await fs.writeJson(path.join(packageRoot, '.xtrm', 'registry.json'), registry);
+
+      await installFromRegistry({
+        packageRoot,
+        registry,
+        userXtrmDir,
+        dryRun: false,
+        force: true,
+        yes: true,
+        overrideRoots: {
+          skills: path.join(globalSkillsRoot, 'default'),
+        },
+      });
+
+      expect(await fs.pathExists(path.join(globalSkillsRoot, 'default', 'alpha', 'SKILL.md'))).toBe(true);
+      expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'default', 'alpha', 'SKILL.md'))).toBe(false);
+      const logPath = path.join(tempDir, '.xtrm', 'logs', 'skills-migration.jsonl');
+      const logLines = (await fs.readFile(logPath, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+      expect(logLines.some(line => line.event === 'install.skip.global-managed' && line.asset === 'skills' && line.count === 1)).toBe(true);
+    } finally {
+      process.env.HOME = previousHome;
+      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+    }
+  });
+});
+
+describe('ensureUserAgentsSkillsSymlink', () => {
+  const itIfSymlinkSupported = process.platform === 'win32' ? it.skip : it;
+
+  itIfSymlinkSupported('wires ~/.claude/skills and ~/.pi/agent/skills to global active with absolute targets', async () => {
+    const tempHome = await createTempDir();
+    const previousHome = process.env.HOME;
+    process.env.HOME = tempHome;
+
+    try {
+      const globalActiveRoot = path.join(tempHome, '.xtrm', 'skills', 'active');
+      await writeSkill(globalActiveRoot, 'alpha');
+
+      await ensureUserAgentsSkillsSymlink();
+
+      expect(await fs.readlink(path.join(tempHome, '.claude', 'skills'))).toBe(globalActiveRoot);
+      expect(await fs.readlink(path.join(tempHome, '.pi', 'agent', 'skills'))).toBe(globalActiveRoot);
+    } finally {
+      process.env.HOME = previousHome;
+    }
+  });
+
+  itIfSymlinkSupported('refuses to replace existing real ~/.claude/skills directory without force', async () => {
+    const tempHome = await createTempDir();
+    const previousHome = process.env.HOME;
+    process.env.HOME = tempHome;
+
+    try {
+      const globalActiveRoot = path.join(tempHome, '.xtrm', 'skills', 'active');
+      const claudeSkillsDir = path.join(tempHome, '.claude', 'skills');
+      await writeSkill(globalActiveRoot, 'alpha');
+      await fs.ensureDir(claudeSkillsDir);
+      await fs.writeFile(path.join(claudeSkillsDir, 'foreign.txt'), 'foreign', 'utf8');
+
+      await expect(ensureUserAgentsSkillsSymlink()).rejects.toThrowError(/Refusing to replace existing ~\/\.claude\/skills/);
+      expect((await fs.lstat(claudeSkillsDir)).isSymbolicLink()).toBe(false);
+    } finally {
+      process.env.HOME = previousHome;
+    }
+  });
 });
 
 describe('ensureAgentsSkillsSymlink', () => {
   const itIfSymlinkSupported = process.platform === 'win32' ? it.skip : it;
-
-  async function writeSkill(root: string, name: string): Promise<void> {
-    const skillRoot = path.join(root, name);
-    await fs.ensureDir(skillRoot);
-    await fs.writeFile(path.join(skillRoot, 'SKILL.md'), `# ${name}\n`, 'utf8');
-  }
 
   itIfSymlinkSupported('rebuilds active view and points .claude/skills at active', async () => {
     const tempDir = await createTempDir();

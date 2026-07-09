@@ -265,14 +265,6 @@ async function planGlobalOperations(managedAgentSkills: ReadonlySet<string>): Pr
     labelPrefix: '~/.pi/agent/extensions/',
   }));
 
-  const agentsSkillsDir = path.join(os.homedir(), '.agents', 'skills');
-  operations.push(...await planManagedDirectoryEntryDeletes({
-    scope: 'global',
-    baseDir: agentsSkillsDir,
-    managedNames: managedAgentSkills,
-    labelPrefix: '~/.agents/skills/',
-  }));
-
   return operations;
 }
 

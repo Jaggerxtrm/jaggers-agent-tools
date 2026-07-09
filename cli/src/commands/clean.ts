@@ -32,6 +32,10 @@ const CANONICAL_HOOKS = new Set([
     'README.md',
 ]);
 
+// Per-runtime active/ tiers were removed in Batch G. The flat active/ layout
+// is now the only supported format. This constant is retained only as a
+// historical reference to prevent accidental re-introduction of runtime subdirs.
+// DO NOT use this for scanning — see cleanSkills() below.
 const ACTIVE_SKILLS_RUNTIMES = ['claude', 'pi'] as const;
 
 // Directories/files to always ignore
@@ -96,12 +100,9 @@ async function cleanSkills(dryRun: boolean): Promise<string[]> {
     const removed: string[] = [];
     const skillsRoot = path.join(homedir(), '.xtrm', 'skills');
 
-    for (const runtime of ACTIVE_SKILLS_RUNTIMES) {
-        const activeRoot = path.join(skillsRoot, 'active', runtime);
-        if (!await fs.pathExists(activeRoot)) {
-            continue;
-        }
-
+    // Flat active/ layout (Batch G+). Scan for orphaned non-symlinks and broken links.
+    const activeRoot = path.join(skillsRoot, 'active');
+    if (await fs.pathExists(activeRoot)) {
         const entries = await fs.readdir(activeRoot);
         for (const entry of entries) {
             if (IGNORED_ITEMS.has(entry)) {
@@ -118,7 +119,7 @@ async function cleanSkills(dryRun: boolean): Promise<string[]> {
                 if (!dryRun) {
                     await fs.remove(entryPath);
                 }
-                removed.push(`active/${runtime}/${entry} (non-symlink)`);
+                removed.push(`active/${entry} (non-symlink)`);
                 continue;
             }
 
@@ -127,7 +128,7 @@ async function cleanSkills(dryRun: boolean): Promise<string[]> {
                 if (!dryRun) {
                     await fs.remove(entryPath);
                 }
-                removed.push(`active/${runtime}/${entry} (broken-link)`);
+                removed.push(`active/${entry} (broken-link)`);
                 continue;
             }
 
@@ -136,17 +137,9 @@ async function cleanSkills(dryRun: boolean): Promise<string[]> {
                 if (!dryRun) {
                     await fs.remove(entryPath);
                 }
-                removed.push(`active/${runtime}/${entry} (dangling)`);
+                removed.push(`active/${entry} (dangling)`);
             }
         }
-    }
-
-    const legacyAgentsSkills = path.join(homedir(), '.agents', 'skills');
-    if (await fs.pathExists(legacyAgentsSkills)) {
-        if (!dryRun) {
-            await fs.remove(legacyAgentsSkills);
-        }
-        removed.push('.agents/skills (deprecated)');
     }
 
     return removed;
@@ -334,7 +327,7 @@ export function createCleanCommand(): Command {
 
             // Clean skills
             if (!hooksOnly) {
-                console.log(kleur.bold('\n  Scanning ~/.xtrm/skills/active and deprecated ~/.agents/skills/...'));
+                console.log(kleur.bold('\n  Scanning ~/.xtrm/skills/active/...'));
                 result.skillsRemoved = await cleanSkills(dryRun);
 
                 if (result.skillsRemoved.length > 0) {

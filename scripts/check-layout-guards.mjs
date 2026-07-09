@@ -9,6 +9,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
+// Batch G: per-runtime active/{claude,pi} subdirs were removed. These paths are
+// now definitively dead code — the guard prevents accidental re-introduction.
 const staleActiveTiers = ['.xtrm/skills/active/claude', '.xtrm/skills/active/pi'];
 const transientAllowlist = [
   '.beads/',

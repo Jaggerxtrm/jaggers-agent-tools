@@ -7,7 +7,7 @@ default branch (master/main) — that is the single moment the code is final, an
 v2 design measures drift semantically from each service's `last_sync_ref`
 (committed range `last_sync_ref..HEAD`). The in-session PostToolUse nudge is
 best-effort and only fires on edits made inside an agent session, so drift can
-accumulate silently (dogfood: market-data, ~5000 items since 2026-04-23).
+accumulate silently (dogfood: ~5000 items observed in an early consumer since 2026-04-23).
 
 This hook is the proactive backstop. On a default-branch merge it:
   1. self-gates: no-op unless a service-registry is present AND HEAD is the

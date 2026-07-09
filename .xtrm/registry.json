@@ -4,6 +4,7 @@
     "hooks": {
       "source_dir": ".xtrm/hooks",
       "install_mode": "copy",
+      "install_scope": "global",
       "files": {
         "beads-claim-sync.mjs": {
           "hash": "a9663671113f8fd540e6588d6825963a0301679bac8a661c9cc35a2d6b474eed",
@@ -110,6 +111,7 @@
     "skills": {
       "source_dir": ".xtrm/skills/default",
       "install_mode": "copy",
+      "install_scope": "global",
       "files": {
         "agent-docs-maintainer/references/agents-template.md": {
           "hash": "3782e8389f689e4786418920f997010af3fbe11bf616615e707154b5423e65c5",
@@ -124,7 +126,7 @@
           "version": "0.9.1"
         },
         "agent-docs-maintainer/references/stack-overview-template.md": {
-          "hash": "63d398ae553b62fa737eee54707c446d77a163235dc028e098626066313723e6",
+          "hash": "afc85b41baf7738f93c561667117b2e287f0a6e63bc83265458a9ed6b812fdea",
           "version": "0.9.1"
         },
         "agent-docs-maintainer/scripts/audit_agent_docs.py": {
@@ -132,7 +134,7 @@
           "version": "0.9.1"
         },
         "agent-docs-maintainer/SKILL.md": {
-          "hash": "9496f8cbe8cd4024abf280edaedfd1ed5bff2c65dacfd13cce8c03ea075ef55f",
+          "hash": "01480b1489bae39781f13b7508c49ed7776bb1e102d7a368883a82773722fe2a",
           "version": "0.9.1"
         },
         "clean-code/SKILL.md": {
@@ -168,11 +170,11 @@
           "version": "0.9.1"
         },
         "documenting/examples/example_pattern.md": {
-          "hash": "479fed8a2932ae6f18b884b2eeed23d3fcdd7a23a169251c22dbc28aaa80ce9a",
+          "hash": "1cdfbdbd50f1e125269d5da24b133b015ae3bd85fc04bd29997aa69efafe0323",
           "version": "0.9.1"
         },
         "documenting/examples/example_reference.md": {
-          "hash": "f54aa4158654f335c3e6b22b1afda1819e3d2a3905abc453ac503e1c2444d38b",
+          "hash": "3387c352022798a8496e98980d964505fef6c44a8b3a61fcfdfaf26cd3eb66ea",
           "version": "0.9.1"
         },
         "documenting/examples/example_ssot_analytics.md": {
@@ -616,15 +618,15 @@
           "version": "0.9.1"
         },
         "multiplexing-team/SKILL.md": {
-          "hash": "c1ae480365a5f2e39bac0a96fd74c335b80d90487ffac55b8d0bee25fef7c28a",
+          "hash": "30cf7881252b8057ba3bd199a904393e4865161012ae789b5963c5366bd28a03",
           "version": "0.9.1"
         },
         "multiplexing/scripts/verify-deploy-applied.sh": {
-          "hash": "6c9f88c53bfd858313d0547bc266e0fb27911800bed679953137ea11a26c5946",
+          "hash": "a7ed4ebeafb4c87c9c6870e39ba5de0db737bb85b2261eb76480d96b70902f06",
           "version": "0.9.1"
         },
         "multiplexing/SKILL.md": {
-          "hash": "682cdd29118e6981473f26999b9aab34f540d472ce794c87ed95606ed52cfa0f",
+          "hash": "e2763e178ceea1db027cea4171c559fee528fee4e72ca97f2789d9688b1afd08",
           "version": "0.9.1"
         },
         "planning/SKILL.md": {
@@ -704,11 +706,11 @@
           "version": "0.9.1"
         },
         "security-pipeline/scripts/security-bootstrap.sh": {
-          "hash": "af7df42cf57ba2cf9ac787cbbb7a0e34640a23619fcf11d45619481580e0ef06",
+          "hash": "344b9be1ae5d4d7d83eab1e07ac583f262d73badbbad1b534182bfe806c64619",
           "version": "0.9.1"
         },
         "security-pipeline/SKILL.md": {
-          "hash": "84e16f28046bf3f425a949b224ecc5d8d5cbbfd28199d477b003804be8fe41b3",
+          "hash": "cfd328ce7a831270a393fcc12e0a0645d2dab101eb81cde0ac4c7d599e13c90f",
           "version": "0.9.1"
         },
         "security-pipeline/templates/.githooks/pre-push.template": {
@@ -728,7 +730,7 @@
           "version": "0.9.1"
         },
         "security-pipeline/templates/.gitleaks.toml": {
-          "hash": "baf5955df1ab76de3a962e883495e0ef63855e41653c893082eb8c48bcbe519e",
+          "hash": "e6e95082ba3660689c2020d2fc26093b751df158409dbaf96a816ac4c287038d",
           "version": "0.9.1"
         },
         "security-pipeline/templates/.pre-commit-config.yaml": {
@@ -752,11 +754,11 @@
           "version": "0.9.1"
         },
         "service-skills/install/git-hooks/post_merge_drift_sweep.py": {
-          "hash": "a3ddf2f1dc84950c58cd0bf893b499e1c6e87be83fed8578730125b001b7e602",
+          "hash": "e42d8b01b014210cd79d28fbe8178d8a2c5d4385f0227f307604f6c025d1346f",
           "version": "0.9.1"
         },
         "service-skills/install/git-hooks/skill_staleness.py": {
-          "hash": "39d1ac16dee329bab34a646216e2d851856a07d53f6c0f909709fe217f2ba22f",
+          "hash": "adcf0d2608431fd643bce318ef03e12049af305225808d48793a9cddd8628676",
           "version": "0.9.1"
         },
         "service-skills/install/install-service-skills.py": {
@@ -780,7 +782,7 @@
           "version": "0.9.1"
         },
         "service-skills/references/script_quality_standards.md": {
-          "hash": "964476a17aea08505edddae1616899ebcc9f6f1f990e060cf37c1676a7f54b7c",
+          "hash": "e932bcfc98dc267ec235eaf84fdd26b1db0c538344a3569f91d833919e64fdd6",
           "version": "0.9.1"
         },
         "service-skills/references/service_skill_contract.json": {
@@ -800,7 +802,7 @@
           "version": "0.9.1"
         },
         "service-skills/scripts/bootstrap.py": {
-          "hash": "f59ba1dfa2ede3f6e6880679bbb355f23dc49c59e656801d1bfe386a4137a53c",
+          "hash": "6d5d52dd9b0449a935fd8043ac9bcea29b7fa63fe6f38eef5775c6707e106e7a",
           "version": "0.9.1"
         },
         "service-skills/scripts/cataloger.py": {
@@ -820,7 +822,7 @@
           "version": "0.9.1"
         },
         "service-skills/scripts/reconcile.py": {
-          "hash": "6c5ca668672868720ff36db5d318d28defc08d16e6d6a8ae465a245e61ccb729",
+          "hash": "735416ab8c1198ea2ed9941732b4c1b23de02de9883e1bd7ca0511edd30a3da0",
           "version": "0.9.1"
         },
         "service-skills/scripts/scaffolder.py": {
@@ -948,7 +950,7 @@
           "version": "0.9.1"
         },
         "sre-triage/SKILL.md": {
-          "hash": "abc80287d391290184a5d24748d15499779b2eafd40d4f1529ae1cbc8ab21a5c",
+          "hash": "b0d2b3c662064845d4810bff0720ae60f7cf9fc194662d5791e207af5692f608",
           "version": "0.9.1"
         },
         "sync-docs/references/doc-structure.md": {
@@ -992,7 +994,7 @@
           "version": "0.9.1"
         },
         "test-planning/SKILL.md": {
-          "hash": "277313a117dbed9f885b309d48515c417332951841b0a681b6a9d66ed7ba7cec",
+          "hash": "6b2d56e6e8daa277632798877ddeeb659053c3d6ffbadc9f580a51fc3fb86205",
           "version": "0.9.1"
         },
         "update-specialists/SKILL.md": {
@@ -1000,7 +1002,7 @@
           "version": "0.9.1"
         },
         "update-xt/SKILL.md": {
-          "hash": "5084adcb414209503e2d7d723bc98ca2ed36562b708e75bc7d766e0609c2bf56",
+          "hash": "17499cb70432d3a2f13fd3cdf1a0596bb49736dfc851084d4d4938d59a8f5bc9",
           "version": "0.9.1"
         },
         "updating-dependencies/schemas/dependency_update_case.schema.json": {
@@ -1092,6 +1094,7 @@
     "skills_optional": {
       "source_dir": ".xtrm/skills/optional",
       "install_mode": "copy",
+      "install_scope": "global",
       "files": {
         "architecture-design/architecture-patterns/references/advanced-patterns.md": {
           "hash": "e1cb31c83b532e579991de277836a1ea5e3d88b2ca30fc8ac16f6047ceca439e",
@@ -1378,6 +1381,7 @@
     "config": {
       "source_dir": ".xtrm/config",
       "install_mode": "copy",
+      "install_scope": "project",
       "files": {
         ".env.example": {
           "hash": "70e6af83cb0faf13a74676a5a3b79551ac60997cccd226e14c8dbc5887c047d5",

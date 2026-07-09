@@ -8,8 +8,14 @@ import { t } from '../utils/theme.js';
 import { runPiInstall } from './pi-install.js';
 import { runClaudeRuntimeSyncPhase } from '../core/claude-runtime-sync.js';
 import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
-import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
+import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
+import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
+import { ensureGlobalHooksBootstrapped } from '../core/global-hooks-bootstrap.js';
+import { reconcileGlobalClaudeHooks } from '../core/claude-runtime-sync.js';
+import { reconcileGlobalPiHooks } from '../core/pi-runtime-hooks.js';
+import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { assertRuntimeSkillsViews } from '../core/skills-runtime-views.js';
+import { getGlobalSkillsOverrideRoots, shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import {
     runMachineBootstrapPhase,
 } from '../core/machine-bootstrap.js';
@@ -159,6 +165,21 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     });
     const userXtrmDir = ctx.targets[0];
 
+    const pkgJson = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };
+    await logBootstrapTrigger({
+        command: 'install',
+        cwd: process.cwd(),
+        pkgVersion: pkgJson.version ?? '0.0.0',
+    });
+    if (!dryRun) {
+        await ensureGlobalSkillsBootstrapped(packageRoot, force ? { force: true } : {});
+        if (shouldUseGlobalHooks()) {
+            await ensureGlobalHooksBootstrapped(packageRoot, force ? { force: true } : {});
+            await reconcileGlobalClaudeHooks();
+            await reconcileGlobalPiHooks();
+        }
+    }
+
     const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
     const registry = await fs.readJson(registryPath) as RegistryManifest;
 
@@ -183,6 +204,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
         force,
         yes: effectiveYes,
         strictRegistry,
+        overrideRoots: getGlobalSkillsOverrideRoots(),
     });
 
     if (prune) {
@@ -224,11 +246,13 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
 
     if (!dryRun) {
         if (force) {
+            await ensureUserAgentsSkillsSymlink({ force: true });
             await ensureAgentsSkillsSymlink(projectRoot, { force: true });
         } else {
+            await ensureUserAgentsSkillsSymlink();
             await ensureAgentsSkillsSymlink(projectRoot);
         }
-        await assertRuntimeSkillsViews(projectRoot);
+        await assertRuntimeSkillsViews(projectRoot, { scope: shouldUseGlobalSkills() ? 'global' : 'both' });
         await ensureBeadsSharedServerEnabled(projectRoot, true);
     }
 

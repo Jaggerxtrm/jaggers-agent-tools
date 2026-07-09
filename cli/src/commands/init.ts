@@ -14,11 +14,17 @@ import {
     type RegistryManifest,
 } from '../core/registry-scaffold.js';
 import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
-import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
+import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
+import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
+import { ensureGlobalHooksBootstrapped } from '../core/global-hooks-bootstrap.js';
+import { reconcileGlobalClaudeHooks } from '../core/claude-runtime-sync.js';
+import { reconcileGlobalPiHooks } from '../core/pi-runtime-hooks.js';
+import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { ensureServiceSkills } from '../core/service-skills-ensure.js';
 import { inventoryDeps, renderBootstrapPlan, runMachineBootstrapPhase, type BootstrapPlan } from '../core/machine-bootstrap.js';
 import { runInitVerification, renderVerificationSummary } from '../core/init-verification.js';
 import { assertRuntimeSkillsViews } from '../core/skills-runtime-views.js';
+import { getGlobalSkillsOverrideRoots } from '../core/global-skills-flag.js';
 import { syncPiMcpConfig, syncProjectMcpConfig } from '../core/project-mcp-sync.js';
 import { getContext } from '../core/context.js';
 import { calculateDiff } from '../core/diff.js';
@@ -787,6 +793,18 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
 
     // ── Phase 6: Registry scaffold (.xtrm files copy) ───────────────────────
     const packageRoot = getPackageRoot();
+    const pkgJson = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };
+    await logBootstrapTrigger({
+        command: 'init',
+        cwd: process.cwd(),
+        pkgVersion: pkgJson.version ?? '0.0.0',
+    });
+    await ensureGlobalSkillsBootstrapped(packageRoot, opts.force ? { force: true } : {});
+    if (shouldUseGlobalHooks()) {
+        await ensureGlobalHooksBootstrapped(packageRoot, opts.force ? { force: true } : {});
+        await reconcileGlobalClaudeHooks();
+        await reconcileGlobalPiHooks();
+    }
     const ctx = await getContext({
         createMissingDirs: true,
         isGlobal: opts.global,
@@ -803,6 +821,7 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
         dryRun: false,
         force: false,
         yes: true,
+        overrideRoots: getGlobalSkillsOverrideRoots(),
     });
     if (registryInstallStats.missingSourceSkipped > 0) {
         console.log(kleur.yellow(`  ⚠ Registry/source mismatch: skipped ${registryInstallStats.missingSourceSkipped} missing source file${registryInstallStats.missingSourceSkipped === 1 ? '' : 's'}.`));
@@ -849,6 +868,11 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
     await runPiInstall(false, Boolean(opts.global), projectRoot);
 
     // ── Phase 6b: Rebuild runtime skills views + wire runtime pointers ───────
+    if (opts.force) {
+        await ensureUserAgentsSkillsSymlink({ force: true });
+    } else {
+        await ensureUserAgentsSkillsSymlink();
+    }
     const skillsActivation = opts.force
         ? await ensureAgentsSkillsSymlink(projectRoot, { force: true })
         : await ensureAgentsSkillsSymlink(projectRoot);
@@ -857,7 +881,7 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
     } else {
         console.log(kleur.green(`  ✓ Activated runtime skills → claude:${skillsActivation.activatedClaudeSkills}, pi:${skillsActivation.activatedPiSkills}`));
     }
-    await assertRuntimeSkillsViews(projectRoot);
+    await assertRuntimeSkillsViews(projectRoot, { scope: 'both' });
 
     // ── Phase 7: Project Bootstrap ───────────────────────────────────────────
     // Initialize beads workspace, inject CLAUDE.md/AGENTS.md instruction

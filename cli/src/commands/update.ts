@@ -5,6 +5,12 @@ import path from 'node:path';
 import fs from 'fs-extra';
 import { checkDrift } from '../core/drift.js';
 import { resolvePackageRoot } from '../core/registry-scaffold.js';
+import { ensureGlobalSkillsBootstrapped, logBootstrapTrigger } from '../core/global-skills-bootstrap.js';
+import { ensureGlobalHooksBootstrapped } from '../core/global-hooks-bootstrap.js';
+import { getGlobalSkillsOverrideRoots, shouldUseGlobalSkills } from '../core/global-skills-flag.js';
+import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
+import { reconcileGlobalClaudeHooks } from '../core/claude-runtime-sync.js';
+import { reconcileGlobalPiHooks } from '../core/pi-runtime-hooks.js';
 import { assureXtManagedPiPackages } from '../core/pi-runtime.js';
 import { scanXtrmRepos } from '../core/repo-discovery.js';
 import { isStrictRegistryMode, runInstall } from './install.js';
@@ -14,6 +20,7 @@ import { printDependencyMaintenanceSummary, runDependencyMaintenance, type Depen
 import { ensureServiceSkills } from '../core/service-skills-ensure.js';
 import { reconcileProjectClaudeHooks } from '../core/claude-runtime-sync.js';
 import { resolveMainProjectRoot } from '../utils/repo-root.js';
+import { printNudgeOnce } from '../utils/nudge.js';
 
 type UpdateStatus = 'refreshed' | 'already-current' | 'failed' | 'skipped' | 'incomplete';
 
@@ -61,12 +68,25 @@ async function resolveTargetRepos(opts: Pick<UpdateOpts, 'root' | 'repo' | 'allR
     return { targets: [resolveMainProjectRoot(process.cwd())], incomplete: [] };
 }
 
-function getCurrentPackageRegistryPath(): string {
-    return path.join(resolvePackageRoot(), '.xtrm', 'registry.json');
+async function printSkillsMigrationNudge(repoRoot: string): Promise<void> {
+    const legacyDefaultRoot = path.join(repoRoot, '.xtrm', 'skills', 'default');
+    const legacyOptionalRoot = path.join(repoRoot, '.xtrm', 'skills', 'optional');
+    const hasLegacyProjectSkills = await fs.pathExists(legacyDefaultRoot) || await fs.pathExists(legacyOptionalRoot);
+
+    if (!hasLegacyProjectSkills) {
+        return;
+    }
+
+    await printNudgeOnce('skills-global-migration', [
+        kleur.yellow('  ⚠ Project-scoped default/optional skills remain on disk; xt update no longer re-syncs them when XTRM_GLOBAL_SKILLS=1.'),
+        kleur.yellow('    Run `xt migrate skills` to clean legacy project payloads.'),
+        kleur.yellow('    Docs: https://github.com/Jaggerxtrm/xtrm-tools/blob/main/docs/skills-registry-exploration.md'),
+    ]);
 }
 
 async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdateResult> {
-    const registryPath = getCurrentPackageRegistryPath();
+    const packageRoot = resolvePackageRoot();
+    const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
     const userXtrmDir = path.join(repoRoot, '.xtrm');
 
     try {
@@ -74,7 +94,25 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
             return { repo: repoRoot, status: 'failed', reason: `missing package registry at ${registryPath}` };
         }
 
-        const drift = await checkDrift(registryPath, userXtrmDir);
+        const pkgJson = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };
+        if (opts.apply) {
+            await logBootstrapTrigger({
+                command: 'update',
+                cwd: process.cwd(),
+                pkgVersion: pkgJson.version ?? '0.0.0',
+            });
+            await ensureGlobalSkillsBootstrapped(packageRoot);
+            if (shouldUseGlobalHooks()) {
+                await ensureGlobalHooksBootstrapped(packageRoot);
+                await reconcileGlobalClaudeHooks();
+                await reconcileGlobalPiHooks();
+            }
+            if (shouldUseGlobalSkills()) {
+                await printSkillsMigrationNudge(repoRoot);
+            }
+        }
+
+        const drift = await checkDrift(registryPath, userXtrmDir, opts.apply ? getGlobalSkillsOverrideRoots() : undefined);
         const hasBeads = await hasBeadsDir(repoRoot);
         const sharedServer = hasBeads
             ? await ensureBeadsSharedServerEnabled(repoRoot, false)

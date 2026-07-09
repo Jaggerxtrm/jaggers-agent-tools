@@ -26,9 +26,9 @@ function findMarkdownFiles(dir: string, basePath: string = ""): string[] {
 }
 
 function resolveUsingXtrmSkillPath(cwd: string): string | null {
+	// Batch G+: only ~/.claude/skills is supported. Legacy ~/.agents/skills and
+	// ~/.pi/agent/skills fallbacks removed.
 	const candidates = [
-		path.join(homedir(), ".agents", "skills", "using-xtrm", "SKILL.md"),
-		path.join(homedir(), ".pi", "agent", "skills", "using-xtrm", "SKILL.md"),
 		path.join(cwd, ".pi", "skills", "using-xtrm", "SKILL.md"),
 	];
 

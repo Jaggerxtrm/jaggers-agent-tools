@@ -23,7 +23,7 @@
       "response_format": "markdown",
       "output_type": "analysis",
       "permission_required": "MEDIUM",
-      "interactive": true,
+      "interactive": null,
       "max_retries": 0
     },
     "prompt": {

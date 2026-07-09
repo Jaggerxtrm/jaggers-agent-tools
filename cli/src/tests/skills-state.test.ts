@@ -69,6 +69,24 @@ describe('skills-state', () => {
     expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(true);
   });
 
+  it('accepts forward-compatible unknown state keys', async () => {
+    const skillsRoot = await createTempSkillsRoot();
+
+    await fs.ensureDir(skillsRoot);
+    await fs.writeJson(path.join(skillsRoot, 'state.json'), {
+      schemaVersion: '1',
+      enabledPacks: { claude: ['alpha'], pi: [] },
+      futureField: 'kept-on-disk-ignored-in-memory',
+    });
+
+    const state = await readSkillsState(skillsRoot);
+
+    expect(state).toEqual({
+      schemaVersion: '1',
+      enabledPacks: { claude: ['alpha'], pi: [] },
+    });
+  });
+
   it.each(runtimePackCases)('$name', async ({ apply, expectedClaude, expectedPi }) => {
     const skillsRoot = await createTempSkillsRoot();
 

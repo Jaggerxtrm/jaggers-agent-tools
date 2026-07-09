@@ -183,6 +183,47 @@ describe('checkDrift', () => {
 
   const itIfSymlinkSupported = process.platform === 'win32' ? it.skip : it;
 
+  it('supports override roots for global skills assets', async () => {
+    const tempDir = await createTempDir();
+    const userXtrmDir = path.join(tempDir, '.xtrm-user');
+    const globalSkillsRoot = path.join(tempDir, '.xtrm-global', 'skills');
+    await fs.mkdir(path.join(globalSkillsRoot, 'default', 'alpha'), { recursive: true });
+    await fs.mkdir(path.join(globalSkillsRoot, 'optional', 'beta'), { recursive: true });
+    await fs.writeFile(path.join(globalSkillsRoot, 'default', 'alpha', 'SKILL.md'), 'alpha', 'utf8');
+    await fs.writeFile(path.join(globalSkillsRoot, 'optional', 'beta', 'SKILL.md'), 'beta', 'utf8');
+
+    const registryPath = await writeRegistry(tempDir, {
+      version: '1',
+      assets: {
+        skills: {
+          source_dir: '.xtrm/skills/default',
+          install_mode: 'copy',
+          files: {
+            'alpha/SKILL.md': { hash: sha256('alpha'), version: '0.9.1' },
+          },
+        },
+        skills_optional: {
+          source_dir: '.xtrm/skills/optional',
+          install_mode: 'copy',
+          files: {
+            'beta/SKILL.md': { hash: sha256('beta'), version: '0.9.1' },
+          },
+        },
+      },
+    });
+
+    const report = await checkDrift(registryPath, userXtrmDir, {
+      skills: path.join(globalSkillsRoot, 'default'),
+      skills_optional: path.join(globalSkillsRoot, 'optional'),
+    });
+
+    expect(report).toEqual({
+      missing: [],
+      upToDate: ['skills/default/alpha/SKILL.md', 'skills/optional/beta/SKILL.md'],
+      drifted: [],
+    });
+  });
+
   itIfSymlinkSupported('hashes symlink targets by file content', async () => {
     const tempDir = await createTempDir();
     const userXtrmDir = path.join(tempDir, '.xtrm-user');

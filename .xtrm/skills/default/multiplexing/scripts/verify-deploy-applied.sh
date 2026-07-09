@@ -5,12 +5,13 @@
 # window, the running container MUST reflect the merged code. If the
 # container's StartedAt predates the PR's mergedAt, the DM would measure
 # the pre-merge baseline and either miss the regression fix or report a
-# false regression against old bytes. Same class of failure as mmd
-# incident 82wh (regressed code sat in prod for over a month) and
-# mmd-sprint 2026-07-03 (DM aborted window against pre-merge container).
+# false regression against old bytes. Same class of failure as the
+# multi-week regression that sat in prod for over a month and one
+# multi-pane sprint eval where DM opened a window against a pre-merge
+# container.
 #
-# Full doctrine: xtrm/docs/devops/deploy-gap-pattern.md
-# Codified per mercury-market-data-nsur (EVAL-22).
+# Full doctrine: consult your project's deploy-gap doctrine file
+# (typically docs/devops/deploy-gap-pattern.md).
 #
 # Usage:
 #   verify-deploy-applied <container> <pr-number> <owner/repo>

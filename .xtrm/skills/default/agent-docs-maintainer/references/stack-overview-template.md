@@ -46,4 +46,4 @@ Keep the section factual and current. It may be longer than the normal compact-d
 
 ## Reference shape
 
-The intended shape is the Mercury infra guide from 2026-06-11: a substantive top section before the managed xtrm block explaining the repo's role, edge/observability/MCP layers, public domains, sibling stack networks, Makefile entry points, environment requirements, data flow, and explicit routing for responsibilities that belong elsewhere.
+The intended shape is a substantive top section before the managed xtrm block explaining the repo's role, edge/observability/MCP layers, public domains, sibling stack networks, Makefile entry points, environment requirements, data flow, and explicit routing for responsibilities that belong elsewhere.
