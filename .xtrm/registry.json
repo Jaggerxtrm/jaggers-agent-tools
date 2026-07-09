@@ -621,8 +621,12 @@
           "hash": "30cf7881252b8057ba3bd199a904393e4865161012ae789b5963c5366bd28a03",
           "version": "0.9.1"
         },
+        "multiplexing/scripts/verify-deploy-applied.sh": {
+          "hash": "a7ed4ebeafb4c87c9c6870e39ba5de0db737bb85b2261eb76480d96b70902f06",
+          "version": "0.9.1"
+        },
         "multiplexing/SKILL.md": {
-          "hash": "901f278d592de4f1427dae40e530238a5b10feeec80222e1ba289d4988f22a78",
+          "hash": "e2763e178ceea1db027cea4171c559fee528fee4e72ca97f2789d9688b1afd08",
           "version": "0.9.1"
         },
         "planning/SKILL.md": {

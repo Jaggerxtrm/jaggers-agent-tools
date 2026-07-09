@@ -479,9 +479,6 @@ function applyXtrmChrome(
   prefs: XtrmUiPrefs,
   getThinkingLevel: () => string
 ): void {
-  // Theme
-  ctx.ui.setTheme(resolveThemeForPrefs(prefs));
-
   // Tool expansion
   ctx.ui.setToolsExpanded(!prefs.compactTools);
 
@@ -1487,24 +1484,36 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderResult(result, { expanded, isPartial }, theme) {
       const details = (result.details ?? {}) as DetailsWithXtrmMeta<BashToolDetails, Record<string, unknown>>;
       const meta = getXtrmMeta<BashToolDetails, Record<string, unknown>>(details);
-      const command = shortenCommand(String(meta?.args.command ?? ""), 80);
+      const command = String(meta?.args.command ?? "");
       if (isPartial) {
-        return toolRowText(theme, `${theme.fg("accent", TOOL_ROW_MARKER)} ${theme.fg("toolTitle", "bash:")}${theme.fg("accent", command)}`);
+        return toolRowText(theme, `${theme.fg("accent", TOOL_ROW_MARKER)} ${theme.fg("accent", "$")} ${theme.fg("accent", command)}`);
       }
       const output = getTextContent(result as any);
       const outputLines = cleanOutputLines(output);
       const exitMatch = output.match(/exit code:\s*(-?\d+)/i);
       const exitCode = exitMatch ? Number.parseInt(exitMatch[1] ?? "0", 10) : 0;
-      const bullet = exitCode === 0 ? theme.fg("success", TOOL_ROW_MARKER) : theme.fg("error", TOOL_ROW_MARKER);
+      const statusColor = exitCode !== 0 ? "error" : "success";
       const summary = joinCompactMeta([
         formatDuration(meta?.durationMs),
         formatPayloadSize(output),
         formatLineLabel(outputLines.length, "line"),
         details.truncation?.truncated ? "truncated" : undefined,
       ]);
-      let text = `${bullet} ${theme.fg("toolTitle", "bash:")}${theme.fg("accent", command)}`;
+      let text = `${theme.fg(statusColor, TOOL_ROW_MARKER)} ${theme.fg(statusColor, "$")} ${theme.fg(statusColor, command)}`;
       if (summary) text += theme.fg("dim", ` · ${summary}`);
-      if (expanded && outputLines.length > 0) text += `\n${renderVerticalPreview(theme, outputLines, 10)}`;
+
+      if (!expanded && outputLines.length > 0) {
+        const previewStart = Math.max(0, outputLines.length - 4);
+        const preview = outputLines.slice(previewStart);
+        text += "\n" + preview.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
+        if (outputLines.length > 4) {
+          text += `\n${theme.fg("dim", `  ... (${outputLines.length - 4} earlier lines, use ␣ to expand)`)}`;
+        }
+      }
+
+      if (expanded && outputLines.length > 0) {
+        text += "\n" + outputLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
+      }
       return toolRowText(theme, text);
     },
   });
@@ -1534,8 +1543,20 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       }
       const textContent = getTextContent(result as any);
       const lines = textContent.split("\n");
-      let text = renderToolSummary(theme, "success", "read", subject, joinMeta([formatLineLabel(lines.length, "line"), formatDuration(meta?.durationMs), details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined]));
-      if (expanded && textContent.length > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 14), 14)}`;
+      const totalLines = lines.length;
+      let text = renderToolSummary(theme, "success", "read", subject, joinMeta([formatLineLabel(totalLines, "line"), formatDuration(meta?.durationMs), details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined]));
+
+      // Show content inline for small files (≤6 lines) even when not expanded
+      const showInline = !expanded && totalLines > 0 && totalLines <= 6;
+      const showExpanded = expanded && totalLines > 0;
+
+      if (showInline || showExpanded) {
+        text += "\n" + lines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
+        if (!expanded && totalLines > 6) {
+          text += `\n${theme.fg("dim", `  ... (${totalLines - 6} more lines, use ␣ to expand)`)}`;
+        }
+      }
+
       return toolRowText(theme, text);
     },
   });
@@ -1557,12 +1578,13 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const details = (result.details ?? {}) as DetailsWithXtrmMeta<EditToolDetails, Record<string, unknown>>;
       const meta = getXtrmMeta<EditToolDetails, Record<string, unknown>>(details);
       const textContent = getTextContent(result as any);
+      const path = String(meta?.args.path ?? "");
       if (/^error/i.test(textContent.trim())) {
-        return toolRowText(theme, renderToolSummary(theme, "error", "edit", shortenPath(String(meta?.args.path ?? "")), textContent.split("\n")[0]));
+        return toolRowText(theme, renderToolSummary(theme, "error", "edit", path, textContent.split("\n")[0]));
       }
       const stats = details.diff ? diffStats(details.diff) : { additions: 0, removals: 0 };
-      let text = renderToolSummary(theme, "success", "edit", shortenPath(String(meta?.args.path ?? "")), joinMeta([`+${stats.additions}`, `-${stats.removals}`, formatDuration(meta?.durationMs)]));
-      if (expanded && details.diff) text += `\n${renderRichDiffPreview(theme, details.diff, 18)}`;
+      let text = renderToolSummary(theme, "success", "edit", path, joinMeta([`+${stats.additions}`, `-${stats.removals}`, formatDuration(meta?.durationMs)]));
+      if (details.diff) text += `\n${renderRichDiffPreview(theme, details.diff, 18)}`;
       return toolRowText(theme, text);
     },
   });
@@ -1589,15 +1611,15 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const details = (result.details ?? {}) as DetailsWithXtrmMeta<Record<string, never>, Record<string, unknown>>;
       const meta = getXtrmMeta<Record<string, never>, Record<string, unknown>>(details);
       const textContent = getTextContent(result as any);
+      const path = String(meta?.args.path ?? "");
       if (/^error/i.test(textContent.trim())) {
-        return toolRowText(theme, renderToolSummary(theme, "error", "write", shortenPath(String(meta?.args.path ?? "")), textContent.split("\n")[0]));
+        return toolRowText(theme, renderToolSummary(theme, "error", "write", path, textContent.split("\n")[0]));
       }
 
-      const subject = shortenPath(String(meta?.args.path ?? ""));
       const preview = details.xtrmWritePreview;
 
       if (preview?.kind === "unchanged") {
-        return toolRowText(theme, renderToolSummary(theme, "success", "write", subject, joinMeta(["no changes", formatDuration(meta?.durationMs)])));
+        return toolRowText(theme, renderToolSummary(theme, "success", "write", path, joinMeta(["no changes", formatDuration(meta?.durationMs)])));
       }
 
       if (preview?.kind === "updated") {
@@ -1605,27 +1627,30 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
           theme,
           "success",
           "write",
-          subject,
+          path,
           joinMeta([`+${preview.additions}`, `-${preview.removals}`, formatDuration(meta?.durationMs)]),
         );
-        if (expanded && preview.diff) text += `\n${renderRichDiffPreview(theme, preview.diff, 18)}`;
+        if (preview.diff) text += `\n${renderRichDiffPreview(theme, preview.diff, 18)}`;
         return toolRowText(theme, text);
       }
 
-      const lines = preview?.kind === "created"
-        ? preview.lineCount
-        : lineCount(String(meta?.args.content ?? ""));
+      // created
+      const lines = preview?.kind === "created" ? preview.lineCount : lineCount(String(meta?.args.content ?? ""));
+      let text = renderToolSummary(theme, "success", "write", path, joinMeta([formatLineLabel(lines, "line"), formatDuration(meta?.durationMs)]));
 
-      return toolRowText(theme, renderToolSummary(
-          theme,
-          "success",
-          "write",
-          subject,
-          joinMeta([formatLineLabel(lines, "line"), formatDuration(meta?.durationMs)]),
-        ),
-        0,
-        0,
-      );
+      const content = String(meta?.args.content ?? "");
+      if (content) {
+        const contentLines = content.split("\n");
+        const showInline = !expanded && contentLines.length <= 6;
+        if (showInline || expanded) {
+          text += "\n" + contentLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
+          if (!expanded && contentLines.length > 6) {
+            text += `\n${theme.fg("dim", `  ... (${contentLines.length - 6} more lines, use ␣ to expand)`)}`;
+          }
+        }
+      }
+
+      return toolRowText(theme, text);
     },
   });
 
@@ -1706,16 +1731,11 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
 // Main Extension
 // ============================================================================
 
-function isXtrmTheme(name: string | undefined): boolean {
-  return name === "pidex-dark" || name === "pidex-light" || name === "pidex-dark-flattools" || name === "pidex-light-flattools";
-}
-
 export default function xtrmUiExtension(pi: ExtensionAPI): void {
   void installSilentHiddenThinkingPatch().catch(() => undefined);
   void installExternalToolFramePatch().catch(() => undefined);
 
   let prefs: XtrmUiPrefs = { ...DEFAULT_PREFS };
-  let previousThemeName: string | null = null;
   const extensionThemeDir = join(__dirname, "../../themes/xtrm-ui");
 
   const getPrefs = () => prefs;
@@ -1739,27 +1759,14 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     setPrefs(loadPrefs(ctx.sessionManager.getEntries() as Array<MaybeCustomEntry>));
-    if (!previousThemeName && !isXtrmTheme(ctx.ui.theme.name)) {
-      previousThemeName = ctx.ui.theme.name ?? null;
-    }
     refresh(ctx);
-
-    setTimeout(() => {
-      ctx.ui.setTheme(resolveThemeForPrefs(prefs));
-    }, 0);
   });
 
   pi.on("session_switch", async (_event, ctx) => {
-    if (!previousThemeName && !isXtrmTheme(ctx.ui.theme.name)) {
-      previousThemeName = ctx.ui.theme.name ?? null;
-    }
     refresh(ctx);
   });
 
   pi.on("session_fork", async (_event, ctx) => {
-    if (!previousThemeName && !isXtrmTheme(ctx.ui.theme.name)) {
-      previousThemeName = ctx.ui.theme.name ?? null;
-    }
     refresh(ctx);
   });
 
@@ -1767,10 +1774,8 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
     refresh(ctx);
   });
 
-  pi.on("session_shutdown", async (_event, ctx) => {
-    if (previousThemeName) {
-      ctx.ui.setTheme(previousThemeName);
-    }
+  pi.on("session_shutdown", async () => {
+    // No-op: no theme restoration on shutdown
   });
 
   pi.on("input", async (event) => {

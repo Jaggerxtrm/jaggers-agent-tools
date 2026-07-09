@@ -23,7 +23,7 @@ function shortenHome(path: string): string {
   return path;
 }
 
-export function shortenPath(path: string, max = 56): string {
+export function shortenPath(path: string, max = 120): string {
   const normalized = shortenHome(path);
   if (normalized.length <= max) return normalized;
   const parts = normalized.split("/").filter(Boolean);
@@ -270,16 +270,14 @@ export function renderToolSummary(
   subject?: string,
   meta?: string,
 ): string {
-  const color =
+  const statusColor =
     status === "pending" ? "accent"
     : status === "error" ? "error"
     : status === "success" ? "success"
     : "muted";
-  const compactSubject = subject ? shortenCommand(subject, TOOL_SUMMARY_SUBJECT_MAX) : undefined;
-  const compactMeta = meta ? shortenCommand(meta, TOOL_SUMMARY_META_MAX) : undefined;
-  let text = `${theme.fg(color, TOOL_ROW_MARKER)} ${theme.fg("toolTitle", theme.bold(label))}`;
-  if (compactSubject) text += ` ${theme.fg("accent", compactSubject)}`;
-  if (compactMeta) text += theme.fg("muted", ` · ${compactMeta}`);
+  let text = `${theme.fg(statusColor, TOOL_ROW_MARKER)} ${theme.fg(statusColor, theme.bold(label))}`;
+  if (subject) text += ` ${theme.fg(statusColor, subject)}`;
+  if (meta) text += theme.fg("dim", ` · ${meta}`);
   return text;
 }
 

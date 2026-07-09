@@ -15,7 +15,7 @@ import sessionFlowExtension from "./extensions/session-flow.ts";
 import spTerminalOverlayExtension from "./extensions/sp-terminal-overlay.ts";
 import xtrmLoaderExtension from "./extensions/xtrm-loader.ts";
 import xtrmUiExtension from "./extensions/xtrm-ui.ts";
-import xtpromptExtension from "./extensions/xtprompt/index.ts";
+import xtpromptExtension from "./extensions/xtprompt.ts";
 
 export type ManagedPiExtension = {
   readonly id: string;
