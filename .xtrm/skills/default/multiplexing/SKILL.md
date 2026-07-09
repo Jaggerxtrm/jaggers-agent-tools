@@ -212,6 +212,32 @@ When a delegated session works on a repo where other sessions are also active, s
 
 The known mitigation is to spawn delegated sessions in dedicated worktrees via `xt claude` or `xt pi`. This is not currently enforced. When pre-flight detects two live sessions in the same checkout, warn the operator and recommend `xt claude` / `xt pi` for the next delegation.
 
+## Deploy-gap chain — post-merge observability guard
+
+When the orchestrator moves a PR from merge to a Deploy Monitor observation window, the running container MUST reflect the merged code. Merging on GitHub does not, by itself, rebuild the container. Between `gh pr merge` and container restart, Prometheus/Tempo/Grafana continue to show pre-merge behavior, and any DM window opened during that gap measures the wrong world. This is the class of failure that let `mercury-market-data-82wh` sit in production for over a month, and that reproduced inside `mmd-sprint 2026-07-03` (EVAL-22).
+
+Enforce the chain as an indivisible sequence:
+
+1. `gh pr merge <N> --repo <owner>/<repo> --squash --admin` (or the repo's canonical merge command).
+2. `docker compose -f <compose> build <service>` on the target host.
+3. `docker compose -f <compose> up -d --force-recreate <service>` on the target host. `--force-recreate` is required — without it, Docker keeps the existing container when the image tag hasn't textually changed even if the bytes underneath have.
+4. Verify the running artifact is newer than the merge, then hand off to DM.
+
+For GitOps-deployed services: wait for the reconciler to advance past the PR's `mergedAt` before handoff.
+
+The verification step is codified as a runnable script bundled with this skill:
+
+```bash
+scripts/verify-deploy-applied.sh <container> <pr-number> <owner/repo>
+# exit 0 → StartedAt > mergedAt, safe to open DM window
+# exit 1 → deploy NOT applied, orchestrator must rebuild + restart
+# exit 2 → usage / dependency error (missing gh/docker, PR unmerged, container absent)
+```
+
+The file also defines a `verify_deploy_applied` bash function that can be sourced by other scripts, sprint runbooks, and `/tmp/<sprint>-deploy-monitor.txt` prompt templates as step 0 of the DM window protocol. DM refuses to open the window when the script returns non-zero and reports `deploy-not-applied` upward to the orchestrator.
+
+Full doctrine: `xtrm/docs/devops/deploy-gap-pattern.md`. Bead: `mercury-market-data-nsur`.
+
 ## End-of-session hygiene
 
 Before closing the orchestrator session:
