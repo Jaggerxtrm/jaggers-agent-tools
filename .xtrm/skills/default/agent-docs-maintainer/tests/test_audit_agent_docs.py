@@ -32,7 +32,7 @@ def test_flags_docs_that_start_with_managed_block(tmp_path: Path) -> None:
 
 def test_preserves_long_substantive_identity_overview(tmp_path: Path) -> None:
     overview_lines = [
-        "# Mercury Platform — Infra (central gateway + observability)",
+        "# Acme Platform — Infra (central gateway + observability)",
         "This repo owns the central gateway and observability surface for the platform, so a fresh agent knows where traffic, metrics, and read-only tool surfaces converge.",
         "",
     ]

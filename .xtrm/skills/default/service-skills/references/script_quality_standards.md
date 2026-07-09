@@ -1,7 +1,6 @@
 # Script Quality Standards for Service Skills
 
-> Distilled from the mercury-market-data implementation (Feb 2026).
-> Updated with lessons from the processing-papers implementation (Feb 2026).
+> Distilled from early consumer implementations (Feb 2026).
 > Apply these standards to every script generated in Phase 2 of the service-skill-builder workflow.
 
 ---

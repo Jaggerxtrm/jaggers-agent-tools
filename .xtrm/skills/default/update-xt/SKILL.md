@@ -254,7 +254,7 @@ locally or pulled a new tag.
 ```bash
 xt update --all-repos                # standard local sweep: ~/dev + ~/projects
 xt update --root ~/dev               # walk one explicit tree
-xt update --root ~/projects/mercury  # walk another explicit tree
+xt update --root ~/projects/<your-fleet>  # walk another explicit tree
 ```
 
 Output classifies each discovered repo by `.xtrm/` state:
@@ -275,7 +275,7 @@ refresh.
 ```bash
 xt update --apply --all-repos
 xt update --apply --root ~/dev
-xt update --apply --root ~/projects/mercury
+xt update --apply --root ~/projects/<your-fleet>
 ```
 
 What `--apply` does for each managed repo:
@@ -413,7 +413,7 @@ Classification:
   is unaffected.
 - `UNSET` — no hooks wired anywhere; same outcome as `OTHER`.
 
-Survey across `~/dev` + `~/projects/mercury` on 2026-05-12 returned **0 repos
+A fleet survey across `~/dev` + `~/projects/<your-fleet>` returned **0 repos
 needing the fix**. The safety net in `launchWorktreeSession` /
 `provisionWorktree` (`normalizeParentHooksPath`) auto-rewrites on next worktree
 creation if a relative `.beads/hooks` ever does appear, so the survey is mostly
@@ -476,7 +476,7 @@ npm link
 xt update --all-repos
 # or target explicit roots:
 xt update --root ~/dev
-xt update --root ~/projects/mercury
+xt update --root ~/projects/<your-fleet>
 
 # 4. Identify failed/incomplete rows. Fix any real bugs in xtrm-tools FIRST,
 #    then re-build + re-link + re-sweep.
@@ -485,7 +485,7 @@ xt update --root ~/projects/mercury
 xt update --apply --all-repos
 # or target explicit roots:
 xt update --apply --root ~/dev
-xt update --apply --root ~/projects/mercury
+xt update --apply --root ~/projects/<your-fleet>
 
 # 6. Cut the public release only after the local apply succeeds end-to-end.
 ```

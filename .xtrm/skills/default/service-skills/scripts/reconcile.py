@@ -213,7 +213,7 @@ def reconcile(options: ReconcileOptions) -> dict[str, Any]:
         # deferred — call the run partial so bump_last_sync_ref is skipped and
         # those services stay visible to the next scan_drift. Without this, all
         # services' last_sync gets stamped to now and the deferred drift is
-        # silently masked (xtrm-vlxug, codex on mercury-infra PR #137).
+        # silently masked (xtrm-vlxug).
         "status": "partial" if truncated else "success",
         "drift_count": len(drifted),
         "reconciled_count": 0,

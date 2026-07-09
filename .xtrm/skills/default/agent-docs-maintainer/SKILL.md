@@ -27,7 +27,7 @@ Run the bundled audit script from the repo root or against explicit repos:
 
 ```bash
 python3 .xtrm/skills/default/agent-docs-maintainer/scripts/audit_agent_docs.py . --format md
-python3 .xtrm/skills/default/agent-docs-maintainer/scripts/audit_agent_docs.py ~/dev/specialists ~/projects/mercury/darth-feedor --format json
+python3 .xtrm/skills/default/agent-docs-maintainer/scripts/audit_agent_docs.py <repo-a> <repo-b> --format json
 ```
 
 If the skill is not installed in the target repo, run the script from its source path and pass repo paths explicitly.

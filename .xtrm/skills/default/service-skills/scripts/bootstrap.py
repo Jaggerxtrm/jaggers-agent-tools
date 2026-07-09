@@ -188,7 +188,7 @@ def get_registry_path(project_root: str | None = None) -> Path:
 
     # Precedence — the canonical .xtrm umbrella location wins, so a stale root or
     # legacy .claude registry can NEVER shadow a migrated repo (the bug that made
-    # market-data's migration not stick):
+    # an earlier consumer's migration not stick):
     #   1) umbrella-owned registry           (post-migration canonical)
     #   2) flat pack-root registry           (pre-migration .xtrm layout)
     #   3) <root>/service-registry.json      (legacy back-compat)
@@ -327,7 +327,7 @@ def _gitnexus_repo_name(project_root: str | None = None) -> str:
     """Resolve the repo label gitnexus indexed under — the MAIN worktree's basename.
 
     In a linked git worktree ``get_project_root()`` returns the worktree dir, whose basename
-    (e.g. ``market-data-uh1r-service-skills-sync``) gitnexus has NOT indexed; injecting it as
+    (e.g. ``consumer-repo-uh1r-service-skills-sync``) gitnexus has NOT indexed; injecting it as
     ``--repo`` makes every gitnexus call fail → drift silently degrades to mtime-only tiering.
     The service-skills-sync librarian ALWAYS runs in such an auto-provisioned worktree, so it
     would otherwise never get semantic enrichment. ``git rev-parse --git-common-dir`` points at

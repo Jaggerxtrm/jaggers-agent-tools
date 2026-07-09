@@ -127,7 +127,7 @@ tmux-session-picker message-list --for "$pane" --unacked
 
 ### Poll BOTH your inbox AND your gh-CI-status timer
 
-If you are waiting on external work (a GitHub Actions run, a `gh pr checks` timer, a container rebuild, a specialist chain), **do not** loop on that timer alone. Every tick, also poll your parent inbox. Otherwise you will sit through orchestrator directions for tens of minutes — that happened in `mmd-sprint 2026-07-03` (EVAL-08): Worker C's timer watched the CI check but not the inbox, and a 20+ minute delay opened between "orchestrator authorized admin-merge" and "worker acted on it".
+If you are waiting on external work (a GitHub Actions run, a `gh pr checks` timer, a container rebuild, a specialist chain), **do not** loop on that timer alone. Every tick, also poll your parent inbox. Otherwise you will sit through orchestrator directions for tens of minutes — one observed sprint (EVAL-08): a worker's timer watched the CI check but not the inbox, and a 20+ minute delay opened between "orchestrator authorized admin-merge" and "worker acted on it".
 
 Correct poll shape — the tick checks both channels and exits on either signal:
 
@@ -214,7 +214,7 @@ Safety reminders:
 - `handoff` is dry-run by default and refuses working targets.
 - `audit` is read-only.
 - `message-send` only writes to the xtmux event log; it does not inject into panes.
-- **Claude Code panes require a deterministic double-Enter after every `tmux send-keys`.** The first Enter is consumed by Claude's paste-detection heuristic. Codex and pi panes do not. Wrap send-keys for a Claude Code target as: `tmux send-keys -t <target> '<pointer>' Enter; sleep 2; tmux send-keys -t <target> Enter`. This was cataloged as "sometimes" in older `/multiplexing` copies; it is actually deterministic per pane type (EVAL-01, mmd-sprint 2026-07-03). Newer `safe-send-pointer` releases probe pane type and append the second Enter automatically — until you confirm the version you're on does that, apply the rule by hand.
+- **Claude Code panes require a deterministic double-Enter after every `tmux send-keys`.** The first Enter is consumed by Claude's paste-detection heuristic. Codex and pi panes do not. Wrap send-keys for a Claude Code target as: `tmux send-keys -t <target> '<pointer>' Enter; sleep 2; tmux send-keys -t <target> Enter`. This was cataloged as "sometimes" in older `/multiplexing` copies; it is actually deterministic per pane type (EVAL-01). Newer `safe-send-pointer` releases probe pane type and append the second Enter automatically — until you confirm the version you're on does that, apply the rule by hand.
 
 ## When you need your own subordinates
 
@@ -249,7 +249,7 @@ While there are more waves in the chain:
 End when the chain says PASS or you hit a hard blocker.
 ```
 
-If the sprint tolerates it, prefer routing multi-wave workers to pi/Codex panes instead. This was EVAL-12 in `mmd-sprint 2026-07-03`: Worker B (Opus 4.7 1M, bypass-permissions on) idled after wave 1 despite explicit chain instructions, while pi Worker A/C looped correctly.
+If the sprint tolerates it, prefer routing multi-wave workers to pi/Codex panes instead. This was EVAL-12 in one observed sprint: a Claude Code worker (Opus 4.7 1M, bypass-permissions on) idled after wave 1 despite explicit chain instructions, while pi workers looped correctly.
 
 ## Blockers and escalation
 

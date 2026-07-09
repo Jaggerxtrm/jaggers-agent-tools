@@ -2,10 +2,9 @@
 name: sre-triage
 description: >-
   Cross-stack health verification with runtime-inferred routing. Queries
-  Prometheus + Grafana + OpenTelemetry traces live via the `mcpq` CLI (sidecar
-  registry lives in `.mcpq.json` — `mcpq servers` lists them) to enumerate firing
-  alerts, down containers, stale freshness feeds, and trace-side error hot-spots;
-  matches each finding to a registered
+  Prometheus + Grafana live via the `mcpq` CLI (sidecar registry lives in
+  `.mcpq.json` — `mcpq servers` lists them) to enumerate firing alerts, down
+  containers, and stale freshness feeds; matches each finding to a registered
   service skill by listing the service-skills directory and matching container
   prefix / `territory:` globs; emits a triage report and loads expert personas
   for affected services. Also handles retroactive investigation of past alerts —
@@ -138,46 +137,6 @@ mcpq prometheus call example_project_execute_query \
 Warn when host CPU > 80%, host memory > 85%, any container > 80% CPU, or any
 container > 85% memory-vs-limit. Use the offending container name to load the
 right service skill before diagnosing further.
-
----
-
-### Step 1c — Trace-side signals via `opentelemetry-mcp`
-
-Added 2026-07-01 (infra-z398). Whenever a service in the mcpq registry (`mcpq
-servers` → `opentelemetry-mcp`) is present, use it to pull span-level context
-that Prometheus alone cannot surface: which specific request path is erroring,
-which upstream span propagated a fault, and which LLM tool call is dominating
-latency. Backed by Tempo; only services actively emitting OTel spans show up.
-
-Use these tools opportunistically alongside Step 1 — they are especially useful
-when Step 1 shows a `severity=warning`/`critical` on an instrumented service or
-when the user reports "requests are slow" without a firing alert:
-
-```bash
-# What services are currently reporting spans?
-mcpq opentelemetry-mcp call list_services --json
-
-# Recent traces that carried an error status
-mcpq opentelemetry-mcp call find_errors --json
-
-# Slowest LLM traces (only meaningful if any producer emits traceloop.* attrs)
-mcpq opentelemetry-mcp call get_llm_slow_traces --json
-
-# One specific trace by ID (e.g. from a forensic.v1 log's correlation.trace_id)
-mcpq opentelemetry-mcp call get_trace --arg trace_id=<hex> --json
-```
-
-Full tool inventory: `mcpq opentelemetry-mcp list-tools`.
-
-Trace-side signals **do not** classify the stack on their own (see Step 2 for
-overall state). They enrich the routing decision in Step 3: an erroring service
-in `find_errors` output routes to that service's expert skill exactly like a
-`up == 0` result would.
-
-Fallback if the sidecar is unreachable: query Tempo directly via
-`docker exec infra-prometheus wget -qO- 'http://tempo:3200/api/search?...'` OR
-open the Tempo datasource in Grafana — do not skip trace-side signals silently
-when investigating a latency/error incident on an instrumented service.
 
 ---
 
@@ -382,6 +341,47 @@ in example-project, it's `make verify-mcpq` from the infra repo root.
 
 ---
 
+## Silent edge failure — traefik-route-drop pattern
+
+`ContainerCrashLoop` and `up==0` miss a class of outage that *keeps the target
+container running healthy* but drops ALL routes. One observed incident: `docker
+compose up` invoked from a worktree without `.env` interpolated empty
+`${ADMIN_CIDR}` into `traefik/dynamic/middlewares.yml`, dynamic config became
+YAML-invalid, traefik discarded every router, and every public request 404-ed
+for 7h. The traefik container stayed `up==1` throughout.
+
+**Alert:** `TraefikEdgeRoutesMissing` — fires on >90% 404 rate on the
+`websecure` entrypoint over 5m (with a `rate>0.05` idle guard).
+
+**Live probe (adds ~200ms; run any time an "edge is down / can't reach
+grafana / API 404" report comes in and no other alerts are firing).** The
+host list comes from an edge-probe config surface — read from
+`$XTRM_EDGE_PROBES` (colon-separated), else `~/.xtrm/config/edge-probes.txt`
+(one host per line), else the repo-local `.xtrm/edge-probes.txt`, else skip
+with a warning:
+
+```bash
+: "${XTRM_EDGE_PROBES:=$(cat ~/.xtrm/config/edge-probes.txt \
+  .xtrm/edge-probes.txt 2>/dev/null | tr '\n' ':' )}"
+IFS=: read -r -a hosts <<<"${XTRM_EDGE_PROBES}"
+for host in "${hosts[@]}"; do
+  [ -z "$host" ] && continue
+  printf "%-45s %s\n" "$host" "$(curl -sS -o /dev/null -w '%{http_code}' https://$host/)"
+done
+```
+
+Interpret the codes against your per-stack baseline (e.g. root=200, dashboards
+behind auth=403, APIs=401). **All-404 across the board is the smoking gun**.
+
+Fix (compose stack):
+
+```bash
+cd /path/to/infra && docker compose --env-file .env up -d traefik
+```
+
+Prevention: a `make preflight-env` guard for missing/empty required env vars +
+an edge-probe pass in the deploy-gap observation window.
+
 ## Alert → Service Mapping Reference
 
 When an alert fires, use this table to identify the affected service and the
@@ -399,6 +399,7 @@ Grafana dashboard to open for visual investigation.
 | `RedisHighMemory`                | WARNING  | `serving-example-api`, `collecting-events` | Redis — Cache Metrics               |
 | `HighErrorRate`                  | WARNING  | `serving-example-api`                | Example Project — API & MCP Traffic (Traefik)          |
 | `TraefikHighLatency`             | WARNING  | `traefik`                            | Traefik — Routing & Proxy Metrics              |
+| `TraefikEdgeRoutesMissing`       | CRITICAL | `traefik` (dynamic config regression)| Traefik — Routing & Proxy Metrics              |
 | `DiskUsageHigh`                  | WARNING  | all stacks (shared host)             | VPS — Host Metrics (Node Exporter)             |
 | `DiskUsageCritical`              | CRITICAL | all stacks — check Loki + volumes    | VPS — Node Exporter Full (Deep Dive)           |
 | `ServiceDown`                    | CRITICAL | match `instance` label in alert      | Containers — Resource Metrics (cAdvisor)       |

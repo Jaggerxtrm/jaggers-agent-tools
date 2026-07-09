@@ -16,6 +16,102 @@ interface MigrateOptions {
   apply?: boolean;
   repo?: string;
   yes?: boolean;
+  forceSource?: boolean;
+  restore?: string;
+  force?: boolean;
+}
+
+function detectRestoreComponent(backupPath: string): 'skills' | 'hooks' | null {
+  const base = path.basename(backupPath);
+  if (base.startsWith('skills-')) return 'skills';
+  if (base.startsWith('hooks-')) return 'hooks';
+  return null;
+}
+
+async function restoreBackup(
+  repoPath: string,
+  backupPath: string,
+  opts: { dryRun: boolean; force: boolean },
+): Promise<{ component: 'skills' | 'hooks'; targetDir: string }> {
+  if (!path.isAbsolute(backupPath) && !backupPath.startsWith('~')) {
+    throw new Error(`Backup path must be absolute or ~-expandable: ${backupPath}`);
+  }
+  const resolvedBackup = backupPath.startsWith('~')
+    ? path.join(os.homedir(), backupPath.slice(1).replace(/^\//, ''))
+    : backupPath;
+
+  if (!(await fs.pathExists(resolvedBackup))) {
+    throw new Error(`Backup not found: ${resolvedBackup}`);
+  }
+
+  const component = detectRestoreComponent(resolvedBackup);
+  if (!component) {
+    throw new Error(
+      `Cannot detect component from backup filename (expected skills-* or hooks-*): ${path.basename(resolvedBackup)}`,
+    );
+  }
+
+  const targetDir = path.join(repoPath, '.xtrm', component);
+  const collisionProbe = component === 'skills'
+    ? path.join(targetDir, 'default')
+    : targetDir;
+  if (await fs.pathExists(collisionProbe)) {
+    if (!opts.force) {
+      throw new Error(
+        `Target already exists: ${collisionProbe}. Rerun with --force to overwrite.`,
+      );
+    }
+  }
+
+  if (opts.dryRun) {
+    console.log(kleur.dim(`  would extract ${resolvedBackup}`));
+    console.log(kleur.dim(`  into ${path.join(repoPath, '.xtrm')}`));
+    return { component, targetDir };
+  }
+
+  if (await fs.pathExists(targetDir)) {
+    await fs.remove(targetDir);
+  }
+
+  const extractInto = path.join(repoPath, '.xtrm');
+  await fs.ensureDir(extractInto);
+
+  const result = spawnSync('tar', ['-xzf', resolvedBackup, '-C', extractInto], {
+    stdio: 'pipe',
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to extract backup: ${result.stderr.toString() || 'unknown error'}`,
+    );
+  }
+
+  const realExtractInto = await fs.realpath(extractInto);
+  const realTarget = await fs.realpath(targetDir);
+  const rel = path.relative(realExtractInto, realTarget);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error(
+      `Restore path traversal detected: ${realTarget} escaped ${realExtractInto}`,
+    );
+  }
+
+  return { component, targetDir };
+}
+
+async function detectSourceRepoMarker(repoPath: string): Promise<string | null> {
+  const pkgPath = path.join(repoPath, 'package.json');
+  if (await fs.pathExists(pkgPath)) {
+    try {
+      const pkg = await fs.readJson(pkgPath);
+      if (pkg?.name === 'xtrm-tools') return "package.json name === 'xtrm-tools'";
+    } catch { /* unreadable package.json → not a match */ }
+  }
+  if (await fs.pathExists(path.join(repoPath, 'scripts', 'gen-registry.mjs'))) {
+    return 'scripts/gen-registry.mjs present';
+  }
+  if (await fs.pathExists(path.join(repoPath, 'scripts', 'vendor-specialists-skills.mjs'))) {
+    return 'scripts/vendor-specialists-skills.mjs present';
+  }
+  return null;
 }
 
 interface MigrationLogEvent {
@@ -392,9 +488,17 @@ async function migrateHooks(
   return { migrated: true, backupPath, divergedFiles: [], skipped: false };
 }
 
-async function cleanSettingsJsonEntries(repoPath: string, opts: { dryRun: boolean; apply: boolean }): Promise<void> {
+function settingsSidecarPath(hooksBackupPath: string): string {
+  return `${hooksBackupPath}.settings.json`;
+}
+
+async function cleanSettingsJsonEntries(
+  repoPath: string,
+  opts: { dryRun: boolean; apply: boolean; hooksBackupPath?: string },
+): Promise<void> {
   const claudeSettingsPath = path.join(repoPath, '.claude', 'settings.json');
   const piSettingsPath = path.join(repoPath, '.pi', 'agent', 'settings.json');
+  const preCleanSnapshot: Record<string, unknown> = {};
 
   for (const settingsPath of [claudeSettingsPath, piSettingsPath]) {
     if (!(await fs.pathExists(settingsPath))) {
@@ -447,6 +551,7 @@ async function cleanSettingsJsonEntries(repoPath: string, opts: { dryRun: boolea
         if (opts.dryRun) {
           console.log(kleur.cyan(`  settings: would clean xtrm-owned entries from ${path.relative(repoPath, settingsPath)}`));
         } else if (opts.apply) {
+          preCleanSnapshot[path.relative(repoPath, settingsPath)] = JSON.parse(JSON.stringify(settings));
           settings.hooks = cleanedHooks;
           await fs.writeJson(settingsPath, settings, { spaces: 2 });
           await fs.appendFile(settingsPath, '\n');
@@ -457,6 +562,36 @@ async function cleanSettingsJsonEntries(repoPath: string, opts: { dryRun: boolea
       // Ignore malformed settings files
     }
   }
+
+  if (opts.apply && opts.hooksBackupPath && Object.keys(preCleanSnapshot).length > 0) {
+    await fs.writeJson(settingsSidecarPath(opts.hooksBackupPath), preCleanSnapshot, { spaces: 2 });
+    await fs.appendFile(settingsSidecarPath(opts.hooksBackupPath), '\n');
+  }
+}
+
+async function restoreSettingsSidecar(
+  repoPath: string,
+  hooksBackupPath: string,
+): Promise<string[]> {
+  const sidecar = settingsSidecarPath(hooksBackupPath);
+  if (!(await fs.pathExists(sidecar))) return [];
+  const snapshot = await fs.readJson(sidecar) as Record<string, unknown>;
+  const restoredFiles: string[] = [];
+  const realRepo = await fs.realpath(repoPath);
+  for (const [relPath, contents] of Object.entries(snapshot)) {
+    const targetPath = path.join(repoPath, relPath);
+    const targetDir = path.dirname(targetPath);
+    await fs.ensureDir(targetDir);
+    const realTargetDir = await fs.realpath(targetDir);
+    const rel = path.relative(realRepo, realTargetDir);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(`Settings sidecar path escaped repo root: ${targetPath}`);
+    }
+    await fs.writeJson(targetPath, contents, { spaces: 2 });
+    await fs.appendFile(targetPath, '\n');
+    restoredFiles.push(relPath);
+  }
+  return restoredFiles;
 }
 
 export function createMigrateCommand(): Command {
@@ -467,6 +602,9 @@ export function createMigrateCommand(): Command {
     .option('--apply', 'Execute migration (destructive)', false)
     .option('--repo <path>', 'Target repository path (default: current working directory)')
     .option('-y, --yes', 'Skip confirmation prompt', false)
+    .option('--force-source', 'Override source-repo guard (maintainer escape hatch)', false)
+    .option('--restore <backup>', 'Restore per-repo skills/hooks from a migration tarball')
+    .option('--force', 'Override target-exists refusal on --restore', false)
     .action(async (target: string, opts: MigrateOptions) => {
       try {
         const validTargets = ['skills', 'hooks', 'all'];
@@ -495,6 +633,72 @@ export function createMigrateCommand(): Command {
           );
           process.exitCode = 1;
           return;
+        }
+
+        if (opts.apply && !opts.forceSource) {
+          const sourceMarker = await detectSourceRepoMarker(repoPath);
+          if (sourceMarker) {
+            console.error(
+              kleur.red(
+                `Refusing to migrate xtrm-tools source repo ${repoPath}: ${sourceMarker}. Migration is intended for consumers.`,
+              ),
+            );
+            process.exitCode = 1;
+            return;
+          }
+        }
+
+        if (opts.restore) {
+          if (!opts.forceSource) {
+            const sourceMarker = await detectSourceRepoMarker(repoPath);
+            if (sourceMarker) {
+              console.error(
+                kleur.red(
+                  `Refusing to restore into xtrm-tools source repo ${repoPath}: ${sourceMarker}.`,
+                ),
+              );
+              process.exitCode = 1;
+              return;
+            }
+          }
+          try {
+            const { component, targetDir } = await restoreBackup(repoPath, opts.restore, {
+              dryRun: opts.dryRun ?? false,
+              force: opts.force ?? false,
+            });
+            if (opts.dryRun) {
+              console.log(kleur.green(`\n  ✓ Restore dry-run complete (${component})\n`));
+            } else {
+              console.log(kleur.green(`  ${component}: restored to ${targetDir}`));
+              if (component === 'hooks') {
+                const restoredSettings = await restoreSettingsSidecar(repoPath, opts.restore);
+                for (const rel of restoredSettings) {
+                  console.log(kleur.green(`  settings: restored ${rel}`));
+                }
+              }
+              await markRepoMigrated(repoPath, {
+                skillsMigrated: component === 'skills' ? false : undefined,
+                hooksMigrated: component === 'hooks' ? false : undefined,
+              });
+              await appendMigrationLog({
+                timestamp: new Date().toISOString(),
+                component: component === 'skills' ? 'skills-migration' : 'hooks-migration',
+                event: `${component}.restore.ok`,
+                repo: repoPath,
+                backupPath: opts.restore,
+                outcome: 'ok',
+              });
+              console.log(kleur.green(`\n  ✓ Restore complete\n`));
+            }
+            process.exitCode = 0;
+            return;
+          } catch (error) {
+            console.error(
+              kleur.red(`✗ Restore failed: ${error instanceof Error ? error.message : String(error)}`),
+            );
+            process.exitCode = 1;
+            return;
+          }
         }
 
         console.log(kleur.bold(`\n  Migrating ${path.basename(repoPath)}`));
@@ -559,6 +763,7 @@ export function createMigrateCommand(): Command {
           await cleanSettingsJsonEntries(repoPath, {
             dryRun: opts.dryRun ?? false,
             apply: opts.apply ?? false,
+            hooksBackupPath: hooksResult.backupPath,
           });
         }
 

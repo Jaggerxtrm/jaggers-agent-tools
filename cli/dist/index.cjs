@@ -73884,6 +73884,80 @@ async function isRepoMigrated(repoPath, opts) {
 }
 
 // src/commands/migrate.ts
+function detectRestoreComponent(backupPath) {
+  const base = import_node_path47.default.basename(backupPath);
+  if (base.startsWith("skills-")) return "skills";
+  if (base.startsWith("hooks-")) return "hooks";
+  return null;
+}
+async function restoreBackup2(repoPath, backupPath, opts) {
+  if (!import_node_path47.default.isAbsolute(backupPath) && !backupPath.startsWith("~")) {
+    throw new Error(`Backup path must be absolute or ~-expandable: ${backupPath}`);
+  }
+  const resolvedBackup = backupPath.startsWith("~") ? import_node_path47.default.join(import_node_os16.default.homedir(), backupPath.slice(1).replace(/^\//, "")) : backupPath;
+  if (!await import_fs_extra56.default.pathExists(resolvedBackup)) {
+    throw new Error(`Backup not found: ${resolvedBackup}`);
+  }
+  const component = detectRestoreComponent(resolvedBackup);
+  if (!component) {
+    throw new Error(
+      `Cannot detect component from backup filename (expected skills-* or hooks-*): ${import_node_path47.default.basename(resolvedBackup)}`
+    );
+  }
+  const targetDir = import_node_path47.default.join(repoPath, ".xtrm", component);
+  const collisionProbe = component === "skills" ? import_node_path47.default.join(targetDir, "default") : targetDir;
+  if (await import_fs_extra56.default.pathExists(collisionProbe)) {
+    if (!opts.force) {
+      throw new Error(
+        `Target already exists: ${collisionProbe}. Rerun with --force to overwrite.`
+      );
+    }
+  }
+  if (opts.dryRun) {
+    console.log(kleur_default.dim(`  would extract ${resolvedBackup}`));
+    console.log(kleur_default.dim(`  into ${import_node_path47.default.join(repoPath, ".xtrm")}`));
+    return { component, targetDir };
+  }
+  if (await import_fs_extra56.default.pathExists(targetDir)) {
+    await import_fs_extra56.default.remove(targetDir);
+  }
+  const extractInto = import_node_path47.default.join(repoPath, ".xtrm");
+  await import_fs_extra56.default.ensureDir(extractInto);
+  const result = (0, import_child_process8.spawnSync)("tar", ["-xzf", resolvedBackup, "-C", extractInto], {
+    stdio: "pipe"
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to extract backup: ${result.stderr.toString() || "unknown error"}`
+    );
+  }
+  const realExtractInto = await import_fs_extra56.default.realpath(extractInto);
+  const realTarget = await import_fs_extra56.default.realpath(targetDir);
+  const rel = import_node_path47.default.relative(realExtractInto, realTarget);
+  if (rel.startsWith("..") || import_node_path47.default.isAbsolute(rel)) {
+    throw new Error(
+      `Restore path traversal detected: ${realTarget} escaped ${realExtractInto}`
+    );
+  }
+  return { component, targetDir };
+}
+async function detectSourceRepoMarker(repoPath) {
+  const pkgPath = import_node_path47.default.join(repoPath, "package.json");
+  if (await import_fs_extra56.default.pathExists(pkgPath)) {
+    try {
+      const pkg = await import_fs_extra56.default.readJson(pkgPath);
+      if (pkg?.name === "xtrm-tools") return "package.json name === 'xtrm-tools'";
+    } catch {
+    }
+  }
+  if (await import_fs_extra56.default.pathExists(import_node_path47.default.join(repoPath, "scripts", "gen-registry.mjs"))) {
+    return "scripts/gen-registry.mjs present";
+  }
+  if (await import_fs_extra56.default.pathExists(import_node_path47.default.join(repoPath, "scripts", "vendor-specialists-skills.mjs"))) {
+    return "scripts/vendor-specialists-skills.mjs present";
+  }
+  return null;
+}
 function resolveLogPath2() {
   return import_node_path47.default.join(import_node_os16.default.homedir(), ".xtrm", "logs", "skills-migration.jsonl");
 }
@@ -74154,9 +74228,13 @@ async function migrateHooks(repoPath, opts) {
   await markRepoMigrated(repoPath, { hooksMigrated: true, backupPath });
   return { migrated: true, backupPath, divergedFiles: [], skipped: false };
 }
+function settingsSidecarPath(hooksBackupPath) {
+  return `${hooksBackupPath}.settings.json`;
+}
 async function cleanSettingsJsonEntries(repoPath, opts) {
   const claudeSettingsPath = import_node_path47.default.join(repoPath, ".claude", "settings.json");
   const piSettingsPath = import_node_path47.default.join(repoPath, ".pi", "agent", "settings.json");
+  const preCleanSnapshot = {};
   for (const settingsPath of [claudeSettingsPath, piSettingsPath]) {
     if (!await import_fs_extra56.default.pathExists(settingsPath)) {
       continue;
@@ -74197,6 +74275,7 @@ async function cleanSettingsJsonEntries(repoPath, opts) {
         if (opts.dryRun) {
           console.log(kleur_default.cyan(`  settings: would clean xtrm-owned entries from ${import_node_path47.default.relative(repoPath, settingsPath)}`));
         } else if (opts.apply) {
+          preCleanSnapshot[import_node_path47.default.relative(repoPath, settingsPath)] = JSON.parse(JSON.stringify(settings));
           settings.hooks = cleanedHooks;
           await import_fs_extra56.default.writeJson(settingsPath, settings, { spaces: 2 });
           await import_fs_extra56.default.appendFile(settingsPath, "\n");
@@ -74206,9 +74285,34 @@ async function cleanSettingsJsonEntries(repoPath, opts) {
     } catch {
     }
   }
+  if (opts.apply && opts.hooksBackupPath && Object.keys(preCleanSnapshot).length > 0) {
+    await import_fs_extra56.default.writeJson(settingsSidecarPath(opts.hooksBackupPath), preCleanSnapshot, { spaces: 2 });
+    await import_fs_extra56.default.appendFile(settingsSidecarPath(opts.hooksBackupPath), "\n");
+  }
+}
+async function restoreSettingsSidecar(repoPath, hooksBackupPath) {
+  const sidecar = settingsSidecarPath(hooksBackupPath);
+  if (!await import_fs_extra56.default.pathExists(sidecar)) return [];
+  const snapshot = await import_fs_extra56.default.readJson(sidecar);
+  const restoredFiles = [];
+  const realRepo = await import_fs_extra56.default.realpath(repoPath);
+  for (const [relPath, contents] of Object.entries(snapshot)) {
+    const targetPath = import_node_path47.default.join(repoPath, relPath);
+    const targetDir = import_node_path47.default.dirname(targetPath);
+    await import_fs_extra56.default.ensureDir(targetDir);
+    const realTargetDir = await import_fs_extra56.default.realpath(targetDir);
+    const rel = import_node_path47.default.relative(realRepo, realTargetDir);
+    if (rel.startsWith("..") || import_node_path47.default.isAbsolute(rel)) {
+      throw new Error(`Settings sidecar path escaped repo root: ${targetPath}`);
+    }
+    await import_fs_extra56.default.writeJson(targetPath, contents, { spaces: 2 });
+    await import_fs_extra56.default.appendFile(targetPath, "\n");
+    restoredFiles.push(relPath);
+  }
+  return restoredFiles;
 }
 function createMigrateCommand() {
-  return new Command("migrate").description("One-time per-repo cleanup: migrate skills/hooks to global scope").argument("[target]", "Migration target: skills | hooks | all", "all").option("--dry-run", "Preview changes without making any modifications", false).option("--apply", "Execute migration (destructive)", false).option("--repo <path>", "Target repository path (default: current working directory)").option("-y, --yes", "Skip confirmation prompt", false).action(async (target, opts) => {
+  return new Command("migrate").description("One-time per-repo cleanup: migrate skills/hooks to global scope").argument("[target]", "Migration target: skills | hooks | all", "all").option("--dry-run", "Preview changes without making any modifications", false).option("--apply", "Execute migration (destructive)", false).option("--repo <path>", "Target repository path (default: current working directory)").option("-y, --yes", "Skip confirmation prompt", false).option("--force-source", "Override source-repo guard (maintainer escape hatch)", false).option("--restore <backup>", "Restore per-repo skills/hooks from a migration tarball").option("--force", "Override target-exists refusal on --restore", false).action(async (target, opts) => {
     try {
       const validTargets = ["skills", "hooks", "all"];
       if (!validTargets.includes(target)) {
@@ -74233,6 +74337,74 @@ function createMigrateCommand() {
         );
         process.exitCode = 1;
         return;
+      }
+      if (opts.apply && !opts.forceSource) {
+        const sourceMarker = await detectSourceRepoMarker(repoPath);
+        if (sourceMarker) {
+          console.error(
+            kleur_default.red(
+              `Refusing to migrate xtrm-tools source repo ${repoPath}: ${sourceMarker}. Migration is intended for consumers.`
+            )
+          );
+          process.exitCode = 1;
+          return;
+        }
+      }
+      if (opts.restore) {
+        if (!opts.forceSource) {
+          const sourceMarker = await detectSourceRepoMarker(repoPath);
+          if (sourceMarker) {
+            console.error(
+              kleur_default.red(
+                `Refusing to restore into xtrm-tools source repo ${repoPath}: ${sourceMarker}.`
+              )
+            );
+            process.exitCode = 1;
+            return;
+          }
+        }
+        try {
+          const { component, targetDir } = await restoreBackup2(repoPath, opts.restore, {
+            dryRun: opts.dryRun ?? false,
+            force: opts.force ?? false
+          });
+          if (opts.dryRun) {
+            console.log(kleur_default.green(`
+  \u2713 Restore dry-run complete (${component})
+`));
+          } else {
+            console.log(kleur_default.green(`  ${component}: restored to ${targetDir}`));
+            if (component === "hooks") {
+              const restoredSettings = await restoreSettingsSidecar(repoPath, opts.restore);
+              for (const rel of restoredSettings) {
+                console.log(kleur_default.green(`  settings: restored ${rel}`));
+              }
+            }
+            await markRepoMigrated(repoPath, {
+              skillsMigrated: component === "skills" ? false : void 0,
+              hooksMigrated: component === "hooks" ? false : void 0
+            });
+            await appendMigrationLog({
+              timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+              component: component === "skills" ? "skills-migration" : "hooks-migration",
+              event: `${component}.restore.ok`,
+              repo: repoPath,
+              backupPath: opts.restore,
+              outcome: "ok"
+            });
+            console.log(kleur_default.green(`
+  \u2713 Restore complete
+`));
+          }
+          process.exitCode = 0;
+          return;
+        } catch (error51) {
+          console.error(
+            kleur_default.red(`\u2717 Restore failed: ${error51 instanceof Error ? error51.message : String(error51)}`)
+          );
+          process.exitCode = 1;
+          return;
+        }
       }
       console.log(kleur_default.bold(`
   Migrating ${import_node_path47.default.basename(repoPath)}`));
@@ -74290,7 +74462,8 @@ function createMigrateCommand() {
       if ((target === "hooks" || target === "all") && hooksResult.migrated) {
         await cleanSettingsJsonEntries(repoPath, {
           dryRun: opts.dryRun ?? false,
-          apply: opts.apply ?? false
+          apply: opts.apply ?? false,
+          hooksBackupPath: hooksResult.backupPath
         });
       }
       console.log(kleur_default.green("\n  \u2713 Migration complete\n"));

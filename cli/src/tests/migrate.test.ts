@@ -231,6 +231,184 @@ describe('xt migrate command', () => {
     }
   });
 
+  it('refuses --apply on source repo (package.json name)', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+    await fs.writeJson(path.join(repoDir, 'package.json'), { name: 'xtrm-tools', version: '1.0.0' });
+
+    const result = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('Refusing to migrate xtrm-tools source repo');
+    expect(result.stderr).toContain("package.json name === 'xtrm-tools'");
+
+    const defaultTierExists = await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'default'));
+    expect(defaultTierExists).toBe(true);
+  });
+
+  it('refuses --apply on source repo (gen-registry marker)', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+    await fs.ensureDir(path.join(repoDir, 'scripts'));
+    await fs.writeFile(path.join(repoDir, 'scripts', 'gen-registry.mjs'), '// marker');
+
+    const result = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('Refusing to migrate xtrm-tools source repo');
+    expect(result.stderr).toContain('scripts/gen-registry.mjs present');
+
+    const defaultTierExists = await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'default'));
+    expect(defaultTierExists).toBe(true);
+  });
+
+  it('--dry-run allowed on source repo', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+    await fs.writeJson(path.join(repoDir, 'package.json'), { name: 'xtrm-tools', version: '1.0.0' });
+
+    const result = runCli(['migrate', 'skills', '--dry-run', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).not.toContain('Refusing to migrate');
+    expect(result.stdout).toContain('would remove');
+  });
+
+  it('--force-source overrides guard', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+    await fs.writeJson(path.join(repoDir, 'package.json'), { name: 'xtrm-tools', version: '1.0.0' });
+
+    const result = runCli(['migrate', 'skills', '--apply', '--yes', '--force-source', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).not.toContain('Refusing to migrate');
+    const defaultTierExists = await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'default'));
+    expect(defaultTierExists).toBe(false);
+  });
+
+  it('restore extracts skills backup back into repo', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+
+    runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+    expect(await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'default'))).toBe(false);
+
+    const backupDir = path.join(tmpHome, '.xtrm', 'migration-backups');
+    const backups = await fs.readdir(backupDir);
+    const skillsBackup = backups.find((f) => f.startsWith('skills-test-repo'));
+    expect(skillsBackup).toBeDefined();
+    const backupPath = path.join(backupDir, skillsBackup!);
+
+    const result = runCli(['migrate', 'all', '--apply', '--restore', backupPath, '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('restored');
+    expect(await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'default', 'test-skill.md'))).toBe(true);
+  });
+
+  it('restore refuses when target exists', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+
+    runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+    const backupDir = path.join(tmpHome, '.xtrm', 'migration-backups');
+    const backups = await fs.readdir(backupDir);
+    const backupPath = path.join(backupDir, backups.find((f) => f.startsWith('skills-test-repo'))!);
+
+    // restore once
+    runCli(['migrate', 'all', '--apply', '--restore', backupPath, '--repo', repoDir], repoDir);
+    // second restore should refuse
+    const result = runCli(['migrate', 'all', '--apply', '--restore', backupPath, '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('already exists');
+    expect(result.stderr).toContain('--force');
+  });
+
+  it('restore --force overrides target-exists refusal', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+
+    runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+    const backupDir = path.join(tmpHome, '.xtrm', 'migration-backups');
+    const backups = await fs.readdir(backupDir);
+    const backupPath = path.join(backupDir, backups.find((f) => f.startsWith('skills-test-repo'))!);
+
+    runCli(['migrate', 'all', '--apply', '--restore', backupPath, '--repo', repoDir], repoDir);
+    // dirty the restored dir
+    await fs.writeFile(path.join(repoDir, '.xtrm', 'skills', 'sentinel.txt'), 'dirty');
+
+    const result = runCli(['migrate', 'all', '--apply', '--force', '--restore', backupPath, '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('restored');
+    expect(await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'sentinel.txt'))).toBe(false);
+  });
+
+  it('restore --dry-run prints planned extraction only', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+
+    runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+    const backupDir = path.join(tmpHome, '.xtrm', 'migration-backups');
+    const backups = await fs.readdir(backupDir);
+    const backupPath = path.join(backupDir, backups.find((f) => f.startsWith('skills-test-repo'))!);
+
+    const result = runCli(['migrate', 'all', '--dry-run', '--restore', backupPath, '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('would extract');
+    expect(await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'default'))).toBe(false);
+  });
+
+  it('restore hooks backup rewrites settings.json entries from sidecar', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+
+    const claudeSettingsDir = path.join(repoDir, '.claude');
+    await fs.ensureDir(claudeSettingsDir);
+    const originalSettings = {
+      hooks: {
+        PreToolUse: [
+          { _source: 'xtrm-global', matcher: 'Bash', hooks: [{ type: 'command', command: 'node /home/x/.xtrm/hooks/foo.mjs' }] },
+          { matcher: 'Read', hooks: [{ type: 'command', command: '/usr/bin/user-hook' }] },
+        ],
+      },
+      model: 'opus',
+    };
+    await fs.writeJson(path.join(claudeSettingsDir, 'settings.json'), originalSettings, { spaces: 2 });
+
+    runCli(['migrate', 'hooks', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    const cleaned = await fs.readJson(path.join(claudeSettingsDir, 'settings.json'));
+    expect(cleaned.hooks.PreToolUse).toHaveLength(1);
+    expect(cleaned.hooks.PreToolUse[0].matcher).toBe('Read');
+
+    const backupDir = path.join(tmpHome, '.xtrm', 'migration-backups');
+    const backups = await fs.readdir(backupDir);
+    const hooksBackup = backups.find((f) => f.startsWith('hooks-test-repo') && f.endsWith('.tgz'));
+    expect(hooksBackup).toBeDefined();
+    const sidecar = backups.find((f) => f.startsWith('hooks-test-repo') && f.endsWith('.settings.json'));
+    expect(sidecar).toBeDefined();
+
+    const result = runCli(['migrate', 'all', '--apply', '--restore', path.join(backupDir, hooksBackup!), '--repo', repoDir], repoDir);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('settings: restored .claude/settings.json');
+
+    const restored = await fs.readJson(path.join(claudeSettingsDir, 'settings.json'));
+    expect(restored).toEqual(originalSettings);
+  });
+
   it('logs migration events to skills-migration.jsonl', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     await createGlobalSkillsRoot(tmpHome);
