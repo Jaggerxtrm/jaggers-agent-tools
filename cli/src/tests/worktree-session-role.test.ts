@@ -1,14 +1,18 @@
 import os from 'node:os';
 import path from 'node:path';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
     buildRoleTmuxPlan,
     parseSpecialistJson,
     guardRolePassthrough,
-    computeRoleExtensions,
-    ROLE_DEFAULT_EXTENSIONS,
+    resolveSkillPath,
 } from '../utils/worktree-session.js';
 
+// Use synthetic test-only skill paths that don't exist under real repo OR
+// $HOME. resolveSkillPath's home-fallback (xtmux-1rn) then leaves them
+// deterministically repo-resolved, so assertions stay stable regardless of
+// the runner's actual $HOME contents.
 const SAMPLE_SPECIALIST = JSON.stringify({
     specialist: {
         metadata: { name: 'chain-coordinator' },
@@ -17,8 +21,8 @@ const SAMPLE_SPECIALIST = JSON.stringify({
         },
         skills: {
             paths: [
-                '.xtrm/skills/active/using-xtrm/SKILL.md',
-                '.xtrm/skills/active/using-specialists-v3/SKILL.md',
+                '.xtrm/skills/test-only/synthetic-a/SKILL.md',
+                '.xtrm/skills/test-only/synthetic-b/SKILL.md',
             ],
         },
     },
@@ -32,8 +36,8 @@ describe('parseSpecialistJson', () => {
         expect(role.name).toBe('chain-coordinator');
         expect(role.systemPrompt).toContain('chain coordinator');
         expect(role.skillPaths).toEqual([
-            path.resolve(mainRepoRoot, '.xtrm/skills/active/using-xtrm/SKILL.md'),
-            path.resolve(mainRepoRoot, '.xtrm/skills/active/using-specialists-v3/SKILL.md'),
+            path.resolve(mainRepoRoot, '.xtrm/skills/test-only/synthetic-a/SKILL.md'),
+            path.resolve(mainRepoRoot, '.xtrm/skills/test-only/synthetic-b/SKILL.md'),
         ]);
     });
 
@@ -172,18 +176,17 @@ describe('buildRoleTmuxPlan', () => {
         expect(plan.sessionName).toBe('role-chain-coordinator-my-bead-1');
     });
 
-    it('emits --no-extensions and the curated -e allow-list', () => {
+    it('does not emit --no-extensions or -e — pi discovers its own extensions', () => {
+        // xtmux-3rs: prior curated allow-list emitted `-e <name>` but pi -e
+        // takes a filesystem path, not a registry name. Silent crash on
+        // startup. Fix drops the policy; trust pi's own discovery.
         const plan = buildRoleTmuxPlan({
             role,
             parentSessionId: '',
             promptFile: '/tmp/prompt.md',
         });
-        expect(plan.piArgs).toContain('--no-extensions');
-        for (const ext of ROLE_DEFAULT_EXTENSIONS) {
-            const i = plan.piArgs.indexOf('-e');
-            expect(i).toBeGreaterThan(-1);
-            expect(plan.piArgs).toContain(ext);
-        }
+        expect(plan.piArgs).not.toContain('--no-extensions');
+        expect(plan.piArgs).not.toContain('-e');
     });
 
     it('forwards --model / --thinking CLI overrides', () => {
@@ -265,33 +268,70 @@ describe('guardRolePassthrough', () => {
     });
 });
 
-describe('computeRoleExtensions', () => {
-    it('returns the default allow-list when no overrides', () => {
-        const role = parseSpecialistJson('x', JSON.stringify({
-            specialist: { prompt: { system: 'x' } },
-        }));
-        const exts = computeRoleExtensions(role);
-        for (const e of ROLE_DEFAULT_EXTENSIONS) expect(exts).toContain(e);
-        expect(exts).toHaveLength(ROLE_DEFAULT_EXTENSIONS.length);
+describe('resolveSkillPath', () => {
+    // xtmux-1rn: relative skill paths must fall back to $HOME when the
+    // per-repo file doesn't exist, so global-migrated skills resolve.
+    // Use a tmpdir sandbox so we don't touch the real home / repo.
+    const sandbox = path.join(os.tmpdir(), `xtmux-1rn-test-${process.pid}`);
+    const fakeHome = path.join(sandbox, 'home');
+    const fakeRepo = path.join(sandbox, 'repo');
+    const rel = '.xtrm/skills/active/multiplexing/SKILL.md';
+
+    function setup(): void {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeHome, { recursive: true });
+        mkdirSync(fakeRepo, { recursive: true });
+    }
+
+    function teardown(): void {
+        rmSync(sandbox, { recursive: true, force: true });
+    }
+
+    function withHomeEnv(fn: () => void): void {
+        const prev = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try { fn(); } finally { process.env.HOME = prev; }
+    }
+
+    it('returns repo-resolved path when file exists in mainRepoRoot', () => {
+        setup();
+        const repoFile = path.join(fakeRepo, rel);
+        mkdirSync(path.dirname(repoFile), { recursive: true });
+        writeFileSync(repoFile, '# skill');
+        withHomeEnv(() => {
+            expect(resolveSkillPath(fakeRepo, rel)).toBe(repoFile);
+        });
+        teardown();
     });
 
-    it('adds specialist opt-ins (execution.extensions: {name: true})', () => {
-        const role = parseSpecialistJson('x', JSON.stringify({
-            specialist: {
-                prompt: { system: 'x' },
-                execution: { extensions: { 'pi-gitnexus': true } },
-            },
-        }));
-        expect(computeRoleExtensions(role)).toContain('pi-gitnexus');
+    it('falls back to $HOME when repo path is missing but home has it', () => {
+        setup();
+        const homeFile = path.join(fakeHome, rel);
+        mkdirSync(path.dirname(homeFile), { recursive: true });
+        writeFileSync(homeFile, '# global skill');
+        withHomeEnv(() => {
+            expect(resolveSkillPath(fakeRepo, rel)).toBe(homeFile);
+        });
+        teardown();
     });
 
-    it('drops specialist opt-outs (execution.extensions: {name: false})', () => {
-        const role = parseSpecialistJson('x', JSON.stringify({
-            specialist: {
-                prompt: { system: 'x' },
-                execution: { extensions: { caveman: false } },
-            },
-        }));
-        expect(computeRoleExtensions(role)).not.toContain('caveman');
+    it('returns repo-resolved path when both miss (pi produces the loud error)', () => {
+        setup();
+        withHomeEnv(() => {
+            expect(resolveSkillPath(fakeRepo, rel)).toBe(path.resolve(fakeRepo, rel));
+        });
+        teardown();
+    });
+
+    it('honors absolute paths verbatim (no fallback)', () => {
+        expect(resolveSkillPath(fakeRepo, '/etc/hosts')).toBe('/etc/hosts');
+    });
+
+    it('expands ~ and ~/ verbatim (no fallback)', () => {
+        withHomeEnv(() => {
+            expect(resolveSkillPath(fakeRepo, '~')).toBe(fakeHome);
+            expect(resolveSkillPath(fakeRepo, '~/foo/bar.md'))
+                .toBe(path.join(fakeHome, 'foo/bar.md'));
+        });
     });
 });
