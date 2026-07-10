@@ -1,13 +1,5 @@
 /**
- * xtprompt - context aware prompt improver.
- *
- * Global Pi extension. Shortcut: alt+m  (alt+p intentionally avoided to not
- * collide with pi-promptsmith if both are installed). Command: /msmith
- *
- * Rewrites the current editor draft via a standalone model call (the active
- * model), using anthropic + xtrm/planning-aware intent templates + hard style rules, then writes
- * the improved prompt back into the editor. The main agent turn never runs
- * during the rewrite.
+ * xtprompt - generic context-aware prompt improver.
  */
 import { complete } from "@earendil-works/pi-ai";
 import type {
@@ -23,33 +15,135 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION = "mercury-smith";
-const COMMAND = "msmith";
+const EXTENSION = "xtprompt";
+const COMMAND = "xtprompt";
 const DEFAULT_SHORTCUT = "alt+m";
-
-const SENTINEL_OPEN = "<mercury-smith>";
-const SENTINEL_CLOSE = "</mercury-smith>";
-
+const SENTINEL_OPEN = "<xtprompt>";
+const SENTINEL_CLOSE = "</xtprompt>";
 const ENHANCER_MAX_OUTPUT_TOKENS = 1600;
 const DEFAULT_TIMEOUT_MS = 45_000;
+const MAX_CONTEXT_ITEMS = 3;
+const MAX_CONTEXT_CHARS = 480;
+const VAGUE_WORDS = new Set([
+  "help",
+  "improve",
+  "rewrite",
+  "fix",
+  "debug",
+  "plan",
+  "stuff",
+  "thing",
+  "things",
+  "this",
+  "that",
+]);
 
-type Intent =
-  | "pane-dispatch"
-  | "specialist"
-  | "bead"
-  | "scope-plan"
-  | "debug"
-  | "generic";
+type Intent = "planning" | "analysis" | "development" | "refactor" | "generic";
 
-interface SmithState {
+type PromptRequestOptions = {
+  draft: string;
+  intent: Intent;
+  conversationContext: string;
+};
+
+type AuthResolved = {
+  apiKey?: string;
+  headers?: Record<string, string>;
+  env?: Record<string, string>;
+};
+
+type PromptState = {
   enabled: boolean;
+};
+
+type SessionEntry = {
+  message?: {
+    role?: string;
+    content?: unknown;
+  };
+  summary?: string;
+};
+
+type InputCapableUi = ExtensionContext["ui"] & {
+  input?: (prompt: string, initialValue?: string) => Promise<string | null | undefined>;
+};
+
+interface IntentRule {
+  intent: Intent;
+  patterns: readonly RegExp[];
 }
 
-function createState(): SmithState {
+const INTENT_RULES: readonly IntentRule[] = [
+  {
+    intent: "planning",
+    patterns: [
+      /##\s*problem/i,
+      /##\s*scope/i,
+      /\bplan(?:ning)?\b/i,
+      /\bnon_goals\b/i,
+      /\bvalidation\b/i,
+      /\bconstraints\b/i,
+    ],
+  },
+  {
+    intent: "analysis",
+    patterns: [
+      /\banaly(?:sis|ze)\b/i,
+      /\binvestigat(?:e|ion)\b/i,
+      /\broot cause\b/i,
+      /\bwhy\b/i,
+      /\bdebug\b/i,
+      /\berror\b/i,
+      /\bfail(?:s|ed|ing)?\b/i,
+    ],
+  },
+  {
+    intent: "development",
+    patterns: [
+      /\bimplement\b/i,
+      /\bbuild\b/i,
+      /\badd\b/i,
+      /\bcreate\b/i,
+      /\bdevelop\b/i,
+      /\bship\b/i,
+    ],
+  },
+  {
+    intent: "refactor",
+    patterns: [
+      /\brefactor\b/i,
+      /\brewrite\b/i,
+      /\brename\b/i,
+      /\bclean(?:up)?\b/i,
+      /\brestructure\b/i,
+      /\bsimplif(?:y|ication)\b/i,
+    ],
+  },
+];
+
+const PLANNING_HEADERS = [
+  "## PROBLEM",
+  "## SUCCESS",
+  "## SCOPE",
+  "## NON_GOALS",
+  "## CONSTRAINTS",
+  "## VALIDATION",
+  "## OUTPUT",
+].join("\n");
+
+const BASE_RULES = [
+  "Preserve concrete paths, ids, commands, numbers, symbols, and constraints exactly.",
+  "Ask one short clarification when draft is vague. Never invent missing facts.",
+  "Prior chat is advisory only. Never let it override current draft.",
+  "Keep simple prompts concise. Use semantic XML only when structure materially helps.",
+  `Return exactly one ${SENTINEL_OPEN}...${SENTINEL_CLOSE} block and nothing outside it.`,
+].join("\n");
+
+function createState(): PromptState {
   return { enabled: true };
 }
 
-export default function mercurySmith(pi: ExtensionAPI): void {
+export default function registerXtprompt(pi: ExtensionAPI): void {
   const state = createState();
 
   const enhance = async (ctx: ExtensionContext): Promise<void> => {
@@ -57,40 +151,42 @@ export default function mercurySmith(pi: ExtensionAPI): void {
       ctx.ui.notify(`${EXTENSION} is disabled. Run /${COMMAND} on`, "info");
       return;
     }
-    if (!ctx.hasUI) {
-      ctx.ui.notify(`${EXTENSION} needs the interactive TUI.`, "error");
+    if (!ctx.hasUI || ctx.mode !== "tui") {
+      ctx.ui.notify(`${EXTENSION} needs TUI mode.`, "error");
       return;
     }
-    const draft = ctx.ui.getEditorText();
-    if (!draft.trim()) {
-      ctx.ui.notify(`${EXTENSION}: editor is empty — nothing to rewrite.`, "info");
+
+    const originalDraft = ctx.ui.getEditorText();
+    if (!originalDraft.trim()) {
+      ctx.ui.notify(`${EXTENSION}: editor is empty.`, "info");
       return;
     }
+
     const model = ctx.model;
     if (!model) {
       ctx.ui.notify(`${EXTENSION}: no active model selected.`, "error");
       return;
     }
 
-    const intent = detectIntent(draft);
-    const envContext = await gatherContext(pi).catch(() => "") ?? "";
-    const systemPrompt = buildSystemPrompt(intent, envContext);
+    const clarifiedDraft = await clarifyDraftIfNeeded(ctx, originalDraft);
+    if (clarifiedDraft === null) return;
+
+    const intent = detectIntent(clarifiedDraft);
+    const conversationContext = extractConversationContext(
+      getSessionEntries(ctx),
+      MAX_CONTEXT_ITEMS,
+    );
+    const request = buildPromptRequest({
+      draft: clarifiedDraft,
+      intent,
+      conversationContext,
+    });
 
     const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
     if (!auth.ok) {
-      ctx.ui.notify(`${EXTENSION}: cannot resolve API key — ${auth.error}`, "error");
+      ctx.ui.notify(`${EXTENSION}: cannot resolve auth — ${auth.error}`, "error");
       return;
     }
-
-    const userMessage: UserMessage = {
-      role: "user",
-      content: draft,
-      timestamp: Date.now(),
-    };
-    const request: Context = {
-      systemPrompt,
-      messages: [userMessage],
-    };
 
     const outcome = await runWithLoader(
       ctx,
@@ -98,20 +194,18 @@ export default function mercurySmith(pi: ExtensionAPI): void {
       async (signal) => {
         const primary = await callModel(model, request, auth, signal);
         if (primary === null) return null;
-        const text = extractText(primary);
-        const parsed = parseSentinel(text);
+        const parsed = parseSentinel(extractText(primary));
         if (parsed !== undefined) return parsed;
-        // retry once with a harder format reminder
         const retried = await callModel(model, retryRequest(request), auth, signal);
         if (retried === null) return null;
-        const parsed2 = parseSentinel(extractText(retried));
-        if (parsed2 !== undefined) return parsed2;
+        const retriedParsed = parseSentinel(extractText(retried));
+        if (retriedParsed !== undefined) return retriedParsed;
         throw new Error(
-          `${EXTENSION}: model did not return the ${SENTINEL_OPEN} block after a retry. Leaving editor unchanged.`,
+          `${EXTENSION}: model did not return ${SENTINEL_OPEN} block. Leaving editor unchanged.`,
         );
       },
-    ).catch((err: unknown) => {
-      ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+    ).catch((error: unknown) => {
+      ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       return null;
     });
 
@@ -121,12 +215,12 @@ export default function mercurySmith(pi: ExtensionAPI): void {
   };
 
   pi.registerShortcut(DEFAULT_SHORTCUT, {
-    description: `Rewrite the current editor draft (${EXTENSION})`,
+    description: `Rewrite current editor draft (${EXTENSION})`,
     handler: enhance,
   });
 
   pi.registerCommand(COMMAND, {
-    description: `${EXTENSION}: rewrite the current editor prompt`,
+    description: `${EXTENSION}: rewrite current editor prompt`,
     handler: async (args, ctx) => {
       const arg = (args ?? "").trim().toLowerCase();
       if (arg === "on") {
@@ -151,240 +245,275 @@ export default function mercurySmith(pi: ExtensionAPI): void {
   });
 }
 
-/* ------------------------------------------------------------------ intent */
-
-interface IntentRule {
-  intent: Intent;
-  patterns: RegExp[];
+async function clarifyDraftIfNeeded(
+  ctx: ExtensionContext,
+  draft: string,
+): Promise<string | null> {
+  if (!isVagueDraft(draft)) return draft;
+  const clarification = await requestClarification(ctx, draft);
+  if (clarification === null) return null;
+  return buildClarifiedDraft(draft, clarification);
 }
 
-const INTENT_RULES: IntentRule[] = [
-  {
-    intent: "pane-dispatch",
-    patterns: [
-      /\bmultiplex(?:ing)?\b/,
-      /\bpane\b/,
-      /\bdispatch(?:ed)?\b/,
-      /\borchestrat(?:e|or|ion)\b/,
-      /\bsubordinate\b/,
-      /\bjudge\b/,
-      /\bdeploy monitor(?:ing)?\b/,
-      /\btmux\b/,
-      /\bsend .*to (?:pane|session|agent)\b/i,
-    ],
-  },
-  {
-    intent: "specialist",
-    patterns: [
-      /\bspecialist\b/,
-      /\bexecutor\b/,
-      /\breviewer\b/,
-      /\bexplorer\b/,
-      /\bdebugger\b/,
-      /\bsp (?:run|script|serve|node)\b/,
-      /\busing-specialists\b/,
-      /\bquant-methodologist\b/,
-      /\bquant-researcher\b/,
-      /\bspecialist chain\b/i,
-    ],
-  },
-  {
-    intent: "bead",
-    patterns: [
-      /\bbead\b/i,
-      /\bbd (?:create|update|close|show|dep)\b/,
-      /\b--parent\b/,
-      /\b--claim\b/,
-      /\bepic\b/i,
-      /\bacceptance criteria\b/i,
-      /\b7-section\b/i,
-      /\bPROBLEM\b/,
-      /\bSUCCESS\b/,
-      /\bNON_GOALS\b/,
-      /\bVALIDATION\b/,
-    ],
-  },
-  {
-    intent: "scope-plan",
-    patterns: [
-      /\bplanning\b/,
-      /\bscope(?: out| this)?\b/i,
-      /\barchitect(?:ure)?\b/,
-      /\bbreak (?:this )?down\b/i,
-      /\bdecompos(?:e|ition)\b/,
-      /\broadmap\b/,
-      /\bphase structure\b/i,
-    ],
-  },
-  {
-    intent: "debug",
-    patterns: [
-      /\bdebug\b/,
-      /\bfix\b/,
-      /\bbug\b/i,
-      /\bbroken\b/,
-      /\bfail(?:s|ed|ing)?\b/,
-      /\bcrash(?:es|ing)?\b/,
-      /\broot cause\b/i,
-      /\btraceback\b/,
-      /\bstack trace\b/i,
-      /\bregression\b/i,
-    ],
-  },
-];
+async function requestClarification(
+  ctx: ExtensionContext,
+  draft: string,
+): Promise<string | null> {
+  const ui = ctx.ui as InputCapableUi;
+  const prompt = `${EXTENSION}: one clarification needed. What exact outcome should rewrite target?`;
+  if (typeof ui.input === "function") {
+    const result = await ui.input(prompt, draft);
+    return normalizeClarification(result);
+  }
+  ctx.ui.notify(`${EXTENSION}: no input UI available for clarification.`, "error");
+  return null;
+}
 
-function detectIntent(draft: string): Intent {
-  const text = draft.toLowerCase();
+function normalizeClarification(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function buildClarifiedDraft(draft: string, clarification: string): string {
+  return [`Original draft: ${draft.trim()}`, `Clarification: ${clarification.trim()}`].join("\n");
+}
+
+export function isVagueDraft(draft: string): boolean {
+  const trimmed = draft.trim();
+  if (!trimmed) return true;
+  if (trimmed.length < 16) return true;
+  if (!/[\n/:#]/.test(trimmed) && !/\b\d+\b/.test(trimmed) && !/\b[a-z0-9_-]+\.[a-z]{2,}\b/i.test(trimmed)) {
+    const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length <= 4) return true;
+    if (words.every((word) => VAGUE_WORDS.has(word))) return true;
+  }
+  return false;
+}
+
+export function detectIntent(draft: string): Intent {
   for (const rule of INTENT_RULES) {
-    if (rule.patterns.some((p) => p.test(text))) return rule.intent;
+    if (rule.patterns.some((pattern) => pattern.test(draft))) return rule.intent;
   }
   return "generic";
 }
 
-/* ----------------------------------------------------------- system prompt */
+export function buildPromptRequest(options: PromptRequestOptions): Context {
+  const userMessage: UserMessage = {
+    role: "user",
+    content: options.draft,
+    timestamp: Date.now(),
+  };
+  return {
+    systemPrompt: buildSystemPrompt(options),
+    messages: [userMessage],
+  };
+}
 
-const MERCURY_RULES = [
-  "Target environment: Mercury market-data (futures analytics service stack).",
-  "1. mmd-api and mmd-mcp-server NEVER compute — they read pre-computed snapshots only; all analytics are produced by the feed services (mmd-snapshot-feed).",
-  "2. Always parameterize SQL (params={'symbol': symbol}); never f-string user input into queries.",
-  "3. Modern type hints (dict[str, Any], list[Foo]); imports use the new layout (from analytics... import, from api... import).",
-  "4. Every analytic family must be wrapped in compute(analytic_family=...); adding one without the wrap is contract drift.",
-  "5. Default to no comments; add one only when the WHY is non-obvious.",
-  "6. analytics/ is pure calc — no I/O, no datetime.now() at module scope, no DB access.",
-  "7. Use bd (beads) for ALL task tracking; create follow-ups with `bd create --parent <id>` so they never get lost.",
-  "8. Keep work tightly scoped to what is asked; flag unknowns explicitly rather than inventing requirements.",
-].join("\n");
+function buildSystemPrompt(options: PromptRequestOptions): string {
+  const body = isComplexDraft(options.draft) || options.intent === "planning"
+    ? buildStructuredPrompt(options)
+    : buildSimplePrompt(options);
+  return [body, "", BASE_RULES].filter(Boolean).join("\n");
+}
 
-const INTENT_TEMPLATES: Record<Intent, string> = {
-  "pane-dispatch":
-    "Rewrite this as a crisp, self-contained instruction for a subordinate agent running in one tmux pane of a multiplexed session. The instruction MUST include: (a) the pane's role and explicitly what it is NOT (helper vs orchestrator), (b) the exact first action, (c) observable success criteria, (d) the escalation/notify rule — when to surface back to the orchestrator and how, (e) the communication protocol in priority order: temp files / structured notes > beads updates > direct notify. Make it dependency-aware: state what this pane must wait for and what it produces for other panes.",
-  specialist:
-    "Rewrite this as a specialist dispatch contract suitable for `sp run` / using-specialists-v3. MUST include: the specialist role needed (executor / reviewer / explorer / debugger / quant-methodologist / quant-researcher), a precise task scope (files and symbols), explicit success criteria, the verification the specialist must run, and the OUTPUT the specialist hands back. Scope it to a single chain step.",
-  bead:
-    "Rewrite this as a well-formed beads issue description using the 7-section contract, with these exact section headers: ## PROBLEM, ## SUCCESS, ## SCOPE, ## NON_GOALS, ## CONSTRAINTS, ## VALIDATION, ## OUTPUT. Make every section concrete and observable. Include a logging/telemetry note in CONSTRAINTS or VALIDATION where relevant, and at least one smoke/integration check in VALIDATION. No placeholder text. Preserve every concrete detail (bead ids, file paths, symbol names) from the original.",
-  "scope-plan":
-    "Rewrite this as a structured plan: distinct phases (P0 scaffold → P1 core → P2 integration), the dependencies between them, what can run in parallel, the top risks, and a short blast-radius summary. Keep it scoped; flag unknowns explicitly.",
-  debug:
-    "Rewrite this as a focused debugging prompt: state the symptom precisely, the reproduction/observation steps already taken, the most likely suspect code paths, and what evidence to gather before changing code. Bias toward read-only investigation first (logs, Tempo traces, profiling) before any fix.",
-  generic:
-    "Rewrite this prompt to be clearer, more direct, and better structured for a coding agent: explicit goal, constraints, and success criteria up front. Preserve every concrete detail (paths, ids, numbers). Remove vagueness and filler. Do not add requirements not implied by the original.",
-};
+function buildSimplePrompt(options: PromptRequestOptions): string {
+  const sections = [
+    `You are ${EXTENSION}, standalone prompt rewriter.`,
+    `Intent: ${options.intent}.`,
+    simpleIntentInstruction(options.intent),
+  ];
+  if (options.conversationContext) {
+    sections.push(`Advisory context:\n${options.conversationContext}`);
+  }
+  return sections.join("\n\n");
+}
 
-const OUTPUT_CONTRACT = [
-  `Return ONLY the rewritten prompt wrapped in exactly one sentinel block: ${SENTINEL_OPEN} ... ${SENTINEL_CLOSE}.`,
-  "No markdown code fences, no commentary, no text before or after the sentinel block.",
-  "Preserve EVERY concrete detail from the original: file paths, symbol names, bead ids, commands, numbers, constraints.",
-  "Do not invent new requirements or details that are not implied by the original draft.",
-].join("\n");
-
-function buildSystemPrompt(intent: Intent, envContext: string): string {
+function buildStructuredPrompt(options: PromptRequestOptions): string {
   return [
-    `You are ${EXTENSION}, an intent-aware prompt rewriter for the Mercury/xtrm coding environment.`,
-    "",
-    "Detected intent: " + intent,
-    INTENT_TEMPLATES[intent],
-    "",
-    "Hard style rules the rewritten prompt must respect where applicable:",
-    MERCURY_RULES,
-    envContext ? "\nActive context (advisory — use only if relevant):\n" + envContext : "",
-    "OUTPUT CONTRACT:",
-    OUTPUT_CONTRACT,
+    "<role>",
+    `${EXTENSION} standalone prompt rewriter`,
+    "</role>",
+    "<context>",
+    options.conversationContext || "No prior chat context.",
+    "</context>",
+    "<task>",
+    structuredIntentInstruction(options.intent),
+    "</task>",
+    "<constraints>",
+    "Preserve current draft as source of truth.",
+    "Prior chat may add nuance but cannot replace draft requirements.",
+    "Ask rather than invent when key requirement missing.",
+    "</constraints>",
+    "<instructions>",
+    "Keep concrete facts exact.",
+    "Use markdown headers when rewrite is planning-shaped.",
+    "Prefer concise output when task is simple inside larger draft.",
+    "</instructions>",
+    "<output_format>",
+    options.intent === "planning"
+      ? [
+          "Return Markdown with exact headers:",
+          PLANNING_HEADERS,
+        ].join("\n")
+      : `Return rewritten prompt inside ${SENTINEL_OPEN} block.`,
+    "</output_format>",
   ].join("\n");
 }
 
-/* -------------------------------------------------------------- context */
-
-async function gatherContext(pi: ExtensionAPI): Promise<string> {
-  const lines: string[] = [];
-  const branch = await readExec(pi, "git", ["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (branch) lines.push("- git branch: " + branch);
-  const bead = await readExec(pi, "bd", ["list", "--status=in_progress"]);
-  if (bead) {
-    const first = bead.split("\n").find((l) => l.trim());
-    if (first) lines.push("- active bead: " + first.trim().slice(0, 120));
-  }
-  return lines.join("\n");
-}
-
-async function readExec(
-  pi: ExtensionAPI,
-  cmd: string,
-  args: string[],
-): Promise<string | undefined> {
-  try {
-    const r = await Promise.race([
-      pi.exec(cmd, args, { timeout: 4000 }),
-      new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error("timeout")), 4500),
-      ),
-    ]);
-    const out = ((r.stdout ?? "") + (r.stderr ?? "")).trim();
-    return out || undefined;
-  } catch {
-    return undefined;
+function simpleIntentInstruction(intent: Intent): string {
+  switch (intent) {
+    case "planning":
+      return `Rewrite into planning-ready Markdown with exact headers:\n${PLANNING_HEADERS}`;
+    case "analysis":
+      return "Rewrite into analysis prompt with evidence, current signals, open questions, and concrete validation.";
+    case "development":
+      return "Rewrite into implementation prompt with goal, scope, constraints, verification, and exact output expectations.";
+    case "refactor":
+      return "Rewrite into refactor prompt with preserved behavior, touched symbols, constraints, and validation.";
+    case "generic":
+      return "Rewrite for clarity, concrete constraints, and observable success criteria.";
   }
 }
 
-/* ----------------------------------------------------------- model calls */
+function structuredIntentInstruction(intent: Intent): string {
+  switch (intent) {
+    case "planning":
+      return "Rewrite into planning-compatible task contract.";
+    case "analysis":
+      return "Rewrite into analysis contract biased toward evidence first.";
+    case "development":
+      return "Rewrite into development contract for implementation work.";
+    case "refactor":
+      return "Rewrite into refactor contract preserving behavior while improving structure.";
+    case "generic":
+      return "Rewrite into generic coding-agent prompt with explicit goal, constraints, and output.";
+  }
+}
 
-interface AuthOk {
-  apiKey?: string;
-  headers?: Record<string, string>;
+function isComplexDraft(draft: string): boolean {
+  return draft.length > 220 || /\n/.test(draft) || /\b(?:constraints|validation|output|scope|problem|success)\b/i.test(draft);
+}
+
+function getSessionEntries(ctx: ExtensionContext): readonly SessionEntry[] {
+  const manager = ctx.sessionManager as { buildContextEntries?: () => readonly SessionEntry[] } | undefined;
+  const entries = manager?.buildContextEntries?.();
+  return Array.isArray(entries) ? entries : [];
+}
+
+export function extractConversationContext(
+  entries: readonly SessionEntry[],
+  maxItems: number = MAX_CONTEXT_ITEMS,
+  maxChars: number = MAX_CONTEXT_CHARS,
+): string {
+  const lines = entries
+    .map(formatConversationEntry)
+    .filter((value): value is string => value !== undefined)
+    .slice(-maxItems);
+  const bounded = boundContextLines(lines, maxChars);
+  if (bounded) return bounded;
+
+  return [...entries]
+    .reverse()
+    .map((entry) => entry.summary?.trim())
+    .find((value) => typeof value === "string" && value.length > 0) ?? "";
+}
+
+function formatConversationEntry(entry: SessionEntry): string | undefined {
+  const role = entry.message?.role;
+  if (role !== "user" && role !== "assistant") return undefined;
+  const text = extractEntryText(entry.message?.content);
+  if (!text) return undefined;
+  return `${role}: ${text}`;
+}
+
+function boundContextLines(lines: readonly string[], maxChars: number): string {
+  const kept: string[] = [];
+  let used = 0;
+  for (const line of [...lines].reverse()) {
+    const nextSize = kept.length === 0 ? line.length : line.length + 1;
+    if (kept.length > 0 && used + nextSize > maxChars) break;
+    if (kept.length === 0 && line.length > maxChars) {
+      return line.slice(0, maxChars).trim();
+    }
+    kept.unshift(line);
+    used += nextSize;
+  }
+  return kept.join("\n");
+}
+
+function extractEntryText(content: unknown): string | undefined {
+  if (typeof content === "string") return collapseWhitespace(content);
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .map((part) => {
+      if (!part || typeof part !== "object") return undefined;
+      const record = part as { type?: string; text?: string };
+      if (record.type !== "text" || typeof record.text !== "string") return undefined;
+      return collapseWhitespace(record.text);
+    })
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+  return text || undefined;
+}
+
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 async function callModel(
   model: Model<Api>,
   request: Context,
-  auth: AuthOk,
+  auth: AuthResolved,
   signal: AbortSignal,
 ): Promise<AssistantMessage | null> {
-  const timeoutCtl = new AbortController();
-  const t = setTimeout(() => timeoutCtl.abort(), DEFAULT_TIMEOUT_MS);
-  const sig = AbortSignal.any([signal, timeoutCtl.signal]);
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), DEFAULT_TIMEOUT_MS);
+  const mergedSignal = AbortSignal.any([signal, timeoutController.signal]);
   try {
-    const res = await Promise.race<AssistantMessage | null>([
+    return await Promise.race<AssistantMessage | null>([
       complete(model, request, {
-        ...(auth.apiKey ? { apiKey: auth.apiKey } : {}),
-        ...(auth.headers ? { headers: auth.headers } : {}),
-        signal: sig,
+        ...auth,
+        signal: mergedSignal,
         maxTokens: Math.min(model.maxTokens, ENHANCER_MAX_OUTPUT_TOKENS),
       }),
       abortGuard(signal, null),
     ]);
-    return res;
   } finally {
-    clearTimeout(t);
+    clearTimeout(timeout);
   }
 }
 
 function retryRequest(request: Context): Context {
   const last = request.messages.at(-1);
-  const baseText = last && typeof last.content === "string" ? last.content : "";
-  const reminder = `\n\nIMPORTANT: reply with exactly one ${SENTINEL_OPEN} block and nothing else (no fences, no commentary).`;
+  const currentText = last && typeof last.content === "string" ? last.content : "";
   const reminded: UserMessage = {
     role: "user",
-    content: baseText + reminder,
+    content: `${currentText}\n\nIMPORTANT: reply with exactly one ${SENTINEL_OPEN} block and nothing else.`,
     timestamp: Date.now(),
   };
-  return { ...request, messages: [...request.messages.slice(0, -1), reminded] };
+  return {
+    ...request,
+    messages: [...request.messages.slice(0, -1), reminded],
+  };
 }
 
 function abortGuard<T>(signal: AbortSignal, value: T): Promise<T> {
   if (signal.aborted) return Promise.resolve(value);
-  return new Promise<T>((resolve) =>
-    signal.addEventListener("abort", () => resolve(value), { once: true }),
-  );
+  return new Promise<T>((resolve) => {
+    signal.addEventListener("abort", () => resolve(value), { once: true });
+  });
 }
 
-function extractText(msg: AssistantMessage): string {
-  return msg.content
-    .filter((p): p is { type: "text"; text: string } => p.type === "text")
-    .map((p) => p.text)
+function extractText(message: AssistantMessage): string {
+  return message.content
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
     .join("\n")
     .trim();
 }
 
-function parseSentinel(text: string): string | undefined {
+export function parseSentinel(text: string): string | undefined {
   const start = text.indexOf(SENTINEL_OPEN);
   const end = text.lastIndexOf(SENTINEL_CLOSE);
   if (start === -1 || end === -1 || end <= start) return undefined;
@@ -392,27 +521,25 @@ function parseSentinel(text: string): string | undefined {
   return inner || undefined;
 }
 
-/* --------------------------------------------------------------- loader */
-
 async function runWithLoader(
   ctx: ExtensionContext,
   message: string,
   task: (signal: AbortSignal) => Promise<string | null>,
 ): Promise<string | null> {
   let taskError: Error | undefined;
-  const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
+  const result = await ctx.ui.custom<string | null>((tui, theme, _keybindings, done) => {
     const loader = new BorderedLoader(tui, theme, message, { cancellable: true });
     loader.onAbort = () => done(null);
     void task(loader.signal)
-      .then((r) => {
-        if (!loader.signal.aborted) done(r);
+      .then((value) => {
+        if (!loader.signal.aborted) done(value);
       })
-      .catch((err: unknown) => {
+      .catch((error: unknown) => {
         if (loader.signal.aborted) {
           done(null);
           return;
         }
-        taskError = err instanceof Error ? err : new Error(`${EXTENSION} failed.`);
+        taskError = error instanceof Error ? error : new Error(`${EXTENSION} failed.`);
         done(null);
       });
     return loader;
