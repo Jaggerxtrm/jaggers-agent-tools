@@ -156,7 +156,7 @@ Use `DEBUG=serena-pool` to print startup, lock, reuse, and orphan-cleanup traces
 
 Compacts verbose output from Serena/GitNexus MCP tools, reducing CLI bloat while preserving essential information.
 
-**Problem:** Serena MCP tools (`find_symbol`, `get_symbols_overview`, `gitnexus_query`, etc.) produce detailed output that spans dozens of lines. Unlike native Pi tools which get compacted by pi-dex, MCP tool output appeared in full.
+**Problem:** Serena MCP tools (`find_symbol`, `get_symbols_overview`, `gitnexus_query`, etc.) produce detailed output that spans dozens of lines. Unlike native tool renderers, MCP tool output appeared in full.
 
 **Solution:** Intercepts `tool_result` events for Serena/GitNexus tools and truncates output:
 
@@ -169,20 +169,13 @@ Adds `… +N more lines` indicator when truncated. Respects expanded view toggle
 
 ### `xtrm-ui`
 
-XTRM-owned Pi chrome and tool rendering. In addition to native `read` / `bash` /
-`edit` / `write` summaries, `xtrm-ui` compacts non-native tool output from MCP
-and extension tools. Operators can switch external tool chrome with:
+XTRM-owned Pi themes, header, editor density, and tool rendering. Native and
+external tools share compact rows, provider badges, bounded previews, Ctrl+O
+expansion, and one metadata-footer convention. Rendering is presentation-only;
+tool execution and model-facing results remain unchanged.
 
-```bash
-/xtrm-ui chrome background
-/xtrm-ui chrome box
-# or
-/xtrm-ui-external-chrome background|box
-```
-
-`background` mode keeps native-density single rows aligned with native tool output
-and highlights only the displayed tool-name token with a cold badge. `box` mode keeps the tighter framed treatment.
-Expanded mode preserves original result text where available.
+Run `/xtrm-ui` for status. Theme, density, header, force-theme, row-background,
+and reset controls are documented in [xtrm-ui.md](xtrm-ui.md).
 
 ### `sp-terminal-overlay`
 
@@ -206,12 +199,11 @@ scroll, and PageUp/PageDown page.
 - `quality-gates` — TypeScript/Python linting on file edit
 - `service-skills` — Service skill routing and activation
 - `custom-footer` — 2-line status bar with claim/open issues
-- `xtrm-ui` — pi-dex chrome + pi-diff-style write/edit rendering + compact external tool chrome
+- `xtrm-ui` — XTRM themes, header, editor density, and native/external tool rendering
 - `sp-terminal-overlay` — centered overlay for streaming `sp feed -f`, snapshot `sp ps`, and arbitrary shell commands
 - `serena-pool` — shared Serena MCP daemon per repo root with deterministic ports, `SERENA_MCP_PORT` wiring, and ownership-based orphan cleanup
 - `xtrm-loader` — XTRM context injection (using-xtrm skill + `.xtrm/memory.md` + project context)
 - `auto-session-name` — Generates session names from branch/context
-- `auto-update` — Checks for xtrm-tools updates
 - `compact-header` — Compact header layout
 - `git-checkpoint` — Git state snapshots
 - `lsp-bootstrap` — LSP initialization hints

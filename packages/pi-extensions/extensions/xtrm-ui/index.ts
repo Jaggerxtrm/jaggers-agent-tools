@@ -1,13 +1,6 @@
 /**
- * XTRM UI Extension
- *
- * Wraps pi-dex functionality with XTRM-specific preferences:
- * - Uses pi-dex themes and header
- * - Disables pi-dex footer (let custom-footer handle it)
- * - Provides /xtrm-ui commands for theme/density switching
- *
- * This eliminates the race condition between pi-dex's footer and
- * XTRM's custom-footer extension.
+ * XTRM-owned Pi chrome, themes, and native/external tool rendering.
+ * custom-footer remains the sole footer owner.
  */
 
 import type {
@@ -31,7 +24,7 @@ import {
   createWriteTool,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -57,21 +50,16 @@ import {
 // Types
 // ============================================================================
 
-export type XtrmThemeName = "pidex-dark" | "pidex-light" | "pidex-dark-flattools" | "pidex-light-flattools";
+export type XtrmThemeName = "xtrm-dark" | "xtrm-light";
+export type XtrmResolvedThemeName = XtrmThemeName | "xtrm-dark-flattools" | "xtrm-light-flattools";
 export type XtrmDensity = "compact" | "comfortable";
-export type XtrmExternalToolChrome = "background" | "box";
 
 export interface XtrmUiPrefs {
   themeName: XtrmThemeName;
   density: XtrmDensity;
   showHeader: boolean;
-  compactTools: boolean;
-  showFooter: boolean; // Our key addition - when false, skip setFooter()
-  forceTheme: boolean; // When false, skip setTheme (allow external theme override)
-  toolRowBg: boolean; // Subtle background behind tool text rows (no padding)
-  compactExternalToolResults: boolean; // Compact extension tool results (disables full expand output)
-  externalToolChrome: XtrmExternalToolChrome; // Visual treatment for non-native tool rows
-  hideThinkingPlaceholder: boolean; // When false, hidden thinking blocks render no placeholder text
+  forceTheme: boolean;
+  toolRowBg: boolean;
 }
 
 // ============================================================================
@@ -81,23 +69,12 @@ export interface XtrmUiPrefs {
 export const XTRM_UI_PREFS_ENTRY = "xtrm-ui-prefs";
 
 export const DEFAULT_PREFS: XtrmUiPrefs = {
-  themeName: "pidex-dark",
+  themeName: "xtrm-dark",
   density: "compact",
   showHeader: true,
-  compactTools: true,
-  showFooter: false, // XTRM: disable pi-dex footer, use custom-footer
   forceTheme: true,
   toolRowBg: false,
-  compactExternalToolResults: true,
-  externalToolChrome: "background",
-  hideThinkingPlaceholder: false,
 };
-
-let activeExternalToolChrome: XtrmExternalToolChrome = DEFAULT_PREFS.externalToolChrome;
-
-function setActiveExternalToolChrome(chrome: XtrmExternalToolChrome): void {
-  activeExternalToolChrome = chrome;
-}
 
 
 // ============================================================================
@@ -112,19 +89,18 @@ type MaybeCustomEntry = {
 
 function normalizePrefs(input: unknown): XtrmUiPrefs {
   if (!input || typeof input !== "object") return { ...DEFAULT_PREFS };
-  const source = input as Partial<XtrmUiPrefs>;
+  const source = input as Partial<XtrmUiPrefs> & { themeName?: unknown };
+  const themeName = source.themeName;
+  const lightTheme = themeName === "xtrm-light"
+    || themeName === "xtrm-light-flattools"
+    || themeName === "pidex-light"
+    || themeName === "pidex-light-flattools";
   return {
-    themeName: source.themeName === "pidex-light" || source.themeName === "pidex-light-flattools" ? "pidex-light" : "pidex-dark",
+    themeName: lightTheme ? "xtrm-light" : "xtrm-dark",
     density: source.density === "comfortable" ? "comfortable" : "compact",
     showHeader: source.showHeader ?? DEFAULT_PREFS.showHeader,
-    compactTools: source.compactTools ?? DEFAULT_PREFS.compactTools,
-    showFooter: source.showFooter ?? DEFAULT_PREFS.showFooter,
     forceTheme: source.forceTheme ?? DEFAULT_PREFS.forceTheme,
     toolRowBg: source.toolRowBg ?? DEFAULT_PREFS.toolRowBg,
-    compactExternalToolResults:
-      source.compactExternalToolResults ?? DEFAULT_PREFS.compactExternalToolResults,
-    externalToolChrome: source.externalToolChrome === "box" ? "box" : "background",
-    hideThinkingPlaceholder: source.hideThinkingPlaceholder ?? DEFAULT_PREFS.hideThinkingPlaceholder,
   };
 }
 
@@ -273,11 +249,6 @@ function externalToolFrameKind(toolName: string | undefined): ExternalToolFrameK
   return "external";
 }
 
-function padVisible(text: string, width: number): string {
-  const visible = visibleWidth(text);
-  return text + " ".repeat(Math.max(0, width - visible));
-}
-
 function getToolArgs(component: PatchableToolExecutionComponent): Record<string, unknown> {
   return component.args && typeof component.args === "object" && !Array.isArray(component.args)
     ? component.args as Record<string, unknown>
@@ -339,18 +310,6 @@ export function highlightExternalToolBadge(kind: ExternalToolFrameKind, line: st
 
   const provider = line.match(/^(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])/u)?.[1];
   return provider ? externalToolBadgeColor(kind, provider) + line.slice(provider.length) : line;
-}
-
-function externalToolBorderColor(kind: ExternalToolFrameKind, text: string): string {
-  const colors: Record<ExternalToolFrameKind, [number, number, number]> = {
-    serena: [150, 210, 255],
-    gitnexus: [185, 168, 255],
-    structured: [205, 166, 255],
-    process: [145, 231, 255],
-    external: [168, 181, 199],
-  };
-  const [r, g, b] = colors[kind];
-  return `[2m[38;2;${r};${g};${b}m${text}[39m[22m`;
 }
 
 export function collapsedExternalToolLines(contentLines: string[], expanded: boolean): string[] {
@@ -422,30 +381,6 @@ export function renderExternalToolBackgroundLines(
     : body;
 }
 
-function renderExternalToolBoxLines(
-  contentLines: string[],
-  width: number,
-  kind: ExternalToolFrameKind,
-  expanded: boolean,
-): string[] {
-  const availableWidth = Math.max(8, width - 4);
-  const maxContentWidth = expanded ? availableWidth : Math.min(availableWidth, 34);
-  const visibleLines = collapsedExternalToolLines(contentLines, expanded);
-  const contentWidth = Math.max(
-    1,
-    Math.min(maxContentWidth, ...visibleLines.map((line) => visibleWidth(line))),
-  );
-  const innerWidth = contentWidth + 2;
-
-  const framed = [externalToolBorderColor(kind, `╭${"─".repeat(innerWidth)}╮`)];
-  for (const rawLine of visibleLines) {
-    const line = truncateToWidth(rawLine, contentWidth);
-    framed.push(`${externalToolBorderColor(kind, "│")} ${padVisible(line, contentWidth)} ${externalToolBorderColor(kind, "│")}`);
-  }
-  framed.push(externalToolBorderColor(kind, `╰${"─".repeat(innerWidth)}╯`));
-  return framed;
-}
-
 function renderExternalToolLines(
   lines: string[],
   width: number,
@@ -455,11 +390,9 @@ function renderExternalToolLines(
   durationMs?: number,
 ): string[] {
   const contentLines = trimRenderedToolLines(lines).filter((line) => !isBlankRenderedLine(line));
-  if (contentLines.length === 0) return [];
-
-  return activeExternalToolChrome === "box"
-    ? renderExternalToolBoxLines(contentLines, width, kind, expanded)
-    : renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs);
+  return contentLines.length > 0
+    ? renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs)
+    : [];
 }
 
 async function installExternalToolFramePatch(): Promise<void> {
@@ -508,10 +441,8 @@ async function installExternalToolFramePatch(): Promise<void> {
   proto[PATCHED_EXTERNAL_TOOL_FRAME] = EXTERNAL_TOOL_FRAME_PATCH_VERSION;
 }
 
-function applyThinkingChrome(ctx: ExtensionContext, prefs: XtrmUiPrefs): void {
-  (ctx.ui as { setHiddenThinkingLabel?: (label?: string) => void }).setHiddenThinkingLabel?.(
-    prefs.hideThinkingPlaceholder ? undefined : "",
-  );
+function applyThinkingChrome(ctx: ExtensionContext): void {
+  (ctx.ui as { setHiddenThinkingLabel?: (label?: string) => void }).setHiddenThinkingLabel?.("");
 }
 
 // ============================================================================
@@ -523,10 +454,9 @@ function fitVisible(text: string, width: number): string {
   return truncated + " ".repeat(Math.max(0, width - visibleWidth(truncated)));
 }
 
-function resolveThemeForPrefs(prefs: XtrmUiPrefs): XtrmThemeName {
-  const base = prefs.themeName === "pidex-light" || prefs.themeName === "pidex-light-flattools" ? "pidex-light" : "pidex-dark";
-  if (!prefs.toolRowBg) return (base + "-flattools") as XtrmThemeName;
-  return base as XtrmThemeName;
+function resolveThemeForPrefs(prefs: XtrmUiPrefs): XtrmResolvedThemeName {
+  if (prefs.toolRowBg) return prefs.themeName;
+  return prefs.themeName === "xtrm-light" ? "xtrm-light-flattools" : "xtrm-dark-flattools";
 }
 
 function formatThinking(level: string): string {
@@ -536,108 +466,61 @@ function formatThinking(level: string): string {
 function applyXtrmChrome(
   ctx: ExtensionContext,
   prefs: XtrmUiPrefs,
-  getThinkingLevel: () => string
+  getThinkingLevel: () => string,
 ): void {
   if (prefs.forceTheme) {
     ctx.ui.setTheme(resolveThemeForPrefs(prefs));
   }
 
-  // Tool expansion
-  ctx.ui.setToolsExpanded(!prefs.compactTools);
-
-  // Editor — density-aware input padding
+  ctx.ui.setToolsExpanded(false);
   ctx.ui.setEditorComponent((tui, theme, keybindings) => {
     const editor = new XtrmEditor(tui, theme, keybindings);
     editor.setPrefs(prefs);
     return editor;
   });
 
-  // Header (optional)
-  if (prefs.showHeader) {
-    ctx.ui.setHeader((_tui, theme) => ({
-      invalidate() {},
-      render(width: number): string[] {
-        const boxWidth = width >= 54 ? 50 : Math.max(24, width);
-        const model = ctx.model?.id ?? "no-model";
-        const thinking = getThinkingLevel();
-        const border = (text: string) => theme.fg("borderAccent", text);
-        const leftPad = "";
-
-        const top = leftPad + border(`╭${"─".repeat(Math.max(0, boxWidth - 2))}╮`);
-        const line1 =
-          leftPad +
-          border("│") +
-          fitVisible(
-            ` ${theme.fg("dim", ">_")} ${theme.bold("XTRM")} ${theme.fg("dim", `(v1.0.0)`)}`,
-            boxWidth - 2
-          ) +
-          border("│");
-        const gap = leftPad + border("│") + fitVisible("", boxWidth - 2) + border("│");
-        const line2 =
-          leftPad +
-          border("│") +
-          fitVisible(
-            ` ${theme.fg("dim", "model:".padEnd(11))}${model} ${thinking}${theme.fg("accent", "    /model")}${theme.fg("dim", " to change")}`,
-            boxWidth - 2
-          ) +
-          border("│");
-        const line3 =
-          leftPad +
-          border("│") +
-          fitVisible(
-            ` ${theme.fg("dim", "directory:".padEnd(11))}${basename(ctx.cwd)}`,
-            boxWidth - 2
-          ) +
-          border("│");
-        const bottom = leftPad + border(`╰${"─".repeat(Math.max(0, boxWidth - 2))}╯`);
-
-        return [top, line1, gap, line2, line3, bottom];
-      },
-    }));
-  } else {
+  if (!prefs.showHeader) {
     ctx.ui.setHeader(undefined);
+    return;
   }
 
-  // Footer - ONLY if showFooter is true (default false for XTRM)
-  // This is the key difference from pi-dex - we let custom-footer handle it
-  if (prefs.showFooter) {
-    ctx.ui.setFooter((tui, theme, footerData) => {
-      const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
-      return {
-        dispose: unsubscribe,
-        invalidate() {},
-        render(width: number): string[] {
-          const modelId = ctx.model?.id ?? "no-model";
-          const thinking = getThinkingLevel();
-          const contextUsage = ctx.getContextUsage();
-          const leftPct = contextUsage?.percent != null ? `${100 - Math.round(contextUsage.percent)}% left` : undefined;
-          const line = theme.fg(
-            "dim",
-            [`${modelId} ${thinking}`, leftPct, basename(ctx.cwd)]
-              .filter(Boolean)
-              .join(" · ")
-          );
-          return [truncateToWidth(line, width)];
-        },
-      };
-    });
-  }
-  // If showFooter is false, we do NOT call setFooter - custom-footer will handle it
+  ctx.ui.setHeader((_tui, theme) => ({
+    invalidate() {},
+    render(width: number): string[] {
+      const boxWidth = width >= 54 ? 50 : Math.max(24, width);
+      const model = ctx.model?.id ?? "no-model";
+      const thinking = getThinkingLevel();
+      const border = (text: string) => theme.fg("borderAccent", text);
+      const top = border(`╭${"─".repeat(Math.max(0, boxWidth - 2))}╮`);
+      const line1 =
+        border("│") +
+        fitVisible(
+          ` ${theme.fg("dim", ">_")} ${theme.bold("XTRM")} ${theme.fg("dim", "(v1.0.0)")}`,
+          boxWidth - 2,
+        ) +
+        border("│");
+      const gap = border("│") + fitVisible("", boxWidth - 2) + border("│");
+      const line2 =
+        border("│") +
+        fitVisible(
+          ` ${theme.fg("dim", "model:".padEnd(11))}${model} ${thinking}${theme.fg("accent", "    /model")}${theme.fg("dim", " to change")}`,
+          boxWidth - 2,
+        ) +
+        border("│");
+      const line3 =
+        border("│") +
+        fitVisible(
+          ` ${theme.fg("dim", "directory:".padEnd(11))}${basename(ctx.cwd)}`,
+          boxWidth - 2,
+        ) +
+        border("│");
+      const bottom = border(`╰${"─".repeat(Math.max(0, boxWidth - 2))}╯`);
+
+      return [top, line1, gap, line2, line3, bottom];
+    },
+  }));
 }
 
-
-function writeExternalCompactFlag(enabled: boolean): void {
-  try {
-    const settingsPath = join(process.env.HOME ?? "", ".pi", "agent", "settings.json");
-    if (!settingsPath) return;
-    let settings: Record<string, unknown> = {};
-    if (existsSync(settingsPath)) {
-      try { settings = JSON.parse(readFileSync(settingsPath, "utf8")); } catch {}
-    }
-    settings.xtrmExternalCompact = enabled;
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
-  } catch {}
-}
 
 // ============================================================================
 // Tool Render Helpers
@@ -702,8 +585,8 @@ function sendInfoMessage(pi: ExtensionAPI, title: string, content: string): void
 
 function parseThemeArg(arg: string): XtrmThemeName | undefined {
   const normalized = arg.trim().toLowerCase();
-  if (normalized === "dark" || normalized === "pidex-dark") return "pidex-dark";
-  if (normalized === "light" || normalized === "pidex-light") return "pidex-light";
+  if (normalized === "dark") return "xtrm-dark";
+  if (normalized === "light") return "xtrm-light";
   return undefined;
 }
 
@@ -714,14 +597,19 @@ function parseDensityArg(arg: string): XtrmDensity | undefined {
   return undefined;
 }
 
-function parseExternalToolChromeArg(arg: string): XtrmExternalToolChrome | undefined {
+function parseToggleArg(arg: string): boolean | undefined {
   const normalized = arg.trim().toLowerCase();
-  if (normalized === "background" || normalized === "bg" || normalized === "row") return "background";
-  if (normalized === "box" || normalized === "frame" || normalized === "border") return "box";
+  if (normalized === "on") return true;
+  if (normalized === "off") return false;
   return undefined;
 }
 
-function registerCommands(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs, setPrefs: (p: XtrmUiPrefs) => void, getThinkingLevel: () => string) {
+function registerCommands(
+  pi: ExtensionAPI,
+  getPrefs: () => XtrmUiPrefs,
+  setPrefs: (prefs: XtrmUiPrefs) => void,
+  getThinkingLevel: () => string,
+): void {
   pi.registerMessageRenderer("xtrm-ui-info", (message, _options, theme) => {
     const title = (message.details as { title?: string } | undefined)?.title ?? "XTRM UI";
     const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
@@ -733,41 +621,22 @@ function registerCommands(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs, setPref
   pi.registerCommand("xtrm-ui", {
     description: "Show XTRM UI status and active preferences",
     handler: async (args, ctx) => {
-      const trimmedArgs = args.trim();
-      if (trimmedArgs) {
-        const [subcommand, ...rest] = trimmedArgs.split(/\s+/u);
-        if (subcommand === "chrome" || subcommand === "external-chrome" || subcommand === "tool-chrome") {
-          const externalToolChrome = parseExternalToolChromeArg(rest.join(" "));
-          if (!externalToolChrome) {
-            ctx.ui.notify("Usage: /xtrm-ui chrome background|box", "warning");
-            return;
-          }
-          const prefs = { ...getPrefs(), externalToolChrome };
-          setPrefs(prefs);
-          persistPrefs(pi, prefs);
-          ctx.ui.notify(`External tool chrome set to ${externalToolChrome}.`, "info");
-          return;
-        }
-        ctx.ui.notify("Usage: /xtrm-ui [chrome background|box]", "warning");
+      if (args.trim()) {
+        ctx.ui.notify("Usage: /xtrm-ui", "warning");
         return;
       }
 
       const prefs = getPrefs();
       const contextUsage = ctx.getContextUsage();
-      const lines = [
+      sendInfoMessage(pi, "XTRM UI status", [
         `Theme: ${prefs.themeName}`,
-        `Force theme: ${prefs.forceTheme ? "on" : "off"}`,
         `Density: ${prefs.density}`,
-        `Compact tools: ${prefs.compactTools ? "on" : "off"}`,
         `Show header: ${prefs.showHeader ? "yes" : "no"}`,
-        `Show footer: ${prefs.showFooter ? "yes" : "no"} (custom-footer handles this)`,
+        `Force theme: ${prefs.forceTheme ? "on" : "off"}`,
         `Tool row background: ${prefs.toolRowBg ? "on" : "off"}`,
-        `Compact external tool results: ${prefs.compactExternalToolResults ? "on" : "off"}`,
-        `External tool chrome: ${prefs.externalToolChrome}`,
         `Model: ${ctx.model?.id ?? "none"}`,
         `Context: ${contextUsage?.tokens ?? "unknown"}/${contextUsage?.contextWindow ?? "unknown"}`,
-      ];
-      sendInfoMessage(pi, "XTRM UI status", lines.join("\\n"));
+      ].join("\n"));
     },
   });
 
@@ -792,7 +661,7 @@ function registerCommands(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs, setPref
   });
 
   pi.registerCommand("xtrm-ui-density", {
-    description: "Switch XTRM UI density: compact|comfortable",
+    description: "Switch editor density: compact|comfortable",
     getArgumentCompletions: (prefix) => {
       const values = ["compact", "comfortable"].filter((item) => item.startsWith(prefix));
       return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
@@ -803,10 +672,9 @@ function registerCommands(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs, setPref
         ctx.ui.notify("Usage: /xtrm-ui-density compact|comfortable", "warning");
         return;
       }
-      const prefs = { ...getPrefs(), density, compactExternalToolResults: density === "compact" };
+      const prefs = { ...getPrefs(), density };
       setPrefs(prefs);
       persistPrefs(pi, prefs);
-      writeExternalCompactFlag(prefs.compactExternalToolResults);
       applyXtrmChrome(ctx, prefs, getThinkingLevel);
       ctx.ui.notify(`XTRM UI density set to ${density}`, "info");
     },
@@ -819,7 +687,11 @@ function registerCommands(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs, setPref
       return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
     },
     handler: async (args, ctx) => {
-      const showHeader = args.trim().toLowerCase() === "on";
+      const showHeader = parseToggleArg(args);
+      if (showHeader === undefined) {
+        ctx.ui.notify("Usage: /xtrm-ui-header on|off", "warning");
+        return;
+      }
       const prefs = { ...getPrefs(), showHeader };
       setPrefs(prefs);
       persistPrefs(pi, prefs);
@@ -835,12 +707,11 @@ function registerCommands(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs, setPref
       return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
     },
     handler: async (args, ctx) => {
-      const normalized = args.trim().toLowerCase();
-      if (normalized !== "on" && normalized !== "off") {
+      const forceTheme = parseToggleArg(args);
+      if (forceTheme === undefined) {
         ctx.ui.notify("Usage: /xtrm-ui-forcetheme on|off", "warning");
         return;
       }
-      const forceTheme = normalized === "on";
       const prefs = { ...getPrefs(), forceTheme };
       setPrefs(prefs);
       persistPrefs(pi, prefs);
@@ -856,60 +727,16 @@ function registerCommands(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs, setPref
       return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
     },
     handler: async (args, ctx) => {
-      const normalized = args.trim().toLowerCase();
-      if (normalized !== "on" && normalized !== "off") {
+      const toolRowBg = parseToggleArg(args);
+      if (toolRowBg === undefined) {
         ctx.ui.notify("Usage: /xtrm-ui-rowbg on|off", "warning");
         return;
       }
-      const toolRowBg = normalized === "on";
       const prefs = { ...getPrefs(), toolRowBg };
       setPrefs(prefs);
       persistPrefs(pi, prefs);
       applyXtrmChrome(ctx, prefs, getThinkingLevel);
       ctx.ui.notify(`Tool row background ${toolRowBg ? "enabled" : "disabled"}.`, "info");
-    },
-  });
-
-  pi.registerCommand("xtrm-ui-compact-tools", {
-    description: "Compact extension tool results: on|off (off keeps full Ctrl+O expand output)",
-    getArgumentCompletions: (prefix) => {
-      const values = ["on", "off"].filter((item) => item.startsWith(prefix));
-      return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
-    },
-    handler: async (args, ctx) => {
-      const normalized = args.trim().toLowerCase();
-      if (normalized !== "on" && normalized !== "off") {
-        ctx.ui.notify("Usage: /xtrm-ui-compact-tools on|off", "warning");
-        return;
-      }
-      const compactExternalToolResults = normalized === "on";
-      const prefs = { ...getPrefs(), compactExternalToolResults };
-      setPrefs(prefs);
-      persistPrefs(pi, prefs);
-      writeExternalCompactFlag(compactExternalToolResults);
-      ctx.ui.notify(
-        `Compact external tool results ${compactExternalToolResults ? "enabled" : "disabled"}.`,
-        "info",
-      );
-    },
-  });
-
-  pi.registerCommand("xtrm-ui-external-chrome", {
-    description: "Choose non-native tool chrome: background|box",
-    getArgumentCompletions: (prefix) => {
-      const values = ["background", "box"].filter((item) => item.startsWith(prefix));
-      return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
-    },
-    handler: async (args, ctx) => {
-      const externalToolChrome = parseExternalToolChromeArg(args);
-      if (!externalToolChrome) {
-        ctx.ui.notify("Usage: /xtrm-ui-external-chrome background|box", "warning");
-        return;
-      }
-      const prefs = { ...getPrefs(), externalToolChrome };
-      setPrefs(prefs);
-      persistPrefs(pi, prefs);
-      ctx.ui.notify(`External tool chrome set to ${externalToolChrome}.`, "info");
     },
   });
 
@@ -926,7 +753,7 @@ function registerCommands(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs, setPref
 }
 
 // ============================================================================
-// Tool Renderers (ported from pi-dex tooling.ts)
+// XTRM Tool Renderers
 // ============================================================================
 
 type BuiltInTools = ReturnType<typeof createBuiltInTools>;
@@ -1451,9 +1278,8 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
   const extensionThemeDir = join(__dirname, "../../themes/xtrm-ui");
 
   const getPrefs = () => prefs;
-  const setPrefs = (p: XtrmUiPrefs) => {
-    prefs = p;
-    setActiveExternalToolChrome(p.externalToolChrome);
+  const setPrefs = (nextPrefs: XtrmUiPrefs) => {
+    prefs = nextPrefs;
   };
   const getThinkingLevel = () => formatThinking(pi.getThinkingLevel());
 
@@ -1462,7 +1288,7 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
 
   const refresh = (ctx: ExtensionContext) => {
     applyXtrmChrome(ctx, prefs, getThinkingLevel);
-    applyThinkingChrome(ctx, prefs);
+    applyThinkingChrome(ctx);
   };
 
   pi.on("resources_discover", async () => ({

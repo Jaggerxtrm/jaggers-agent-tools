@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -29,6 +29,7 @@ vi.mock("@earendil-works/pi-tui", () => ({
 
 const {
   collapsedExternalToolLines,
+  DEFAULT_PREFS,
   default: xtrmUiExtension,
   renderExternalToolBackgroundLines,
 } = await import("../../../packages/pi-extensions/extensions/xtrm-ui/index");
@@ -36,8 +37,14 @@ const {
 function loadExtension() {
   const handlers: Record<string, Function[]> = {};
   const tools: Record<string, any> = {};
+  const commands: Record<string, any> = {};
+  const entries: Array<{ customType: string; data: unknown }> = [];
+  const messages: any[] = [];
   const pi = new Proxy(
     {
+      appendEntry(customType: string, data: unknown) {
+        entries.push({ customType, data });
+      },
       getThinkingLevel: () => "off",
       on(event: string, handler: Function) {
         (handlers[event] ??= []).push(handler);
@@ -45,14 +52,45 @@ function loadExtension() {
       registerTool(tool: any) {
         tools[tool.name] = tool;
       },
-      registerCommand() {},
+      registerCommand(name: string, command: any) {
+        commands[name] = command;
+      },
       registerMessageRenderer() {},
+      sendMessage(message: unknown) {
+        messages.push(message);
+      },
     },
     { get: (target, key) => key in target ? target[key as keyof typeof target] : () => {} },
   );
 
   xtrmUiExtension(pi as any);
-  return { handlers, tools };
+  return { commands, entries, handlers, messages, tools };
+}
+
+function commandContext() {
+  const notifications: Array<[string, string]> = [];
+  const ui = {
+    notify(message: string, level: string) {
+      notifications.push([message, level]);
+    },
+    setEditorComponent: vi.fn(),
+    setFooter: vi.fn(),
+    setHeader: vi.fn(),
+    setHiddenThinkingLabel: vi.fn(),
+    setTheme: vi.fn(),
+    setToolsExpanded: vi.fn(),
+  };
+  return {
+    context: {
+      cwd: "/tmp/project",
+      getContextUsage: () => ({ tokens: 42, contextWindow: 100 }),
+      model: { id: "test-model" },
+      sessionManager: { getEntries: () => [] },
+      ui,
+    },
+    notifications,
+    ui,
+  };
 }
 
 const theme = {
@@ -75,6 +113,148 @@ const context = (args: Record<string, unknown>, overrides: Record<string, unknow
   showImages: true,
   isError: false,
   ...overrides,
+});
+
+describe("xtrm-ui commands", () => {
+  const supportedCommands = [
+    "xtrm-ui",
+    "xtrm-ui-density",
+    "xtrm-ui-forcetheme",
+    "xtrm-ui-header",
+    "xtrm-ui-reset",
+    "xtrm-ui-rowbg",
+    "xtrm-ui-theme",
+  ];
+
+  it("registers only commands backed by active behavior", () => {
+    const { commands } = loadExtension();
+
+    expect(Object.keys(commands).sort()).toEqual(supportedCommands);
+  });
+
+  it("discovers only XTRM-named themes", async () => {
+    const { handlers } = loadExtension();
+    const resources = await handlers.resources_discover[0]();
+    const themeDir = resources.themePaths[0];
+    const files = readdirSync(themeDir).filter((file) => file.endsWith(".json")).sort();
+
+    expect(files).toEqual([
+      "xtrm-dark-flattools.json",
+      "xtrm-dark.json",
+      "xtrm-light-flattools.json",
+      "xtrm-light.json",
+    ]);
+    for (const file of files) {
+      const theme = JSON.parse(readFileSync(join(themeDir, file), "utf8"));
+      expect(theme.name).toBe(file.replace(/\.json$/u, ""));
+    }
+  });
+
+  it("reports only active preferences and rejects subcommands", async () => {
+    const { commands, entries, messages } = loadExtension();
+    const { context, notifications } = commandContext();
+
+    await commands["xtrm-ui"].handler("", context);
+    await commands["xtrm-ui"].handler("chrome box", context);
+
+    expect(messages[0].content).toContain("Theme: xtrm-dark");
+    expect(messages[0].content).toContain("Density: compact");
+    expect(messages[0].content).toContain("Show header: yes");
+    expect(messages[0].content).toContain("Force theme: on");
+    expect(messages[0].content).toContain("Tool row background: off");
+    expect(messages[0].content).not.toMatch(/footer|external tool chrome|compact external/i);
+    expect(notifications).toContainEqual(["Usage: /xtrm-ui", "warning"]);
+    expect(entries).toEqual([]);
+  });
+
+  it.each([
+    ["xtrm-ui-theme", "light", "themeName", "xtrm-light"],
+    ["xtrm-ui-density", "comfortable", "density", "comfortable"],
+    ["xtrm-ui-header", "off", "showHeader", false],
+    ["xtrm-ui-forcetheme", "off", "forceTheme", false],
+    ["xtrm-ui-rowbg", "on", "toolRowBg", true],
+  ])("persists and applies /%s", async (name, arg, key, expected) => {
+    const { commands, entries } = loadExtension();
+    const { context, ui } = commandContext();
+
+    await commands[name].handler(arg, context);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].data).toMatchObject({ [key]: expected });
+    expect(ui.setEditorComponent).toHaveBeenCalledOnce();
+    expect(ui.setFooter).not.toHaveBeenCalled();
+  });
+
+  it("applies theme variants and respects disabled theme ownership", async () => {
+    const themeExtension = loadExtension();
+    const themeCommand = commandContext();
+    await themeExtension.commands["xtrm-ui-theme"].handler("light", themeCommand.context);
+    expect(themeCommand.ui.setTheme).toHaveBeenCalledWith("xtrm-light-flattools");
+
+    const rowExtension = loadExtension();
+    const rowCommand = commandContext();
+    await rowExtension.commands["xtrm-ui-rowbg"].handler("on", rowCommand.context);
+    expect(rowCommand.ui.setTheme).toHaveBeenCalledWith("xtrm-dark");
+
+    const forceExtension = loadExtension();
+    const forceCommand = commandContext();
+    await forceExtension.commands["xtrm-ui-forcetheme"].handler("off", forceCommand.context);
+    expect(forceCommand.ui.setTheme).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["xtrm-ui-theme", "blue", "/xtrm-ui-theme dark|light"],
+    ["xtrm-ui-density", "dense", "/xtrm-ui-density compact|comfortable"],
+    ["xtrm-ui-header", "maybe", "/xtrm-ui-header on|off"],
+    ["xtrm-ui-forcetheme", "maybe", "/xtrm-ui-forcetheme on|off"],
+    ["xtrm-ui-rowbg", "maybe", "/xtrm-ui-rowbg on|off"],
+  ])("rejects invalid /%s arguments", async (name, arg, usage) => {
+    const { commands, entries } = loadExtension();
+    const { context, notifications, ui } = commandContext();
+
+    await commands[name].handler(arg, context);
+
+    expect(notifications).toContainEqual([`Usage: ${usage}`, "warning"]);
+    expect(entries).toEqual([]);
+    expect(ui.setEditorComponent).not.toHaveBeenCalled();
+  });
+
+  it("resets exactly to the supported defaults", async () => {
+    const { commands, entries } = loadExtension();
+    const { context } = commandContext();
+
+    await commands["xtrm-ui-reset"].handler("ignored", context);
+
+    expect(entries).toEqual([{ customType: "xtrm-ui-prefs", data: DEFAULT_PREFS }]);
+    expect(DEFAULT_PREFS).toEqual({
+      themeName: "xtrm-dark",
+      density: "compact",
+      showHeader: true,
+      forceTheme: true,
+      toolRowBg: false,
+    });
+  });
+
+  it("migrates legacy session themes without restoring obsolete preferences", async () => {
+    const { handlers } = loadExtension();
+    const { context, ui } = commandContext();
+    context.sessionManager.getEntries = () => [{
+      type: "custom",
+      customType: "xtrm-ui-prefs",
+      data: {
+        themeName: "pidex-light-flattools",
+        compactExternalToolResults: false,
+        externalToolChrome: "box",
+        showFooter: true,
+      },
+    }];
+
+    await handlers.session_start[0]({}, context);
+
+    expect(ui.setTheme).toHaveBeenCalledWith("xtrm-light-flattools");
+    expect(ui.setFooter).not.toHaveBeenCalled();
+    expect(ui.setHiddenThinkingLabel).toHaveBeenCalledWith("");
+  });
 });
 
 describe("xtrm-ui built-in tool rendering", () => {
