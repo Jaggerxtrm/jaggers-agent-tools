@@ -121,7 +121,7 @@ xt migrate skills --apply     # Execute
 
 #### Added
 
-- **`xtprompt` (mercury-smith) extension folded into the `pi-extensions` bundle.** Context-aware prompt improver bound to `alt+m` (avoids collision with `pi-promptsmith`'s `alt+p`), invokable via `/msmith`. Rewrites the current editor draft via a standalone model call (using the active model) with xtrm/planning-aware intent templates and hard style rules, then writes the improved prompt back to the editor without triggering a main agent turn. Detects one of `pane-dispatch`, `specialist`, `bead`, `scope-plan`, `debug`, `generic` intent from the draft and gathers `xt` + `bd` environmental context to inform the rewrite. Previously lived as a user-scoped extension at `~/.pi/agent/extensions/xtprompt.ts`; now shipped in `packages/pi-extensions/extensions/xtprompt/` and registered in `src/registry.ts` so every consumer picks it up automatically.
+- **`xtprompt` extension folded into the `pi-extensions` bundle.** Context-aware prompt improver bound to `alt+m` (avoids collision with `pi-promptsmith`'s `alt+p`), invokable via `/xtprompt`. Rewrites current editor draft via standalone model call (using active model) with canonical `planning` / `analysis` / `development` / `refactor` / `generic` intents, bounded session context, and hard style rules, then writes improved prompt back to editor without triggering main agent turn. Previously lived as user-scoped extension at `~/.pi/agent/extensions/xtprompt.ts`; now shipped in `packages/pi-extensions/extensions/xtprompt/` and registered in `src/registry.ts` so every consumer picks it up automatically.
 
 #### Fixed
 
