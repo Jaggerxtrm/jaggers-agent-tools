@@ -17,9 +17,47 @@ mock.module("@earendil-works/pi-coding-agent", () => ({
     signal = new AbortController().signal;
     onAbort?: () => void;
   },
+  VERSION: "test",
+  createBashTool: () => ({}),
+  createEditTool: () => ({}),
+  createFindTool: () => ({}),
+  createGrepTool: () => ({}),
+  createLsTool: () => ({}),
+  createReadTool: () => ({}),
+  createWriteTool: () => ({}),
+  isBashToolResult: () => false,
+  isToolCallEventType: () => false,
 }));
 
-mock.module("@earendil-works/pi-tui", () => ({}));
+mock.module("@earendil-works/pi-tui", () => ({
+  Box: () => null,
+  Text: () => null,
+  matchesKey: () => false,
+  truncateToWidth: (value: string) => value,
+  visibleWidth: (value: string) => value.length,
+}));
+
+for (const modulePath of [
+  "../../src/extensions/auto-session-name.ts",
+  "../../src/extensions/auto-update.ts",
+  "../../src/extensions/beads.ts",
+  "../../src/extensions/compact-header.ts",
+  "../../src/extensions/custom-footer.ts",
+  "../../src/extensions/custom-provider-qwen-cli.ts",
+  "../../src/extensions/git-checkpoint.ts",
+  "../../src/extensions/lsp-bootstrap.ts",
+  "../../src/extensions/quality-gates.ts",
+  "../../src/extensions/serena-pool.ts",
+  "../../src/extensions/service-skills.ts",
+  "../../src/extensions/session-flow.ts",
+  "../../src/extensions/sp-terminal-overlay.ts",
+  "../../src/extensions/xtrm-loader.ts",
+  "../../src/extensions/xtrm-ui.ts",
+]) {
+  mock.module(modulePath, () => ({
+    default() {},
+  }));
+}
 
 const xtprompt = await import("./index.ts");
 
@@ -81,9 +119,21 @@ describe("xtprompt", () => {
         { summary: "Compaction summary: user wants generic xtprompt rewrite" },
       ],
       2,
-      24,
+      48,
     );
     expect(context).toContain("Compaction summary");
+    expect(context.length).toBeLessThanOrEqual(48);
+
+    const oversizedSummary = xtprompt.extractConversationContext(
+      [
+        { message: { role: "tool", content: "ignored" } },
+        { summary: "Compaction summary: user wants generic xtprompt rewrite with much longer retained context than limit allows" },
+      ],
+      2,
+      24,
+    );
+    expect(oversizedSummary).toBe("Compaction summary: user");
+    expect(oversizedSummary.length).toBeLessThanOrEqual(24);
 
     const bounded = xtprompt.extractConversationContext(
       [
@@ -408,19 +458,24 @@ describe("xtprompt", () => {
     expect(request.systemPrompt).not.toContain("older compacted summary");
   });
 
-  test("wrapper smoke registers xtprompt command without agent send", async () => {
+  test("managed registry smoke registers xtprompt command without agent send", async () => {
     completeCalls.length = 0;
-    const wrapper = await import("../../src/extensions/xtprompt.ts");
-    const commands: string[] = [];
+    const send = mock(() => {
+      throw new Error("main agent send should stay unused");
+    });
+    const { registerManagedPiExtensions } = await import("../../src/registry.ts");
+    const commands = new Map<string, { description: string }>();
 
-    wrapper.default({
-      registerCommand(name: string) {
-        commands.push(name);
+    registerManagedPiExtensions({
+      send,
+      registerCommand(name: string, config: { description: string }) {
+        commands.set(name, { description: config.description });
       },
       registerShortcut() {},
     } as any);
 
-    expect(commands).toContain("xtprompt");
+    expect(commands.get("xtprompt")).toEqual({ description: "xtprompt: rewrite current editor prompt" });
+    expect(send).toHaveBeenCalledTimes(0);
     expect(completeCalls).toHaveLength(0);
   });
 

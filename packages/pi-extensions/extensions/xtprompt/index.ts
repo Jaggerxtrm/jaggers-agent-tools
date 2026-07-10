@@ -441,10 +441,11 @@ export function extractConversationContext(
   const bounded = boundContextLines(lines, maxChars);
   if (bounded) return bounded;
 
-  return [...entries]
+  const summary = [...entries]
     .reverse()
     .map((entry) => entry.summary?.trim())
-    .find((value) => typeof value === "string" && value.length > 0) ?? "";
+    .find((value) => typeof value === "string" && value.length > 0);
+  return summary ? boundContextLines([summary], maxChars) : "";
 }
 
 function formatConversationEntry(entry: SessionEntry): string | undefined {
