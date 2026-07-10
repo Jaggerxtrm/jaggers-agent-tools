@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
-  "name": "pidex-light",
+  "name": "xtrm-light-flattools",
   "vars": {
     "accentBlue": "#44546a",
     "accentCyan": "#5f6b7a",
@@ -30,19 +30,17 @@
     "dim": "dimGray",
     "text": "",
     "thinkingText": "gray",
-
     "selectedBg": "surfaceMuted",
     "userMessageBg": "surfaceUser",
     "userMessageText": "",
     "customMessageBg": "surfaceCustom",
     "customMessageText": "",
     "customMessageLabel": "accentBlue",
-    "toolPendingBg": "surfaceAlt",
-    "toolSuccessBg": "surfaceAlt",
-    "toolErrorBg": "surfaceAlt",
+    "toolPendingBg": "",
+    "toolSuccessBg": "",
+    "toolErrorBg": "",
     "toolTitle": "",
     "toolOutput": "gray",
-
     "mdHeading": "warningAmber",
     "mdLink": "accentBlue",
     "mdLinkUrl": "dimGray",
@@ -53,11 +51,9 @@
     "mdQuoteBorder": "borderGray",
     "mdHr": "borderGray",
     "mdListBullet": "accentTeal",
-
     "toolDiffAdded": "successGreen",
     "toolDiffRemoved": "errorRed",
     "toolDiffContext": "gray",
-
     "syntaxComment": "#6b7280",
     "syntaxKeyword": "#3569c8",
     "syntaxFunction": "#3b4351",
@@ -67,14 +63,12 @@
     "syntaxType": "#2c7a7b",
     "syntaxOperator": "#3b4351",
     "syntaxPunctuation": "#55606f",
-
     "thinkingOff": "borderGray",
     "thinkingMinimal": "#9d9d9d",
     "thinkingLow": "#979797",
     "thinkingMedium": "#919191",
     "thinkingHigh": "#8b8b8b",
     "thinkingXhigh": "#858585",
-
     "bashMode": "accentTeal"
   },
   "export": {

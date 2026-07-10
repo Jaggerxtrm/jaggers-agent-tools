@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { inventoryPiRuntime, executePiSync, ensureAlwaysGlobalPiPackages, getXtManagedPiPackages } from '../src/core/pi-runtime.js';
+import { cleanupConflictingPiPackageSettings, inventoryPiRuntime, executePiSync, ensureAlwaysGlobalPiPackages, getXtManagedPiPackages, updatePiSettings } from '../src/core/pi-runtime.js';
 
 async function makeExtension(baseDir: string, name: string, extraFiles: Record<string, string> = {}): Promise<void> {
     const extDir = path.join(baseDir, name);
@@ -16,6 +16,95 @@ async function makeExtension(baseDir: string, name: string, extraFiles: Record<s
         await fs.writeFile(absPath, content);
     }
 }
+
+describe('cleanupConflictingPiPackageSettings', () => {
+    it('leaves settings unchanged in dry-run mode', async () => {
+        const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-project-'));
+        const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-agent-'));
+        const projectSettingsPath = path.join(projectRoot, '.pi', 'settings.json');
+        const globalSettingsPath = path.join(agentDir, 'settings.json');
+        await fs.ensureDir(path.dirname(projectSettingsPath));
+        await fs.writeJson(projectSettingsPath, { theme: 'pidex-light', xtrmExternalCompact: true });
+        await fs.writeJson(globalSettingsPath, { theme: 'pidex-dark', xtrmExternalCompact: true });
+        const projectBefore = await fs.readFile(projectSettingsPath, 'utf8');
+        const globalBefore = await fs.readFile(globalSettingsPath, 'utf8');
+
+        try {
+            await cleanupConflictingPiPackageSettings(projectRoot, true, true, undefined, agentDir);
+            expect(await fs.readFile(projectSettingsPath, 'utf8')).toBe(projectBefore);
+            expect(await fs.readFile(globalSettingsPath, 'utf8')).toBe(globalBefore);
+        } finally {
+            await fs.remove(projectRoot);
+            await fs.remove(agentDir);
+        }
+    });
+
+    it('migrates global preferences only in global mode', async () => {
+        const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-project-'));
+        const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-agent-'));
+        const projectSettingsPath = path.join(projectRoot, '.pi', 'settings.json');
+        const globalSettingsPath = path.join(agentDir, 'settings.json');
+        await fs.ensureDir(path.dirname(projectSettingsPath));
+        await fs.writeJson(projectSettingsPath, { theme: 'pidex-light', xtrmExternalCompact: true });
+        await fs.writeJson(globalSettingsPath, { theme: 'pidex-dark', xtrmExternalCompact: true });
+
+        try {
+            await cleanupConflictingPiPackageSettings(projectRoot, false, false, undefined, agentDir);
+            expect(await fs.readJson(projectSettingsPath)).toMatchObject({ theme: 'xtrm-light' });
+            expect(await fs.readJson(projectSettingsPath)).not.toHaveProperty('xtrmExternalCompact');
+            expect(await fs.readJson(globalSettingsPath)).toEqual({ theme: 'pidex-dark', xtrmExternalCompact: true });
+
+            await cleanupConflictingPiPackageSettings(projectRoot, false, true, undefined, agentDir);
+            expect(await fs.readJson(globalSettingsPath)).toMatchObject({ theme: 'xtrm-dark' });
+            expect(await fs.readJson(globalSettingsPath)).not.toHaveProperty('xtrmExternalCompact');
+        } finally {
+            await fs.remove(projectRoot);
+            await fs.remove(agentDir);
+        }
+    });
+});
+
+describe('updatePiSettings', () => {
+    it('does not overwrite malformed settings', async () => {
+        const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-settings-'));
+        const settingsPath = path.join(projectRoot, '.pi', 'settings.json');
+        await fs.ensureDir(path.dirname(settingsPath));
+        await fs.writeFile(settingsPath, '{ malformed');
+
+        try {
+            await expect(updatePiSettings(projectRoot, false)).rejects.toThrow();
+            expect(await fs.readFile(settingsPath, 'utf8')).toBe('{ malformed');
+        } finally {
+            await fs.remove(projectRoot);
+        }
+    });
+
+    it.each([
+        ['pidex-dark', 'xtrm-dark'],
+        ['pidex-light', 'xtrm-light'],
+        ['pidex-dark-flattools', 'xtrm-dark-flattools'],
+        ['pidex-light-flattools', 'xtrm-light-flattools'],
+    ])('migrates legacy theme %s without changing unrelated settings', async (legacyTheme, expectedTheme) => {
+        const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-settings-'));
+        await fs.ensureDir(path.join(projectRoot, '.pi'));
+        await fs.writeJson(path.join(projectRoot, '.pi', 'settings.json'), {
+            theme: legacyTheme,
+            customSetting: 'preserved',
+            xtrmExternalCompact: false,
+        });
+
+        try {
+            await updatePiSettings(projectRoot, false);
+            const settings = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
+
+            expect(settings.theme).toBe(expectedTheme);
+            expect(settings.customSetting).toBe('preserved');
+            expect(settings).not.toHaveProperty('xtrmExternalCompact');
+        } finally {
+            await fs.remove(projectRoot);
+        }
+    });
+});
 
 describe('inventoryPiRuntime', () => {
     let sourceDir: string;

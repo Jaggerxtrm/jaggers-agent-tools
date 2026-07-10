@@ -1030,7 +1030,19 @@ type PiSettingsShape = Record<string, unknown> & {
     skills?: unknown;
     packages?: unknown;
     serena?: unknown;
+    theme?: unknown;
 };
+
+const LEGACY_XTRM_THEMES: Record<string, string> = {
+    'pidex-dark': 'xtrm-dark',
+    'pidex-light': 'xtrm-light',
+    'pidex-dark-flattools': 'xtrm-dark-flattools',
+    'pidex-light-flattools': 'xtrm-light-flattools',
+};
+
+function normalizeXtrmTheme(theme: unknown): unknown {
+    return typeof theme === 'string' ? LEGACY_XTRM_THEMES[theme] ?? theme : theme;
+}
 
 const SERENA_DEFAULT_BLOCKED_TOOLS = new Set(['read', 'write', 'edit', 'ls', 'find', 'grep']);
 
@@ -1124,6 +1136,7 @@ async function pruneConflictingPiPackagesFromSettings(
     settingsPath: string,
     scopeLabel: string,
     dryRun: boolean,
+    migrateXtrmPreferences = false,
     log?: (message: string) => void,
 ): Promise<string[]> {
     if (!await fs.pathExists(settingsPath)) {
@@ -1139,35 +1152,59 @@ async function pruneConflictingPiPackagesFromSettings(
 
     const existingPackages = normalizeStringArray(existingSettings.packages);
     const { kept, removed } = pruneConflictingPiPackageEntries(existingPackages);
-    if (removed.length === 0) {
+    const theme = migrateXtrmPreferences ? normalizeXtrmTheme(existingSettings.theme) : existingSettings.theme;
+    const themeChanged = theme !== existingSettings.theme;
+    const hasObsoleteCompactSetting = migrateXtrmPreferences && 'xtrmExternalCompact' in existingSettings;
+    if (removed.length === 0 && !themeChanged && !hasObsoleteCompactSetting) {
         return [];
     }
 
     if (dryRun) {
-        log?.(kleur.dim(`[DRY RUN] would remove conflicting Pi package(s) from ${scopeLabel}: ${removed.join(', ')}`));
+        if (removed.length > 0) {
+            log?.(kleur.dim(`[DRY RUN] would remove conflicting Pi package(s) from ${scopeLabel}: ${removed.join(', ')}`));
+        }
+        if (themeChanged) {
+            log?.(kleur.dim(`[DRY RUN] would migrate Pi theme in ${scopeLabel}: ${String(existingSettings.theme)} → ${String(theme)}`));
+        }
+        if (hasObsoleteCompactSetting) {
+            log?.(kleur.dim(`[DRY RUN] would remove obsolete xtrmExternalCompact from ${scopeLabel}`));
+        }
         return removed;
     }
 
-    await fs.writeJson(settingsPath, { ...existingSettings, packages: kept }, { spaces: 2 });
-    log?.(kleur.dim(`Removed conflicting Pi package(s) from ${scopeLabel}: ${removed.join(', ')}`));
+    const nextSettings: PiSettingsShape = { ...existingSettings };
+    if (removed.length > 0) nextSettings.packages = kept;
+    if (themeChanged) nextSettings.theme = theme;
+    if (hasObsoleteCompactSetting) delete nextSettings.xtrmExternalCompact;
+    await fs.writeJson(settingsPath, nextSettings, { spaces: 2 });
+    if (removed.length > 0) {
+        log?.(kleur.dim(`Removed conflicting Pi package(s) from ${scopeLabel}: ${removed.join(', ')}`));
+    }
+    if (themeChanged) {
+        log?.(kleur.dim(`Migrated Pi theme in ${scopeLabel}: ${String(existingSettings.theme)} → ${String(theme)}`));
+    }
     return removed;
 }
 
-async function cleanupConflictingPiPackageSettings(
+export async function cleanupConflictingPiPackageSettings(
     projectRoot: string,
     dryRun: boolean,
+    isGlobal: boolean,
     log?: (message: string) => void,
+    agentDir = PI_AGENT_DIR,
 ): Promise<void> {
     await pruneConflictingPiPackagesFromSettings(
-        path.join(PI_AGENT_DIR, 'settings.json'),
+        path.join(agentDir, 'settings.json'),
         '~/.pi/agent/settings.json',
         dryRun,
+        isGlobal,
         log,
     );
     await pruneConflictingPiPackagesFromSettings(
         path.join(projectRoot, '.pi', 'settings.json'),
         `${projectRoot}/.pi/settings.json`,
         dryRun,
+        true,
         log,
     );
 }
@@ -1190,8 +1227,8 @@ export async function updatePiSettings(
     let existingSettings: PiSettingsShape = {};
     try {
         existingSettings = await fs.readJson(piSettingsPath) as PiSettingsShape;
-    } catch {
-        existingSettings = {};
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
 
     const LEGACY_PACKAGE_IDS = new Set(['npm:@xtrm/pi-extensions', './extensions/']);
@@ -1226,7 +1263,9 @@ export async function updatePiSettings(
         skills: normalizedSkills,
         packages: existingPackages,
         serena: normalizeSerenaSettings(existingSettings.serena),
+        theme: normalizeXtrmTheme(existingSettings.theme),
     };
+    delete nextSettings.xtrmExternalCompact;
 
     await fs.writeJson(piSettingsPath, nextSettings, { spaces: 2 });
     log?.(kleur.dim(`Updated .pi/settings.json → ${PROJECT_EXTENSION_PACKAGE_ID} + ${normalizedSkills.join(' + ')}`));
@@ -1385,7 +1424,7 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
         result.extensionsRemoved.push('pi-mcp-adapter');
     }
 
-    await cleanupConflictingPiPackageSettings(resolvedProjectRoot, dryRun, log);
+    await cleanupConflictingPiPackageSettings(resolvedProjectRoot, dryRun, isGlobal, log);
 
     if (isGlobal) {
         const targetDir = path.join(PI_AGENT_DIR, 'extensions');
