@@ -259,7 +259,7 @@ describe("xtprompt", () => {
 
   test("shipped xtprompt files contain no legacy project branding", () => {
     const forbiddenTokens = [
-      ["mercury", "-smith"].join(""),
+      [["merc", "ury"].join(""), "-smith"].join(""),
       ["/", "m", "smith"].join(""),
       ["m", "m", "d"].join(""),
     ];
