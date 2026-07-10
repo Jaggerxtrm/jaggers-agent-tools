@@ -1,7 +1,7 @@
 {
   "name": "@xtrm/pi-xtprompt",
   "version": "0.1.0",
-  "description": "xtrm Pi extension: context-aware prompt improver (mercury-smith)",
+  "description": "xtrm Pi extension: generic context-aware prompt improver (xtprompt)",
   "type": "module",
   "exports": {
     ".": "./index.ts"
