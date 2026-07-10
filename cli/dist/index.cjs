@@ -74084,12 +74084,27 @@ async function migrateSkills(repoPath, opts) {
       for (const relPath of divergedFiles) {
         const tierPrefix = relPath.startsWith("optional/") ? "optional/" : "default/";
         const pathInTier = relPath.slice(tierPrefix.length);
+        if (import_node_path47.default.basename(pathInTier) === "PACK.json" && !pathInTier.includes("/")) continue;
         const sourcePath = relPath.startsWith("optional/") ? import_node_path47.default.join(optionalTierRoot2, pathInTier) : import_node_path47.default.join(defaultTierRoot2, pathInTier);
-        const destPath = import_node_path47.default.join(legacyRoot, import_node_path47.default.basename(relPath));
+        const destPath = import_node_path47.default.join(legacyRoot, pathInTier);
         if (await import_fs_extra56.default.pathExists(sourcePath)) {
+          await import_fs_extra56.default.ensureDir(import_node_path47.default.dirname(destPath));
           await import_fs_extra56.default.copy(sourcePath, destPath);
         }
       }
+      const dirEntries = (await import_fs_extra56.default.readdir(legacyRoot, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+      const skillDirs = [];
+      for (const name of dirEntries) {
+        if (await import_fs_extra56.default.pathExists(import_node_path47.default.join(legacyRoot, name, "SKILL.md"))) {
+          skillDirs.push(name);
+        }
+      }
+      skillDirs.sort();
+      await import_fs_extra56.default.writeJson(
+        import_node_path47.default.join(legacyRoot, "PACK.json"),
+        { schemaVersion: "1", name: "local-legacy", version: "0.0.0", description: "Files preserved during xt migrate that diverged from the global canonical.", skills: skillDirs },
+        { spaces: 2 }
+      );
     }
   }
   const skillsToRemove = [];
