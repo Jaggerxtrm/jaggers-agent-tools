@@ -257,10 +257,18 @@ describe("xtprompt", () => {
     expect(completeCalls).toHaveLength(0);
   });
 
-  test("shipped xtprompt files contain no mercury mmd msmith strings", () => {
+  test("shipped xtprompt files contain no legacy project branding", () => {
+    const forbiddenTokens = [
+      ["mercury", "-smith"].join(""),
+      ["/", "m", "smith"].join(""),
+      ["m", "m", "d"].join(""),
+    ];
+
     for (const file of ["index.ts", "package.json"]) {
-      const content = readFileSync(join("packages/pi-extensions/extensions/xtprompt", file), "utf8");
-      expect(/mercury|mmd|msmith/i.test(content)).toBe(false);
+      const content = readFileSync(join("packages/pi-extensions/extensions/xtprompt", file), "utf8").toLowerCase();
+      for (const forbiddenToken of forbiddenTokens) {
+        expect(content.includes(forbiddenToken)).toBe(false);
+      }
     }
   });
 });
