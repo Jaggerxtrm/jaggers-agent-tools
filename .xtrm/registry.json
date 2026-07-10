@@ -83,7 +83,11 @@
           "version": "0.9.1"
         },
         "statusline.mjs": {
-          "hash": "411b726326ee5927fa5d1351d5a49fa47fe5dd37820c854251c99df5eb745d9e",
+          "hash": "3505b1754aea7d90ad086da423b7d0956c1efa1373a66df1c6b0c1fb1dab081b",
+          "version": "0.9.1"
+        },
+        "statusline.test.mjs": {
+          "hash": "ce53d601e9f5de446fc90e01c8e6300af560baa9fde8c2a850f0bcbf6643aae7",
           "version": "0.9.1"
         },
         "using-xtrm-reminder.mjs": {
