@@ -302,15 +302,34 @@ async function migrateSkills(
       for (const relPath of divergedFiles) {
         const tierPrefix = relPath.startsWith('optional/') ? 'optional/' : 'default/';
         const pathInTier = relPath.slice(tierPrefix.length);
+        // ponytail: skip source-pack PACK.json so it never overwrites the authoritative one we write below.
+        if (path.basename(pathInTier) === 'PACK.json' && !pathInTier.includes('/')) continue;
         const sourcePath = relPath.startsWith('optional/')
           ? path.join(optionalTierRoot, pathInTier)
           : path.join(defaultTierRoot, pathInTier);
 
-        const destPath = path.join(legacyRoot, path.basename(relPath));
+        const destPath = path.join(legacyRoot, pathInTier);
         if (await fs.pathExists(sourcePath)) {
+          await fs.ensureDir(path.dirname(destPath));
           await fs.copy(sourcePath, destPath);
         }
       }
+
+      const dirEntries = (await fs.readdir(legacyRoot, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+      const skillDirs: string[] = [];
+      for (const name of dirEntries) {
+        if (await fs.pathExists(path.join(legacyRoot, name, 'SKILL.md'))) {
+          skillDirs.push(name);
+        }
+      }
+      skillDirs.sort();
+      await fs.writeJson(
+        path.join(legacyRoot, 'PACK.json'),
+        { schemaVersion: '1', name: 'local-legacy', version: '0.0.0', description: 'Files preserved during xt migrate that diverged from the global canonical.', skills: skillDirs },
+        { spaces: 2 },
+      );
     }
   }
 
