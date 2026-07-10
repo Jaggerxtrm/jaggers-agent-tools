@@ -479,6 +479,10 @@ function applyXtrmChrome(
   prefs: XtrmUiPrefs,
   getThinkingLevel: () => string
 ): void {
+  if (prefs.forceTheme) {
+    ctx.ui.setTheme(resolveThemeForPrefs(prefs));
+  }
+
   // Tool expansion
   ctx.ui.setToolsExpanded(!prefs.compactTools);
 
@@ -868,20 +872,19 @@ function registerCommands(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs, setPref
 
 type BuiltInTools = ReturnType<typeof createBuiltInTools>;
 
-type XtrmMeta<TArgs = Record<string, unknown>> = {
-  tool: string;
-  args: TArgs;
-  durationMs: number;
-};
-
 type XtrmWritePreview =
   | { kind: "created"; lineCount: number }
   | { kind: "updated"; diff: string; additions: number; removals: number }
   | { kind: "unchanged" };
 
-type DetailsWithXtrmMeta<TDetails, TArgs = Record<string, unknown>> = TDetails & {
-  xtrmMeta?: XtrmMeta<TArgs>;
-  xtrmWritePreview?: XtrmWritePreview;
+type XtrmToolRenderState = {
+  startedAt?: number;
+  writePreview?: XtrmWritePreview;
+};
+
+type XtrmToolRenderContext = {
+  isPartial: boolean;
+  state: XtrmToolRenderState;
 };
 
 const toolCache = new Map<string, BuiltInTools>();
@@ -905,22 +908,6 @@ function getTools(cwd: string): BuiltInTools {
     toolCache.set(cwd, tools);
   }
   return tools;
-}
-
-function withXtrmMeta<TDetails extends object, TArgs extends Record<string, unknown>>(
-  details: TDetails | undefined,
-  tool: string,
-  args: TArgs,
-  durationMs: number,
-): DetailsWithXtrmMeta<TDetails, TArgs> {
-  return { ...(details ?? ({} as TDetails)), xtrmMeta: { tool, args, durationMs } };
-}
-
-function getXtrmMeta<TDetails extends object, TArgs extends Record<string, unknown>>(
-  details: TDetails | undefined,
-): XtrmMeta<TArgs> | undefined {
-  if (!details || typeof details !== "object") return undefined;
-  return (details as DetailsWithXtrmMeta<TDetails, TArgs>).xtrmMeta;
 }
 
 function getTextContent(result: { content: Array<{ type: string; text?: string }> }): string {
@@ -954,10 +941,6 @@ function createWritePreview(path: string, nextContent: string): XtrmWritePreview
 
 function renderPendingCall(toolName: string, args: Record<string, unknown>, theme: any): Text {
   return new Text(renderToolSummary(theme, "pending", toolName, summarizeToolSubject(toolName, args), undefined), 0, 0);
-}
-
-function stableToolSignature(toolName: string, args: Record<string, unknown>): string {
-  return `${toolName}:${JSON.stringify(args)}`;
 }
 
 function summarizeToolSubject(toolName: string, args: Record<string, unknown>): string | undefined {
@@ -1389,8 +1372,7 @@ const PAYLOAD_TOOLS = new Set<string>([
 ]);
 
 function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): void {
-  const activeToolCalls = new Map<string, string>();
-
+  const tools = getTools(process.cwd());
   const toolRowText = (theme: any, text: string) =>
     new Text(
       text,
@@ -1398,69 +1380,37 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       0,
       getPrefs().toolRowBg ? (line: string) => theme.bg("selectedBg", line) : undefined,
     );
-  const activeSignatureCounts = new Map<string, number>();
-  const toolCallStartTimes = new Map<string, number>();
-
-  const trackToolCallStart = (toolCallId: string, toolName: string, args: Record<string, unknown>) => {
-    const signature = stableToolSignature(toolName, args);
-    activeToolCalls.set(toolCallId, signature);
-    activeSignatureCounts.set(signature, (activeSignatureCounts.get(signature) ?? 0) + 1);
-    toolCallStartTimes.set(toolCallId, Date.now());
+  const renderCall = (
+    toolName: string,
+    args: Record<string, unknown>,
+    theme: any,
+    context: XtrmToolRenderContext,
+  ) => {
+    context.state.startedAt ??= Date.now();
+    return context.isPartial ? renderPendingCall(toolName, args, theme) : toolRowText(theme, "");
   };
+  const renderDuration = (context: XtrmToolRenderContext) =>
+    formatDuration(context.state.startedAt == null ? undefined : Date.now() - context.state.startedAt);
 
-  const trackToolCallEnd = (toolCallId: string) => {
-    const signature = activeToolCalls.get(toolCallId);
-    if (!signature) return;
-    activeToolCalls.delete(toolCallId);
-    const next = (activeSignatureCounts.get(signature) ?? 1) - 1;
-    if (next <= 0) activeSignatureCounts.delete(signature);
-    else activeSignatureCounts.set(signature, next);
-    toolCallStartTimes.delete(toolCallId);
-  };
-
-  const isToolCallActive = (toolName: string, args: Record<string, unknown>) =>
-    activeSignatureCounts.has(stableToolSignature(toolName, args));
-
-  const renderPendingCallIfActive = (toolName: string, args: Record<string, unknown>, theme: any) =>
-    isToolCallActive(toolName, args) ? renderPendingCall(toolName, args, theme) : toolRowText(theme, "");
-
-  pi.on("tool_call", async (event) => {
-    trackToolCallStart(event.toolCallId, event.toolName, event.input as Record<string, unknown>);
-  });
-
-  pi.on("tool_execution_end", async (event) => {
-    trackToolCallEnd(event.toolCallId);
-  });
-
-  pi.on("tool_result", async (event: ToolResultEvent, _ctx) => {
-    if (event.isError) return undefined;
-    if (XTRM_BUILTIN_TOOLS.has(event.toolName)) {
-      trackToolCallEnd(event.toolCallId);
-      return undefined;
-    }
+  pi.on("tool_result", async (event: ToolResultEvent) => {
+    if (XTRM_BUILTIN_TOOLS.has(event.toolName) || event.isError) return undefined;
     // Never compact read/inspect tools: the hook return replaces model-facing content,
     // so summarizing these would blind headless agents/specialists (no row to expand).
     if (PAYLOAD_TOOLS.has(event.toolName)) return undefined;
     if (!getPrefs().compactExternalToolResults) return undefined;
 
     const text = getTextContent({ content: event.content as Array<{ type: string; text?: string }> });
-    const startedAt = toolCallStartTimes.get(event.toolCallId);
-    const durationMs = startedAt != null ? Date.now() - startedAt : undefined;
-
-    const fallbackText = "[non-text result]";
-    const sourceText = text.trim() ? text : fallbackText;
-
+    const sourceText = text.trim() ? text : "[non-text result]";
     const safeInput =
       event.input && typeof event.input === "object" && !Array.isArray(event.input)
         ? (event.input as Record<string, unknown>)
         : {};
-
     const compactText = summarizeExternalToolResult(
       event.toolName,
       safeInput,
       sourceText,
       event.details,
-      durationMs,
+      undefined,
     );
 
     return {
@@ -1472,29 +1422,24 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
   pi.registerTool({
     name: "bash",
     label: "bash",
-    description: getTools(process.cwd()).bash.description,
-    parameters: getTools(process.cwd()).bash.parameters,
+    description: tools.bash.description,
+    parameters: tools.bash.parameters,
+    execute: tools.bash.execute,
     renderShell: "self",
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const started = Date.now();
-      const result = await getTools(ctx.cwd).bash.execute(toolCallId, params, signal, onUpdate);
-      return { ...result, details: withXtrmMeta(result.details as BashToolDetails | undefined, "bash", params as Record<string, unknown>, Date.now() - started) };
-    },
-    renderCall: (args, theme) => renderPendingCallIfActive("bash", args as Record<string, unknown>, theme),
-    renderResult(result, { expanded, isPartial }, theme) {
-      const details = (result.details ?? {}) as DetailsWithXtrmMeta<BashToolDetails, Record<string, unknown>>;
-      const meta = getXtrmMeta<BashToolDetails, Record<string, unknown>>(details);
-      const command = String(meta?.args.command ?? "");
+    renderCall: (args, theme, context) =>
+      renderCall("bash", args as Record<string, unknown>, theme, context),
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      const details = (result.details ?? {}) as BashToolDetails;
+      const args = context.args as Record<string, unknown>;
+      const command = String(args.command ?? "");
       if (isPartial) {
         return toolRowText(theme, `${theme.fg("accent", TOOL_ROW_MARKER)} ${theme.fg("accent", "$")} ${theme.fg("accent", command)}`);
       }
       const output = getTextContent(result as any);
       const outputLines = cleanOutputLines(output);
-      const exitMatch = output.match(/exit code:\s*(-?\d+)/i);
-      const exitCode = exitMatch ? Number.parseInt(exitMatch[1] ?? "0", 10) : 0;
-      const statusColor = exitCode !== 0 ? "error" : "success";
+      const statusColor = context.isError ? "error" : "success";
       const summary = joinCompactMeta([
-        formatDuration(meta?.durationMs),
+        renderDuration(context),
         formatPayloadSize(output),
         formatLineLabel(outputLines.length, "line"),
         details.truncation?.truncated ? "truncated" : undefined,
@@ -1503,14 +1448,12 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       if (summary) text += theme.fg("dim", ` · ${summary}`);
 
       if (!expanded && outputLines.length > 0) {
-        const previewStart = Math.max(0, outputLines.length - 4);
-        const preview = outputLines.slice(previewStart);
+        const preview = outputLines.slice(-4);
         text += "\n" + preview.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
         if (outputLines.length > 4) {
           text += `\n${theme.fg("dim", `  ... (${outputLines.length - 4} earlier lines, use ␣ to expand)`)}`;
         }
       }
-
       if (expanded && outputLines.length > 0) {
         text += "\n" + outputLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
       }
@@ -1521,42 +1464,40 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
   pi.registerTool({
     name: "read",
     label: "read",
-    description: getTools(process.cwd()).read.description,
-    parameters: getTools(process.cwd()).read.parameters,
+    description: tools.read.description,
+    parameters: tools.read.parameters,
+    execute: tools.read.execute,
     renderShell: "self",
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const started = Date.now();
-      const result = await getTools(ctx.cwd).read.execute(toolCallId, params, signal, onUpdate);
-      return { ...result, details: withXtrmMeta(result.details as ReadToolDetails | undefined, "read", params as Record<string, unknown>, Date.now() - started) };
-    },
-    renderCall: (args, theme) => renderPendingCallIfActive("read", args as Record<string, unknown>, theme),
-    renderResult(result, { expanded, isPartial }, theme) {
+    renderCall: (args, theme, context) =>
+      renderCall("read", args as Record<string, unknown>, theme, context),
+    renderResult(result, { expanded, isPartial }, theme, context) {
       if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "read", "loading", undefined));
-      const details = (result.details ?? {}) as DetailsWithXtrmMeta<ReadToolDetails, Record<string, unknown>>;
-      const meta = getXtrmMeta<ReadToolDetails, Record<string, unknown>>(details);
-      const subjectBase = shortenPath(String(meta?.args.path ?? ""));
-      const range = lineRange(meta?.args.offset as number | undefined, meta?.args.limit as number | undefined);
+      const details = (result.details ?? {}) as ReadToolDetails;
+      const args = context.args as Record<string, unknown>;
+      const subjectBase = shortenPath(String(args.path ?? ""));
+      const range = lineRange(args.offset as number | undefined, args.limit as number | undefined);
       const subject = range ? `${subjectBase}:${range}` : subjectBase;
       const first = result.content[0];
       if (first?.type === "image") {
-        return toolRowText(theme, renderToolSummary(theme, "success", "read", subject, joinMeta(["image", formatDuration(meta?.durationMs)])));
+        return toolRowText(theme, renderToolSummary(theme, "success", "read", subject, joinMeta(["image", renderDuration(context)])));
       }
       const textContent = getTextContent(result as any);
       const lines = textContent.split("\n");
       const totalLines = lines.length;
-      let text = renderToolSummary(theme, "success", "read", subject, joinMeta([formatLineLabel(totalLines, "line"), formatDuration(meta?.durationMs), details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined]));
-
-      // Show content inline for small files (≤6 lines) even when not expanded
-      const showInline = !expanded && totalLines > 0 && totalLines <= 6;
-      const showExpanded = expanded && totalLines > 0;
-
-      if (showInline || showExpanded) {
+      let text = renderToolSummary(
+        theme,
+        context.isError ? "error" : "success",
+        "read",
+        subject,
+        joinMeta([
+          formatLineLabel(totalLines, "line"),
+          renderDuration(context),
+          details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined,
+        ]),
+      );
+      if ((expanded || totalLines <= 6) && totalLines > 0) {
         text += "\n" + lines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-        if (!expanded && totalLines > 6) {
-          text += `\n${theme.fg("dim", `  ... (${totalLines - 6} more lines, use ␣ to expand)`)}`;
-        }
       }
-
       return toolRowText(theme, text);
     },
   });
@@ -1564,26 +1505,23 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
   pi.registerTool({
     name: "edit",
     label: "edit",
-    description: getTools(process.cwd()).edit.description,
-    parameters: getTools(process.cwd()).edit.parameters,
+    description: tools.edit.description,
+    parameters: tools.edit.parameters,
+    execute: tools.edit.execute,
     renderShell: "self",
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const started = Date.now();
-      const result = await getTools(ctx.cwd).edit.execute(toolCallId, params, signal, onUpdate);
-      return { ...result, details: withXtrmMeta(result.details as EditToolDetails | undefined, "edit", params as Record<string, unknown>, Date.now() - started) };
-    },
-    renderCall: (args, theme) => renderPendingCallIfActive("edit", args as Record<string, unknown>, theme),
-    renderResult(result, { expanded, isPartial }, theme) {
+    renderCall: (args, theme, context) =>
+      renderCall("edit", args as Record<string, unknown>, theme, context),
+    renderResult(result, { isPartial }, theme, context) {
       if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "edit", "applying", undefined));
-      const details = (result.details ?? {}) as DetailsWithXtrmMeta<EditToolDetails, Record<string, unknown>>;
-      const meta = getXtrmMeta<EditToolDetails, Record<string, unknown>>(details);
+      const details = (result.details ?? {}) as EditToolDetails;
+      const args = context.args as Record<string, unknown>;
+      const path = String(args.path ?? "");
       const textContent = getTextContent(result as any);
-      const path = String(meta?.args.path ?? "");
-      if (/^error/i.test(textContent.trim())) {
+      if (context.isError) {
         return toolRowText(theme, renderToolSummary(theme, "error", "edit", path, textContent.split("\n")[0]));
       }
       const stats = details.diff ? diffStats(details.diff) : { additions: 0, removals: 0 };
-      let text = renderToolSummary(theme, "success", "edit", path, joinMeta([`+${stats.additions}`, `-${stats.removals}`, formatDuration(meta?.durationMs)]));
+      let text = renderToolSummary(theme, "success", "edit", path, joinMeta([`+${stats.additions}`, `-${stats.removals}`, renderDuration(context)]));
       if (details.diff) text += `\n${renderRichDiffPreview(theme, details.diff, 18)}`;
       return toolRowText(theme, text);
     },
@@ -1592,64 +1530,44 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
   pi.registerTool({
     name: "write",
     label: "write",
-    description: getTools(process.cwd()).write.description,
-    parameters: getTools(process.cwd()).write.parameters,
+    description: tools.write.description,
+    parameters: tools.write.parameters,
+    execute: tools.write.execute,
     renderShell: "self",
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const started = Date.now();
-      const args = params as Record<string, unknown>;
+    renderCall(args, theme, context) {
+      const input = args as Record<string, unknown>;
+      const state = context.state as XtrmToolRenderState;
+      if (context.argsComplete && !state.writePreview) {
+        state.writePreview = createWritePreview(String(input.path ?? ""), String(input.content ?? ""));
+      }
+      return renderCall("write", input, theme, context);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "write", "writing", undefined));
+      const args = context.args as Record<string, unknown>;
       const path = String(args.path ?? "");
       const content = String(args.content ?? "");
-      const preview = createWritePreview(path, content);
-      const result = await getTools(ctx.cwd).write.execute(toolCallId, params, signal, onUpdate);
-      const details = withXtrmMeta(result.details as Record<string, never> | undefined, "write", args, Date.now() - started);
-      return { ...result, details: { ...details, xtrmWritePreview: preview } };
-    },
-    renderCall: (args, theme) => renderPendingCallIfActive("write", args as Record<string, unknown>, theme),
-    renderResult(result, { expanded, isPartial }, theme) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "write", "writing", undefined));
-      const details = (result.details ?? {}) as DetailsWithXtrmMeta<Record<string, never>, Record<string, unknown>>;
-      const meta = getXtrmMeta<Record<string, never>, Record<string, unknown>>(details);
       const textContent = getTextContent(result as any);
-      const path = String(meta?.args.path ?? "");
-      if (/^error/i.test(textContent.trim())) {
+      if (context.isError) {
         return toolRowText(theme, renderToolSummary(theme, "error", "write", path, textContent.split("\n")[0]));
       }
 
-      const preview = details.xtrmWritePreview;
-
+      const preview = (context.state as XtrmToolRenderState).writePreview;
       if (preview?.kind === "unchanged") {
-        return toolRowText(theme, renderToolSummary(theme, "success", "write", path, joinMeta(["no changes", formatDuration(meta?.durationMs)])));
+        return toolRowText(theme, renderToolSummary(theme, "success", "write", path, joinMeta(["no changes", renderDuration(context)])));
       }
-
       if (preview?.kind === "updated") {
-        let text = renderToolSummary(
-          theme,
-          "success",
-          "write",
-          path,
-          joinMeta([`+${preview.additions}`, `-${preview.removals}`, formatDuration(meta?.durationMs)]),
-        );
+        let text = renderToolSummary(theme, "success", "write", path, joinMeta([`+${preview.additions}`, `-${preview.removals}`, renderDuration(context)]));
         if (preview.diff) text += `\n${renderRichDiffPreview(theme, preview.diff, 18)}`;
         return toolRowText(theme, text);
       }
 
-      // created
-      const lines = preview?.kind === "created" ? preview.lineCount : lineCount(String(meta?.args.content ?? ""));
-      let text = renderToolSummary(theme, "success", "write", path, joinMeta([formatLineLabel(lines, "line"), formatDuration(meta?.durationMs)]));
-
-      const content = String(meta?.args.content ?? "");
-      if (content) {
-        const contentLines = content.split("\n");
-        const showInline = !expanded && contentLines.length <= 6;
-        if (showInline || expanded) {
-          text += "\n" + contentLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-          if (!expanded && contentLines.length > 6) {
-            text += `\n${theme.fg("dim", `  ... (${contentLines.length - 6} more lines, use ␣ to expand)`)}`;
-          }
-        }
+      const lines = preview?.kind === "created" ? preview.lineCount : lineCount(content);
+      let text = renderToolSummary(theme, "success", "write", path, joinMeta([formatLineLabel(lines, "line"), renderDuration(context)]));
+      const contentLines = content.split("\n");
+      if (content && (expanded || contentLines.length <= 6)) {
+        text += "\n" + contentLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
       }
-
       return toolRowText(theme, text);
     },
   });
@@ -1657,22 +1575,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
   pi.registerTool({
     name: "find",
     label: "find",
-    description: getTools(process.cwd()).find.description,
-    parameters: getTools(process.cwd()).find.parameters,
+    description: tools.find.description,
+    parameters: tools.find.parameters,
+    execute: tools.find.execute,
     renderShell: "self",
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const started = Date.now();
-      const result = await getTools(ctx.cwd).find.execute(toolCallId, params, signal, onUpdate);
-      return { ...result, details: withXtrmMeta(result.details as FindToolDetails | undefined, "find", params as Record<string, unknown>, Date.now() - started) };
-    },
-    renderCall: (args, theme) => renderPendingCallIfActive("find", args as Record<string, unknown>, theme),
-    renderResult(result, { expanded, isPartial }, theme) {
+    renderCall: (args, theme, context) =>
+      renderCall("find", args as Record<string, unknown>, theme, context),
+    renderResult(result, { expanded, isPartial }, theme, context) {
       if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "find", "searching", undefined));
-      const details = (result.details ?? {}) as DetailsWithXtrmMeta<FindToolDetails, Record<string, unknown>>;
-      const meta = getXtrmMeta<FindToolDetails, Record<string, unknown>>(details);
+      const details = (result.details ?? {}) as FindToolDetails;
+      const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = summarizeCount(textContent);
-      let text = renderToolSummary(theme, "success", "find", String(meta?.args.pattern ?? ""), joinMeta([formatLineLabel(count, "match"), formatDuration(meta?.durationMs), details.resultLimitReached ? "limit reached" : undefined]));
+      let text = renderToolSummary(
+        theme,
+        context.isError ? "error" : "success",
+        "find",
+        String(args.pattern ?? ""),
+        joinMeta([formatLineLabel(count, "match"), renderDuration(context), details.resultLimitReached ? "limit reached" : undefined]),
+      );
       if (expanded && count > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 10), 10)}`;
       return toolRowText(theme, text);
     },
@@ -1681,22 +1602,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
   pi.registerTool({
     name: "grep",
     label: "grep",
-    description: getTools(process.cwd()).grep.description,
-    parameters: getTools(process.cwd()).grep.parameters,
+    description: tools.grep.description,
+    parameters: tools.grep.parameters,
+    execute: tools.grep.execute,
     renderShell: "self",
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const started = Date.now();
-      const result = await getTools(ctx.cwd).grep.execute(toolCallId, params, signal, onUpdate);
-      return { ...result, details: withXtrmMeta(result.details as GrepToolDetails | undefined, "grep", params as Record<string, unknown>, Date.now() - started) };
-    },
-    renderCall: (args, theme) => renderPendingCallIfActive("grep", args as Record<string, unknown>, theme),
-    renderResult(result, { expanded, isPartial }, theme) {
+    renderCall: (args, theme, context) =>
+      renderCall("grep", args as Record<string, unknown>, theme, context),
+    renderResult(result, { expanded, isPartial }, theme, context) {
       if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "grep", "searching", undefined));
-      const details = (result.details ?? {}) as DetailsWithXtrmMeta<GrepToolDetails, Record<string, unknown>>;
-      const meta = getXtrmMeta<GrepToolDetails, Record<string, unknown>>(details);
+      const details = (result.details ?? {}) as GrepToolDetails;
+      const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = countPrefixedItems(textContent, ["-- "]) || summarizeCount(textContent);
-      let text = renderToolSummary(theme, "success", "grep", String(meta?.args.pattern ?? ""), joinMeta([formatLineLabel(count, "match"), formatDuration(meta?.durationMs), details.matchLimitReached ? "limit reached" : undefined]));
+      let text = renderToolSummary(
+        theme,
+        context.isError ? "error" : "success",
+        "grep",
+        String(args.pattern ?? ""),
+        joinMeta([formatLineLabel(count, "match"), renderDuration(context), details.matchLimitReached ? "limit reached" : undefined]),
+      );
       if (expanded && textContent.length > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 12), 12)}`;
       return toolRowText(theme, text);
     },
@@ -1705,22 +1629,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
   pi.registerTool({
     name: "ls",
     label: "ls",
-    description: getTools(process.cwd()).ls.description,
-    parameters: getTools(process.cwd()).ls.parameters,
+    description: tools.ls.description,
+    parameters: tools.ls.parameters,
+    execute: tools.ls.execute,
     renderShell: "self",
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const started = Date.now();
-      const result = await getTools(ctx.cwd).ls.execute(toolCallId, params, signal, onUpdate);
-      return { ...result, details: withXtrmMeta(result.details as LsToolDetails | undefined, "ls", params as Record<string, unknown>, Date.now() - started) };
-    },
-    renderCall: (args, theme) => renderPendingCallIfActive("ls", args as Record<string, unknown>, theme),
-    renderResult(result, { expanded, isPartial }, theme) {
+    renderCall: (args, theme, context) =>
+      renderCall("ls", args as Record<string, unknown>, theme, context),
+    renderResult(result, { expanded, isPartial }, theme, context) {
       if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "ls", "listing", undefined));
-      const details = (result.details ?? {}) as DetailsWithXtrmMeta<LsToolDetails, Record<string, unknown>>;
-      const meta = getXtrmMeta<LsToolDetails, Record<string, unknown>>(details);
+      const details = (result.details ?? {}) as LsToolDetails;
+      const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = summarizeCount(textContent);
-      let text = renderToolSummary(theme, "success", "ls", shortenPath(String(meta?.args.path ?? ".")), joinMeta([formatLineLabel(count, "entry"), formatDuration(meta?.durationMs), details.entryLimitReached ? "limit reached" : undefined]));
+      let text = renderToolSummary(
+        theme,
+        context.isError ? "error" : "success",
+        "ls",
+        shortenPath(String(args.path ?? ".")),
+        joinMeta([formatLineLabel(count, "entry"), renderDuration(context), details.entryLimitReached ? "limit reached" : undefined]),
+      );
       if (expanded && count > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 12), 12)}`;
       return toolRowText(theme, text);
     },
