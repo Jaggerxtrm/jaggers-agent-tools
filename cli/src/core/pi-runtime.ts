@@ -29,6 +29,10 @@ const MANAGED_PI_EXTENSION_SOURCE_CANDIDATES = [
     ['packages', 'pi-extensions', 'extensions'],
     ['.xtrm', 'extensions'],
 ] as const;
+const MANAGED_PI_THEME_SOURCE_CANDIDATES = [
+    ['packages', 'pi-extensions', 'themes', 'xtrm-ui'],
+    ['.xtrm', 'themes', 'xtrm-ui'],
+] as const;
 
 function resolveFirstExistingPath(
     rootDir: string,
@@ -61,6 +65,10 @@ export function resolveManagedPiExtensionsSourceDir(pkgRoot: string = resolvePkg
     return resolveFirstExistingPath(pkgRoot, MANAGED_PI_EXTENSION_SOURCE_CANDIDATES);
 }
 
+function resolveManagedPiThemesSourceDir(pkgRoot: string = resolvePkgRoot()): string | null {
+    return resolveFirstExistingPath(pkgRoot, MANAGED_PI_THEME_SOURCE_CANDIDATES);
+}
+
 export function resolveManagedPiCoreSourceDir(pkgRoot: string = resolvePkgRoot()): string | null {
     return resolveFirstExistingPath(pkgRoot, [
         ['packages', 'pi-extensions', 'src', 'core'],
@@ -69,6 +77,40 @@ export function resolveManagedPiCoreSourceDir(pkgRoot: string = resolvePkgRoot()
 }
 
 const PI_AGENT_DIR = process.env.PI_AGENT_DIR || path.join(homedir(), '.pi', 'agent');
+const MANAGED_XTRM_THEME_FILES = [
+    'xtrm-dark.json',
+    'xtrm-dark-flattools.json',
+    'xtrm-light.json',
+    'xtrm-light-flattools.json',
+] as const;
+
+export async function syncManagedPiThemes(
+    sourceDir: string | null,
+    dryRun: boolean,
+    log?: (message: string) => void,
+    themeDir = path.join(PI_AGENT_DIR, 'themes'),
+): Promise<void> {
+    if (!sourceDir || !await fs.pathExists(sourceDir)) return;
+
+    const missing = MANAGED_XTRM_THEME_FILES.filter((name) => !fs.existsSync(path.join(sourceDir, name)));
+    if (missing.length > 0) {
+        throw new Error(`Missing managed Pi theme files: ${missing.join(', ')}`);
+    }
+
+    if (dryRun) {
+        log?.(`[DRY RUN] sync XTRM Pi themes → ${themeDir}`);
+        return;
+    }
+
+    await fs.ensureDir(themeDir);
+    for (const name of MANAGED_XTRM_THEME_FILES) {
+        const target = path.join(themeDir, name);
+        await fs.remove(target);
+        await fs.symlink(path.relative(themeDir, path.join(sourceDir, name)), target);
+    }
+    log?.('Synced XTRM Pi themes');
+}
+
 const PI_MCP_ADAPTER_OVERRIDE_DIR = path.join(PI_AGENT_DIR, 'extensions', 'pi-mcp-adapter');
 const PI_MCP_ADAPTER_REQUIRED_ENTRY = 'commands.js';
 
@@ -954,6 +996,7 @@ export async function runPiLaunchPreflight(
     dryRun: boolean,
     log?: (message: string) => void,
 ): Promise<PiLaunchPreflightResult> {
+    await syncManagedPiThemes(resolveManagedPiThemesSourceDir(), dryRun, log);
     const staleOverride = await remediateStalePiMcpAdapterOverride(dryRun, log);
     const coreSymlinkStatus = await ensureCorePackageSymlink(
         path.join(projectRoot, '.xtrm', 'extensions', 'core'),
