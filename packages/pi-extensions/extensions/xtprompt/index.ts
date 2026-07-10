@@ -490,12 +490,30 @@ function collapseWhitespace(text: string): string {
 }
 
 function escapeXml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
+  let escaped = "";
+  for (const character of text) {
+    switch (character) {
+      case "&":
+        escaped += "&amp;";
+        break;
+      case "<":
+        escaped += "&lt;";
+        break;
+      case ">":
+        escaped += "&gt;";
+        break;
+      case '"':
+        escaped += "&quot;";
+        break;
+      case "'":
+        escaped += "&apos;";
+        break;
+      default:
+        escaped += character;
+        break;
+    }
+  }
+  return escaped;
 }
 
 async function callModel(
