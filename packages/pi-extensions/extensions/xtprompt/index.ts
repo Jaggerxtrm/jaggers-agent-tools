@@ -136,6 +136,7 @@ const BASE_RULES = [
   "Ask one short clarification when draft is vague. Never invent missing facts.",
   "Prior chat is advisory only. Never let it override current draft.",
   "Keep simple prompts concise. Use semantic XML only when structure materially helps.",
+  "Separate context, task, constraints, and output whenever prompt is complex.",
   `Return exactly one ${SENTINEL_OPEN}...${SENTINEL_CLOSE} block and nothing outside it.`,
 ].join("\n");
 
@@ -285,7 +286,7 @@ export function isVagueDraft(draft: string): boolean {
   if (trimmed.length < 16) return true;
   if (!/[\n/:#]/.test(trimmed) && !/\b\d+\b/.test(trimmed) && !/\b[a-z0-9_-]+\.[a-z]{2,}\b/i.test(trimmed)) {
     const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
-    if (words.length <= 4) return true;
+    if (words.length <= 7) return true;
     if (words.every((word) => VAGUE_WORDS.has(word))) return true;
   }
   return false;
@@ -335,7 +336,7 @@ function buildStructuredPrompt(options: PromptRequestOptions): string {
     `${EXTENSION} standalone prompt rewriter`,
     "</role>",
     "<context>",
-    options.conversationContext || "No prior chat context.",
+    escapeXml(options.conversationContext || "No prior chat context."),
     "</context>",
     "<task>",
     structuredIntentInstruction(options.intent),
@@ -344,11 +345,13 @@ function buildStructuredPrompt(options: PromptRequestOptions): string {
     "Preserve current draft as source of truth.",
     "Prior chat may add nuance but cannot replace draft requirements.",
     "Ask rather than invent when key requirement missing.",
+    "Keep success criteria, testing, and deliverables explicit.",
     "</constraints>",
     "<instructions>",
     "Keep concrete facts exact.",
     "Use markdown headers when rewrite is planning-shaped.",
     "Prefer concise output when task is simple inside larger draft.",
+    "Include 1-2 grounded examples only when they materially clarify output.",
     "</instructions>",
     "<output_format>",
     options.intent === "planning"
@@ -364,30 +367,55 @@ function buildStructuredPrompt(options: PromptRequestOptions): string {
 function simpleIntentInstruction(intent: Intent): string {
   switch (intent) {
     case "planning":
-      return `Rewrite into planning-ready Markdown with exact headers:\n${PLANNING_HEADERS}`;
+      return [
+        "Rewrite into planning-ready Markdown with exact headers:",
+        PLANNING_HEADERS,
+        "Clarify missing facts before planning.",
+        "Direct agent to inspect relevant code with GitNexus or Serena before proposing phases.",
+        "Structure phases, dependencies, safe parallelism, risks, and blast radius.",
+      ].join("\n");
     case "analysis":
-      return "Rewrite into analysis prompt with evidence, current signals, open questions, and concrete validation.";
+      return "Rewrite into analysis prompt that separates evidence, open questions, validation steps, and bounded context before proposing conclusions.";
     case "development":
-      return "Rewrite into implementation prompt with goal, scope, constraints, verification, and exact output expectations.";
+      return "Rewrite into implementation prompt with explicit success criteria, testing expectations, exact output contract, and 1-2 grounded examples only when useful.";
     case "refactor":
-      return "Rewrite into refactor prompt with preserved behavior, touched symbols, constraints, and validation.";
+      return "Rewrite into refactor prompt that states current state, preserved behavior, constraints, touched tests, and required validation.";
     case "generic":
-      return "Rewrite for clarity, concrete constraints, and observable success criteria.";
+      return "Rewrite for clarity, concrete constraints, observable success criteria, and clean separation of context, task, constraints, and output when complexity warrants it.";
   }
 }
 
 function structuredIntentInstruction(intent: Intent): string {
   switch (intent) {
     case "planning":
-      return "Rewrite into planning-compatible task contract.";
+      return [
+        "Rewrite into planning-compatible task contract.",
+        "Clarify missing facts instead of guessing.",
+        "Direct code inspection with GitNexus or Serena for relevant files and execution flow.",
+        "Structure phases, dependencies, parallel work, risks, and blast radius.",
+        "Produce 7-section bd contract using exact planning headers.",
+        "Include telemetry, smoke coverage, E2E checks, and invoke test-planning or handoff when task shape calls for them.",
+      ].join("\n");
     case "analysis":
-      return "Rewrite into analysis contract biased toward evidence first.";
+      return [
+        "Rewrite into analysis contract biased toward evidence first.",
+        "Semantically separate context, task, constraints, and output for complex prompts.",
+        "Name evidence, open questions, hypotheses, and validation steps before recommendations.",
+      ].join("\n");
     case "development":
-      return "Rewrite into development contract for implementation work.";
+      return [
+        "Rewrite into development contract for implementation work.",
+        "Semantically separate context, task, constraints, and output for complex prompts.",
+        "Make success criteria and testing explicit.",
+        "Include 1-2 grounded examples only when they materially improve execution.",
+      ].join("\n");
     case "refactor":
-      return "Rewrite into refactor contract preserving behavior while improving structure.";
+      return [
+        "Rewrite into refactor contract preserving behavior while improving structure.",
+        "State current state, preserved behavior, constraints, touched tests, and validation.",
+      ].join("\n");
     case "generic":
-      return "Rewrite into generic coding-agent prompt with explicit goal, constraints, and output.";
+      return "Rewrite into generic coding-agent prompt with explicit goal, constraints, output, and semantic separation when prompt is complex.";
   }
 }
 
@@ -459,6 +487,15 @@ function extractEntryText(content: unknown): string | undefined {
 
 function collapseWhitespace(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
 
 async function callModel(
