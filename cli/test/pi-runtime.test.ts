@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { cleanupConflictingPiPackageSettings, inventoryPiRuntime, executePiSync, ensureAlwaysGlobalPiPackages, getXtManagedPiPackages, updatePiSettings } from '../src/core/pi-runtime.js';
+import { cleanupConflictingPiPackageSettings, inventoryPiRuntime, executePiSync, ensureAlwaysGlobalPiPackages, getXtManagedPiPackages, syncManagedPiThemes, updatePiSettings } from '../src/core/pi-runtime.js';
 
 async function makeExtension(baseDir: string, name: string, extraFiles: Record<string, string> = {}): Promise<void> {
     const extDir = path.join(baseDir, name);
@@ -16,6 +16,49 @@ async function makeExtension(baseDir: string, name: string, extraFiles: Record<s
         await fs.writeFile(absPath, content);
     }
 }
+
+describe('syncManagedPiThemes', () => {
+    it('symlinks every XTRM theme before Pi settings are read', async () => {
+        const sourceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-theme-source-'));
+        const targetDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-theme-target-'));
+        const themes = ['xtrm-dark.json', 'xtrm-dark-flattools.json', 'xtrm-light.json', 'xtrm-light-flattools.json'];
+
+        try {
+            await Promise.all(themes.map((name) => fs.writeFile(path.join(sourceDir, name), `{"name":"${name}"}`)));
+            await fs.writeFile(path.join(sourceDir, 'ignored.json'), '{}');
+
+            await syncManagedPiThemes(sourceDir, false, undefined, targetDir);
+
+            expect((await fs.readdir(targetDir)).sort()).toEqual(themes.sort());
+            for (const name of themes) {
+                expect((await fs.lstat(path.join(targetDir, name))).isSymbolicLink()).toBe(true);
+                expect(await fs.readFile(path.join(targetDir, name), 'utf8')).toContain(name);
+            }
+        } finally {
+            await fs.remove(sourceDir);
+            await fs.remove(targetDir);
+        }
+    });
+
+    it('does not create themes during a dry run', async () => {
+        const sourceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-theme-source-'));
+        const targetDir = path.join(os.tmpdir(), `pi-theme-target-${Date.now()}`);
+        await Promise.all([
+            'xtrm-dark.json',
+            'xtrm-dark-flattools.json',
+            'xtrm-light.json',
+            'xtrm-light-flattools.json',
+        ].map((name) => fs.writeFile(path.join(sourceDir, name), '{}')));
+
+        try {
+            await syncManagedPiThemes(sourceDir, true, undefined, targetDir);
+            expect(await fs.pathExists(targetDir)).toBe(false);
+        } finally {
+            await fs.remove(sourceDir);
+            await fs.remove(targetDir);
+        }
+    });
+});
 
 describe('cleanupConflictingPiPackageSettings', () => {
     it('leaves settings unchanged in dry-run mode', async () => {

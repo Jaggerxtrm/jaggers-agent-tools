@@ -60579,6 +60579,10 @@ var MANAGED_PI_EXTENSION_SOURCE_CANDIDATES = [
   ["packages", "pi-extensions", "extensions"],
   [".xtrm", "extensions"]
 ];
+var MANAGED_PI_THEME_SOURCE_CANDIDATES = [
+  ["packages", "pi-extensions", "themes", "xtrm-ui"],
+  [".xtrm", "themes", "xtrm-ui"]
+];
 function resolveFirstExistingPath(rootDir, candidates) {
   for (const candidate of candidates) {
     const candidatePath = import_path4.default.join(rootDir, ...candidate);
@@ -60603,6 +60607,9 @@ function resolvePkgRoot() {
 function resolveManagedPiExtensionsSourceDir(pkgRoot = resolvePkgRoot()) {
   return resolveFirstExistingPath(pkgRoot, MANAGED_PI_EXTENSION_SOURCE_CANDIDATES);
 }
+function resolveManagedPiThemesSourceDir(pkgRoot = resolvePkgRoot()) {
+  return resolveFirstExistingPath(pkgRoot, MANAGED_PI_THEME_SOURCE_CANDIDATES);
+}
 function resolveManagedPiCoreSourceDir(pkgRoot = resolvePkgRoot()) {
   return resolveFirstExistingPath(pkgRoot, [
     ["packages", "pi-extensions", "src", "core"],
@@ -60610,6 +60617,30 @@ function resolveManagedPiCoreSourceDir(pkgRoot = resolvePkgRoot()) {
   ]);
 }
 var PI_AGENT_DIR = process.env.PI_AGENT_DIR || import_path4.default.join((0, import_node_os4.homedir)(), ".pi", "agent");
+var MANAGED_XTRM_THEME_FILES = [
+  "xtrm-dark.json",
+  "xtrm-dark-flattools.json",
+  "xtrm-light.json",
+  "xtrm-light-flattools.json"
+];
+async function syncManagedPiThemes(sourceDir, dryRun, log, themeDir = import_path4.default.join(PI_AGENT_DIR, "themes")) {
+  if (!sourceDir || !await import_fs_extra11.default.pathExists(sourceDir)) return;
+  const missing = MANAGED_XTRM_THEME_FILES.filter((name) => !import_fs_extra11.default.existsSync(import_path4.default.join(sourceDir, name)));
+  if (missing.length > 0) {
+    throw new Error(`Missing managed Pi theme files: ${missing.join(", ")}`);
+  }
+  if (dryRun) {
+    log?.(`[DRY RUN] sync XTRM Pi themes \u2192 ${themeDir}`);
+    return;
+  }
+  await import_fs_extra11.default.ensureDir(themeDir);
+  for (const name of MANAGED_XTRM_THEME_FILES) {
+    const target = import_path4.default.join(themeDir, name);
+    await import_fs_extra11.default.remove(target);
+    await import_fs_extra11.default.symlink(import_path4.default.relative(themeDir, import_path4.default.join(sourceDir, name)), target);
+  }
+  log?.("Synced XTRM Pi themes");
+}
 var PI_MCP_ADAPTER_OVERRIDE_DIR = import_path4.default.join(PI_AGENT_DIR, "extensions", "pi-mcp-adapter");
 var PI_MCP_ADAPTER_REQUIRED_ENTRY = "commands.js";
 async function resolveGlobalNpmRootDir() {
@@ -61124,6 +61155,7 @@ async function remediateStalePiMcpAdapterOverride(dryRun, log) {
   };
 }
 async function runPiLaunchPreflight(projectRoot, dryRun, log) {
+  await syncManagedPiThemes(resolveManagedPiThemesSourceDir(), dryRun, log);
   const staleOverride = await remediateStalePiMcpAdapterOverride(dryRun, log);
   const coreSymlinkStatus = await ensureCorePackageSymlink(
     import_path4.default.join(projectRoot, ".xtrm", "extensions", "core"),
@@ -61174,6 +61206,15 @@ async function cleanupLegacyProjectExtensionCopies(projectRoot, dryRun, log) {
     }
   }
   return { removed, failed };
+}
+var LEGACY_XTRM_THEMES = {
+  "pidex-dark": "xtrm-dark",
+  "pidex-light": "xtrm-light",
+  "pidex-dark-flattools": "xtrm-dark-flattools",
+  "pidex-light-flattools": "xtrm-light-flattools"
+};
+function normalizeXtrmTheme(theme) {
+  return typeof theme === "string" ? LEGACY_XTRM_THEMES[theme] ?? theme : theme;
 }
 var SERENA_DEFAULT_BLOCKED_TOOLS = /* @__PURE__ */ new Set(["read", "write", "edit", "ls", "find", "grep"]);
 function normalizeStringArray(value) {
@@ -61231,7 +61272,7 @@ function pruneConflictingPiPackageEntries(entries) {
   }
   return { kept, removed };
 }
-async function pruneConflictingPiPackagesFromSettings(settingsPath, scopeLabel, dryRun, log) {
+async function pruneConflictingPiPackagesFromSettings(settingsPath, scopeLabel, dryRun, migrateXtrmPreferences = false, log) {
   if (!await import_fs_extra11.default.pathExists(settingsPath)) {
     return [];
   }
@@ -61243,28 +61284,50 @@ async function pruneConflictingPiPackagesFromSettings(settingsPath, scopeLabel, 
   }
   const existingPackages = normalizeStringArray(existingSettings.packages);
   const { kept, removed } = pruneConflictingPiPackageEntries(existingPackages);
-  if (removed.length === 0) {
+  const theme = migrateXtrmPreferences ? normalizeXtrmTheme(existingSettings.theme) : existingSettings.theme;
+  const themeChanged = theme !== existingSettings.theme;
+  const hasObsoleteCompactSetting = migrateXtrmPreferences && "xtrmExternalCompact" in existingSettings;
+  if (removed.length === 0 && !themeChanged && !hasObsoleteCompactSetting) {
     return [];
   }
   if (dryRun) {
-    log?.(kleur_default.dim(`[DRY RUN] would remove conflicting Pi package(s) from ${scopeLabel}: ${removed.join(", ")}`));
+    if (removed.length > 0) {
+      log?.(kleur_default.dim(`[DRY RUN] would remove conflicting Pi package(s) from ${scopeLabel}: ${removed.join(", ")}`));
+    }
+    if (themeChanged) {
+      log?.(kleur_default.dim(`[DRY RUN] would migrate Pi theme in ${scopeLabel}: ${String(existingSettings.theme)} \u2192 ${String(theme)}`));
+    }
+    if (hasObsoleteCompactSetting) {
+      log?.(kleur_default.dim(`[DRY RUN] would remove obsolete xtrmExternalCompact from ${scopeLabel}`));
+    }
     return removed;
   }
-  await import_fs_extra11.default.writeJson(settingsPath, { ...existingSettings, packages: kept }, { spaces: 2 });
-  log?.(kleur_default.dim(`Removed conflicting Pi package(s) from ${scopeLabel}: ${removed.join(", ")}`));
+  const nextSettings = { ...existingSettings };
+  if (removed.length > 0) nextSettings.packages = kept;
+  if (themeChanged) nextSettings.theme = theme;
+  if (hasObsoleteCompactSetting) delete nextSettings.xtrmExternalCompact;
+  await import_fs_extra11.default.writeJson(settingsPath, nextSettings, { spaces: 2 });
+  if (removed.length > 0) {
+    log?.(kleur_default.dim(`Removed conflicting Pi package(s) from ${scopeLabel}: ${removed.join(", ")}`));
+  }
+  if (themeChanged) {
+    log?.(kleur_default.dim(`Migrated Pi theme in ${scopeLabel}: ${String(existingSettings.theme)} \u2192 ${String(theme)}`));
+  }
   return removed;
 }
-async function cleanupConflictingPiPackageSettings(projectRoot, dryRun, log) {
+async function cleanupConflictingPiPackageSettings(projectRoot, dryRun, isGlobal, log, agentDir = PI_AGENT_DIR) {
   await pruneConflictingPiPackagesFromSettings(
-    import_path4.default.join(PI_AGENT_DIR, "settings.json"),
+    import_path4.default.join(agentDir, "settings.json"),
     "~/.pi/agent/settings.json",
     dryRun,
+    isGlobal,
     log
   );
   await pruneConflictingPiPackagesFromSettings(
     import_path4.default.join(projectRoot, ".pi", "settings.json"),
     `${projectRoot}/.pi/settings.json`,
     dryRun,
+    true,
     log
   );
 }
@@ -61279,8 +61342,8 @@ async function updatePiSettings(projectRoot, dryRun, log) {
   let existingSettings = {};
   try {
     existingSettings = await import_fs_extra11.default.readJson(piSettingsPath);
-  } catch {
-    existingSettings = {};
+  } catch (error51) {
+    if (error51.code !== "ENOENT") throw error51;
   }
   const LEGACY_PACKAGE_IDS = /* @__PURE__ */ new Set(["npm:@xtrm/pi-extensions", "./extensions/"]);
   const existingProjectPackages = normalizeStringArray(existingSettings.packages).filter((entry) => !LEGACY_PACKAGE_IDS.has(entry) && !entry.startsWith("./extensions/"));
@@ -61308,8 +61371,10 @@ async function updatePiSettings(projectRoot, dryRun, log) {
     extensions: existingExtensions,
     skills: normalizedSkills,
     packages: existingPackages,
-    serena: normalizeSerenaSettings(existingSettings.serena)
+    serena: normalizeSerenaSettings(existingSettings.serena),
+    theme: normalizeXtrmTheme(existingSettings.theme)
   };
+  delete nextSettings.xtrmExternalCompact;
   await import_fs_extra11.default.writeJson(piSettingsPath, nextSettings, { spaces: 2 });
   log?.(kleur_default.dim(`Updated .pi/settings.json \u2192 ${PROJECT_EXTENSION_PACKAGE_ID} + ${normalizedSkills.join(" + ")}`));
 }
@@ -61420,7 +61485,7 @@ async function runPiRuntimeSync(opts = {}) {
   if (preflight.staleOverride.remediated) {
     result.extensionsRemoved.push("pi-mcp-adapter");
   }
-  await cleanupConflictingPiPackageSettings(resolvedProjectRoot, dryRun, log);
+  await cleanupConflictingPiPackageSettings(resolvedProjectRoot, dryRun, isGlobal, log);
   if (isGlobal) {
     const targetDir = import_path4.default.join(PI_AGENT_DIR, "extensions");
     const plan = await inventoryPiRuntime(sourceDir, targetDir);

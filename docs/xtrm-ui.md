@@ -108,8 +108,9 @@ registered. External tools always use the unified background renderer.
 ## Install and Migration
 
 Canonical source lives under `packages/pi-extensions/` and is exposed by the
-managed `@jaggerxtrm/pi-extensions` package. Pi discovers the extension and theme
-directory from that package.
+managed `@jaggerxtrm/pi-extensions` package. Before Pi reads its configured theme,
+launch preflight symlinks the four XTRM-owned theme files into `~/.pi/agent/themes`.
+The extension still discovers its package-local theme directory after startup.
 
 Runtime sync removes the obsolete UI package entry. It migrates legacy theme names
 and removes the retired `xtrmExternalCompact` setting in project settings; user-global
