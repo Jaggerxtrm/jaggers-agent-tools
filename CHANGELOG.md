@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### `xt pi --role` launcher — current-pane default inside tmux (xtmux-1lb.5.1)
+
+**Behavior change (default flip).** Inside an existing `$TMUX` client, `xt pi --role <name>` now runs pi in the **current pane** by default instead of creating a new tmux session and switching to it. This matches operator intent — no nested-tmux warning, no new session in `tmux ls`, and the pane's `@agent_*` metadata is set on the pane you launched from.
+
+New flags on `xt pi --role`:
+
+- `--new-session` (alias `--ns`) — opt back into the "fresh tmux session" behavior even inside `$TMUX`. Combines with `--no-attach` for orchestrator capture.
+- `--parent <target>` — override `@agent_parent_session` on the target pane. `<target>` may be a session name, session id (`$3`), or `#{session_id}` string. Bogus targets fail before pi spawns.
+- `--child` — explicit form of the auto-behavior (`@agent_parent_session` = current pane's `#{session_id}`). Redundant with the current default; retained as a stable opt-in against a future default flip.
+
+Behavior matrix:
+
+| context | flags | result |
+| --- | --- | --- |
+| inside `$TMUX` | (none) | pi runs in current pane; pane options + `XTMUX_AGENT_*` env set here |
+| inside `$TMUX` | `--new-session` | new session; `switch-client` attaches (from xtmux-1lb.5) |
+| inside `$TMUX` | `--new-session --no-attach` | new session detached; prints `session:pane` |
+| inside `$TMUX` | `--no-attach` alone | **error** — requires `--new-session` or exit tmux first |
+| outside `$TMUX` | (any) | `new-session` + attach (unchanged) |
+
+Also wired at launch time (both modes):
+
+- `@agent_state=idle` set on the target pane so the picker sees the pane immediately.
+- `@agent_prompt_file` points at the transported system-prompt file so picker previews + handoff can reuse it.
+- `XTMUX_AGENT_BEAD` / `XTMUX_AGENT_TASK` / `XTMUX_AGENT_PROMPT_FILE` / `XTMUX_AGENT_PARENT_SESSION` exported into pi's environment so `scripts/agent-state.sh` can pick them up on first turn.
+- `agent.role.launched` event emitted via `tmux-session-picker log emit` (non-fatal if picker missing).
+
+Migration notes: scripts using `xt pi --role --no-attach` from **inside** tmux must add `--new-session`. Scripts using `--no-attach` from outside tmux, or `xt pi --role` from outside tmux, are unaffected.
+
+### `xt pi --role` — switch-client attach inside `$TMUX` (xtmux-1lb.5)
+
+`launchRoleTmuxSession` now uses `tmux switch-client` when the caller is inside an existing tmux client (was `tmux attach-session`, which refused with "sessions should be nested with care, unset TMUX to force"). Outside tmux, `attach-session` is retained. Extracted as a pure `chooseAttachCommand(sessionName, insideTmux)` helper. `--no-attach` path unchanged.
+
+### `xt pi --help` — document `--` passthrough (xtmux-1lb.2)
+
+`xt pi --help` now surfaces the `--` passthrough contract (forward arbitrary flags to the pi runtime) with two concrete examples.
+
 ### Global Skills Migration (Epic xtrm-bq7yd)
 
 **Batches A–F shipped; Batch H docs sweep complete.**

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+    buildAgentEnv,
     buildRoleTmuxPlan,
     chooseAttachCommand,
     parseSpecialistJson,
@@ -143,6 +144,10 @@ describe('buildRoleTmuxPlan', () => {
         expect(task?.value).toBe('role:chain-coordinator');
         const parent = plan.paneOptions.find((o) => o.key === '@agent_parent_session');
         expect(parent?.value).toBe('$3');
+        const state = plan.paneOptions.find((o) => o.key === '@agent_state');
+        expect(state?.value).toBe('idle');
+        const promptFile = plan.paneOptions.find((o) => o.key === '@agent_prompt_file');
+        expect(promptFile?.value).toBe('/tmp/prompt.md');
     });
 
     it('omits @agent_bead and bead-slug when bead is not provided', () => {
@@ -236,6 +241,30 @@ describe('buildRoleTmuxPlan', () => {
         // thinking still uses specialist default
         const thinkIdx = plan.piArgs.indexOf('--thinking');
         expect(plan.piArgs[thinkIdx + 1]).toBe('medium');
+    });
+});
+
+describe('buildAgentEnv', () => {
+    it('exports role + prompt file + parent session id', () => {
+        const env = buildAgentEnv({
+            role: 'chain-coordinator',
+            promptFile: '/tmp/x.md',
+            parentSessionId: '$5',
+        });
+        expect(env.XTMUX_AGENT_TASK).toBe('role:chain-coordinator');
+        expect(env.XTMUX_AGENT_PROMPT_FILE).toBe('/tmp/x.md');
+        expect(env.XTMUX_AGENT_PARENT_SESSION).toBe('$5');
+        expect(env.XTMUX_AGENT_BEAD).toBeUndefined();
+    });
+
+    it('includes bead when provided', () => {
+        const env = buildAgentEnv({
+            role: 'r',
+            promptFile: '/x',
+            parentSessionId: '',
+            bead: 'xtmux-1lb.5',
+        });
+        expect(env.XTMUX_AGENT_BEAD).toBe('xtmux-1lb.5');
     });
 });
 
