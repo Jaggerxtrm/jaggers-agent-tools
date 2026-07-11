@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### `xt claude` — full role-launcher parity with `xt pi` (xtmux-1lb.1)
+
+`xt claude` now accepts the same role-launcher surface as `xt pi`:
+
+- `--role <name>` — launch claude as a specialist role resolved via `sp view`. Same sandbox / worktree / `@agent_*` metadata semantics as `xt pi --role`.
+- `--bead <id>` — attach bead id to `@agent_bead`; slug into the session name.
+- `--no-attach` — new-session mode only; detached + print `session:pane` on stdout.
+- `--model <name>` — override specialist default; forwarded to claude verbatim.
+- `--thinking <level>` — warn-and-drop (claude has no `--thinking` flag; configure thinking on the underlying model).
+- `--new-session` / `--ns` — force fresh tmux session inside `$TMUX` (matches xt pi).
+- `--parent <target>` — override `@agent_parent_session`; same resolution as xt pi.
+- `--child` — explicit form of auto-parent.
+- `--` passthrough — forwarded verbatim to claude (guarded flags rejected, batch-mode flags dropped with warning).
+
+Shared launcher plumbing (`buildRoleTmuxPlan`, `launchRoleTmuxSession`) is now runtime-aware: pi gets `--append-system-prompt <file>` + `--skill <path>` per role skill; claude gets `--append-system-prompt <prompt>` + `--dangerously-skip-permissions` (skills resolve from cwd's `.claude/skills/`).
+
 ### `xt pi --role` launcher — current-pane default inside tmux (xtmux-1lb.5.1)
 
 **Behavior change (default flip).** Inside an existing `$TMUX` client, `xt pi --role <name>` now runs pi in the **current pane** by default instead of creating a new tmux session and switching to it. This matches operator intent — no nested-tmux warning, no new session in `tmux ls`, and the pane's `@agent_*` metadata is set on the pane you launched from.
@@ -99,19 +115,9 @@ xt migrate skills --apply     # Execute
 | v-next-3 (enforced) | ON (locked) | Per-repo scaffold code removed; global-only model |
 
 ### Changed
+- xtrm-ui now owns XTRM-named themes and one native/external tool renderer; retired footer, external compaction, and box-chrome preferences/commands, with legacy Pi theme migration. Pi launch preflight materializes the four owned theme files before settings are resolved, preventing startup fallback to dark.
+
 - **Add `## Code restraint (when implementing directly)` to `agents-top.md` and `claude-top.md`.** Companion to specialists PR #173 (unitAI-pzmwf) which introduced a unified code-restraint discipline at the mandatory-rule level and in the orchestrator skill. This layer is for when the agent implements directly without delegating to a specialist. Compact 3-bullet section fits the "managed block" style the file's own header enforces (`This is a compact managed block. Use CLI --help and skills for details; do not paste full manuals here.`): the ladder in one line (YAGNI → reuse → stdlib → native → one line → minimum), the "never simplify away" boundary (input validation at trust boundaries, error handling that prevents data loss, security, accessibility, explicitly requested behavior, understanding the problem), and the deliberate-shortcut marker `// SIMPLIFIED: <ceiling>. upgrade when <trigger>.` The full ladder + rules + tag vocabulary specifics live in the specialists mandatory rule and are not repeated here (reuse over rewrite — the same discipline being taught). Identical text in both files so all downstream propagation (~30 consumer repos via existing `xt update` flow) picks up the same rule regardless of runtime. Zero external plugin brand references in shipped text.
-
-## [pi-extensions v0.9.5] — 2026-07-11
-
-### Changed
-
-- **Canonical XTRM UI themes and rendering.** `xtrm-ui` now owns the `xtrm-dark`/`xtrm-light` theme family and one renderer for native and external tools; obsolete footer, result-compaction, and box-chrome controls were removed. Legacy `pidex-*` preferences migrate to canonical names.
-
-### Fixed
-
-- **Theme startup fallback.** Pi launch preflight materializes the four owned XTRM theme files before settings resolve, preventing fallback when `xtrm-dark-flattools` is configured.
-- **Managed `xtprompt` behavior.** Restored its package enrollment and hardened context, prompt-guidance, escaping, and legacy-branding checks.
-- **Custom-footer refresh reliability.** Git and Beads refresh work is scheduled outside the render path, coalesced and timeout-bounded; footer reapply no longer detaches the active branch listener or redraw callback.
 
 ## [pi-extensions v0.9.3] — 2026-07-05
 

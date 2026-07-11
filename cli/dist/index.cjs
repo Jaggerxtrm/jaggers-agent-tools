@@ -61724,21 +61724,29 @@ function chooseAttachCommand(sessionName, insideTmux) {
   return insideTmux ? ["switch-client", "-t", sessionName] : ["attach-session", "-t", sessionName];
 }
 function buildRoleTmuxPlan(args) {
-  const { role, bead, parentSessionId, promptFile, modelOverride, thinkingOverride, passthrough } = args;
+  const { runtime, role, bead, parentSessionId, promptFile, systemPrompt, modelOverride, thinkingOverride, passthrough } = args;
   const roleSlug = slugifyForSession(role.name);
   const sessionName = bead ? `role-${roleSlug}-${slugifyForSession(bead)}` : `role-${roleSlug}`;
-  const piArgs = ["--append-system-prompt", promptFile];
-  for (const skill of role.skillPaths) {
-    piArgs.push("--skill", skill);
+  const runtimeArgs = [];
+  if (runtime === "pi") {
+    runtimeArgs.push("--append-system-prompt", promptFile);
+    for (const skill of role.skillPaths) {
+      runtimeArgs.push("--skill", skill);
+    }
+  } else {
+    runtimeArgs.push("--append-system-prompt", systemPrompt);
+    runtimeArgs.push("--dangerously-skip-permissions");
   }
   const model = modelOverride ?? role.model;
-  if (model) piArgs.push("--model", model);
-  const thinking = thinkingOverride ?? role.thinkingLevel;
-  if (thinking) piArgs.push("--thinking", thinking);
-  if (passthrough && passthrough.length > 0) {
-    piArgs.push(...passthrough);
+  if (model) runtimeArgs.push("--model", model);
+  if (runtime === "pi") {
+    const thinking = thinkingOverride ?? role.thinkingLevel;
+    if (thinking) runtimeArgs.push("--thinking", thinking);
   }
-  const piCmdString = ["pi", ...piArgs].map(shellQuote).join(" ");
+  if (passthrough && passthrough.length > 0) {
+    runtimeArgs.push(...passthrough);
+  }
+  const runtimeCmdString = [runtime, ...runtimeArgs].map(shellQuote).join(" ");
   const paneOptions = [
     { key: "@agent_parent_session", value: parentSessionId },
     { key: "@agent_task", value: `role:${role.name}` },
@@ -61746,7 +61754,7 @@ function buildRoleTmuxPlan(args) {
     { key: "@agent_prompt_file", value: promptFile }
   ];
   if (bead) paneOptions.push({ key: "@agent_bead", value: bead });
-  return { sessionName, piArgs, piCmdString, paneOptions };
+  return { sessionName, runtimeCmd: runtime, runtimeArgs, runtimeCmdString, paneOptions };
 }
 function buildAgentEnv(args) {
   const { bead, role, promptFile, parentSessionId } = args;
@@ -62034,6 +62042,7 @@ async function launchWorktreeSession(opts) {
   }
   if (resolvedRole) {
     await launchRoleTmuxSession({
+      runtime,
       role: resolvedRole,
       bead,
       attach,
@@ -62076,6 +62085,7 @@ function emitAgentRoleLaunched(fields) {
 }
 async function launchRoleTmuxSession(args) {
   const {
+    runtime,
     role,
     bead,
     attach,
@@ -62123,10 +62133,12 @@ async function launchRoleTmuxSession(args) {
   (0, import_node_fs2.mkdirSync)(import_node_path9.default.dirname(promptFile), { recursive: true });
   (0, import_node_fs2.writeFileSync)(promptFile, role.systemPrompt);
   const plan = buildRoleTmuxPlan({
+    runtime,
     role,
     bead,
     parentSessionId,
     promptFile,
+    systemPrompt: role.systemPrompt,
     modelOverride,
     thinkingOverride,
     passthrough
@@ -62153,7 +62165,7 @@ async function launchRoleTmuxSession(args) {
       parent: parentSessionId,
       worktree: worktreePath
     });
-    const piResult = (0, import_node_child_process2.spawnSync)("pi", plan.piArgs, {
+    const piResult = (0, import_node_child_process2.spawnSync)(plan.runtimeCmd, plan.runtimeArgs, {
       cwd: worktreePath,
       stdio: "inherit",
       env: { ...process.env, ...agentEnv }
@@ -62215,7 +62227,7 @@ async function launchRoleTmuxSession(args) {
     "-c",
     worktreePath,
     ...envArgs,
-    plan.piCmdString
+    plan.runtimeCmdString
   ], { stdio: "pipe", encoding: "utf8" });
   if (newSess.status !== 0) {
     const stderr = (newSess.stderr ?? "").trim() || "unknown error";
@@ -62671,8 +62683,39 @@ function hasXtrmHookWiring(settingsPath) {
   }
 }
 function createClaudeCommand() {
-  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").action(async (name) => {
-    await launchWorktreeSession({ runtime: "claude", name });
+  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role \u2014 creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata").option("--bead <id>", "Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to claude (overrides specialist.execution.model)").option("--thinking <level>", "With --role: warn-and-drop \u2014 claude has no --thinking flag; set thinking on the underlying model config instead").option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowUnknownOption(true).addHelpText("after", `
+Passthrough:
+  Everything after \`--\` is forwarded verbatim to the claude runtime \u2014 the
+  primary escape hatch for any claude flag not first-classed here. xt-owned
+  flags (--session-dir, --name, --system-prompt, --append-system-prompt)
+  are rejected; batch-mode flags (--print, --list-models, --export,
+  --mode) are dropped with a warning.
+
+Examples:
+  $ xt claude --role reviewer --bead xyz -- --add-dir ~/notes
+  $ xt claude --role chain-coordinator --model claude-opus-4-8
+`).action(async (name, opts) => {
+    if (opts.thinking) {
+      console.error(kleur_default.yellow(
+        `  \u26A0 xt claude --thinking: claude has no --thinking flag; ignoring '${opts.thinking}'. Configure thinking on the model itself.`
+      ));
+    }
+    const dashIdx = process.argv.indexOf("--");
+    const passthrough = dashIdx >= 0 ? process.argv.slice(dashIdx + 1) : [];
+    await launchWorktreeSession({
+      runtime: "claude",
+      name,
+      role: opts.role,
+      bead: opts.bead,
+      attach: opts.attach,
+      model: opts.model,
+      thinking: opts.thinking,
+      newSession: Boolean(opts.newSession || opts.ns),
+      parent: opts.parent,
+      child: Boolean(opts.child),
+      reuse: Boolean(opts.reuse),
+      passthrough
+    });
   });
   cmd.command("install").description("Install/refresh Claude settings hook wiring from .xtrm/config/hooks.json").option("--dry-run", "Preview without making changes", false).option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
     if (!opts.dryRun) {

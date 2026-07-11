@@ -42,8 +42,65 @@ export function createClaudeCommand(): Command {
     const cmd = new Command('claude')
         .description('Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring')
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
-        .action(async (name: string | undefined) => {
-            await launchWorktreeSession({ runtime: 'claude', name });
+        .option('--role <name>', 'Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role — creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata')
+        .option('--bead <id>', 'Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug')
+        .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
+        .option('--model <name>', 'With --role: forward `--model <name>` to claude (overrides specialist.execution.model)')
+        .option('--thinking <level>', 'With --role: warn-and-drop — claude has no --thinking flag; set thinking on the underlying model config instead')
+        .option('--new-session', 'With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)')
+        .option('--ns', 'Alias for --new-session')
+        .option('--parent <target>', 'With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})')
+        .option('--child', 'With --role: explicit form of the auto-behavior — @agent_parent_session = current pane\'s session_id')
+        .option('--reuse', 'With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one')
+        .allowUnknownOption(true)
+        .addHelpText('after', `
+Passthrough:
+  Everything after \`--\` is forwarded verbatim to the claude runtime — the
+  primary escape hatch for any claude flag not first-classed here. xt-owned
+  flags (--session-dir, --name, --system-prompt, --append-system-prompt)
+  are rejected; batch-mode flags (--print, --list-models, --export,
+  --mode) are dropped with a warning.
+
+Examples:
+  $ xt claude --role reviewer --bead xyz -- --add-dir ~/notes
+  $ xt claude --role chain-coordinator --model claude-opus-4-8
+`)
+        .action(async (name: string | undefined, opts: {
+            role?: string;
+            bead?: string;
+            attach?: boolean;
+            model?: string;
+            thinking?: string;
+            newSession?: boolean;
+            ns?: boolean;
+            parent?: string;
+            child?: boolean;
+            reuse?: boolean;
+        }) => {
+            // claude has no --thinking flag; if the operator was explicit,
+            // warn and continue (specialist.execution.thinking_level from
+            // sp view is silently dropped for claude in buildRoleTmuxPlan).
+            if (opts.thinking) {
+                console.error(kleur.yellow(
+                    `  ⚠ xt claude --thinking: claude has no --thinking flag; ignoring '${opts.thinking}'. Configure thinking on the model itself.`,
+                ));
+            }
+            const dashIdx = process.argv.indexOf('--');
+            const passthrough = dashIdx >= 0 ? process.argv.slice(dashIdx + 1) : [];
+            await launchWorktreeSession({
+                runtime: 'claude',
+                name,
+                role: opts.role,
+                bead: opts.bead,
+                attach: opts.attach,
+                model: opts.model,
+                thinking: opts.thinking,
+                newSession: Boolean(opts.newSession || opts.ns),
+                parent: opts.parent,
+                child: Boolean(opts.child),
+                reuse: Boolean(opts.reuse),
+                passthrough,
+            });
         });
 
     cmd.command('install')
