@@ -307,7 +307,7 @@ describe('pi runtime safeguards', () => {
   });
 
   describe('updatePiSettings — pi skills resolution paths (xtrm-4h6u)', () => {
-    it('uses global active only when repo has no project-scoped packs', async () => {
+    it('does not write retired managed skills entry when repo has no project-scoped packs', async () => {
       const { updatePiSettings } = await import('../core/pi-runtime.js');
       const projectRoot = path.join(tempRoot, 'fresh-project');
       await fs.ensureDir(projectRoot);
@@ -315,12 +315,10 @@ describe('pi runtime safeguards', () => {
       await updatePiSettings(projectRoot, false);
 
       const settings = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
-      expect(settings.skills).toEqual([
-        '~/.xtrm/skills/active',
-      ]);
+      expect(settings).not.toHaveProperty('skills');
     });
 
-    it('preserves user-added skill paths after canonical entries normalize to active', async () => {
+    it('preserves user-added skill paths after removing retired managed entries', async () => {
       const { updatePiSettings } = await import('../core/pi-runtime.js');
       const projectRoot = path.join(tempRoot, 'with-user-paths');
       await fs.ensureDir(path.join(projectRoot, '.pi'));
@@ -334,10 +332,8 @@ describe('pi runtime safeguards', () => {
 
       const settings = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
       expect(settings.skills).toEqual([
-        '../.xtrm/skills/active',
         './my-custom-skills',
         '/abs/team-skills',
-        '~/.xtrm/skills/active',
       ]);
     });
 
@@ -350,9 +346,7 @@ describe('pi runtime safeguards', () => {
       await updatePiSettings(projectRoot, false);
 
       const settings = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
-      expect(settings.skills).toEqual([
-        '~/.xtrm/skills/active',
-      ]);
+      expect(settings).not.toHaveProperty('skills');
     });
 
     it('does not write in dry-run mode', async () => {

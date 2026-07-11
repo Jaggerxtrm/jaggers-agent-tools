@@ -10,6 +10,7 @@ import {
   resolveUserPacksRoot,
 } from './skills-layout.js';
 import { diffPackMetadataSkills, readPackMetadata, type PackMetadataMismatch } from './pack-metadata.js';
+import { assertSafeRuntimeLinkName } from './skills-state.js';
 
 export type DiscoveredSkill = {
   /** Filesystem directory name — the identity used for PACK.json metadata invariants. */
@@ -27,7 +28,8 @@ export type InvariantViolationCode =
   | 'SKILL_AND_PACK_CONFLICT'
   | 'NESTED_RUNTIME_ROOT'
   | 'PACK_METADATA_MISMATCH'
-  | 'PACK_NAME_COLLISION';
+  | 'PACK_NAME_COLLISION'
+  | 'DEFAULT_SKILL_NAME_MISMATCH';
 
 export type InvariantViolation = {
   readonly code: InvariantViolationCode;
@@ -111,7 +113,9 @@ export async function discoverDirectSkills(root: string): Promise<DiscoveredSkil
     }
 
     const frontmatterName = await readSkillFrontmatterName(path.join(skillPath, SKILL_FILE_NAME));
-    discoveredSkills.push({ name: childDirectory, runtimeName: frontmatterName ?? childDirectory, path: skillPath });
+    const runtimeName = frontmatterName ?? childDirectory;
+    assertSafeRuntimeLinkName(runtimeName);
+    discoveredSkills.push({ name: childDirectory, runtimeName, path: skillPath });
   }
 
   return discoveredSkills;
@@ -153,6 +157,10 @@ export async function validateSkillsInvariants(skillsRoot: string): Promise<Inva
 
   const defaultSkills = await discoverDefaultSkills(skillsRoot);
   for (const skill of defaultSkills) {
+    const frontmatterName = skill.runtimeName;
+    if (frontmatterName !== skill.name) {
+      violations.push({ code: 'DEFAULT_SKILL_NAME_MISMATCH', path: skill.path, message: `Default skill directory '${skill.name}' must match frontmatter name '${frontmatterName}'.` });
+    }
     if (await hasNestedRuntimeRoot(skill.path)) {
       violations.push({
         code: 'NESTED_RUNTIME_ROOT',

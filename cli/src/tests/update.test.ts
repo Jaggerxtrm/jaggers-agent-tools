@@ -359,31 +359,25 @@ describe('xtrm update', () => {
     expect(ensureGlobalSkillsBootstrappedMock).not.toHaveBeenCalled();
   });
 
-  it('retargets skills drift to global roots on apply when XTRM_GLOBAL_SKILLS=1', async () => {
+  it('does not drift-check absent direct global roots when XTRM_GLOBAL_SKILLS=1', async () => {
     const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
     const previousHome = process.env.HOME;
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
     fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
     const repo = writeRepo(tmpDir, 'repo-a');
-    fs.ensureDirSync(path.join(repo, '.xtrm', 'skills', 'default'));
     resolvePackageRootMock.mockReturnValue(packageRoot);
     process.env.XTRM_GLOBAL_SKILLS = '1';
     process.env.HOME = tmpDir;
 
     try {
       const result = await runUpdateCli(['--apply', '--repo', repo]);
-      expect(checkDriftMock).toHaveBeenCalledWith(
-        path.join(packageRoot, '.xtrm', 'registry.json'),
-        path.join(repo, '.xtrm'),
-        {
-          skills: path.join(tmpDir, '.xtrm', 'skills', 'default'),
-          skills_optional: path.join(tmpDir, '.xtrm', 'skills', 'optional'),
-        },
-      );
-      expect(result.logs.join('\n')).toMatch(/Run `xt migrate skills`/);
+      expect(checkDriftMock).not.toHaveBeenCalled();
+      expect(result.logs.join('\n')).not.toMatch(/Run `xt migrate skills`/);
     } finally {
-      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
-      process.env.HOME = previousHome;
+      if (previousFlag === undefined) delete process.env.XTRM_GLOBAL_SKILLS;
+      else process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
     }
   });
 

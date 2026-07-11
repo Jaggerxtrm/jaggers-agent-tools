@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 
-export const SKILLS_STATE_SCHEMA_VERSION = '1' as const;
+export const SKILLS_STATE_SCHEMA_VERSION = '2' as const;
 
 export const SKILLS_RUNTIMES = ['claude', 'pi'] as const;
 export type SkillsRuntime = typeof SKILLS_RUNTIMES[number];
@@ -34,10 +34,6 @@ export function resolveOptionalTierRoot(skillsRoot: string): string {
 
 export function resolveUserPacksRoot(skillsRoot: string): string {
   return path.join(skillsRoot, 'user', 'packs');
-}
-
-export function resolveActiveRuntimeRoot(skillsRoot: string): string {
-  return path.join(skillsRoot, 'active');
 }
 
 export function resolveStateFilePath(skillsRoot: string): string {

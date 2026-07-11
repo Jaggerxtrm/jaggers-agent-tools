@@ -14,24 +14,23 @@ description: >
 
 # update-xt
 
-Reconcile a project's xtrm installation against the current canonical state. Detect
-drift, apply targeted fixes, verify everything is wired correctly.
+Reconcile project's xtrm installation against canonical state. Detect drift, apply targeted fixes, verify wiring.
+
+## Upgrade note
+
+This release retires `active/`. `xt update --apply` reconciles `.claude/skills/` and `.pi/skills/` automatically.
 
 ## Canonical State (current)
-
-This is what a correctly installed project looks like. Check each item.
 
 ### Skills wiring
 
 | Check | Expected value |
 |-------|----------------|
-| `.claude/skills` symlink target | `../.xtrm/skills/active` |
-| `.xtrm/skills/active/` | Flat directory of symlinks to `../default/<skill>` |
-| `active/pi/` subdirectory | Must NOT exist (stale — old runtime split) |
-| `active/claude/` subdirectory | Must NOT exist (stale — old runtime split) |
-| `.pi/settings.json` `.skills` array | Must include `"../.xtrm/skills/active"` (project-local, wins) |
-| `.pi/settings.json` `.skills` array | Must include `"~/.xtrm/skills/default"` (user-level fallback — xtrm-4h6u) |
-| `.pi/settings.json` `.skills` array | Must NOT include `"../.xtrm/skills/active/pi"` (old path) |
+| `~/.claude/skills` symlink target | `~/.xtrm/skills/default` |
+| `~/.pi/agent/skills` symlink target | `~/.xtrm/skills/default` |
+| project `.claude/skills` | Real directory with managed per-skill symlinks |
+| project `.pi/skills` | Real directory with managed per-skill symlinks |
+| project `.pi/settings.json` `.skills` array | User entries only |
 
 ### Hooks wiring
 

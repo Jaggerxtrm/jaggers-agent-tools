@@ -21,6 +21,7 @@ export default defineConfig(async () => ({
   test: {
     reporters: await loadReporters(),
     testTimeout: 30000,
+    setupFiles: ['./test/setup.ts'],
     retry: {
       count: 2,
       delay: 500,

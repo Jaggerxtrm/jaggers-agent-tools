@@ -643,33 +643,33 @@ describe('installFromRegistry', () => {
 describe('ensureUserAgentsSkillsSymlink', () => {
   const itIfSymlinkSupported = process.platform === 'win32' ? it.skip : it;
 
-  itIfSymlinkSupported('wires ~/.claude/skills and ~/.pi/agent/skills to global active with absolute targets', async () => {
+  itIfSymlinkSupported('wires home runtime pointers to global default skills', async () => {
     const tempHome = await createTempDir();
     const previousHome = process.env.HOME;
     process.env.HOME = tempHome;
 
     try {
-      const globalActiveRoot = path.join(tempHome, '.xtrm', 'skills', 'active');
-      await writeSkill(globalActiveRoot, 'alpha');
+      const globalDefaultRoot = path.join(tempHome, '.xtrm', 'skills', 'default');
+      await writeSkill(globalDefaultRoot, 'alpha');
 
       await ensureUserAgentsSkillsSymlink();
 
-      expect(await fs.readlink(path.join(tempHome, '.claude', 'skills'))).toBe(globalActiveRoot);
-      expect(await fs.readlink(path.join(tempHome, '.pi', 'agent', 'skills'))).toBe(globalActiveRoot);
+      expect(await fs.readlink(path.join(tempHome, '.claude', 'skills'))).toBe(globalDefaultRoot);
+      expect(await fs.readlink(path.join(tempHome, '.pi', 'agent', 'skills'))).toBe(globalDefaultRoot);
     } finally {
       process.env.HOME = previousHome;
     }
   });
 
-  itIfSymlinkSupported('refuses to replace existing real ~/.claude/skills directory without force', async () => {
+  itIfSymlinkSupported('refuses to replace existing real home Claude skills directory without force', async () => {
     const tempHome = await createTempDir();
     const previousHome = process.env.HOME;
     process.env.HOME = tempHome;
 
     try {
-      const globalActiveRoot = path.join(tempHome, '.xtrm', 'skills', 'active');
+      const globalDefaultRoot = path.join(tempHome, '.xtrm', 'skills', 'default');
       const claudeSkillsDir = path.join(tempHome, '.claude', 'skills');
-      await writeSkill(globalActiveRoot, 'alpha');
+      await writeSkill(globalDefaultRoot, 'alpha');
       await fs.ensureDir(claudeSkillsDir);
       await fs.writeFile(path.join(claudeSkillsDir, 'foreign.txt'), 'foreign', 'utf8');
 
@@ -684,103 +684,87 @@ describe('ensureUserAgentsSkillsSymlink', () => {
 describe('ensureAgentsSkillsSymlink', () => {
   const itIfSymlinkSupported = process.platform === 'win32' ? it.skip : it;
 
-  itIfSymlinkSupported('rebuilds active view and points .claude/skills at active', async () => {
-    const tempDir = await createTempDir();
+  async function setupProjectPack(tempDir: string): Promise<string> {
     const skillsRoot = path.join(tempDir, '.xtrm', 'skills');
-
-    await writeSkill(path.join(skillsRoot, 'default'), 'alpha');
-    await fs.ensureDir(path.join(skillsRoot, 'optional', 'pack-one'));
-    await fs.writeJson(path.join(skillsRoot, 'optional', 'pack-one', 'PACK.json'), {
-      schemaVersion: '1',
-      name: 'pack-one',
-      version: '1.0.0',
-      description: 'pack',
-      skills: ['beta'],
+    const packRoot = path.join(skillsRoot, 'optional', 'pack-one');
+    await fs.ensureDir(packRoot);
+    await fs.writeJson(path.join(packRoot, 'PACK.json'), {
+      schemaVersion: '1', name: 'pack-one', version: '1.0.0', description: 'pack', skills: ['beta'],
     });
-    await writeSkill(path.join(skillsRoot, 'optional', 'pack-one'), 'beta');
+    await writeSkill(packRoot, 'beta');
     await fs.writeJson(path.join(skillsRoot, 'state.json'), {
-      schemaVersion: '1',
-      enabledPacks: { claude: ['pack-one'], pi: [] },
+      schemaVersion: '1', enabledPacks: { claude: ['pack-one'], pi: ['pack-one'] },
     });
+    return path.join(packRoot, 'beta');
+  }
 
-    const activation = await ensureAgentsSkillsSymlink(tempDir);
+  itIfSymlinkSupported('reconciles direct Claude and Pi skill links with managed manifest ownership', async () => {
+    const tempDir = await createTempDir();
+    const previousHome = process.env.HOME;
+    process.env.HOME = path.join(tempDir, 'home');
 
-    const claudeLink = path.join(tempDir, '.claude', 'skills');
-    const activeClaude = path.join(skillsRoot, 'active');
+    try {
+      await writeSkill(path.join(process.env.HOME, '.xtrm', 'skills', 'default'), 'alpha');
+      const betaRoot = await setupProjectPack(tempDir);
 
-    expect((await fs.lstat(claudeLink)).isSymbolicLink()).toBe(true);
-    expect(await fs.readlink(claudeLink)).toBe(path.join('..', '.xtrm', 'skills', 'active'));
+      const activation = await ensureAgentsSkillsSymlink(tempDir);
 
-    const activeEntries = (await fs.readdir(activeClaude)).sort();
-    expect(activeEntries).toEqual(['alpha', 'beta']);
-
-    expect(activation).toEqual({
-      activatedClaudeSkills: 2,
-      activatedPiSkills: 2,
-    });
-    expect((await fs.lstat(path.join(activeClaude, 'alpha'))).isSymbolicLink()).toBe(true);
-    expect((await fs.lstat(path.join(activeClaude, 'beta'))).isSymbolicLink()).toBe(true);
-    expect(await fs.pathExists(path.join(tempDir, '.agents', 'skills'))).toBe(false);
+      expect(activation).toEqual({ activatedClaudeSkills: 1, activatedPiSkills: 1 });
+      for (const runtime of ['.claude', '.pi']) {
+        const runtimeSkills = path.join(tempDir, runtime, 'skills');
+        expect((await fs.lstat(runtimeSkills)).isDirectory()).toBe(true);
+        expect((await fs.lstat(path.join(runtimeSkills, 'beta'))).isSymbolicLink()).toBe(true);
+        expect(await fs.readlink(path.join(runtimeSkills, 'beta'))).toBe(betaRoot);
+      }
+      const state = await fs.readJson(path.join(tempDir, '.xtrm', 'skills', 'state.json'));
+      expect(state.managedLinks).toEqual({
+        claude: { beta: '.xtrm/skills/optional/pack-one/beta' },
+        pi: { beta: '.xtrm/skills/optional/pack-one/beta' },
+      });
+      expect(await fs.pathExists(path.join(tempDir, '.xtrm', 'skills', 'active'))).toBe(false);
+      expect(await fs.pathExists(path.join(tempDir, '.pi', 'settings.json'))).toBe(false);
+    } finally {
+      process.env.HOME = previousHome;
+    }
   });
 
-  it('skips when .xtrm/skills/default does not exist', async () => {
+  itIfSymlinkSupported('is idempotent without rebuilding retired active view', async () => {
     const tempDir = await createTempDir();
+    const previousHome = process.env.HOME;
+    process.env.HOME = path.join(tempDir, 'home');
 
-    const activation = await ensureAgentsSkillsSymlink(tempDir);
+    try {
+      await writeSkill(path.join(process.env.HOME, '.xtrm', 'skills', 'default'), 'alpha');
+      await setupProjectPack(tempDir);
+      await ensureAgentsSkillsSymlink(tempDir);
+      const claudeLink = path.join(tempDir, '.claude', 'skills', 'beta');
+      const firstTarget = await fs.readlink(claudeLink);
 
-    expect(await fs.pathExists(path.join(tempDir, '.claude', 'skills'))).toBe(false);
-    expect(activation).toEqual({
-      activatedClaudeSkills: 0,
-      activatedPiSkills: 0,
-    });
+      await ensureAgentsSkillsSymlink(tempDir);
+
+      expect(await fs.readlink(claudeLink)).toBe(firstTarget);
+      expect(await fs.pathExists(path.join(tempDir, '.xtrm', 'skills', 'active'))).toBe(false);
+    } finally {
+      process.env.HOME = previousHome;
+    }
   });
 
-  itIfSymlinkSupported('is idempotent and logs already in place on second call', async () => {
+  itIfSymlinkSupported('rejects same-name user-owned direct runtime entry', async () => {
     const tempDir = await createTempDir();
-    const defaultRoot = path.join(tempDir, '.xtrm', 'skills', 'default');
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const previousHome = process.env.HOME;
+    process.env.HOME = path.join(tempDir, 'home');
 
-    await writeSkill(defaultRoot, 'alpha');
+    try {
+      await writeSkill(path.join(process.env.HOME, '.xtrm', 'skills', 'default'), 'alpha');
+      await setupProjectPack(tempDir);
+      const userOwned = path.join(tempDir, '.claude', 'skills', 'beta');
+      await fs.ensureDir(path.dirname(userOwned));
+      await fs.writeFile(userOwned, 'user', 'utf8');
 
-    await ensureAgentsSkillsSymlink(tempDir);
-    logSpy.mockClear();
-    await ensureAgentsSkillsSymlink(tempDir);
-
-    const messages = logSpy.mock.calls.map(([message]) => String(message));
-    expect(messages.some(message => message.includes('.claude/skills symlink already in place'))).toBe(true);
-  });
-
-  itIfSymlinkSupported('refuses to replace existing real .claude/skills directory', async () => {
-    const tempDir = await createTempDir();
-    const defaultRoot = path.join(tempDir, '.xtrm', 'skills', 'default');
-    const claudeSkillsDir = path.join(tempDir, '.claude', 'skills');
-
-    await writeSkill(defaultRoot, 'alpha');
-    await fs.ensureDir(claudeSkillsDir);
-    await fs.writeFile(path.join(claudeSkillsDir, 'local.txt'), 'local', 'utf8');
-
-    await expect(ensureAgentsSkillsSymlink(tempDir)).rejects.toThrowError(/Refusing to replace existing \.claude\/skills/);
-    expect((await fs.lstat(claudeSkillsDir)).isSymbolicLink()).toBe(false);
-    expect(await fs.pathExists(path.join(claudeSkillsDir, 'local.txt'))).toBe(true);
-  });
-
-  itIfSymlinkSupported('evicts non-symlink entries from active during rebuild', async () => {
-    const tempDir = await createTempDir();
-    const skillsRoot = path.join(tempDir, '.xtrm', 'skills');
-    const activeClaudeRoot = path.join(skillsRoot, 'active');
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-
-    await writeSkill(path.join(skillsRoot, 'default'), 'alpha');
-    await fs.ensureDir(path.join(activeClaudeRoot, 'corrupt-dir'));
-    await fs.writeFile(path.join(activeClaudeRoot, 'corrupt-dir', 'junk.txt'), 'junk', 'utf8');
-
-    await ensureAgentsSkillsSymlink(tempDir);
-
-    const activeEntries = (await fs.readdir(activeClaudeRoot)).sort();
-    expect(activeEntries).toEqual(['alpha']);
-    expect((await fs.lstat(path.join(activeClaudeRoot, 'alpha'))).isSymbolicLink()).toBe(true);
-
-    const messages = logSpy.mock.calls.map(([message]) => String(message));
-    expect(messages.some(message => message.includes('contains non-symlink entries (corrupt-dir)'))).toBe(true);
+      await expect(ensureAgentsSkillsSymlink(tempDir)).rejects.toThrowError(/is user-owned/);
+      expect(await fs.readFile(userOwned, 'utf8')).toBe('user');
+    } finally {
+      process.env.HOME = previousHome;
+    }
   });
 });

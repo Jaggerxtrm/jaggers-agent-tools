@@ -31,7 +31,7 @@ import {
   type InvariantViolation,
   validateSkillsInvariants,
 } from '../core/skill-discovery.js';
-import { rebuildRuntimeActiveView, selectRuntimeSkills } from '../core/skills-materializer.js';
+import { selectRuntimeSkills, reconcileRuntimeLinks } from '../core/skills-runtime-reconcile.js';
 
 type Scope = 'global' | 'local';
 
@@ -150,7 +150,7 @@ async function collectListState(
     ? [...globalUserPacks, ...localUserPacks]
     : globalUserPacks;
 
-  const allPacksMap = new Map<string, { tier: 'optional' | 'user'; path: string; skills: any[]; metadataMismatch: any; source: 'global' | 'local' | 'both' }>();
+  const allPacksMap = new Map<string, { name: string; tier: 'optional' | 'user'; path: string; skills: any[]; metadataMismatch: any; source: 'global' | 'local' | 'both' }>();
   for (const pack of globalOptionalPacks) {
     allPacksMap.set(pack.name, { ...pack, tier: 'optional' as const, source: 'global' as const });
   }
@@ -369,8 +369,18 @@ async function mutatePacks(opts: {
       }
     }
 
+    const nextState = { ...beforeState, enabledPacks: { ...beforeState.enabledPacks, [runtime]: [...current] } };
+    const globalSkillsRoot = resolveSkillsRoot(os.homedir());
+    const packs = [
+      ...(await discoverTierPacks(globalSkillsRoot, 'optional')),
+      ...(await discoverTierPacks(globalSkillsRoot, 'user')),
+      ...(await discoverTierPacks(skillsRoot, 'optional')),
+      ...(await discoverTierPacks(skillsRoot, 'user')),
+    ];
+    if (scope === 'local') {
+      await reconcileRuntimeLinks({ projectRoot: await resolveScopeRoot(scope), state: nextState, runtime, discoveredPacks: packs, globalDefaultRoot: path.join(globalSkillsRoot, 'default'), globalOptionalRoot: path.join(globalSkillsRoot, 'optional') });
+    }
     await setRuntimeEnabledPacks(skillsRoot, runtime, [...current]);
-    await rebuildRuntimeActiveView(runtime, skillsRoot);
   }
 
   const afterState = await readSkillsState(skillsRoot);

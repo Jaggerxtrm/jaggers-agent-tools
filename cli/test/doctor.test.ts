@@ -18,11 +18,11 @@ async function writeFile(relativePath: string, content: string): Promise<void> {
 
 async function setupCleanRepo(): Promise<void> {
   const homeDir = process.env.HOME as string;
-  await fs.ensureDir(path.join(homeDir, '.xtrm', 'skills', 'active'));
+  await fs.ensureDir(path.join(homeDir, '.xtrm', 'skills', 'default'));
   await fs.ensureDir(path.join(homeDir, '.claude'));
   await fs.ensureDir(path.join(homeDir, '.pi', 'agent'));
-  await fs.symlink(path.join(homeDir, '.xtrm', 'skills', 'active'), path.join(homeDir, '.claude', 'skills'));
-  await fs.symlink(path.join(homeDir, '.xtrm', 'skills', 'active'), path.join(homeDir, '.pi', 'agent', 'skills'));
+  await fs.symlink(path.join(homeDir, '.xtrm', 'skills', 'default'), path.join(homeDir, '.claude', 'skills'));
+  await fs.symlink(path.join(homeDir, '.xtrm', 'skills', 'default'), path.join(homeDir, '.pi', 'agent', 'skills'));
   await fs.ensureDir(path.join(tmpDir, '.xtrm', 'skills', 'default', 'clean-code'));
   await fs.writeFile(path.join(tmpDir, '.xtrm', 'skills', 'default', 'clean-code', 'SKILL.md'), '# clean\n');
   await fs.ensureDir(path.join(tmpDir, '.xtrm', 'skills', 'default', 'fresh-skill'));
@@ -30,10 +30,13 @@ async function setupCleanRepo(): Promise<void> {
   await fs.ensureDir(path.join(tmpDir, '.xtrm', 'hooks'));
   await fs.writeFile(path.join(tmpDir, '.xtrm', 'hooks', 'hook-a.mjs'), 'export default 1;\n');
   await fs.writeFile(path.join(tmpDir, '.xtrm', 'hooks', 'hook-b.mjs'), 'export default 2;\n');
-  await fs.ensureDir(path.join(tmpDir, '.claude'));
-  await fs.symlink(path.join('..', '.xtrm', 'skills', 'active'), path.join(tmpDir, '.claude', 'skills'));
-  await fs.ensureDir(path.join(tmpDir, '.pi'));
-  await fs.writeJson(path.join(tmpDir, '.pi', 'settings.json'), { skills: ['../.xtrm/skills/active'] });
+  await fs.ensureDir(path.join(tmpDir, '.claude', 'skills'));
+  await fs.ensureDir(path.join(tmpDir, '.pi', 'skills'));
+  await fs.writeJson(path.join(tmpDir, '.xtrm', 'skills', 'state.json'), {
+    schemaVersion: '2',
+    enabledPacks: { claude: [], pi: [] },
+    managedLinks: { claude: {}, pi: {} },
+  });
   await fs.writeJson(path.join(tmpDir, '.xtrm', 'registry.json'), {
     version: '1',
     assets: {
@@ -55,9 +58,7 @@ async function setupCleanRepo(): Promise<void> {
       },
     },
   });
-  await fs.ensureDir(path.join(tmpDir, '.xtrm', 'skills', 'active'));
-  await fs.symlink(path.join('..', 'default', 'clean-code'), path.join(tmpDir, '.xtrm', 'skills', 'active', 'clean-code'));
-  await fs.symlink(path.join('..', 'default', 'fresh-skill'), path.join(tmpDir, '.xtrm', 'skills', 'active', 'fresh-skill'));
+  expect(await fs.pathExists(path.join(tmpDir, '.xtrm', 'skills', 'active'))).toBe(false);
 }
 
 async function runDoctor(args: string[] = []): Promise<{ stdout: string; stderr: string; status: number | null }> {

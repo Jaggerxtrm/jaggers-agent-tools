@@ -5,6 +5,7 @@ import { rmSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDefaultSkillsState,
+  isSafeRuntimeLinkName,
   readSkillsState,
   setRuntimeEnabledPacks,
   writeSkillsState,
@@ -57,14 +58,14 @@ const runtimePackCases: RuntimePackCase[] = [
 ];
 
 describe('skills-state', () => {
-  it('initializes missing state.json with schemaVersion 1 and runtime enabledPacks', async () => {
+  it('initializes schemaVersion 2 state with per-runtime manifests and no active view', async () => {
     const skillsRoot = await createTempSkillsRoot();
 
     const state = await readSkillsState(skillsRoot);
 
     expect(state).toEqual(createDefaultSkillsState());
     expect(await fs.pathExists(path.join(skillsRoot, 'state.json'))).toBe(true);
-    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(true);
+    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
     expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(true);
     expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(true);
   });
@@ -82,9 +83,41 @@ describe('skills-state', () => {
     const state = await readSkillsState(skillsRoot);
 
     expect(state).toEqual({
+      schemaVersion: '2',
+      enabledPacks: { claude: ['alpha'], pi: [] },
+      managedLinks: { claude: {}, pi: {} },
+    });
+    expect(await fs.readJson(path.join(skillsRoot, 'state.json'))).toEqual({
       schemaVersion: '1',
       enabledPacks: { claude: ['alpha'], pi: [] },
+      futureField: 'kept-on-disk-ignored-in-memory',
     });
+  });
+
+  it.each(['../outside', 'nested/name', '..', 'bad\0name'])('rejects unsafe runtime link name %j', (name) => {
+    expect(isSafeRuntimeLinkName(name)).toBe(false);
+  });
+
+  it('rejects unsafe managed-link names before writing state', async () => {
+    const skillsRoot = await createTempSkillsRoot();
+
+    await expect(writeSkillsState(skillsRoot, {
+      ...createDefaultSkillsState(),
+      managedLinks: { claude: { '../outside': '.xtrm/skills/old' }, pi: {} },
+    })).rejects.toThrow();
+    expect(await fs.pathExists(skillsRoot)).toBe(false);
+  });
+
+  it('rejects unsafe managed-link names when reading state', async () => {
+    const skillsRoot = await createTempSkillsRoot();
+    await fs.ensureDir(skillsRoot);
+    await fs.writeJson(path.join(skillsRoot, 'state.json'), {
+      schemaVersion: '2',
+      enabledPacks: { claude: [], pi: [] },
+      managedLinks: { claude: { '../outside': '.xtrm/skills/old' }, pi: {} },
+    });
+
+    await expect(readSkillsState(skillsRoot)).rejects.toThrow(/Invalid skills state/);
   });
 
   it.each(runtimePackCases)('$name', async ({ apply, expectedClaude, expectedPi }) => {

@@ -21,8 +21,8 @@ async function createTempProjectRoot(): Promise<string> {
   return projectRoot;
 }
 
-describe.skipIf(SYMLINK_UNSUPPORTED)('skills scaffold migration guard', () => {
-  it('refuses real .claude/skills dir with foreign file', async () => {
+describe.skipIf(SYMLINK_UNSUPPORTED)('skills scaffold direct-runtime guard', () => {
+  it('preserves foreign files in real .claude/skills directory', async () => {
     const projectRoot = await createTempProjectRoot();
     const projectSkillsRoot = path.join(projectRoot, '.xtrm', 'skills');
 
@@ -34,11 +34,13 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills scaffold migration guard', () => {
     await fs.ensureDir(skillsPath);
     await fs.writeFile(path.join(skillsPath, 'foreign.txt'), 'local content', 'utf8');
 
-    await expect(ensureAgentsSkillsSymlink(projectRoot)).rejects.toThrow(/docs\/cat-b-distribution\.md/);
+    await expect(ensureAgentsSkillsSymlink(projectRoot)).resolves.toBeDefined();
+    expect(await fs.readFile(path.join(skillsPath, 'foreign.txt'), 'utf8')).toBe('local content');
+    expect((await fs.lstat(skillsPath)).isDirectory()).toBe(true);
     expect((await fs.readdir(path.join(projectRoot, '.claude'))).some(name => name.startsWith('skills.bak-'))).toBe(false);
   });
 
-  it('backs up foreign content when forced', async () => {
+  it('keeps foreign content when forced because runtime root is no longer replaced', async () => {
     const projectRoot = await createTempProjectRoot();
     const projectSkillsRoot = path.join(projectRoot, '.xtrm', 'skills');
 
@@ -52,12 +54,12 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills scaffold migration guard', () => {
 
     await ensureAgentsSkillsSymlink(projectRoot, { force: true });
 
+    expect(await fs.pathExists(path.join(skillsPath, 'foo', 'SKILL.md'))).toBe(true);
     const backups = (await fs.readdir(path.join(projectRoot, '.claude'))).filter(name => name.startsWith('skills.bak-'));
-    expect(backups.length).toBe(1);
-    expect(await fs.pathExists(path.join(projectRoot, '.claude', backups[0], 'foo', 'SKILL.md'))).toBe(true);
+    expect(backups).toEqual([]);
   });
 
-  it('leaves correct symlink untouched', async () => {
+  it('keeps direct runtime directory untouched', async () => {
     const projectRoot = await createTempProjectRoot();
     const projectSkillsRoot = path.join(projectRoot, '.xtrm', 'skills');
 
@@ -65,12 +67,12 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills scaffold migration guard', () => {
     await ensureAgentsSkillsSymlink(projectRoot);
 
     const skillsPath = path.join(projectRoot, '.claude', 'skills');
-    const before = await fs.readlink(skillsPath);
+    const before = await fs.readdir(skillsPath);
 
     await ensureAgentsSkillsSymlink(projectRoot);
 
-    expect((await fs.lstat(skillsPath)).isSymbolicLink()).toBe(true);
-    expect(await fs.readlink(skillsPath)).toBe(before);
+    expect((await fs.lstat(skillsPath)).isDirectory()).toBe(true);
+    expect(await fs.readdir(skillsPath)).toEqual(before);
     expect((await fs.readdir(path.join(projectRoot, '.claude'))).some(name => name.startsWith('skills.bak-'))).toBe(false);
   });
 });

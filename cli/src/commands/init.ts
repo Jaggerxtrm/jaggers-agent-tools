@@ -877,7 +877,7 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
         ? await ensureAgentsSkillsSymlink(projectRoot, { force: true })
         : await ensureAgentsSkillsSymlink(projectRoot);
     if (skillsActivation.activatedClaudeSkills === skillsActivation.activatedPiSkills) {
-        console.log(kleur.green(`  ✓ Activated ${skillsActivation.activatedClaudeSkills} default skills → .xtrm/skills/active`));
+        console.log(kleur.green(`  ✓ Reconciled ${skillsActivation.activatedClaudeSkills} runtime skills`));
     } else {
         console.log(kleur.green(`  ✓ Activated runtime skills → claude:${skillsActivation.activatedClaudeSkills}, pi:${skillsActivation.activatedPiSkills}`));
     }
@@ -1020,7 +1020,7 @@ async function runGitNexusInitForProject(projectRoot: string): Promise<void> {
         // (xtrm-wbfd). projectRoot is derived from git rev-parse or an
         // internal opts.projectRoot; not user input.
         // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
-        const gitnexusPollutionPath = path.join(projectRoot, '.xtrm', 'skills', 'active', 'gitnexus');
+        const gitnexusPollutionPath = path.join(projectRoot, '.claude', 'skills', 'gitnexus');
         try {
             fs.removeSync(gitnexusPollutionPath);
         } catch {

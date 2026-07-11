@@ -42,7 +42,7 @@ describe('skills-state', () => {
     expect(await fs.pathExists(path.join(skillsRoot, 'default'))).toBe(true);
     expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(true);
     expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(true);
-    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(true);
+    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
   });
 
   it('handles the all pack token as a normal normalized pack name', async () => {
