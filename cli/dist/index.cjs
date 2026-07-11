@@ -61726,7 +61726,7 @@ function chooseAttachCommand(sessionName, insideTmux) {
 function buildRoleTmuxPlan(args) {
   const { runtime, role, bead, parentSessionId, promptFile, systemPrompt, modelOverride, thinkingOverride, passthrough } = args;
   const roleSlug = slugifyForSession(role.name);
-  const sessionName = bead ? `role-${roleSlug}-${slugifyForSession(bead)}` : `role-${roleSlug}`;
+  const sessionName = bead ? `role-${runtime}-${roleSlug}-${slugifyForSession(bead)}` : `role-${runtime}-${roleSlug}`;
   const runtimeArgs = [];
   if (runtime === "pi") {
     runtimeArgs.push("--append-system-prompt", promptFile);

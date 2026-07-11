@@ -261,9 +261,15 @@ export function buildRoleTmuxPlan(args: {
 }): RoleTmuxPlan {
     const { runtime, role, bead, parentSessionId, promptFile, systemPrompt, modelOverride, thinkingOverride, passthrough } = args;
     const roleSlug = slugifyForSession(role.name);
+    // Include runtime in the session name so xt pi --role X --bead Y and
+    // xt claude --role X --bead Y produce distinguishable sessions
+    // (role-pi-X-Y vs role-claude-X-Y) instead of colliding on role-X-Y and
+    // relying on xtmux-1lb.6's auto-suffix. Operator's mental model is one
+    // pi + one claude flavor of the same specialist, not "the second one
+    // gets a random hex". See xtmux-3h8.
     const sessionName = bead
-        ? `role-${roleSlug}-${slugifyForSession(bead)}`
-        : `role-${roleSlug}`;
+        ? `role-${runtime}-${roleSlug}-${slugifyForSession(bead)}`
+        : `role-${runtime}-${roleSlug}`;
 
     const runtimeArgs: string[] = [];
 
