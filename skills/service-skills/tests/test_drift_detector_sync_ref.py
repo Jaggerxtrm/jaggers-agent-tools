@@ -25,12 +25,12 @@ def test_cli_sync_stamps_nonempty_last_sync_ref_to_head():
         _git(root, "config", "user.email", "t@t.t")
         _git(root, "config", "user.name", "t")
         # Minimal service repo: a pack umbrella registry with one service.
-        reg_dir = root / ".xtrm/skills/user/packs/p1/service-skills"
+        reg_dir = root / ".xtrm/skills/p1/service-skills"
         reg_dir.mkdir(parents=True)
         (reg_dir / "service-registry.json").write_text(json.dumps({
             "version": "1.0.0",
             "services": {"alpha": {"name": "Alpha", "territory": ["src/**/*"],
-                                   "skill_path": ".xtrm/skills/user/packs/p1/service-skills/services/alpha/SKILL.md",
+                                   "skill_path": ".xtrm/skills/p1/service-skills/services/alpha/SKILL.md",
                                    "last_sync": "never"}}}), encoding="utf-8")
         (root / "src").mkdir()
         (root / "src/x.py").write_text("x=1\n", encoding="utf-8")

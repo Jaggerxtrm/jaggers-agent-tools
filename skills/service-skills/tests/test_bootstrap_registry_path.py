@@ -8,7 +8,7 @@ from bootstrap import get_registry_path
 
 
 def test_pack_only_registry(tmp_path: Path):
-    reg = tmp_path / ".xtrm/skills/user/packs/mercury/service-registry.json"
+    reg = tmp_path / ".xtrm/skills/mercury/service-registry.json"
     reg.parent.mkdir(parents=True)
     reg.write_text("{}")
     assert get_registry_path(str(tmp_path)) == reg
@@ -22,17 +22,17 @@ def test_canonical_xtrm_wins_over_root_legacy_shadow(tmp_path: Path):
     legacy_reg = tmp_path / ".claude/skills/service-registry.json"
     legacy_reg.parent.mkdir(parents=True)
     legacy_reg.write_text("{}")
-    pack_reg = tmp_path / ".xtrm/skills/user/packs/mercury/service-registry.json"
+    pack_reg = tmp_path / ".xtrm/skills/mercury/service-registry.json"
     pack_reg.parent.mkdir(parents=True)
     pack_reg.write_text("{}")
     assert get_registry_path(str(tmp_path)) == pack_reg
 
 
 def test_umbrella_registry_wins_over_everything(tmp_path: Path):
-    umbrella_reg = tmp_path / ".xtrm/skills/user/packs/mercury/service-skills/service-registry.json"
+    umbrella_reg = tmp_path / ".xtrm/skills/mercury/service-skills/service-registry.json"
     umbrella_reg.parent.mkdir(parents=True)
     umbrella_reg.write_text("{}")
-    flat_reg = tmp_path / ".xtrm/skills/user/packs/mercury/service-registry.json"
+    flat_reg = tmp_path / ".xtrm/skills/mercury/service-registry.json"
     flat_reg.write_text("{}")
     root_reg = tmp_path / "service-registry.json"
     root_reg.write_text("{}")
@@ -52,24 +52,24 @@ def test_xtrm_pack_env_selects_umbrella_pack(tmp_path: Path, monkeypatch):
     # flat <pack>/service-registry.json layout, so umbrella registries fell
     # through to sorted()[0] and silently picked the wrong pack.
     for pack in ("infra", "darth-feedor"):
-        reg = tmp_path / f".xtrm/skills/user/packs/{pack}/service-skills/service-registry.json"
+        reg = tmp_path / f".xtrm/skills/{pack}/service-skills/service-registry.json"
         reg.parent.mkdir(parents=True)
         reg.write_text("{}")
     monkeypatch.setenv("XTRM_PACK", "infra")
     chosen = get_registry_path(str(tmp_path))
-    assert chosen == tmp_path / ".xtrm/skills/user/packs/infra/service-skills/service-registry.json"
+    assert chosen == tmp_path / ".xtrm/skills/infra/service-skills/service-registry.json"
 
 
 def test_scope_find_registry_resolves_canonical_pack(tmp_path: Path, monkeypatch):
     # xtrm-5bnfk: scope.py previously had its own resolver that only knew
     # .claude/skills/service-registry.json — it never found the canonical
-    # .xtrm/skills/user/packs/<pack>/service-skills/service-registry.json,
+    # .xtrm/skills/<pack>/service-skills/service-registry.json,
     # so on mercury-infra the specialist's pre-script always reported
     # 'No drift detected' even when drift existed. The fix delegates
     # scope.find_registry() to bootstrap.get_registry_path().
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
     import scope as scope_mod
-    canonical = tmp_path / ".xtrm/skills/user/packs/infra/service-skills/service-registry.json"
+    canonical = tmp_path / ".xtrm/skills/infra/service-skills/service-registry.json"
     canonical.parent.mkdir(parents=True)
     canonical.write_text("{}")
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
