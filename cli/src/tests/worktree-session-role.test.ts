@@ -130,14 +130,16 @@ describe('buildRoleTmuxPlan', () => {
 
     it('builds session name and metadata for role+bead', () => {
         const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             bead: 'xtmux-2i5',
             parentSessionId: '$3',
             promptFile: '/tmp/prompt.md',
         });
         expect(plan.sessionName).toBe('role-chain-coordinator-xtmux-2i5');
-        expect(plan.piArgs.slice(0, 2)).toEqual(['--append-system-prompt', '/tmp/prompt.md']);
-        expect(plan.piArgs.filter((a) => a === '--skill')).toHaveLength(2);
+        expect(plan.runtimeArgs.slice(0, 2)).toEqual(['--append-system-prompt', '/tmp/prompt.md']);
+        expect(plan.runtimeArgs.filter((a) => a === '--skill')).toHaveLength(2);
         const bead = plan.paneOptions.find((o) => o.key === '@agent_bead');
         expect(bead?.value).toBe('xtmux-2i5');
         const task = plan.paneOptions.find((o) => o.key === '@agent_task');
@@ -152,6 +154,8 @@ describe('buildRoleTmuxPlan', () => {
 
     it('omits @agent_bead and bead-slug when bead is not provided', () => {
         const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
             promptFile: '/tmp/prompt.md',
@@ -164,16 +168,20 @@ describe('buildRoleTmuxPlan', () => {
 
     it('shell-quotes the pi command string', () => {
         const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
             promptFile: "/tmp/it's-mine.md",
         });
-        expect(plan.piCmdString.startsWith("'pi' ")).toBe(true);
-        expect(plan.piCmdString).toContain("'/tmp/it'\\''s-mine.md'");
+        expect(plan.runtimeCmdString.startsWith("'pi' ")).toBe(true);
+        expect(plan.runtimeCmdString).toContain("'/tmp/it'\\''s-mine.md'");
     });
 
     it('slugifies bead ids with weird characters', () => {
         const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             bead: 'MY BEAD/1',
             parentSessionId: '',
@@ -187,40 +195,46 @@ describe('buildRoleTmuxPlan', () => {
         // takes a filesystem path, not a registry name. Silent crash on
         // startup. Fix drops the policy; trust pi's own discovery.
         const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
             promptFile: '/tmp/prompt.md',
         });
-        expect(plan.piArgs).not.toContain('--no-extensions');
-        expect(plan.piArgs).not.toContain('-e');
+        expect(plan.runtimeArgs).not.toContain('--no-extensions');
+        expect(plan.runtimeArgs).not.toContain('-e');
     });
 
     it('forwards --model / --thinking CLI overrides', () => {
         const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
             promptFile: '/tmp/prompt.md',
             modelOverride: 'gemini/gemini-3-pro',
             thinkingOverride: 'high',
         });
-        const modelIdx = plan.piArgs.indexOf('--model');
+        const modelIdx = plan.runtimeArgs.indexOf('--model');
         expect(modelIdx).toBeGreaterThan(-1);
-        expect(plan.piArgs[modelIdx + 1]).toBe('gemini/gemini-3-pro');
-        const thinkIdx = plan.piArgs.indexOf('--thinking');
+        expect(plan.runtimeArgs[modelIdx + 1]).toBe('gemini/gemini-3-pro');
+        const thinkIdx = plan.runtimeArgs.indexOf('--thinking');
         expect(thinkIdx).toBeGreaterThan(-1);
-        expect(plan.piArgs[thinkIdx + 1]).toBe('high');
+        expect(plan.runtimeArgs[thinkIdx + 1]).toBe('high');
     });
 
     it('appends passthrough argv verbatim after all other flags', () => {
         const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
             promptFile: '/tmp/prompt.md',
             passthrough: ['--gitnexus-cmd', 'foo bar'],
         });
-        const idx = plan.piArgs.indexOf('--gitnexus-cmd');
+        const idx = plan.runtimeArgs.indexOf('--gitnexus-cmd');
         expect(idx).toBeGreaterThan(-1);
-        expect(plan.piArgs[idx + 1]).toBe('foo bar');
+        expect(plan.runtimeArgs[idx + 1]).toBe('foo bar');
     });
 
     it('CLI --model wins over specialist.execution.model', () => {
@@ -231,16 +245,94 @@ describe('buildRoleTmuxPlan', () => {
             },
         }));
         const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role: roleWithModel,
             parentSessionId: '',
             promptFile: '/tmp/prompt.md',
             modelOverride: 'override-model',
         });
-        const modelIdx = plan.piArgs.indexOf('--model');
-        expect(plan.piArgs[modelIdx + 1]).toBe('override-model');
+        const modelIdx = plan.runtimeArgs.indexOf('--model');
+        expect(plan.runtimeArgs[modelIdx + 1]).toBe('override-model');
         // thinking still uses specialist default
-        const thinkIdx = plan.piArgs.indexOf('--thinking');
-        expect(plan.piArgs[thinkIdx + 1]).toBe('medium');
+        const thinkIdx = plan.runtimeArgs.indexOf('--thinking');
+        expect(plan.runtimeArgs[thinkIdx + 1]).toBe('medium');
+    });
+});
+
+describe('buildRoleTmuxPlan (claude runtime)', () => {
+    const role = parseSpecialistJson('chain-coordinator', JSON.stringify({
+        specialist: {
+            prompt: { system: 'You are chain-coordinator.' },
+            skills: { paths: ['.xtrm/skills/x/SKILL.md'] },
+            execution: { model: 'claude-opus-4-8', thinking_level: 'medium' },
+        },
+    }));
+
+    it('emits --append-system-prompt with the verbatim prompt (not a file path)', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            systemPrompt: 'You are chain-coordinator.',
+            parentSessionId: '$3',
+            promptFile: '/tmp/prompt.md',
+        });
+        expect(plan.runtimeCmd).toBe('claude');
+        const idx = plan.runtimeArgs.indexOf('--append-system-prompt');
+        expect(idx).toBe(0);
+        expect(plan.runtimeArgs[idx + 1]).toBe('You are chain-coordinator.');
+    });
+
+    it('emits --dangerously-skip-permissions and NO --skill flags', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            systemPrompt: 'x',
+            parentSessionId: '',
+            promptFile: '/tmp/p',
+        });
+        expect(plan.runtimeArgs).toContain('--dangerously-skip-permissions');
+        expect(plan.runtimeArgs).not.toContain('--skill');
+    });
+
+    it('forwards --model but silently drops --thinking (claude has no --thinking flag)', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            systemPrompt: 'x',
+            parentSessionId: '',
+            promptFile: '/tmp/p',
+            thinkingOverride: 'high',
+        });
+        const modelIdx = plan.runtimeArgs.indexOf('--model');
+        expect(modelIdx).toBeGreaterThan(-1);
+        expect(plan.runtimeArgs[modelIdx + 1]).toBe('claude-opus-4-8');
+        expect(plan.runtimeArgs).not.toContain('--thinking');
+    });
+
+    it('shell-quotes with claude as the runtime prefix', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            systemPrompt: 'x',
+            parentSessionId: '',
+            promptFile: '/tmp/p',
+        });
+        expect(plan.runtimeCmdString.startsWith("'claude' ")).toBe(true);
+    });
+
+    it('appends passthrough verbatim', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            systemPrompt: 'x',
+            parentSessionId: '',
+            promptFile: '/tmp/p',
+            passthrough: ['--add-dir', '/notes'],
+        });
+        const idx = plan.runtimeArgs.indexOf('--add-dir');
+        expect(idx).toBeGreaterThan(-1);
+        expect(plan.runtimeArgs[idx + 1]).toBe('/notes');
     });
 });
 

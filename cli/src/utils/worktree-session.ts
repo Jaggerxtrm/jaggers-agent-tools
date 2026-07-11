@@ -224,8 +224,12 @@ function shellQuote(s: string): string {
 
 export interface RoleTmuxPlan {
     sessionName: string;
-    piArgs: string[];
-    piCmdString: string;
+    /** Runtime binary — 'pi' or 'claude'. */
+    runtimeCmd: 'pi' | 'claude';
+    /** Argv passed to the runtime binary (excluding the binary itself). */
+    runtimeArgs: string[];
+    /** Shell-quoted command line for `tmux new-session ...` (includes the binary). */
+    runtimeCmdString: string;
     paneOptions: Array<{ key: string; value: string }>;
 }
 
@@ -237,57 +241,79 @@ export function chooseAttachCommand(sessionName: string, insideTmux: boolean): s
 }
 
 export function buildRoleTmuxPlan(args: {
+    /** Which runtime binary this plan targets. */
+    runtime: 'pi' | 'claude';
     role: ResolvedRole;
     bead?: string;
     parentSessionId: string;
     promptFile: string;
+    /** Verbatim system prompt content, needed for the claude runtime which
+     * takes `--append-system-prompt <prompt>` (a string), not a file path. */
+    systemPrompt: string;
     /** CLI --model override; wins over role.model. */
     modelOverride?: string;
-    /** CLI --thinking override; wins over role.thinkingLevel. */
+    /** CLI --thinking override; wins over role.thinkingLevel. Silently dropped
+     * for claude (no --thinking flag) — caller warns at CLI level if the user
+     * explicitly passed --thinking to xt claude. */
     thinkingOverride?: string;
-    /** Argv after `--` on xt pi command line, already guard-checked. */
+    /** Argv after `--` on the xt command line, already guard-checked. */
     passthrough?: string[];
 }): RoleTmuxPlan {
-    const { role, bead, parentSessionId, promptFile, modelOverride, thinkingOverride, passthrough } = args;
+    const { runtime, role, bead, parentSessionId, promptFile, systemPrompt, modelOverride, thinkingOverride, passthrough } = args;
     const roleSlug = slugifyForSession(role.name);
     const sessionName = bead
         ? `role-${roleSlug}-${slugifyForSession(bead)}`
         : `role-${roleSlug}`;
 
-    const piArgs: string[] = ['--append-system-prompt', promptFile];
-    for (const skill of role.skillPaths) {
-        piArgs.push('--skill', skill);
+    const runtimeArgs: string[] = [];
+
+    if (runtime === 'pi') {
+        // Pi: file-based system prompt (--append-system-prompt <file>);
+        // repo-native --skill <path> for each of the role's skills.
+        runtimeArgs.push('--append-system-prompt', promptFile);
+        for (const skill of role.skillPaths) {
+            runtimeArgs.push('--skill', skill);
+        }
+        // Extensions: trust pi's own discovery (~/.pi/agent/settings.json plus
+        // any per-repo settings). Previously (PR #365) the launcher emitted
+        // `--no-extensions -e <name>...` from a curated allow-list, but `pi -e`
+        // takes a **filesystem path**, not a registry name — the launcher was
+        // silently crashing pi on startup. Drop the policy; trust discovery.
+        // See xtmux-3rs.
+    } else {
+        // Claude: string-based system prompt (--append-system-prompt <prompt>);
+        // skills are resolved from cwd's .claude/skills/ (the worktree scaffold
+        // already symlinks that at launch), so no CLI flag needed. Skip the
+        // permission gate — sandboxed worktrees are the trust boundary.
+        runtimeArgs.push('--append-system-prompt', systemPrompt);
+        runtimeArgs.push('--dangerously-skip-permissions');
     }
 
-    // Extensions: trust pi's own discovery (~/.pi/agent/settings.json plus any
-    // per-repo settings). Previously (PR #365) the launcher emitted
-    // `--no-extensions -e <name>...` from a curated allow-list, but `pi -e`
-    // takes a **filesystem path**, not a registry name — the launcher was
-    // silently crashing pi on startup with "Extension path does not exist".
-    // The 'problematic extensions' concern that motivated the allow-list has
-    // since been resolved upstream, so drop the policy entirely rather than
-    // resurrect it via name→path resolution. See xtmux-3rs.
-
-    // Model / thinking: CLI override wins over specialist default. Both
-    // optional — pi resolves its own default when neither is set.
+    // Model: CLI override wins over specialist default. Both runtimes accept
+    // --model <name>; pi and claude resolve their own defaults when unset.
     const model = modelOverride ?? role.model;
-    if (model) piArgs.push('--model', model);
-    const thinking = thinkingOverride ?? role.thinkingLevel;
-    if (thinking) piArgs.push('--thinking', thinking);
+    if (model) runtimeArgs.push('--model', model);
+
+    // Thinking: pi-only. Claude has no --thinking flag; silently drop when
+    // the target is claude (caller warns at CLI-level if user was explicit).
+    if (runtime === 'pi') {
+        const thinking = thinkingOverride ?? role.thinkingLevel;
+        if (thinking) runtimeArgs.push('--thinking', thinking);
+    }
 
     // Passthrough: append verbatim (caller must have run guardRolePassthrough
     // first to reject xt-owned flags and drop batch-mode incompatibles).
     if (passthrough && passthrough.length > 0) {
-        piArgs.push(...passthrough);
+        runtimeArgs.push(...passthrough);
     }
 
-    const piCmdString = ['pi', ...piArgs].map(shellQuote).join(' ');
+    const runtimeCmdString = [runtime, ...runtimeArgs].map(shellQuote).join(' ');
 
     // Pane metadata written on the target pane at launch time. Picker + safe-
     // send-pointer + handoff read these. @agent_state=idle so the picker sees
-    // the pane immediately (pi's own agent-state hook won't fire until the
-    // first turn). @agent_prompt_file lets the picker preview show which role
-    // is running.
+    // the pane immediately (the runtime's own agent-state hook won't fire
+    // until the first turn). @agent_prompt_file lets the picker preview show
+    // which role is running.
     const paneOptions: Array<{ key: string; value: string }> = [
         { key: '@agent_parent_session', value: parentSessionId },
         { key: '@agent_task', value: `role:${role.name}` },
@@ -296,7 +322,7 @@ export function buildRoleTmuxPlan(args: {
     ];
     if (bead) paneOptions.push({ key: '@agent_bead', value: bead });
 
-    return { sessionName, piArgs, piCmdString, paneOptions };
+    return { sessionName, runtimeCmd: runtime, runtimeArgs, runtimeCmdString, paneOptions };
 }
 
 /**
@@ -734,6 +760,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // callers should capture stdout only after seeing that final line.
     if (resolvedRole) {
         await launchRoleTmuxSession({
+            runtime,
             role: resolvedRole,
             bead,
             attach,
@@ -794,6 +821,7 @@ function emitAgentRoleLaunched(fields: Record<string, string>): void {
 }
 
 async function launchRoleTmuxSession(args: {
+    runtime: 'pi' | 'claude';
     role: ResolvedRole;
     bead?: string;
     attach: boolean;
@@ -807,7 +835,7 @@ async function launchRoleTmuxSession(args: {
     reuse?: boolean;
 }): Promise<never> {
     const {
-        role, bead, attach, worktreePath, modelOverride, thinkingOverride, passthrough,
+        runtime, role, bead, attach, worktreePath, modelOverride, thinkingOverride, passthrough,
         newSession, parent, child, reuse,
     } = args;
 
@@ -860,10 +888,12 @@ async function launchRoleTmuxSession(args: {
     writeFileSync(promptFile, role.systemPrompt);
 
     const plan = buildRoleTmuxPlan({
+        runtime,
         role,
         bead,
         parentSessionId,
         promptFile,
+        systemPrompt: role.systemPrompt,
         modelOverride,
         thinkingOverride,
         passthrough,
@@ -897,7 +927,7 @@ async function launchRoleTmuxSession(args: {
             worktree: worktreePath,
         });
 
-        const piResult = spawnSync('pi', plan.piArgs, {
+        const piResult = spawnSync(plan.runtimeCmd, plan.runtimeArgs, {
             cwd: worktreePath,
             stdio: 'inherit',
             env: { ...process.env, ...agentEnv },
@@ -968,7 +998,7 @@ async function launchRoleTmuxSession(args: {
         '-s', plan.sessionName,
         '-c', worktreePath,
         ...envArgs,
-        plan.piCmdString,
+        plan.runtimeCmdString,
     ], { stdio: 'pipe', encoding: 'utf8' });
     if (newSess.status !== 0) {
         const stderr = (newSess.stderr ?? '').trim() || 'unknown error';
