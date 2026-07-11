@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### `xt pi/claude --role` — runtime prefix in session name (xtmux-3h8, PR #388)
+
+Session names now include the runtime so `xt pi --role X` and `xt claude --role X` produce distinguishable sessions: `role-pi-<slug>[-<bead>]` vs `role-claude-<slug>[-<bead>]`. Both coexist in `tmux ls` without `--reuse` or auto-suffix. Backwards-incompatible for anyone relying on the pre-flip `role-<slug>[-<bead>]` shape; nobody parses this format programmatically, so no migration needed beyond re-launching.
+
+### `xt claude --role` — remove leftover pi-only runtime guard (xtmux-1lb.1 followup, PR #387)
+
+PR #383 shipped the CLI surface but missed removing an up-front guard that hard-refused `runtime !== 'pi'`. `xt claude --role X` now actually launches instead of erroring with `"--role is currently only supported for pi"`.
+
+### `xt pi --role` session-name collision handling (xtmux-1lb.6, PR #386)
+
+Prior refusal on session-name collision replaced by two operator-friendly outcomes:
+
+- `--reuse` — attach to the existing session (or with `--no-attach`, print its coordinates + exit). Does NOT emit `agent.role.launched` — the session isn't ours and metadata isn't guaranteed to be current.
+- default — auto-suffix `-<hex>` and create a fresh sibling. Uses the same 4-char random slug as the worktree layer. Retries up to 10 times before erroring loudly.
+
+`--reuse` only makes sense with `--new-session` (or outside `$TMUX`).
+
+### `xt pi --help` documents `--` passthrough (xtmux-1lb.2, PR #381)
+
+`xt pi --help` now surfaces the `--` passthrough contract with two concrete examples. Same treatment lands on `xt claude` via the shared parity work above.
+
+### `xt pi --role` switch-client inside `$TMUX` (xtmux-1lb.5, PR #380 — superseded by xtmux-1lb.5.1)
+
+Intermediate fix that used `tmux switch-client` when `xt pi --role` runs inside `$TMUX`, avoiding the pre-fix nested-attach refusal. Superseded by the current-pane default in xtmux-1lb.5.1 (see entry below); `--new-session` still uses `chooseAttachCommand` to pick `switch-client` vs `attach-session` correctly.
+
 ### `xt claude` — full role-launcher parity with `xt pi` (xtmux-1lb.1)
 
 `xt claude` now accepts the same role-launcher surface as `xt pi`:
