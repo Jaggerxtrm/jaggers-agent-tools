@@ -79,6 +79,18 @@ export function createPiCommand(): Command {
         .option('--parent <target>', 'With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})')
         .option('--child', 'With --role: explicit form of the auto-behavior — @agent_parent_session = current pane\'s session_id')
         .allowUnknownOption(true)
+        .addHelpText('after', `
+Passthrough:
+  Everything after \`--\` is forwarded verbatim to the pi runtime — the
+  primary escape hatch for any pi flag not first-classed here. xt-owned
+  flags (--session-dir, --name, --system-prompt, --append-system-prompt)
+  are rejected; batch-mode flags (--print, --list-models, --export,
+  --mode) are dropped with a warning.
+
+Examples:
+  $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
+  $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
+`)
         .action(async (name: string | undefined, opts: {
             role?: string;
             bead?: string;
