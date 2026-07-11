@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
     buildRoleTmuxPlan,
+    chooseAttachCommand,
     parseSpecialistJson,
     guardRolePassthrough,
     resolveSkillPath,
@@ -235,6 +236,20 @@ describe('buildRoleTmuxPlan', () => {
         // thinking still uses specialist default
         const thinkIdx = plan.piArgs.indexOf('--thinking');
         expect(plan.piArgs[thinkIdx + 1]).toBe('medium');
+    });
+});
+
+describe('chooseAttachCommand', () => {
+    it('uses switch-client inside an existing tmux client', () => {
+        expect(chooseAttachCommand('role-x-y', true)).toEqual([
+            'switch-client', '-t', 'role-x-y',
+        ]);
+    });
+
+    it('uses attach-session outside tmux', () => {
+        expect(chooseAttachCommand('role-x-y', false)).toEqual([
+            'attach-session', '-t', 'role-x-y',
+        ]);
     });
 });
 

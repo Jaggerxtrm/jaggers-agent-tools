@@ -222,6 +222,12 @@ export interface RoleTmuxPlan {
 }
 
 // Pure — no I/O. Exported for unit testing.
+export function chooseAttachCommand(sessionName: string, insideTmux: boolean): string[] {
+    return insideTmux
+        ? ['switch-client', '-t', sessionName]
+        : ['attach-session', '-t', sessionName];
+}
+
 export function buildRoleTmuxPlan(args: {
     role: ResolvedRole;
     bead?: string;
@@ -787,7 +793,8 @@ async function launchRoleTmuxSession(args: {
         process.exit(0);
     }
 
-    const attachResult = spawnSync('tmux', ['attach-session', '-t', plan.sessionName], {
+    const attachCmd = chooseAttachCommand(plan.sessionName, Boolean(process.env.TMUX));
+    const attachResult = spawnSync('tmux', attachCmd, {
         stdio: 'inherit',
     });
     process.exit(attachResult.status ?? 0);
