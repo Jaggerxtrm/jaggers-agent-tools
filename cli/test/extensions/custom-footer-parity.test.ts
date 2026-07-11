@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock the @earendil-works Pi runtime packages before importing the extension —
-// Pi provides these at runtime, but CI's npm install does not pull them in.
-// Without these mocks, vitest fails the entire test file at module-load time.
-// See xtrm-qdsx.
 vi.mock("@earendil-works/pi-coding-agent", () => ({
 	isToolCallEventType: vi.fn(() => false),
 	isBashToolResult: vi.fn(() => false),
@@ -14,7 +10,7 @@ vi.mock("@earendil-works/pi-tui", () => ({
 }));
 
 import customFooterExtension from "../../../packages/pi-extensions/extensions/custom-footer/index";
-import { SubprocessRunner, EventAdapter } from "../../../packages/pi-extensions/src/core";
+import { EventAdapter, SubprocessRunner } from "../../../packages/pi-extensions/src/core";
 
 vi.mock("../../../packages/pi-extensions/src/core", async () => {
 	const actual = await vi.importActual<any>("../../../packages/pi-extensions/src/core");
@@ -30,20 +26,29 @@ describe("custom-footer parity", () => {
 	let footerRenderer: any;
 	let ctx: any;
 	let setFooterSpy: any;
+	let requestRenderSpy: any;
+	let branchChangeHandler: (() => void) | null;
 
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.resetAllMocks();
 		handlers = {};
 		footerRenderer = null;
+		requestRenderSpy = vi.fn();
+		branchChangeHandler = null;
 
 		setFooterSpy = vi.fn((factory: any) => {
 			footerRenderer = factory(
-				{ requestRender: vi.fn() },
+				{ requestRender: requestRenderSpy },
 				{ fg: (_c: string, text: string) => text },
 				{
 					getGitBranch: () => "xt/demo",
-					onBranchChange: () => () => {},
+					onBranchChange: (handler: () => void) => {
+						branchChangeHandler = handler;
+						return () => {
+							if (branchChangeHandler === handler) branchChangeHandler = null;
+						};
+					},
 					getAvailableProviderCount: () => 1,
 				},
 			);
@@ -59,7 +64,30 @@ describe("custom-footer parity", () => {
 		};
 	});
 
-	it("renders two lines with claim title parity", async () => {
+	const createPi = () => ({
+		on: (event: string, fn: Function) => {
+			if (!handlers[event]) handlers[event] = [];
+			handlers[event].push(fn);
+		},
+	});
+
+	it("render does not invoke SubprocessRunner", async () => {
+		(SubprocessRunner.run as any).mockResolvedValue({ code: 1, stdout: "", stderr: "" });
+
+		customFooterExtension(createPi() as any);
+		await handlers.session_start[0]({}, ctx);
+		await vi.runOnlyPendingTimersAsync();
+		await Promise.resolve();
+		vi.clearAllMocks();
+
+		footerRenderer.render(120);
+		await vi.advanceTimersByTimeAsync(6000);
+		footerRenderer.render(120);
+
+		expect(SubprocessRunner.run).not.toHaveBeenCalled();
+	});
+
+	it("renders three lines with claim title parity", async () => {
 		(EventAdapter.isBeadsProject as any).mockReturnValue(true);
 		(SubprocessRunner.run as any).mockImplementation(async (cmd: string, args: string[]) => {
 			if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: "/repo\n", stderr: "" };
@@ -74,19 +102,11 @@ describe("custom-footer parity", () => {
 			return { code: 1, stdout: "", stderr: "" };
 		});
 
-		const pi = {
-			on: (event: string, fn: Function) => {
-				if (!handlers[event]) handlers[event] = [];
-				handlers[event].push(fn);
-			},
-		};
+		customFooterExtension(createPi() as any);
+		await handlers.session_start[0]({}, ctx);
+		await vi.runOnlyPendingTimersAsync();
+		await Promise.resolve();
 
-		customFooterExtension(pi as any);
-		await handlers["session_start"][0]({}, ctx);
-		await vi.advanceTimersByTimeAsync(45);
-
-		footerRenderer.render(120);
-		await vi.advanceTimersByTimeAsync(1);
 		const lines = footerRenderer.render(120);
 		expect(lines).toHaveLength(3);
 		expect(lines[0]).toContain("xt/demo");
@@ -107,41 +127,62 @@ describe("custom-footer parity", () => {
 			return { code: 1, stdout: "", stderr: "" };
 		});
 
-		const pi = {
-			on: (event: string, fn: Function) => {
-				if (!handlers[event]) handlers[event] = [];
-				handlers[event].push(fn);
-			},
-		};
+		customFooterExtension(createPi() as any);
+		await handlers.session_start[0]({}, ctx);
+		await vi.runOnlyPendingTimersAsync();
+		await Promise.resolve();
 
-		customFooterExtension(pi as any);
-		await handlers["session_start"][0]({}, ctx);
-		await vi.advanceTimersByTimeAsync(45);
-
-		footerRenderer.render(100);
-		await vi.advanceTimersByTimeAsync(1);
 		const lines = footerRenderer.render(100);
 		expect(lines[2]).toContain("○ 5 open");
+	});
+
+	it("coalesces lifecycle refresh triggers and redraws on state update", async () => {
+		(EventAdapter.isBeadsProject as any).mockReturnValue(true);
+		let resolveRefresh: (() => void) | null = null;
+		const refreshGate = new Promise<void>((resolve) => {
+			resolveRefresh = resolve;
+		});
+		(SubprocessRunner.run as any).mockImplementation(async (cmd: string, args: string[]) => {
+			await refreshGate;
+			if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: "/repo\n", stderr: "" };
+			if (cmd === "git" && args[0] === "branch") return { code: 0, stdout: "xt/demo\n", stderr: "" };
+			if (cmd === "git" && args.includes("status")) return { code: 0, stdout: "", stderr: "" };
+			if (cmd === "git" && args.includes("rev-list")) return { code: 0, stdout: "0 0\n", stderr: "" };
+			if (cmd === "bd" && args[0] === "list" && args[1] === "--status=in_progress") return { code: 0, stdout: "", stderr: "" };
+			if (cmd === "bd" && args[0] === "list") return { code: 0, stdout: "(5 open, 0 in progress)", stderr: "" };
+			return { code: 1, stdout: "", stderr: "" };
+		});
+
+		customFooterExtension(createPi() as any);
+		await handlers.session_start[0]({}, ctx);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(SubprocessRunner.run).toHaveBeenCalledTimes(2);
+
+		await handlers.tool_result[0]({ input: { command: "git status" } });
+		await handlers.tool_result[0]({ input: { command: "git commit -m test" } });
+		branchChangeHandler?.();
+		await vi.advanceTimersByTimeAsync(250);
+		expect(SubprocessRunner.run).toHaveBeenCalledTimes(2);
+
+		resolveRefresh?.();
+		await Promise.resolve();
+		await Promise.resolve();
+		await vi.runOnlyPendingTimersAsync();
+		expect(SubprocessRunner.run).toHaveBeenCalledTimes(6);
+		expect(requestRenderSpy).toHaveBeenCalled();
 	});
 
 	it("reapplies footer on model/session refresh events", async () => {
 		(SubprocessRunner.run as any).mockResolvedValue({ code: 1, stdout: "", stderr: "" });
 
-		const pi = {
-			on: (event: string, fn: Function) => {
-				if (!handlers[event]) handlers[event] = [];
-				handlers[event].push(fn);
-			},
-		};
-
-		customFooterExtension(pi as any);
-		await handlers["session_start"][0]({}, ctx);
+		customFooterExtension(createPi() as any);
+		await handlers.session_start[0]({}, ctx);
 		await vi.advanceTimersByTimeAsync(45);
 		const initialCalls = setFooterSpy.mock.calls.length;
 
-		await handlers["model_select"][0]({}, ctx);
+		await handlers.model_select[0]({}, ctx);
 		await vi.advanceTimersByTimeAsync(45);
-		await handlers["session_switch"][0]({}, ctx);
+		await handlers.session_switch[0]({}, ctx);
 		await vi.advanceTimersByTimeAsync(45);
 
 		expect(setFooterSpy.mock.calls.length).toBeGreaterThan(initialCalls);
