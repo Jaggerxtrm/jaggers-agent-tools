@@ -62042,6 +62042,7 @@ async function launchWorktreeSession(opts) {
       thinkingOverride: thinking,
       passthrough: guardedPassthrough,
       newSession: opts.newSession,
+      reuse: opts.reuse,
       parent: opts.parent,
       child: opts.child
     });
@@ -62084,7 +62085,8 @@ async function launchRoleTmuxSession(args) {
     passthrough,
     newSession,
     parent,
-    child
+    child,
+    reuse
   } = args;
   const insideTmux = Boolean(process.env.TMUX);
   const currentPaneMode = insideTmux && !newSession;
@@ -62158,16 +62160,48 @@ async function launchRoleTmuxSession(args) {
     });
     process.exit(piResult.status ?? 0);
   }
-  const hasSess = (0, import_node_child_process2.spawnSync)("tmux", ["has-session", "-t", `=${plan.sessionName}`], {
-    stdio: "pipe"
-  });
-  if (hasSess.status === 0) {
-    process.stderr.write(kleur_default.red(
-      `
-  \u2717 tmux session '${plan.sessionName}' already exists \u2014 kill it or pick a fresh bead
+  const sessionExists = (name) => {
+    const r = (0, import_node_child_process2.spawnSync)("tmux", ["has-session", "-t", `=${name}`], { stdio: "pipe" });
+    return r.status === 0;
+  };
+  if (sessionExists(plan.sessionName)) {
+    if (reuse) {
+      const paneQuery2 = (0, import_node_child_process2.spawnSync)("tmux", [
+        "list-panes",
+        "-t",
+        plan.sessionName,
+        "-F",
+        "#{pane_id}"
+      ], { stdio: "pipe", encoding: "utf8" });
+      const existingPane = (paneQuery2.stdout ?? "").trim().split("\n")[0] ?? "";
+      if (!attach) {
+        process.stdout.write(`${plan.sessionName}:${existingPane}
+`);
+        process.exit(0);
+      }
+      const attachCmd2 = chooseAttachCommand(plan.sessionName, insideTmux);
+      const attachResult2 = (0, import_node_child_process2.spawnSync)("tmux", attachCmd2, { stdio: "inherit" });
+      process.exit(attachResult2.status ?? 0);
+    }
+    let suffixed = plan.sessionName;
+    let found = false;
+    for (let i = 0; i < 10; i++) {
+      const candidate = `${plan.sessionName}-${randomSlug(4)}`;
+      if (!sessionExists(candidate)) {
+        suffixed = candidate;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      process.stderr.write(kleur_default.red(
+        `
+  \u2717 Could not find a free session name variant for '${plan.sessionName}' \u2014 kill some or pass --reuse
 `
-    ));
-    process.exit(1);
+      ));
+      process.exit(1);
+    }
+    plan.sessionName = suffixed;
   }
   const envArgs = [];
   for (const [k, v] of Object.entries(agentEnv)) {
@@ -63008,7 +63042,7 @@ async function getPiProjectPointer(projectRoot) {
   }
 }
 function createPiCommand() {
-  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to pi (overrides specialist.execution.model)").option("--thinking <level>", "With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)").option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").allowUnknownOption(true).addHelpText("after", `
+  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to pi (overrides specialist.execution.model)").option("--thinking <level>", "With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)").option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowUnknownOption(true).addHelpText("after", `
 Passthrough:
   Everything after \`--\` is forwarded verbatim to the pi runtime \u2014 the
   primary escape hatch for any pi flag not first-classed here. xt-owned
@@ -63033,6 +63067,7 @@ Examples:
       newSession: Boolean(opts.newSession || opts.ns),
       parent: opts.parent,
       child: Boolean(opts.child),
+      reuse: Boolean(opts.reuse),
       passthrough
     });
   });

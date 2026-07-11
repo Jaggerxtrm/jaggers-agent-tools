@@ -24,6 +24,8 @@ export interface WorktreeSessionOptions {
     parent?: string;
     /** With --role: explicit form of the auto-behavior — @agent_parent_session = current pane's #{session_id}. --parent wins over --child when both set. */
     child?: boolean;
+    /** When --new-session (or outside $TMUX) hits a session-name collision, attach to the existing session instead of auto-suffixing. */
+    reuse?: boolean;
     /** Raw argv after `--` on the xt pi command; forwarded verbatim to pi. */
     passthrough?: string[];
 }
@@ -740,6 +742,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             thinkingOverride: thinking,
             passthrough: guardedPassthrough,
             newSession: opts.newSession,
+            reuse: opts.reuse,
             parent: opts.parent,
             child: opts.child,
         });
@@ -801,10 +804,11 @@ async function launchRoleTmuxSession(args: {
     newSession?: boolean;
     parent?: string;
     child?: boolean;
+    reuse?: boolean;
 }): Promise<never> {
     const {
         role, bead, attach, worktreePath, modelOverride, thinkingOverride, passthrough,
-        newSession, parent, child,
+        newSession, parent, child, reuse,
     } = args;
 
     const insideTmux = Boolean(process.env.TMUX);
@@ -902,16 +906,54 @@ async function launchRoleTmuxSession(args: {
     }
 
     // New-session path (default outside $TMUX, or --new-session inside).
-    // Fail fast if the session name already exists — do not silently attach
-    // to a stale session with unknown metadata.
-    const hasSess = spawnSync('tmux', ['has-session', '-t', `=${plan.sessionName}`], {
-        stdio: 'pipe',
-    });
-    if (hasSess.status === 0) {
-        process.stderr.write(kleur.red(
-            `\n  ✗ tmux session '${plan.sessionName}' already exists — kill it or pick a fresh bead\n`,
-        ));
-        process.exit(1);
+    // On session-name collision two operator-friendly outcomes replace the
+    // pre-xtmux-1lb.6 hard-refuse:
+    //   --reuse         attach to the existing session (no new worktree work)
+    //   default         auto-suffix `-<hex>` and create a fresh sibling
+    // The worktree naming already generates unique hex suffixes; session
+    // naming now mirrors that so `xt pi --role X` twice in a row does the
+    // sane thing.
+    const sessionExists = (name: string): boolean => {
+        const r = spawnSync('tmux', ['has-session', '-t', `=${name}`], { stdio: 'pipe' });
+        return r.status === 0;
+    };
+    if (sessionExists(plan.sessionName)) {
+        if (reuse) {
+            // Attach to the existing session (or --no-attach: print its
+            // first-pane coordinates). Do NOT emit agent.role.launched —
+            // the session isn't ours and metadata isn't guaranteed.
+            const paneQuery = spawnSync('tmux', [
+                'list-panes', '-t', plan.sessionName, '-F', '#{pane_id}',
+            ], { stdio: 'pipe', encoding: 'utf8' });
+            const existingPane = (paneQuery.stdout ?? '').trim().split('\n')[0] ?? '';
+            if (!attach) {
+                process.stdout.write(`${plan.sessionName}:${existingPane}\n`);
+                process.exit(0);
+            }
+            const attachCmd = chooseAttachCommand(plan.sessionName, insideTmux);
+            const attachResult = spawnSync('tmux', attachCmd, { stdio: 'inherit' });
+            process.exit(attachResult.status ?? 0);
+        }
+        // Auto-suffix. Try a handful of random slugs — collisions on
+        // 4-hex-char slugs are astronomically unlikely, but bail loudly if
+        // the operator has genuinely tens of sessions all sharing a prefix.
+        let suffixed = plan.sessionName;
+        let found = false;
+        for (let i = 0; i < 10; i++) {
+            const candidate = `${plan.sessionName}-${randomSlug(4)}`;
+            if (!sessionExists(candidate)) {
+                suffixed = candidate;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            process.stderr.write(kleur.red(
+                `\n  ✗ Could not find a free session name variant for '${plan.sessionName}' — kill some or pass --reuse\n`,
+            ));
+            process.exit(1);
+        }
+        plan.sessionName = suffixed;
     }
 
     // Pass XTMUX_AGENT_* through to the new session's environment via -e so

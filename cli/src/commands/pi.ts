@@ -78,6 +78,7 @@ export function createPiCommand(): Command {
         .option('--ns', 'Alias for --new-session')
         .option('--parent <target>', 'With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})')
         .option('--child', 'With --role: explicit form of the auto-behavior — @agent_parent_session = current pane\'s session_id')
+        .option('--reuse', 'With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one')
         .allowUnknownOption(true)
         .addHelpText('after', `
 Passthrough:
@@ -101,6 +102,7 @@ Examples:
             ns?: boolean;
             parent?: string;
             child?: boolean;
+            reuse?: boolean;
         }) => {
             // Everything after `--` is forwarded verbatim to pi (with guards
             // enforced in the launcher). This is the primary escape hatch for
@@ -118,6 +120,7 @@ Examples:
                 newSession: Boolean(opts.newSession || opts.ns),
                 parent: opts.parent,
                 child: Boolean(opts.child),
+                reuse: Boolean(opts.reuse),
                 passthrough,
             });
         });
