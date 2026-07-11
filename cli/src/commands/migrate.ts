@@ -251,9 +251,9 @@ async function walkDir(dir: string): Promise<string[]> {
   return files;
 }
 
-async function migrateSkillsLayout(
+export async function migrateSkillsLayout(
   repoPath: string,
-  opts: { dryRun: boolean; apply: boolean },
+  opts: { dryRun: boolean },
 ): Promise<void> {
   const skillsRoot = path.join(repoPath, '.xtrm', 'skills');
   const legacyRoot = path.join(skillsRoot, 'user', 'packs');
@@ -281,7 +281,6 @@ async function migrateSkillsLayout(
       console.log(kleur.cyan(`  skills-layout: would move ${source} → ${target}`));
       continue;
     }
-    await fs.remove(path.join(source, 'PACK.json'));
     await fs.rename(source, target);
     await fs.remove(path.join(target, 'PACK.json'));
     console.log(kleur.green(`  skills-layout: moved ${source} → ${target}`));
@@ -756,7 +755,6 @@ export function createMigrateCommand(): Command {
         if (target === 'skills-layout') {
           await migrateSkillsLayout(repoPath, {
             dryRun: opts.dryRun ?? false,
-            apply: opts.apply ?? false,
           });
           process.exitCode = 0;
           return;
