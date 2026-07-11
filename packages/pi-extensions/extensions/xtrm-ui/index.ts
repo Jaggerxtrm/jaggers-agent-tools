@@ -19,7 +19,6 @@ import type {
   GrepToolDetails,
   LsToolDetails,
   ReadToolDetails,
-  ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import {
   CustomEditor,
@@ -247,12 +246,14 @@ type PatchableToolExecutionComponent = {
   result?: { content?: Array<{ type: string; text?: string }>; details?: unknown; isError?: boolean };
   expanded?: boolean;
   hasRendererDefinition?: () => boolean;
+  __xtrmExternalStartedAt?: number;
+  __xtrmExternalDurationMs?: number;
 };
 
 type ExternalToolFrameKind = "serena" | "gitnexus" | "structured" | "process" | "external";
 
 const PATCHED_EXTERNAL_TOOL_FRAME = "__xtrmUiExternalToolFrame";
-const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 12;
+const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 17;
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 
 function stripAnsi(text: string): string {
@@ -275,11 +276,6 @@ function externalToolFrameKind(toolName: string | undefined): ExternalToolFrameK
 function padVisible(text: string, width: number): string {
   const visible = visibleWidth(text);
   return text + " ".repeat(Math.max(0, width - visible));
-}
-
-function getXtrmOriginalText(details: unknown): string | undefined {
-  const record = asRecord(details);
-  return typeof record?.xtrmOriginalText === "string" ? record.xtrmOriginalText : undefined;
 }
 
 function getToolArgs(component: PatchableToolExecutionComponent): Record<string, unknown> {
@@ -309,13 +305,10 @@ function summarizeExternalToolPending(toolName: string | undefined, input: Recor
 }
 
 function extractResultTextLines(component: PatchableToolExecutionComponent): string[] | undefined {
-  const originalText = component.expanded ? getXtrmOriginalText(component.result?.details) : undefined;
-  if (originalText) return originalText.split("\n");
-
   const text = component.result?.content?.find((content) => content.type === "text")?.text;
-  if (text) return text.split("\n");
-
-  return [summarizeExternalToolPending(component.toolName, getToolArgs(component))];
+  return text
+    ? text.split("\n")
+    : [summarizeExternalToolPending(component.toolName, getToolArgs(component))];
 }
 
 function trimRenderedToolLines(lines: string[]): string[] {
@@ -338,10 +331,14 @@ function externalToolBadgeColor(kind: ExternalToolFrameKind, text: string): stri
   return `\x1b[38;2;3;8;12m\x1b[48;2;${badgeR};${badgeG};${badgeB}m${text}\x1b[39m\x1b[49m`;
 }
 
-function highlightExternalToolBadge(kind: ExternalToolFrameKind, line: string): string {
-  const match = line.match(/^([•›]\s+)(\S+)/u);
-  if (!match?.[1] || !match[2]) return line;
-  return match[1] + externalToolBadgeColor(kind, match[2]) + line.slice(match[1].length + match[2].length);
+export function highlightExternalToolBadge(kind: ExternalToolFrameKind, line: string): string {
+  const marked = line.match(/^([•›]\s+)(\S+)/u);
+  if (marked?.[1] && marked[2]) {
+    return marked[1] + externalToolBadgeColor(kind, marked[2]) + line.slice(marked[1].length + marked[2].length);
+  }
+
+  const provider = line.match(/^(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])/u)?.[1];
+  return provider ? externalToolBadgeColor(kind, provider) + line.slice(provider.length) : line;
 }
 
 function externalToolBorderColor(kind: ExternalToolFrameKind, text: string): string {
@@ -356,24 +353,73 @@ function externalToolBorderColor(kind: ExternalToolFrameKind, text: string): str
   return `[2m[38;2;${r};${g};${b}m${text}[39m[22m`;
 }
 
-function collapsedExternalToolLines(contentLines: string[], expanded: boolean): string[] {
-  return expanded ? contentLines : [contentLines.join(" · ")];
+export function collapsedExternalToolLines(contentLines: string[], expanded: boolean): string[] {
+  if (expanded || contentLines.length <= 6) return contentLines;
+  return [
+    ...contentLines.slice(0, 6),
+    `... (${contentLines.length - 6} more lines, ctrl+o to expand)`,
+  ];
 }
 
-function renderExternalToolBackgroundLines(
+export function renderExternalToolBackgroundLines(
   contentLines: string[],
   width: number,
   kind: ExternalToolFrameKind,
   expanded: boolean,
+  toolName?: string,
+  durationMs?: number,
 ): string[] {
-  const availableWidth = Math.max(8, width);
-  const renderWidth = availableWidth;
-  const visibleLines = collapsedExternalToolLines(contentLines, expanded);
+  let displayLines = contentLines;
+  const raw = contentLines.length === 1 ? contentLines[0]?.trim() : undefined;
+  if (raw?.startsWith("{") || raw?.startsWith("[")) {
+    try {
+      displayLines = JSON.stringify(JSON.parse(raw), null, 2).split("\n");
+    } catch {
+      // Keep non-JSON output unchanged.
+    }
+  }
 
-  return visibleLines.map((rawLine) => {
-    const line = truncateToWidth(rawLine, Math.max(1, renderWidth));
+  const firstLine = displayLines[0] ?? "";
+  const action = kind === "gitnexus" && toolName?.startsWith("gitnexus_")
+    ? toolName.slice("gitnexus_".length)
+    : kind === "serena" ? toolName : undefined;
+  const providerHeader = /^\[[A-Za-z][A-Za-z0-9 _-]{0,31}\]/u.test(firstLine);
+
+  if (providerHeader && action && !firstLine.endsWith(` ${action}`)) {
+    displayLines = [`${firstLine} ${action}`, ...displayLines.slice(1)];
+  } else if (!/^(?:[•›]\s+|\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])/u.test(firstLine)) {
+    const labels: Record<ExternalToolFrameKind, string> = {
+      serena: "Serena",
+      gitnexus: "GitNexus",
+      structured: "structured_return",
+      process: "process",
+      external: "external",
+    };
+    const label = kind === "external" && toolName ? normalizeToolLabel(toolName) : labels[kind];
+    displayLines = [`[${label}]${action ? ` ${action}` : ""}`, ...displayLines];
+  }
+
+  const header = displayLines[0] ?? "";
+  const payloadLines = displayLines.slice(1);
+  const visiblePayload = expanded ? payloadLines : payloadLines.slice(0, 6);
+  const shown = visiblePayload.length;
+  const total = payloadLines.length;
+  const lineSummary = !expanded && shown < total
+    ? `showing ${shown}/${total} lines (ctrl+o expand)`
+    : total > 0 ? formatLineLabel(total, "line") : undefined;
+  const footerMeta = joinMeta([
+    lineSummary,
+    formatDuration(durationMs),
+    formatPayloadSize(contentLines.join("\n")),
+  ]);
+  const renderWidth = Math.max(8, width);
+  const body = [header, ...visiblePayload].map((rawLine) => {
+    const line = truncateToWidth(rawLine, renderWidth);
     return highlightExternalToolBadge(kind, line);
   });
+  return footerMeta
+    ? [...body, `\x1b[2m${truncateToWidth(`└─ ${footerMeta}`, renderWidth)}\x1b[22m`]
+    : body;
 }
 
 function renderExternalToolBoxLines(
@@ -405,13 +451,15 @@ function renderExternalToolLines(
   width: number,
   kind: ExternalToolFrameKind,
   expanded = false,
+  toolName?: string,
+  durationMs?: number,
 ): string[] {
   const contentLines = trimRenderedToolLines(lines).filter((line) => !isBlankRenderedLine(line));
   if (contentLines.length === 0) return [];
 
   return activeExternalToolChrome === "box"
     ? renderExternalToolBoxLines(contentLines, width, kind, expanded)
-    : renderExternalToolBackgroundLines(contentLines, width, kind, expanded);
+    : renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs);
 }
 
 async function installExternalToolFramePatch(): Promise<void> {
@@ -421,7 +469,7 @@ async function installExternalToolFramePatch(): Promise<void> {
     ToolExecutionComponent?: ToolExecutionComponentCtor;
   };
   const proto = mod.ToolExecutionComponent?.prototype as
-    | (ToolExecutionComponentCtor["prototype"] & { [PATCHED_EXTERNAL_TOOL_FRAME]?: boolean })
+    | (ToolExecutionComponentCtor["prototype"] & { [PATCHED_EXTERNAL_TOOL_FRAME]?: number })
     | undefined;
   if (!proto?.render || proto[PATCHED_EXTERNAL_TOOL_FRAME] === EXTERNAL_TOOL_FRAME_PATCH_VERSION) return;
 
@@ -435,14 +483,25 @@ async function installExternalToolFramePatch(): Promise<void> {
   };
 
   proto.render = function patchedRender(this: PatchableToolExecutionComponent, width: number) {
-    const rendered = render.call(this, width);
     const kind = externalToolFrameKind(this.toolName);
+    if (kind) this.__xtrmExternalStartedAt ??= Date.now();
+    const rendered = render.call(this, width);
     if (!kind || rendered.length === 0) return rendered;
 
+    if (this.result && this.__xtrmExternalDurationMs == null) {
+      this.__xtrmExternalDurationMs = Date.now() - (this.__xtrmExternalStartedAt ?? Date.now());
+    }
     const firstContentIndex = rendered.findIndex((line) => !isBlankRenderedLine(line));
     const leading = firstContentIndex > 0 ? rendered.slice(0, firstContentIndex) : [];
     const content = extractResultTextLines(this) ?? rendered;
-    const styled = renderExternalToolLines(content, width, kind, Boolean(this.expanded));
+    const styled = renderExternalToolLines(
+      content,
+      width,
+      kind,
+      Boolean(this.expanded),
+      this.toolName,
+      this.__xtrmExternalDurationMs,
+    );
     return styled.length > 0 ? [...leading, ...styled] : rendered;
   };
 
@@ -883,6 +942,7 @@ type XtrmToolRenderState = {
 };
 
 type XtrmToolRenderContext = {
+  executionStarted: boolean;
   isPartial: boolean;
   state: XtrmToolRenderState;
 };
@@ -939,7 +999,16 @@ function createWritePreview(path: string, nextContent: string): XtrmWritePreview
   };
 }
 
+function appendToolFooter(theme: any, text: string, parts: Array<string | undefined>): string {
+  const meta = joinMeta(parts);
+  return meta ? `${text}\n${theme.fg("dim", `└─ ${meta}`)}` : text;
+}
+
 function renderPendingCall(toolName: string, args: Record<string, unknown>, theme: any): Text {
+  if (toolName === "bash") {
+    const command = shortenCommand(String(args.command ?? ""), 80);
+    return new Text(`${theme.fg("accent", TOOL_ROW_MARKER)} ${theme.fg("accent", "$")} ${theme.fg("accent", command)}`, 0, 0);
+  }
   return new Text(renderToolSummary(theme, "pending", toolName, summarizeToolSubject(toolName, args), undefined), 0, 0);
 }
 
@@ -1005,53 +1074,8 @@ const SERENA_COMPACT_TOOLS = new Set([
   "serena_mcp_reset",
 ]);
 
-function parseJson(text: string): unknown | undefined {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
-
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
-
-function countSearchMatches(payload: unknown): number | undefined {
-  const record = asRecord(payload);
-  if (!record) return undefined;
-  let total = 0;
-  for (const value of Object.values(record)) {
-    if (Array.isArray(value)) total += value.length;
-  }
-  return total > 0 ? total : undefined;
-}
-
-function countOverviewSymbols(payload: unknown): number {
-  if (Array.isArray(payload)) {
-    const nested = payload.reduce<number>((total, value) => total + countOverviewSymbols(value), 0);
-    return nested || payload.length;
-  }
-  const record = asRecord(payload);
-  if (!record) return 0;
-  return Object.values(record).reduce<number>((total, value) => total + countOverviewSymbols(value), 0);
-}
-
-function countLines(text: string): number {
-  if (!text) return 0;
-  return text.split("\n").length;
-}
-
-function countJsonItems(payload: unknown): number | undefined {
-  if (Array.isArray(payload)) return payload.length;
-  const record = asRecord(payload);
-  if (!record) return undefined;
-
-  let total = 0;
-  for (const value of Object.values(record)) {
-    if (Array.isArray(value)) total += value.length;
-  }
-  return total > 0 ? total : undefined;
 }
 
 function summarizeSerenaSubject(toolName: string, input: Record<string, unknown>): string | undefined {
@@ -1100,103 +1124,7 @@ function summarizeSerenaSubject(toolName: string, input: Record<string, unknown>
   }
 }
 
-function summarizeSerenaToolResult(
-  toolName: string,
-  input: Record<string, unknown>,
-  text: string,
-  durationMs: number | undefined,
-): string {
-  const payload = parseJson(text);
-  const duration = formatDuration(durationMs);
-  const payloadSize = formatPayloadSize(text);
-  const subject = summarizeSerenaSubject(toolName, input);
-  const meta = (...parts: Array<string | undefined>) => {
-    const joined = joinCompactMeta([duration, payloadSize, ...parts]);
-    return joined ? ` · ${joined}` : "";
-  };
 
-  switch (toolName) {
-    case "find_symbol":
-    case "find_referencing_symbols":
-    case "jet_brains_find_symbol":
-    case "jet_brains_find_referencing_symbols": {
-      const count = countJsonItems(payload) ?? (text.match(/"name_path"\s*:/g)?.length ?? 0);
-      return `${TOOL_ROW_MARKER} serena ${toolName} ${subject ?? "symbol"}${meta(formatLineLabel(count, "result"))}`;
-    }
-    case "get_symbols_overview":
-    case "jet_brains_get_symbols_overview":
-    case "jet_brains_type_hierarchy": {
-      const count = Math.max(countOverviewSymbols(payload), text.match(/"name_path"\s*:/g)?.length ?? 0);
-      return `${TOOL_ROW_MARKER} serena ${toolName} ${subject ?? "file"}${meta(formatLineLabel(count, "symbol"))}`;
-    }
-    case "search_for_pattern": {
-      const count = countSearchMatches(payload) ?? (text.match(/^\s*>\s*\d+:/gm)?.length ?? 0);
-      return `${TOOL_ROW_MARKER} serena search ${subject ?? "pattern"}${meta(formatLineLabel(count, "match"))}`;
-    }
-    case "read_file": {
-      return `${TOOL_ROW_MARKER} serena read ${subject ?? "file"}${meta(formatLineLabel(countLines(text), "line"))}`;
-    }
-    case "list_dir": {
-      const count = countJsonItems(payload) ?? countLines(text);
-      return `${TOOL_ROW_MARKER} serena list_dir ${subject ?? "."}${meta(formatLineLabel(count, "entry"))}`;
-    }
-    case "find_file": {
-      const count = countJsonItems(payload) ?? countLines(text);
-      return `${TOOL_ROW_MARKER} serena find_file ${String(input.file_mask ?? "")}${meta(formatLineLabel(count, "match"))}`;
-    }
-    case "replace_symbol_body":
-    case "insert_after_symbol":
-    case "insert_before_symbol":
-    case "rename_symbol":
-    case "create_text_file":
-    case "replace_content":
-    case "replace_lines":
-    case "delete_lines":
-    case "insert_at_line":
-    case "write_memory":
-    case "delete_memory":
-    case "rename_memory":
-    case "edit_memory":
-    case "activate_project":
-    case "remove_project":
-    case "switch_modes":
-    case "restart_language_server":
-    case "onboarding":
-    case "serena_mcp_reset":
-      return `${TOOL_ROW_MARKER} serena ${toolName}${subject ? ` ${subject}` : ""}${meta()}`;
-    case "execute_shell_command": {
-      const count = countLines(text);
-      return `${TOOL_ROW_MARKER} serena shell ${subject ?? "command"}${meta(formatLineLabel(count, "line"))}`;
-    }
-    default: {
-      const count = countJsonItems(payload) ?? countLines(text);
-      return `${TOOL_ROW_MARKER} serena ${toolName}${subject ? ` ${subject}` : ""}${meta(formatLineLabel(count, "item"))}`;
-    }
-  }
-}
-
-
-function formatHierarchyText(text: string): string {
-  const lines = text.split("\n");
-  const out: string[] = [];
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    if (!line.trim()) {
-      out.push("");
-      continue;
-    }
-    if (line.startsWith("● ")) {
-      out.push(line);
-      continue;
-    }
-    if (/^(Read|Searched|Listed|Update\(|File must be read first|Now )/.test(line.trimStart())) {
-      out.push(`  └─ ${line.trimStart()}`);
-      continue;
-    }
-    out.push(line);
-  }
-  return out.join("\n");
-}
 
 function normalizeToolLabel(toolName: string): string {
   const gitnexusMap: Record<string, string> = {
@@ -1225,151 +1153,10 @@ function normalizeToolLabel(toolName: string): string {
   return toolName;
 }
 
-function summarizeGenericToolResult(
-  toolName: string,
-  input: Record<string, unknown>,
-  text: string,
-  durationMs: number | undefined,
-): string {
-  const payload = parseJson(text);
-  const duration = formatDuration(durationMs);
-  const payloadSize = formatPayloadSize(text);
-  const subject = summarizeToolSubject(toolName, input) ?? summarizeSerenaSubject(toolName, input);
-  const count = countJsonItems(payload) ?? countLines(text);
-  const label = formatLineLabel(count, "line");
-  const joined = joinCompactMeta([duration, payloadSize, label]);
-  const normalized = normalizeToolLabel(toolName);
-  return `${TOOL_ROW_MARKER} ${normalized}${subject ? ` ${subject}` : ""}${joined ? ` · ${joined}` : ""}`;
-}
 
-function summarizeStructuredReturnToolResult(
-  input: Record<string, unknown>,
-  text: string,
-  details: unknown,
-  durationMs: number | undefined,
-): string {
-  const record = asRecord(details);
-  const command = shortenCommand(String(input.command ?? text.split("→")[0] ?? "command"), 52);
-  const resultText = text.includes("→") ? text.split("→").slice(1).join("→").trim() : text.trim();
-  const resultLines = resultText.split("\n").map((line) => line.trim()).filter(Boolean);
-  const summary = resultLines.find((line) => !line.startsWith("cwd:"));
-  const parser = typeof record?.parser === "string" ? record.parser : undefined;
-  const exitCode = typeof record?.exitCode === "number" ? `exit ${record.exitCode}` : undefined;
-  const resultMeta = joinCompactMeta([formatDuration(durationMs), formatPayloadSize(text)]);
-  const meta = joinMeta([summary ? shortenCommand(summary, 72) : undefined, parser, exitCode, resultMeta]);
-  return `${TOOL_ROW_MARKER} structured_return ${command}${meta ? ` · ${meta}` : ""}`;
-}
-
-function summarizeProcessToolResult(
-  input: Record<string, unknown>,
-  text: string,
-  details: unknown,
-  durationMs: number | undefined,
-): string {
-  const record = asRecord(details);
-  const action = String(record?.action ?? input.action ?? "action");
-  const duration = formatDuration(durationMs);
-  const payloadSize = formatPayloadSize(text);
-  const meta = (...parts: Array<string | undefined>) => {
-    const joined = joinCompactMeta([duration, payloadSize, ...parts]);
-    return joined ? ` · ${joined}` : "";
-  };
-
-  if (action === "start") {
-    const proc = asRecord(record?.process);
-    const name = String(proc?.name ?? input.name ?? "process");
-    const id = proc?.id ? String(proc.id) : undefined;
-    const pid = proc?.pid != null ? `pid ${String(proc.pid)}` : undefined;
-    return `${TOOL_ROW_MARKER} process start "${name}"${meta(id, pid)}`;
-  }
-
-  if (action === "list") {
-    const processes = Array.isArray(record?.processes) ? record.processes : [];
-    const running = processes.filter((item) => {
-      const proc = asRecord(item);
-      return proc?.status === "running" || proc?.status === "terminating";
-    }).length;
-    return `${TOOL_ROW_MARKER} process list${meta(`${processes.length} ${processes.length === 1 ? "process" : "processes"}`, `${running} running`)}`;
-  }
-
-  if (action === "output") {
-    const output = asRecord(record?.output);
-    const stdout = Array.isArray(output?.stdout) ? output.stdout.length : undefined;
-    const stderr = Array.isArray(output?.stderr) ? output.stderr.length : undefined;
-    return `${TOOL_ROW_MARKER} process output ${String(input.id ?? "process")}${meta(
-      stdout != null ? `${stdout} stdout` : undefined,
-      stderr != null ? `${stderr} stderr` : undefined,
-    )}`;
-  }
-
-  if (action === "logs") {
-    return `${TOOL_ROW_MARKER} process logs ${String(input.id ?? "process")}${meta("log paths")}`;
-  }
-
-  const message = typeof record?.message === "string" ? record.message : text.split("\n")[0];
-  return `${TOOL_ROW_MARKER} process ${action}${message ? ` · ${shortenCommand(message, 38)}` : ""}${meta()}`;
-}
-
-function summarizeExternalToolResult(
-  toolName: string,
-  input: Record<string, unknown>,
-  text: string,
-  details: unknown,
-  durationMs: number | undefined,
-): string {
-  if (SERENA_COMPACT_TOOLS.has(toolName)) {
-    return summarizeSerenaToolResult(toolName, input, text, durationMs);
-  }
-  if (toolName === "structured_return") {
-    return summarizeStructuredReturnToolResult(input, text, details, durationMs);
-  }
-  if (toolName === "process") {
-    return summarizeProcessToolResult(input, text, details, durationMs);
-  }
-  return summarizeGenericToolResult(toolName, input, text, durationMs);
-}
-
-function withXtrmToolDetails(details: unknown, sourceText: string, toolName: string): unknown {
-  const record = asRecord(details);
-  return {
-    ...(record ?? {}),
-    xtrmOriginalText: sourceText,
-    xtrmToolFrame: externalToolFrameKind(toolName),
-  };
-}
 
 const XTRM_BUILTIN_TOOLS = new Set(["bash", "read", "edit", "write", "find", "grep", "ls"]);
 
-// Tools whose RESULT PAYLOAD the model needs verbatim in context. In pi, a tool_result
-// hook's return value REPLACES the model-facing content (not just the TUI render), so
-// compacting these would replace the model-facing payload with "· N lines" / "· N results"
-// for every pi surface that loads xtrm-ui — interactive sessions (where the human can
-// expand the TUI row but the model cannot) and any headless pi run that doesn't pass
-// --no-extensions. Specialists are unaffected: they run with --no-extensions and never
-// load xtrm-ui (selectively re-attach only quality-gates / service-skills / pi-gitnexus /
-// pi-serena-tools). Mutation/no-payload tools are still summarized below, preserving
-// most of the token savings.
-const PAYLOAD_TOOLS = new Set<string>([
-  // Serena reads / inspection
-  "read_file",
-  "find_symbol",
-  "find_referencing_symbols",
-  "get_symbols_overview",
-  "search_for_pattern",
-  "find_file",
-  "list_dir",
-  "read_memory",
-  // JetBrains backend equivalents
-  "jet_brains_find_symbol",
-  "jet_brains_find_referencing_symbols",
-  "jet_brains_get_symbols_overview",
-  "jet_brains_type_hierarchy",
-  // GitNexus reads (same blindness risk)
-  "gitnexus_query",
-  "gitnexus_context",
-  "gitnexus_impact",
-  "gitnexus_detect_changes",
-]);
 
 function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): void {
   const tools = getTools(process.cwd());
@@ -1387,37 +1174,12 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     context: XtrmToolRenderContext,
   ) => {
     context.state.startedAt ??= Date.now();
-    return context.isPartial ? renderPendingCall(toolName, args, theme) : toolRowText(theme, "");
+    return context.isPartial && !context.executionStarted
+      ? renderPendingCall(toolName, args, theme)
+      : toolRowText(theme, "");
   };
   const renderDuration = (context: XtrmToolRenderContext) =>
     formatDuration(context.state.startedAt == null ? undefined : Date.now() - context.state.startedAt);
-
-  pi.on("tool_result", async (event: ToolResultEvent) => {
-    if (XTRM_BUILTIN_TOOLS.has(event.toolName) || event.isError) return undefined;
-    // Never compact read/inspect tools: the hook return replaces model-facing content,
-    // so summarizing these would blind headless agents/specialists (no row to expand).
-    if (PAYLOAD_TOOLS.has(event.toolName)) return undefined;
-    if (!getPrefs().compactExternalToolResults) return undefined;
-
-    const text = getTextContent({ content: event.content as Array<{ type: string; text?: string }> });
-    const sourceText = text.trim() ? text : "[non-text result]";
-    const safeInput =
-      event.input && typeof event.input === "object" && !Array.isArray(event.input)
-        ? (event.input as Record<string, unknown>)
-        : {};
-    const compactText = summarizeExternalToolResult(
-      event.toolName,
-      safeInput,
-      sourceText,
-      event.details,
-      undefined,
-    );
-
-    return {
-      content: [{ type: "text", text: formatHierarchyText(compactText) }],
-      details: withXtrmToolDetails(event.details, sourceText, event.toolName),
-    };
-  });
 
   pi.registerTool({
     name: "bash",
@@ -1438,25 +1200,20 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const output = getTextContent(result as any);
       const outputLines = cleanOutputLines(output);
       const statusColor = context.isError ? "error" : "success";
-      const summary = joinCompactMeta([
+      let text = `${theme.fg(statusColor, TOOL_ROW_MARKER)} ${theme.fg(statusColor, "$")} ${theme.fg(statusColor, command)}`;
+      const visibleLines = expanded ? outputLines : outputLines.slice(-4);
+      if (visibleLines.length > 0) {
+        text += "\n" + visibleLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
+      }
+      const lineSummary = !expanded && visibleLines.length < outputLines.length
+        ? `showing ${visibleLines.length}/${outputLines.length} lines (ctrl+o expand)`
+        : formatLineLabel(outputLines.length, "line");
+      text = appendToolFooter(theme, text, [
+        lineSummary,
         renderDuration(context),
         formatPayloadSize(output),
-        formatLineLabel(outputLines.length, "line"),
         details.truncation?.truncated ? "truncated" : undefined,
       ]);
-      let text = `${theme.fg(statusColor, TOOL_ROW_MARKER)} ${theme.fg(statusColor, "$")} ${theme.fg(statusColor, command)}`;
-      if (summary) text += theme.fg("dim", ` · ${summary}`);
-
-      if (!expanded && outputLines.length > 0) {
-        const preview = outputLines.slice(-4);
-        text += "\n" + preview.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-        if (outputLines.length > 4) {
-          text += `\n${theme.fg("dim", `  ... (${outputLines.length - 4} earlier lines, use ␣ to expand)`)}`;
-        }
-      }
-      if (expanded && outputLines.length > 0) {
-        text += "\n" + outputLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-      }
       return toolRowText(theme, text);
     },
   });
@@ -1479,25 +1236,30 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const subject = range ? `${subjectBase}:${range}` : subjectBase;
       const first = result.content[0];
       if (first?.type === "image") {
-        return toolRowText(theme, renderToolSummary(theme, "success", "read", subject, joinMeta(["image", renderDuration(context)])));
+        const text = appendToolFooter(
+          theme,
+          renderToolSummary(theme, "success", "read", subject, undefined),
+          ["image", renderDuration(context)],
+        );
+        return toolRowText(theme, text);
       }
       const textContent = getTextContent(result as any);
       const lines = textContent.split("\n");
       const totalLines = lines.length;
-      let text = renderToolSummary(
-        theme,
-        context.isError ? "error" : "success",
-        "read",
-        subject,
-        joinMeta([
-          formatLineLabel(totalLines, "line"),
-          renderDuration(context),
-          details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined,
-        ]),
-      );
-      if ((expanded || totalLines <= 6) && totalLines > 0) {
+      const showContent = expanded || totalLines <= 6;
+      let text = renderToolSummary(theme, context.isError ? "error" : "success", "read", subject, undefined);
+      if (showContent && totalLines > 0) {
         text += "\n" + lines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
       }
+      const lineSummary = !showContent && totalLines > 0
+        ? `${formatLineLabel(totalLines, "line")} (ctrl+o expand)`
+        : formatLineLabel(totalLines, "line");
+      text = appendToolFooter(theme, text, [
+        lineSummary,
+        renderDuration(context),
+        formatPayloadSize(textContent),
+        details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined,
+      ]);
       return toolRowText(theme, text);
     },
   });
@@ -1518,11 +1280,17 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const path = String(args.path ?? "");
       const textContent = getTextContent(result as any);
       if (context.isError) {
-        return toolRowText(theme, renderToolSummary(theme, "error", "edit", path, textContent.split("\n")[0]));
+        const text = appendToolFooter(
+          theme,
+          renderToolSummary(theme, "error", "edit", path, textContent.split("\n")[0]),
+          [renderDuration(context)],
+        );
+        return toolRowText(theme, text);
       }
       const stats = details.diff ? diffStats(details.diff) : { additions: 0, removals: 0 };
-      let text = renderToolSummary(theme, "success", "edit", path, joinMeta([`+${stats.additions}`, `-${stats.removals}`, renderDuration(context)]));
+      let text = renderToolSummary(theme, "success", "edit", path, undefined);
       if (details.diff) text += `\n${renderRichDiffPreview(theme, details.diff, 18)}`;
+      text = appendToolFooter(theme, text, [`+${stats.additions}`, `-${stats.removals}`, renderDuration(context)]);
       return toolRowText(theme, text);
     },
   });
@@ -1549,25 +1317,42 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const content = String(args.content ?? "");
       const textContent = getTextContent(result as any);
       if (context.isError) {
-        return toolRowText(theme, renderToolSummary(theme, "error", "write", path, textContent.split("\n")[0]));
+        const text = appendToolFooter(
+          theme,
+          renderToolSummary(theme, "error", "write", path, textContent.split("\n")[0]),
+          [renderDuration(context)],
+        );
+        return toolRowText(theme, text);
       }
 
       const preview = (context.state as XtrmToolRenderState).writePreview;
       if (preview?.kind === "unchanged") {
-        return toolRowText(theme, renderToolSummary(theme, "success", "write", path, joinMeta(["no changes", renderDuration(context)])));
+        const text = appendToolFooter(
+          theme,
+          renderToolSummary(theme, "success", "write", path, undefined),
+          ["no changes", renderDuration(context)],
+        );
+        return toolRowText(theme, text);
       }
       if (preview?.kind === "updated") {
-        let text = renderToolSummary(theme, "success", "write", path, joinMeta([`+${preview.additions}`, `-${preview.removals}`, renderDuration(context)]));
+        let text = renderToolSummary(theme, "success", "write", path, undefined);
         if (preview.diff) text += `\n${renderRichDiffPreview(theme, preview.diff, 18)}`;
+        text = appendToolFooter(theme, text, [`+${preview.additions}`, `-${preview.removals}`, renderDuration(context)]);
         return toolRowText(theme, text);
       }
 
       const lines = preview?.kind === "created" ? preview.lineCount : lineCount(content);
-      let text = renderToolSummary(theme, "success", "write", path, joinMeta([formatLineLabel(lines, "line"), renderDuration(context)]));
+      let text = renderToolSummary(theme, "success", "write", path, undefined);
       const contentLines = content.split("\n");
-      if (content && (expanded || contentLines.length <= 6)) {
+      const showContent = content && (expanded || contentLines.length <= 6);
+      if (showContent) {
         text += "\n" + contentLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
       }
+      text = appendToolFooter(theme, text, [
+        !showContent && lines > 0 ? `${formatLineLabel(lines, "line")} (ctrl+o expand)` : formatLineLabel(lines, "line"),
+        renderDuration(context),
+        formatPayloadSize(content),
+      ]);
       return toolRowText(theme, text);
     },
   });
@@ -1587,14 +1372,14 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = summarizeCount(textContent);
-      let text = renderToolSummary(
-        theme,
-        context.isError ? "error" : "success",
-        "find",
-        String(args.pattern ?? ""),
-        joinMeta([formatLineLabel(count, "match"), renderDuration(context), details.resultLimitReached ? "limit reached" : undefined]),
-      );
+      let text = renderToolSummary(theme, context.isError ? "error" : "success", "find", String(args.pattern ?? ""), undefined);
       if (expanded && count > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 10), 10)}`;
+      text = appendToolFooter(theme, text, [
+        !expanded && count > 0 ? `${formatLineLabel(count, "match")} (ctrl+o expand)` : formatLineLabel(count, "match"),
+        renderDuration(context),
+        formatPayloadSize(textContent),
+        details.resultLimitReached ? "limit reached" : undefined,
+      ]);
       return toolRowText(theme, text);
     },
   });
@@ -1614,14 +1399,14 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = countPrefixedItems(textContent, ["-- "]) || summarizeCount(textContent);
-      let text = renderToolSummary(
-        theme,
-        context.isError ? "error" : "success",
-        "grep",
-        String(args.pattern ?? ""),
-        joinMeta([formatLineLabel(count, "match"), renderDuration(context), details.matchLimitReached ? "limit reached" : undefined]),
-      );
+      let text = renderToolSummary(theme, context.isError ? "error" : "success", "grep", String(args.pattern ?? ""), undefined);
       if (expanded && textContent.length > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 12), 12)}`;
+      text = appendToolFooter(theme, text, [
+        !expanded && count > 0 ? `${formatLineLabel(count, "match")} (ctrl+o expand)` : formatLineLabel(count, "match"),
+        renderDuration(context),
+        formatPayloadSize(textContent),
+        details.matchLimitReached ? "limit reached" : undefined,
+      ]);
       return toolRowText(theme, text);
     },
   });
@@ -1641,14 +1426,14 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = summarizeCount(textContent);
-      let text = renderToolSummary(
-        theme,
-        context.isError ? "error" : "success",
-        "ls",
-        shortenPath(String(args.path ?? ".")),
-        joinMeta([formatLineLabel(count, "entry"), renderDuration(context), details.entryLimitReached ? "limit reached" : undefined]),
-      );
+      let text = renderToolSummary(theme, context.isError ? "error" : "success", "ls", shortenPath(String(args.path ?? ".")), undefined);
       if (expanded && count > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 12), 12)}`;
+      text = appendToolFooter(theme, text, [
+        !expanded && count > 0 ? `${formatLineLabel(count, "entry")} (ctrl+o expand)` : formatLineLabel(count, "entry"),
+        renderDuration(context),
+        formatPayloadSize(textContent),
+        details.entryLimitReached ? "limit reached" : undefined,
+      ]);
       return toolRowText(theme, text);
     },
   });

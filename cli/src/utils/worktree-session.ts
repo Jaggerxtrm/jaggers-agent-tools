@@ -57,21 +57,6 @@ export interface ResolvedRole {
     extensions?: Record<string, boolean>;
 }
 
-// Baseline pi extension policy for xt pi --role, per xtmux-2dy design.
-// INCLUDE by default: caveman, pi-nvidia-nim, service-skills, worktree-boundary,
-// @jaggerxtrm/pi-extensions, pi-guardrails. Everything else pi's default
-// discovery finds (pi-serena-tools, pi-gitnexus, structured-return, goal, qwen,
-// lsp, ponytail, context-mode extension, etc.) is EXCLUDED. Specialists can
-// still opt-in via execution.extensions.{name}: true or opt-out via false.
-export const ROLE_DEFAULT_EXTENSIONS: readonly string[] = [
-    'caveman',
-    'pi-nvidia-nim',
-    'service-skills',
-    'worktree-boundary',
-    '@jaggerxtrm/pi-extensions',
-    'pi-guardrails',
-] as const;
-
 // xt-owned flags a passthrough must not clobber. Reject with a clear error if
 // the user tries to pass any of these after `--`. Session naming, prompt, and
 // session-dir are set by the launcher and re-passing them silently would break
@@ -126,22 +111,34 @@ export function guardRolePassthrough(passthrough: string[]): PiArgvGuardResult {
     return { warnings, filteredArgs };
 }
 
-// Pure — no I/O. Merge baseline defaults with per-role overrides to produce the
-// final -e list. execution.extensions: {name: true} adds; {name: false} drops.
-export function computeRoleExtensions(role: ResolvedRole): string[] {
-    const wanted = new Set<string>(ROLE_DEFAULT_EXTENSIONS);
-    for (const [name, keep] of Object.entries(role.extensions ?? {})) {
-        if (keep) wanted.add(name);
-        else wanted.delete(name);
-    }
-    return [...wanted];
-}
-
-function resolveSkillPath(mainRepoRoot: string, rawPath: string): string {
+// Resolve a specialist.skills.paths entry to an absolute file path.
+//
+// Precedence, matching the operator's mental model "try local override,
+// else canonical global":
+//   1. absolute or ~-prefixed → use verbatim (author knows what they want)
+//   2. relative + exists at mainRepoRoot → repo-local override
+//   3. relative + exists at $HOME → canonical global (post-migration home)
+//   4. otherwise → return the repo-resolved path so pi produces the loud
+//      "skill not found" error at the exact absolute location the operator
+//      can then fix
+//
+// Rationale: after xtrm-bq7yd's global-skills migration, canonical skills
+// live at ~/.xtrm/skills/active/... The repo's .xtrm/skills/active/ often has
+// only a subset (or partial symlinks from an in-flight migration). Resolving
+// exclusively against mainRepoRoot silently sends pi at a path that doesn't
+// exist. Falling back to $HOME picks up the canonical global. See xtmux-1rn.
+// Post-y0tdg the layout flattens further and resolution can simplify to
+// querying pi's own settings.json chain, but that's follow-up work.
+// Exported for unit testing.
+export function resolveSkillPath(mainRepoRoot: string, rawPath: string): string {
     if (path.isAbsolute(rawPath)) return rawPath;
     if (rawPath === '~') return os.homedir();
     if (rawPath.startsWith('~/')) return path.join(os.homedir(), rawPath.slice(2));
-    return path.resolve(mainRepoRoot, rawPath);
+    const repoResolved = path.resolve(mainRepoRoot, rawPath);
+    if (existsSync(repoResolved)) return repoResolved;
+    const homeResolved = path.resolve(os.homedir(), rawPath);
+    if (existsSync(homeResolved)) return homeResolved;
+    return repoResolved;
 }
 
 // Exposed for unit testing. sp view <name> --raw is the source of truth for
@@ -248,12 +245,14 @@ export function buildRoleTmuxPlan(args: {
         piArgs.push('--skill', skill);
     }
 
-    // Extension policy: curated allow-list for interactive coordination.
-    // Defaults + specialist opt-in/out (see computeRoleExtensions).
-    piArgs.push('--no-extensions');
-    for (const ext of computeRoleExtensions(role)) {
-        piArgs.push('-e', ext);
-    }
+    // Extensions: trust pi's own discovery (~/.pi/agent/settings.json plus any
+    // per-repo settings). Previously (PR #365) the launcher emitted
+    // `--no-extensions -e <name>...` from a curated allow-list, but `pi -e`
+    // takes a **filesystem path**, not a registry name — the launcher was
+    // silently crashing pi on startup with "Extension path does not exist".
+    // The 'problematic extensions' concern that motivated the allow-list has
+    // since been resolved upstream, so drop the policy entirely rather than
+    // resurrect it via name→path resolution. See xtmux-3rs.
 
     // Model / thinking: CLI override wins over specialist default. Both
     // optional — pi resolves its own default when neither is set.

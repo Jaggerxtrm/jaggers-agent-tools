@@ -61551,14 +61551,6 @@ function verifyGlobalPointer() {
     throw new Error(`global skills pointer target missing: ${resolvedTarget}`);
   }
 }
-var ROLE_DEFAULT_EXTENSIONS = [
-  "caveman",
-  "pi-nvidia-nim",
-  "service-skills",
-  "worktree-boundary",
-  "@jaggerxtrm/pi-extensions",
-  "pi-guardrails"
-];
 var ROLE_GUARDED_PI_FLAGS = [
   "--session-dir",
   "--name",
@@ -61595,19 +61587,15 @@ function guardRolePassthrough(passthrough) {
   }
   return { warnings, filteredArgs };
 }
-function computeRoleExtensions(role) {
-  const wanted = new Set(ROLE_DEFAULT_EXTENSIONS);
-  for (const [name, keep] of Object.entries(role.extensions ?? {})) {
-    if (keep) wanted.add(name);
-    else wanted.delete(name);
-  }
-  return [...wanted];
-}
 function resolveSkillPath(mainRepoRoot, rawPath) {
   if (import_node_path9.default.isAbsolute(rawPath)) return rawPath;
   if (rawPath === "~") return import_node_os5.default.homedir();
   if (rawPath.startsWith("~/")) return import_node_path9.default.join(import_node_os5.default.homedir(), rawPath.slice(2));
-  return import_node_path9.default.resolve(mainRepoRoot, rawPath);
+  const repoResolved = import_node_path9.default.resolve(mainRepoRoot, rawPath);
+  if ((0, import_node_fs2.existsSync)(repoResolved)) return repoResolved;
+  const homeResolved = import_node_path9.default.resolve(import_node_os5.default.homedir(), rawPath);
+  if ((0, import_node_fs2.existsSync)(homeResolved)) return homeResolved;
+  return repoResolved;
 }
 function parseSpecialistJson(name, raw, mainRepoRoot = process.cwd()) {
   let parsed;
@@ -61673,10 +61661,6 @@ function buildRoleTmuxPlan(args) {
   const piArgs = ["--append-system-prompt", promptFile];
   for (const skill of role.skillPaths) {
     piArgs.push("--skill", skill);
-  }
-  piArgs.push("--no-extensions");
-  for (const ext of computeRoleExtensions(role)) {
-    piArgs.push("-e", ext);
   }
   const model = modelOverride ?? role.model;
   if (model) piArgs.push("--model", model);
