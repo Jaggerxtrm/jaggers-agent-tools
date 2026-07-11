@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs-extra';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { execSync } from 'child_process';
+import { migrateSkillsLayout } from '../commands/migrate.js';
 
 const CLI_PATH = path.join(__dirname, '../../dist/index.cjs');
 
@@ -97,6 +98,28 @@ describe('xt migrate command', () => {
     const result = runCli(['migrate', 'invalid']);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('Invalid target');
+  });
+
+  it('preserves pack metadata when legacy pack rename fails', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const source = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'legacy-pack');
+    const packMetadata = { schemaVersion: '1', name: 'legacy-pack', version: '1.0.0' };
+    await fs.ensureDir(source);
+    await fs.writeJson(path.join(source, 'PACK.json'), packMetadata);
+
+    const renameSpy = vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('rename failed'));
+    try {
+      await expect(migrateSkillsLayout(repoDir, { dryRun: false })).rejects.toThrow('rename failed');
+      expect(await fs.readJson(path.join(source, 'PACK.json'))).toEqual(packMetadata);
+      expect(await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'legacy-pack'))).toBe(false);
+    } finally {
+      renameSpy.mockRestore();
+    }
+
+    await migrateSkillsLayout(repoDir, { dryRun: false });
+    const target = path.join(repoDir, '.xtrm', 'skills', 'legacy-pack');
+    expect(await fs.pathExists(path.join(target, 'PACK.json'))).toBe(false);
+    expect(await fs.pathExists(path.join(source, 'PACK.json'))).toBe(false);
   });
 
   it('dry-run mode prints planned actions without touching filesystem', async () => {
