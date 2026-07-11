@@ -172,6 +172,44 @@ describe("custom-footer parity", () => {
 		expect(requestRenderSpy).toHaveBeenCalled();
 	});
 
+	it("schedules beads refresh from relevant tool results", async () => {
+		(EventAdapter.isBeadsProject as any).mockReturnValue(true);
+		(SubprocessRunner.run as any).mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: "/repo\n", stderr: "" };
+			if (cmd === "git" && args[0] === "branch") return { code: 0, stdout: "xt/demo\n", stderr: "" };
+			if (cmd === "git" && args.includes("status")) return { code: 0, stdout: "", stderr: "" };
+			if (cmd === "git" && args.includes("rev-list")) return { code: 0, stdout: "0 0\n", stderr: "" };
+			if (cmd === "bd" && args[0] === "list" && args[1] === "--status=in_progress") return { code: 0, stdout: "", stderr: "" };
+			if (cmd === "bd" && args[0] === "list") return { code: 0, stdout: "(5 open, 0 in progress)", stderr: "" };
+			return { code: 1, stdout: "", stderr: "" };
+		});
+
+		customFooterExtension(createPi() as any);
+		await handlers.session_start[0]({}, ctx);
+		await vi.runOnlyPendingTimersAsync();
+		await Promise.resolve();
+		const settledCalls = (SubprocessRunner.run as any).mock.calls.length;
+
+		await handlers.tool_result[0]({ input: { command: "bd update xtrm-123" } });
+		await vi.advanceTimersByTimeAsync(250);
+		await Promise.resolve();
+
+		expect(SubprocessRunner.run).toHaveBeenCalledTimes(settledCalls + 2);
+		expect(requestRenderSpy).toHaveBeenCalled();
+	});
+
+	it("cleans pending footer timers on session shutdown", async () => {
+		(SubprocessRunner.run as any).mockResolvedValue({ code: 1, stdout: "", stderr: "" });
+
+		customFooterExtension(createPi() as any);
+		await handlers.session_start[0]({}, ctx);
+		await handlers.session_shutdown[0]();
+		await vi.advanceTimersByTimeAsync(500);
+
+		expect(SubprocessRunner.run).not.toHaveBeenCalled();
+		expect(setFooterSpy).toHaveBeenCalledTimes(1);
+	});
+
 	it("reapplies footer on model/session refresh events", async () => {
 		(SubprocessRunner.run as any).mockResolvedValue({ code: 1, stdout: "", stderr: "" });
 
@@ -186,5 +224,54 @@ describe("custom-footer parity", () => {
 		await vi.advanceTimersByTimeAsync(45);
 
 		expect(setFooterSpy.mock.calls.length).toBeGreaterThan(initialCalls);
+	});
+
+	it("keeps latest branch listener and redraw after footer reapply race", async () => {
+		let activeBranchChangeHandler: (() => void) | null = null;
+		let previousRenderer: any = null;
+		const racySetFooterSpy = vi.fn((factory: any) => {
+			const renderer = factory(
+				{ requestRender: requestRenderSpy },
+				{ fg: (_c: string, text: string) => text },
+				{
+					getGitBranch: () => "xt/demo",
+					onBranchChange: (handler: () => void) => {
+						activeBranchChangeHandler = handler;
+						return () => {
+							if (activeBranchChangeHandler === handler) activeBranchChangeHandler = null;
+						};
+					},
+					getAvailableProviderCount: () => 1,
+				},
+			);
+			const staleRenderer = previousRenderer;
+			previousRenderer = renderer;
+			footerRenderer = renderer;
+			staleRenderer?.dispose();
+		});
+		ctx.ui.setFooter = racySetFooterSpy;
+		(SubprocessRunner.run as any).mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: "/repo\n", stderr: "" };
+			if (cmd === "git" && args[0] === "branch") return { code: 0, stdout: "xt/demo\n", stderr: "" };
+			if (cmd === "git" && args.includes("status")) return { code: 0, stdout: "", stderr: "" };
+			if (cmd === "git" && args.includes("rev-list")) return { code: 0, stdout: "0 0\n", stderr: "" };
+			return { code: 1, stdout: "", stderr: "" };
+		});
+
+		customFooterExtension(createPi() as any);
+		await handlers.session_start[0]({}, ctx);
+		await vi.runOnlyPendingTimersAsync();
+		await Promise.resolve();
+		expect(racySetFooterSpy).toHaveBeenCalledTimes(2);
+		vi.clearAllMocks();
+
+		expect(activeBranchChangeHandler).not.toBeNull();
+		activeBranchChangeHandler?.();
+		await vi.runOnlyPendingTimersAsync();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(SubprocessRunner.run).toHaveBeenCalledTimes(4);
+		expect(requestRenderSpy).toHaveBeenCalled();
 	});
 });
