@@ -61317,6 +61317,7 @@ async function pruneConflictingPiPackagesFromSettings(settingsPath, scopeLabel, 
 }
 async function cleanupConflictingPiPackageSettings(projectRoot, dryRun, isGlobal, log, agentDir = PI_AGENT_DIR) {
   await pruneConflictingPiPackagesFromSettings(
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- agentDir is an internal runtime path and filename is fixed.
     import_path4.default.join(agentDir, "settings.json"),
     "~/.pi/agent/settings.json",
     dryRun,
