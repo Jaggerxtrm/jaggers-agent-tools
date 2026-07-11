@@ -38,7 +38,7 @@ class TestRewriteClaudeRefs(unittest.TestCase):
     def test_rewrites_self_container_and_cross_refs(self):
         with TemporaryDirectory() as d:
             root = Path(d)
-            base = ".xtrm/skills/user/packs/market-data/service-skills/services"
+            base = ".xtrm/skills/market-data/service-skills/services"
             pack = _flat_pack(root, "market-data", {
                 "ingesting-ohlcv": {
                     "container": "mmd-data-feed",

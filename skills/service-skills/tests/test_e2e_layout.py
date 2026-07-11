@@ -42,18 +42,18 @@ class TestE2ELayout(unittest.TestCase):
         with TemporaryDirectory() as d:
             root = Path(d)
             _git_init(root)
-            (root / ".xtrm/skills/user/packs/p1/service-skills").mkdir(parents=True)
-            (root / ".xtrm/skills/user/packs/p1/service-skills/service-registry.json").write_text(
+            (root / ".xtrm/skills/p1/service-skills").mkdir(parents=True)
+            (root / ".xtrm/skills/p1/service-skills/service-registry.json").write_text(
                 '{"version":"1.0","services":{}}', encoding="utf-8")
             (root / "docker-compose.yml").write_text(
                 "services:\n  cache-svc:\n    image: redis:7\n", encoding="utf-8")
             r = _run("scaffolder.py", "docker-compose.yml", "cache-svc", cwd=root, pack="p1")
             self.assertIn("Phase 1 Complete", r.stdout, msg=r.stderr)
-            gen = root / ".xtrm/skills/user/packs/p1/service-skills/services/cache-svc/SKILL.md"
+            gen = root / ".xtrm/skills/p1/service-skills/services/cache-svc/SKILL.md"
             self.assertTrue(gen.exists(), "scaffold must land under service-skills/services/")
             self.assertNotIn(".claude/skills", gen.read_text(), "generated SKILL.md must be .claude-free")
             # registry skill_path resolves under .xtrm
-            reg = json.loads((root / ".xtrm/skills/user/packs/p1/service-skills/service-registry.json").read_text())
+            reg = json.loads((root / ".xtrm/skills/p1/service-skills/service-registry.json").read_text())
             sp = reg["services"]["cache-svc"]["skill_path"]
             self.assertTrue(sp.startswith(".xtrm/"))
             self.assertNotIn(".claude/skills", sp)
@@ -62,11 +62,11 @@ class TestE2ELayout(unittest.TestCase):
         with TemporaryDirectory() as d:
             root = Path(d)
             _git_init(root)
-            pk = root / ".xtrm/skills/user/packs/market-data/service-skills"
+            pk = root / ".xtrm/skills/market-data/service-skills"
             pk.mkdir(parents=True)
             (pk / "service-registry.json").write_text(json.dumps({"version": "1.0", "services": {
                 "auth-service": {"name": "Auth", "territory": ["src/auth/**"],
-                                 "skill_path": ".xtrm/skills/user/packs/market-data/service-skills/services/auth-service/SKILL.md",
+                                 "skill_path": ".xtrm/skills/market-data/service-skills/services/auth-service/SKILL.md",
                                  "last_sync": "never"}}}), encoding="utf-8")
             r = _run("umbrella_generator.py", "market-data", cwd=root, pack="market-data")
             self.assertTrue(r.stdout.startswith("generated:"), msg=r.stderr)
@@ -78,7 +78,7 @@ class TestE2ELayout(unittest.TestCase):
         with TemporaryDirectory() as d:
             root = Path(d)
             _git_init(root)
-            pk = root / ".xtrm/skills/user/packs/market-data"
+            pk = root / ".xtrm/skills/market-data"
             for sid in ("auth-service", "db-expert"):
                 sd = pk / sid / "scripts"
                 sd.mkdir(parents=True)
@@ -111,7 +111,7 @@ class TestE2ELayout(unittest.TestCase):
         with TemporaryDirectory() as d:
             root = Path(d)
             _git_init(root)
-            pk = root / ".xtrm/skills/user/packs/p/service-skills"
+            pk = root / ".xtrm/skills/p/service-skills"
             (pk / "services").mkdir(parents=True)
             (pk / "service-registry.json").write_text('{"version":"1.0","services":{}}', encoding="utf-8")
             r = _run("drift_detector.py", "scan", cwd=root, pack="p")

@@ -10,4 +10,4 @@ def test_scan_missing_registry_prints_hint(tmp_path: Path, capsys):
     assert scan_drift(str(tmp_path)) == []
     err = capsys.readouterr().err
     assert "Registry not found." in err
-    assert ".xtrm/skills/user/packs/*/service-registry.json" in err
+    assert ".xtrm/skills/*/service-registry.json" in err

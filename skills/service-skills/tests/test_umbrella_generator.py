@@ -14,7 +14,7 @@ REGISTRY = {
             "name": "Auth Service",
             "container": "infra-auth",
             "territory": ["src/auth/**/*.py"],
-            "skill_path": ".xtrm/skills/user/packs/market-data/service-skills/services/auth-service/SKILL.md",
+            "skill_path": ".xtrm/skills/market-data/service-skills/services/auth-service/SKILL.md",
             "description": "JWT auth",
             "last_sync": "2026-05-01T00:00:00Z",
             "last_sync_ref": "0d241bc1abcd",
@@ -22,7 +22,7 @@ REGISTRY = {
         "db-expert": {
             "name": "DB Expert",
             "territory": ["src/db/**/*.py"],
-            "skill_path": ".xtrm/skills/user/packs/market-data/service-skills/services/db-expert/SKILL.md",
+            "skill_path": ".xtrm/skills/market-data/service-skills/services/db-expert/SKILL.md",
             "description": "schema",
             "last_sync": "never",
         },
@@ -50,7 +50,7 @@ class TestGenerate(unittest.TestCase):
         # both services + their resolved .xtrm skill_path appear
         self.assertIn("`auth-service`", out)
         self.assertIn("`db-expert`", out)
-        self.assertIn(".xtrm/skills/user/packs/market-data/service-skills/services/auth-service/SKILL.md", out)
+        self.assertIn(".xtrm/skills/market-data/service-skills/services/auth-service/SKILL.md", out)
         # last_sync_ref short hash rendered
         self.assertIn("0d241bc1", out)
         # no hardcoded .claude/skills emission
