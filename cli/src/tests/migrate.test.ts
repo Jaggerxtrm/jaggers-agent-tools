@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs-extra';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { execSync } from 'child_process';
+import { migrateSkillsLayout } from '../commands/migrate.js';
 
 const CLI_PATH = path.join(__dirname, '../../dist/index.cjs');
 
@@ -99,6 +100,28 @@ describe('xt migrate command', () => {
     expect(result.stderr).toContain('Invalid target');
   });
 
+  it('preserves pack metadata when legacy pack rename fails', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const source = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'legacy-pack');
+    const packMetadata = { schemaVersion: '1', name: 'legacy-pack', version: '1.0.0' };
+    await fs.ensureDir(source);
+    await fs.writeJson(path.join(source, 'PACK.json'), packMetadata);
+
+    const renameSpy = vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('rename failed'));
+    try {
+      await expect(migrateSkillsLayout(repoDir, { dryRun: false })).rejects.toThrow('rename failed');
+      expect(await fs.readJson(path.join(source, 'PACK.json'))).toEqual(packMetadata);
+      expect(await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'legacy-pack'))).toBe(false);
+    } finally {
+      renameSpy.mockRestore();
+    }
+
+    await migrateSkillsLayout(repoDir, { dryRun: false });
+    const target = path.join(repoDir, '.xtrm', 'skills', 'legacy-pack');
+    expect(await fs.pathExists(path.join(target, 'PACK.json'))).toBe(false);
+    expect(await fs.pathExists(path.join(source, 'PACK.json'))).toBe(false);
+  });
+
   it('dry-run mode prints planned actions without touching filesystem', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     await createGlobalSkillsRoot(tmpHome);
@@ -191,7 +214,7 @@ describe('xt migrate command', () => {
     expect(result.stdout).toContain('diverged');
     expect(result.stdout).toContain('preserving as override');
 
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
     const legacyFileExists = await fs.pathExists(path.join(legacyRoot, 'diverged-skill.md'));
     expect(legacyFileExists).toBe(true);
   });
@@ -211,13 +234,13 @@ describe('xt migrate command', () => {
     const result = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
 
     expect(result.exitCode).toBe(0);
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
     expect(await fs.pathExists(path.join(legacyRoot, 'nested-skill', 'SKILL.md'))).toBe(true);
     expect(await fs.pathExists(path.join(legacyRoot, 'nested-skill', 'script.py'))).toBe(true);
     expect(await fs.readFile(path.join(legacyRoot, 'nested-skill', 'SKILL.md'), 'utf8')).toBe('repo skill');
   });
 
-  it('local-legacy PACK.json has name=local-legacy and lists only dirs with SKILL.md', async () => {
+  it('local-legacy has no PACK.json and preserves partial trees', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     const globalSkillsRoot = await createGlobalSkillsRoot(tmpHome);
 
@@ -242,11 +265,8 @@ describe('xt migrate command', () => {
     const result = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
     expect(result.exitCode).toBe(0);
 
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
-    const legacyPack = await fs.readJson(path.join(legacyRoot, 'PACK.json'));
-    expect(legacyPack.name).toBe('local-legacy');
-    expect(legacyPack.schemaVersion).toBe('1');
-    expect(legacyPack.skills).toEqual(['real-skill']);
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
+    expect(await fs.pathExists(path.join(legacyRoot, 'PACK.json'))).toBe(false);
     expect(await fs.pathExists(path.join(legacyRoot, 'partial-tree', 'refs', 'note.md'))).toBe(true);
     expect(await fs.pathExists(path.join(legacyRoot, 'partial-tree'))).toBe(true);
   });
@@ -267,7 +287,7 @@ describe('xt migrate command', () => {
     expect(result.stdout).toContain('diverged');
     expect(result.stdout).toContain('preserving as override');
 
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
     const legacyFileExists = await fs.pathExists(path.join(legacyRoot, 'optional-diverged.md'));
     expect(legacyFileExists).toBe(true);
   });
@@ -481,9 +501,9 @@ describe('xt migrate command', () => {
     const result = runCli(['migrate', 'hooks', '--apply', '--yes', '--repo', repoDir], repoDir);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('settings: cleaned xtrm-owned entries from .pi/agent/settings.json');
-    expect((await fs.readJson(directSettingsPath)).hooks.PreToolUse).toEqual([xtrmHook, userHook]);
-    expect((await fs.readJson(retiredSettingsPath)).hooks.PreToolUse).toEqual([]);
+    expect(result.stdout).toContain('settings: cleaned xtrm-owned entries from .pi/settings.json');
+    expect((await fs.readJson(directSettingsPath)).hooks.PreToolUse).toEqual([userHook]);
+    expect((await fs.readJson(retiredSettingsPath)).hooks.PreToolUse).toEqual([xtrmHook]);
   });
 
   it('logs migration events to skills-migration.jsonl', async () => {
