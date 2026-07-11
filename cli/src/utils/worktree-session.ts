@@ -630,24 +630,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.log(kleur.dim(`  warning: could not rebuild active skills view (${message})`));
-
-            // Best-effort fallback symlink if rebuild fails.
-            const wtSkillsDir = path.join(claudeDir, 'skills');
-            const claudeSkillsTarget = path.join('..', '.xtrm', 'skills', 'active');
-            try {
-                const existing = lstatSync(wtSkillsDir);
-                if (!existing.isSymbolicLink() || readlinkSync(wtSkillsDir) !== claudeSkillsTarget) {
-                    rmSync(wtSkillsDir, { recursive: true, force: true });
-                    mkdirSync(claudeDir, { recursive: true });
-                    symlinkSync(claudeSkillsTarget, wtSkillsDir);
-                }
-            } catch {
-                try {
-                    mkdirSync(claudeDir, { recursive: true });
-                    symlinkSync(claudeSkillsTarget, wtSkillsDir);
-                } catch { /* non-fatal */ }
-            }
+            console.log(kleur.dim(`  warning: could not reconcile runtime skills (${message})`));
         }
 
         // 2. Symlink specialist definition directories into worktree so

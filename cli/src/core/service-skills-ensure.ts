@@ -2,7 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'fs-extra';
-import { rebuildAllRuntimeActiveViews } from './skills-materializer.js';
+
 
 /**
  * Registry-gated, idempotent service-skills migration runner.
@@ -120,22 +120,7 @@ export async function ensureServiceSkills(
     }
   }
 
-  // Rebuild the runtime active view AFTER a migration (xtrm-x8b5g). The migrator just
-  // moved services into the umbrella and synced PACK.json; but the active-view rebuild in
-  // the normal flow is gated (update: only when registry files drifted; init: Phase 6b runs
-  // *before* this migration), so a migration-only pass would leave .xtrm/skills/active frozen
-  // — the consumer would never see the new `service-skills` machinery + `<repo>-services`
-  // umbrella. Rebuild here, scoped to an actual migration. Idempotent (atomic swap) and
-  // best-effort: a failure is noted, never aborts the update.
-  if (migratedPacks.length > 0) {
-    try {
-      const skillsRoot = path.join(projectRoot, '.xtrm', 'skills');
-      const views = await rebuildAllRuntimeActiveViews(skillsRoot);
-      notes.push(`service-skills: active view rebuilt after migration (${views[0]?.discoveredSkillCount ?? 0} skills).`);
-    } catch (error) {
-      notes.push(`service-skills: active-view rebuild after migration skipped — ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
+  if (migratedPacks.length > 0) notes.push('service-skills: runtime links reconciled on next update pass.');
 
   // Wire the local git post-merge drift sweep (xtrm-jcmub) on the foolproof path.
   // Registry-gated (we only reach here when applicable). Idempotent — marker-guarded

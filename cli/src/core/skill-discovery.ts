@@ -27,7 +27,8 @@ export type InvariantViolationCode =
   | 'SKILL_AND_PACK_CONFLICT'
   | 'NESTED_RUNTIME_ROOT'
   | 'PACK_METADATA_MISMATCH'
-  | 'PACK_NAME_COLLISION';
+  | 'PACK_NAME_COLLISION'
+  | 'DEFAULT_SKILL_NAME_MISMATCH';
 
 export type InvariantViolation = {
   readonly code: InvariantViolationCode;
@@ -153,6 +154,10 @@ export async function validateSkillsInvariants(skillsRoot: string): Promise<Inva
 
   const defaultSkills = await discoverDefaultSkills(skillsRoot);
   for (const skill of defaultSkills) {
+    const frontmatterName = skill.runtimeName;
+    if (frontmatterName !== skill.name) {
+      violations.push({ code: 'DEFAULT_SKILL_NAME_MISMATCH', path: skill.path, message: `Default skill directory '${skill.name}' must match frontmatter name '${frontmatterName}'.` });
+    }
     if (await hasNestedRuntimeRoot(skill.path)) {
       violations.push({
         code: 'NESTED_RUNTIME_ROOT',

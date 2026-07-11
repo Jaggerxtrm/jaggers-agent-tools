@@ -40,18 +40,18 @@
     },
     "skills": {
       "paths": [
-        ".xtrm/skills/active/find-docs/SKILL.md",
-        ".xtrm/skills/active/deepwiki/SKILL.md",
-        ".xtrm/skills/active/github-search/SKILL.md",
-        ".xtrm/skills/active/last30days/SKILL.md"
+        "~/.xtrm/skills/default/find-docs/SKILL.md",
+        "~/.xtrm/skills/default/deepwiki/SKILL.md",
+        "~/.xtrm/skills/default/github-search/SKILL.md",
+        "~/.xtrm/skills/default/last30days/SKILL.md"
       ],
       "scripts": []
     },
     "validation": {
       "files_to_watch": [
-        ".xtrm/skills/active/find-docs/SKILL.md",
-        ".xtrm/skills/active/deepwiki/SKILL.md",
-        ".xtrm/skills/active/github-search/SKILL.md"
+        "~/.xtrm/skills/default/find-docs/SKILL.md",
+        "~/.xtrm/skills/default/deepwiki/SKILL.md",
+        "~/.xtrm/skills/default/github-search/SKILL.md"
       ],
       "stale_threshold_days": 30
     },

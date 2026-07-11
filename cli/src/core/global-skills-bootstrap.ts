@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { resolveGlobalSkillsRoot, resolveStateFilePath, SKILLS_STATE_SCHEMA_VERSION } from './skills-layout.js';
-import { rebuildGlobalActiveView } from './skills-materializer.js';
+
 import { readSkillsState } from './skills-state.js';
 
 interface BootstrapOptions {
@@ -119,6 +119,7 @@ export async function ensureGlobalSkillsBootstrapped(pkgRoot: string, opts: Boot
 
   try {
     const currentState = await readSkillsState(globalSkillsRoot);
+    await fs.remove(path.join(globalSkillsRoot, 'active'));
     if (!opts.force && currentState.installedVersion === installedVersion) {
       await appendLog({
         timestamp: new Date().toISOString(),
@@ -155,12 +156,13 @@ export async function ensureGlobalSkillsBootstrapped(pkgRoot: string, opts: Boot
       });
     }
 
-    await rebuildGlobalActiveView(globalSkillsRoot);
+    await fs.remove(path.join(globalSkillsRoot, 'active'));
 
     const currentStateForMetadata = await readSkillsState(globalSkillsRoot);
     await fs.writeJson(statePath, {
       schemaVersion: SKILLS_STATE_SCHEMA_VERSION,
       enabledPacks: currentStateForMetadata.enabledPacks,
+      managedLinks: currentStateForMetadata.managedLinks,
       installedVersion,
       installedFrom: formatLogPath(pkgRoot),
       installedAt: new Date().toISOString(),

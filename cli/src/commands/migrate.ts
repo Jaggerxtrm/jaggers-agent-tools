@@ -516,7 +516,7 @@ async function cleanSettingsJsonEntries(
   opts: { dryRun: boolean; apply: boolean; hooksBackupPath?: string },
 ): Promise<void> {
   const claudeSettingsPath = path.join(repoPath, '.claude', 'settings.json');
-  const piSettingsPath = path.join(repoPath, '.pi', 'agent', 'settings.json');
+  const piSettingsPath = path.join(repoPath, '.pi', 'settings.json');
   const preCleanSnapshot: Record<string, unknown> = {};
 
   for (const settingsPath of [claudeSettingsPath, piSettingsPath]) {

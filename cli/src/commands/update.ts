@@ -18,6 +18,7 @@ import { ensureBeadsSharedServerEnabled, hasBeadsDir } from '../core/beads-share
 import { ensureBdAutoStagePatch, summarizeBdAutoStagePatch } from '../core/bd-auto-stage-patch.js';
 import { printDependencyMaintenanceSummary, runDependencyMaintenance, type DependencyMaintenanceSummary } from '../core/dependency-maintenance.js';
 import { ensureServiceSkills } from '../core/service-skills-ensure.js';
+import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { reconcileProjectClaudeHooks } from '../core/claude-runtime-sync.js';
 import { resolveMainProjectRoot } from '../utils/repo-root.js';
 import { printNudgeOnce } from '../utils/nudge.js';
@@ -102,6 +103,7 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
                 pkgVersion: pkgJson.version ?? '0.0.0',
             });
             await ensureGlobalSkillsBootstrapped(packageRoot);
+            await ensureUserAgentsSkillsSymlink({ force: true });
             if (shouldUseGlobalHooks()) {
                 await ensureGlobalHooksBootstrapped(packageRoot);
                 await reconcileGlobalClaudeHooks();
@@ -153,6 +155,8 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
         // repos and on already-migrated ones, but it still migrates a package-current
         // repo that is on the OLD service layout (which xt update otherwise misses).
         const serviceSkills = await ensureServiceSkills(repoRoot, { apply: true });
+        await fs.remove(path.join(repoRoot, '.xtrm', 'skills', 'active'));
+        await ensureAgentsSkillsSymlink(repoRoot);
 
         // Reconcile .claude/settings.json hooks against canonical hooks.json on every
         // apply. runInstall is invoked with skipClaudeRuntimeSync (and is not invoked at

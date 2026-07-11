@@ -19,8 +19,8 @@ import { homedir } from 'node:os';
 import { t, sym } from '../utils/theme.js';
 import { resolveSkillsRoot, resolveUserPacksRoot } from './skills-layout.js';
 import { validateSkillsInvariants } from './skill-discovery.js';
-import { rebuildAllRuntimeActiveViews } from './skills-materializer.js';
-import { hasServiceRegistry } from './service-skills-ensure.js';
+
+import { hasProjectScopedSkillsContent } from './project-skills-content.js';
 
 // Resolve xtrm-tools package root from __dirname (cli/dist/ -> ../..)
 declare const __dirname: string;
@@ -125,8 +125,7 @@ async function resolveGlobalNpmRootDir(): Promise<string | null> {
     return npmRootDir.length > 0 ? npmRootDir : null;
 }
 const PROJECT_EXTENSIONS_ENTRY = '../.xtrm/extensions';
-const PROJECT_SKILLS_ENTRY = '../.xtrm/skills/active';
-const USER_DEFAULT_SKILLS_ENTRY = '~/.xtrm/skills/active';
+const LEGACY_XTRM_SKILLS_ENTRIES = new Set(['../.xtrm/skills/active', '~/.xtrm/skills/active', '~/.xtrm/skills/default']);
 const PROJECT_EXTENSION_PACKAGE_ID = 'npm:@jaggerxtrm/pi-extensions';
 const PROJECT_EXTENSION_PACKAGE: ManagedPackage = {
     id: PROJECT_EXTENSION_PACKAGE_ID,
@@ -1119,27 +1118,8 @@ function normalizeSerenaSettings(value: unknown): Record<string, unknown> {
     return serena;
 }
 
-async function hasProjectScopedSkillsContent(projectRoot: string): Promise<boolean> {
-    const packsRoot = resolveUserPacksRoot(resolveSkillsRoot(projectRoot));
-    const packEntries = await fs.readdir(packsRoot, { withFileTypes: true }).catch(() => [] as fs.Dirent[]);
-    if (packEntries.some((entry) => entry.isDirectory())) {
-        return true;
-    }
-
-    return hasServiceRegistry(projectRoot);
-}
-
-function normalizePiSkillsEntries(existingSkills: readonly string[], includeProjectEntry: boolean): string[] {
-    const preserved = existingSkills.filter((entry, index) => (
-        existingSkills.indexOf(entry) === index
-        && entry !== PROJECT_SKILLS_ENTRY
-        && entry !== '~/.xtrm/skills/default'
-        && entry !== USER_DEFAULT_SKILLS_ENTRY
-    ));
-
-    return includeProjectEntry
-        ? [PROJECT_SKILLS_ENTRY, ...preserved, USER_DEFAULT_SKILLS_ENTRY]
-        : [USER_DEFAULT_SKILLS_ENTRY, ...preserved];
+function normalizePiSkillsEntries(existingSkills: readonly string[]): string[] {
+    return existingSkills.filter((entry, index) => existingSkills.indexOf(entry) === index && !LEGACY_XTRM_SKILLS_ENTRIES.has(entry));
 }
 
 async function appendSkillsPointerLog(event: {
@@ -1287,10 +1267,7 @@ export async function updatePiSettings(
     }
 
     const existingSkills = normalizeStringArray(existingSettings.skills);
-    const normalizedSkills = normalizePiSkillsEntries(
-        existingSkills,
-        await hasProjectScopedSkillsContent(projectRoot),
-    );
+    const normalizedSkills = normalizePiSkillsEntries(existingSkills);
     if (JSON.stringify(existingSkills) !== JSON.stringify(normalizedSkills)) {
         await appendSkillsPointerLog({
             scope: 'project',
@@ -1582,7 +1559,8 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
         }
 
         if (!dryRun) {
-            await rebuildAllRuntimeActiveViews(skillsRoot);
+            // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- skillsRoot is resolved from the trusted project root.
+            await fs.remove(path.join(skillsRoot, 'active'));
         }
     }
 
