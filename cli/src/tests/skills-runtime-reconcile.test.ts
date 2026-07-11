@@ -82,6 +82,15 @@ describe('reconcileRuntimeLinks', () => {
     expect(result.state.managedLinks.claude).toEqual({});
   });
 
+  it('preserves user-owned runtime directory symlinks regardless of target text', async () => {
+    const runtimeDirectory = path.join(projectRoot, '.claude', 'skills');
+    await fs.ensureDir(path.dirname(runtimeDirectory));
+    await fs.symlink('/custom/active-skills', runtimeDirectory);
+
+    await expect(run()).rejects.toThrow(/user-owned runtime directory/);
+    expect(await fs.readlink(runtimeDirectory)).toBe('/custom/active-skills');
+  });
+
   it.each(['claude', 'pi'] as const)('rejects unsafe runtime names before mutating %s runtime', async (runtime) => {
     const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'user', 'packs', 'local');
     const state = {

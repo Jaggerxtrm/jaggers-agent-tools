@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assertRuntimeSkillsViews, getRuntimePointerTarget } from '../core/skills-runtime-views.js';
+import { assertRuntimeSkillsViews, checkRuntimeSkillsViews, getRuntimePointerTarget } from '../core/skills-runtime-views.js';
 
 const tempDirs: string[] = [];
 
@@ -61,6 +61,37 @@ describe('skills-runtime-views', () => {
 
       await expect(assertRuntimeSkillsViews(projectRoot, { scope: 'both' })).resolves.toBeUndefined();
       expect(await fs.pathExists(path.join(projectRoot, '.pi', 'settings.json'))).toBe(false);
+    } finally {
+      process.env.HOME = previousHome;
+    }
+  });
+
+  it('requires each managed runtime link to match manifest target and exist', async () => {
+    const tempHome = await createTempDir();
+    const projectRoot = await createTempDir();
+    const previousHome = process.env.HOME;
+    process.env.HOME = tempHome;
+    try {
+      const skillsRoot = path.join(projectRoot, '.xtrm', 'skills');
+      const manifestTarget = path.join(skillsRoot, 'user', 'packs', 'local', 'local-skill');
+      const wrongTarget = path.join(skillsRoot, 'user', 'packs', 'other-skill');
+      const runtimeLink = path.join(projectRoot, '.claude', 'skills', 'local-skill');
+      await fs.ensureDir(manifestTarget);
+      await fs.ensureDir(wrongTarget);
+      await fs.ensureDir(path.dirname(runtimeLink));
+      await fs.symlink(wrongTarget, runtimeLink);
+      await fs.writeJson(path.join(skillsRoot, 'state.json'), {
+        schemaVersion: '2',
+        enabledPacks: { claude: ['local'], pi: [] },
+        managedLinks: { claude: { 'local-skill': '.xtrm/skills/user/packs/local/local-skill' }, pi: {} },
+      });
+
+      const wrongTargetCheck = await checkRuntimeSkillsViews(projectRoot);
+      expect(wrongTargetCheck.projectClaudeSkillsReady).toBe(false);
+
+      await fs.remove(runtimeLink);
+      const missingLinkCheck = await checkRuntimeSkillsViews(projectRoot);
+      expect(missingLinkCheck.projectClaudeSkillsReady).toBe(false);
     } finally {
       process.env.HOME = previousHome;
     }

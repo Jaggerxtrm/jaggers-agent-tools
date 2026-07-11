@@ -31,23 +31,26 @@ async function isRealDirectory(dir: string): Promise<boolean> {
   return Boolean(stat?.isDirectory() && !stat.isSymbolicLink());
 }
 
-async function managedEntries(projectRoot: string, runtime: 'claude' | 'pi'): Promise<string[]> {
+async function managedEntries(projectRoot: string, runtime: 'claude' | 'pi'): Promise<boolean> {
   const state = await readSkillsState(resolveSkillsRoot(projectRoot));
   const dir = path.join(projectRoot, runtime === 'claude' ? '.claude' : '.pi', 'skills');
-  const names = Object.keys(state.managedLinks[runtime]);
-  for (const name of names) {
-    const stat = await fs.lstat(path.join(dir, name)).catch(() => null);
-    if (!stat?.isSymbolicLink()) return [];
+  for (const [name, relativeTarget] of Object.entries(state.managedLinks[runtime])) {
+    const linkPath = path.join(dir, name);
+    const stat = await fs.lstat(linkPath).catch(() => null);
+    if (!stat?.isSymbolicLink()) return false;
+    const actualTarget = path.resolve(path.dirname(linkPath), await fs.readlink(linkPath));
+    const manifestTarget = path.resolve(projectRoot, relativeTarget);
+    if (actualTarget !== manifestTarget || !await fs.pathExists(manifestTarget)) return false;
   }
-  return names;
+  return true;
 }
 
 export async function checkRuntimeSkillsViews(projectRoot: string): Promise<RuntimeViewCheckResult> {
   const globalDefault = resolveDefaultTierRoot(resolveGlobalSkillsRoot());
   const globalClaudePointerReady = await pointsTo(path.join(os.homedir(), '.claude', 'skills'), globalDefault);
   const globalPiPointerReady = await pointsTo(path.join(os.homedir(), '.pi', 'agent', 'skills'), globalDefault);
-  const projectClaudeSkillsReady = await isRealDirectory(path.join(projectRoot, '.claude', 'skills')) && await managedEntries(projectRoot, 'claude').then(() => true);
-  const projectPiSkillsReady = await isRealDirectory(path.join(projectRoot, '.pi', 'skills')) && await managedEntries(projectRoot, 'pi').then(() => true);
+  const projectClaudeSkillsReady = await isRealDirectory(path.join(projectRoot, '.claude', 'skills')) && await managedEntries(projectRoot, 'claude');
+  const projectPiSkillsReady = await isRealDirectory(path.join(projectRoot, '.pi', 'skills')) && await managedEntries(projectRoot, 'pi');
   const projectClaudePointerState = projectClaudeSkillsReady ? 'ready' : 'skipped';
   const projectPiPointerState = projectPiSkillsReady ? 'ready' : 'skipped';
   return {

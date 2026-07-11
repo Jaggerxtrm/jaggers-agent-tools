@@ -81,10 +81,9 @@ function resolveDesiredSkills(options: ReconcileRuntimeLinksOptions, defaults: r
 async function ensureRuntimeDirectory(directory: string): Promise<void> {
   const existing = await fs.lstat(directory).catch(() => null);
   if (existing?.isSymbolicLink()) {
-    const target = await fs.readlink(directory).catch(() => '');
-    if (!target.includes('active')) throw new Error(`Refusing to replace user-owned runtime directory ${directory}.`);
-    await fs.remove(directory);
-  } else if (existing && !existing.isDirectory()) {
+    throw new Error(`Refusing to replace user-owned runtime directory ${directory}.`);
+  }
+  if (existing && !existing.isDirectory()) {
     throw new Error(`Refusing to replace non-directory runtime path ${directory}.`);
   }
   await fs.ensureDir(directory);
