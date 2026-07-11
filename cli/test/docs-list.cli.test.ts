@@ -22,7 +22,8 @@ function run(args: string[], cwd?: string): { stdout: string; stderr: string; st
 
 beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-docs-list-'));
-    // Anchor findRepoRoot to tmpDir by creating required marker dirs
+    // Anchor current project-root discovery to tmpDir.
+    await fs.ensureDir(path.join(tmpDir, '.xtrm'));
     await fs.ensureDir(path.join(tmpDir, 'skills'));
     await fs.ensureDir(path.join(tmpDir, 'hooks'));
 });

@@ -116,26 +116,20 @@ describe('xtrm install integration', () => {
     }
   });
 
-  it('creates active runtime pointers for Claude and Pi and is idempotent across reruns', async () => {
+  it('creates global default pointers and preserves direct project runtime roots across reruns', async () => {
     await runInstallCli(['--yes']);
 
-    // Global-skills migration (xtrm-bq7yd): Claude/Pi pointers now live under
-    // $HOME (absolute), targeting the global active view. Project .xtrm/skills
-    // still holds the per-repo user tier.
     const homeDir = process.env.HOME!;
     const claudeSkillsPath = path.join(homeDir, '.claude', 'skills');
-    const globalActivePath = path.join(homeDir, '.xtrm', 'skills', 'active');
-    const piSettingsPath = path.join(tmpDir, '.pi', 'settings.json');
+    const globalDefaultPath = path.join(homeDir, '.xtrm', 'skills', 'default');
 
     const claudeLinkStat = fs.lstatSync(claudeSkillsPath);
     expect(claudeLinkStat.isSymbolicLink()).toBe(true);
-    expect(fs.readlinkSync(claudeSkillsPath)).toBe(globalActivePath);
-    expect(fs.pathExistsSync(globalActivePath)).toBe(true);
-
-    const piSettings = fs.readJsonSync(piSettingsPath) as { skills?: string[] };
-    expect(Array.isArray(piSettings.skills)).toBe(true);
-    // Pi settings entry points at the global active view via HOME expansion.
-    expect(piSettings.skills!.some(s => s.includes('.xtrm/skills/active'))).toBe(true);
+    expect(fs.readlinkSync(claudeSkillsPath)).toBe(globalDefaultPath);
+    expect(fs.pathExistsSync(globalDefaultPath)).toBe(true);
+    expect(fs.lstatSync(path.join(tmpDir, '.claude', 'skills')).isDirectory()).toBe(true);
+    expect(fs.lstatSync(path.join(tmpDir, '.pi', 'skills')).isDirectory()).toBe(true);
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'active'))).toBe(false);
 
     const claudeMtimeBefore = claudeLinkStat.mtimeMs;
 
@@ -186,28 +180,16 @@ describe('xtrm install integration', () => {
     expect(fs.pathExistsSync(path.join(tmpDir, '.claude', 'settings.json'))).toBe(false);
   });
 
-  it('with XTRM_GLOBAL_SKILLS=1 installs default and optional skills only to global root', async () => {
-    // HOME is already isolated to path.join(tmpDir, 'home') by beforeEach — the
-    // project root is tmpDir; the global tree lives under $HOME/.xtrm.
+  it('treats retired XTRM_GLOBAL_SKILLS flag as no-op for direct runtime scaffolding', async () => {
     process.env.XTRM_GLOBAL_SKILLS = '1';
 
     await runInstallCli(['--yes']);
 
-    // Per-repo default/optional/active are NOT materialised under the flag —
-    // skills live only in $HOME/.xtrm/skills. Project retains the user tier
-    // (empty scaffold) but nothing else under skills/.
-    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'default'))).toBe(false);
-    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'optional'))).toBe(false);
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'default'))).toBe(true);
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'optional'))).toBe(true);
     expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'user', 'packs'))).toBe(true);
-
-    // Global tree is where the payload actually landed.
-    const homeDir = process.env.HOME!;
-    expect(fs.pathExistsSync(path.join(homeDir, '.xtrm', 'skills', 'default'))).toBe(true);
-
-    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'registry.json'))).toBe(true);
-    const registry = fs.readJsonSync(path.join(tmpDir, '.xtrm', 'registry.json')) as { assets: Record<string, unknown> };
-    expect(registry.assets.skills).toBeUndefined();
-    expect(registry.assets.skills_optional).toBeUndefined();
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'active'))).toBe(false);
+    expect(fs.pathExistsSync(path.join(process.env.HOME!, '.xtrm', 'skills', 'default'))).toBe(true);
   });
 
   it('hook wiring includes all hooks and preserves existing permissions.allow on reinstall', async () => {

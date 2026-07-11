@@ -73,7 +73,7 @@ describe('ensureServiceSkills — foolproof registry-gated migration (xtrm-u54wt
     expect(second.migratedPacks).toEqual([]);
   });
 
-  it('syncs PACK.json and rebuilds the active view (umbrella) after migration (xtrm-x8b5g)', async () => {
+  it('syncs PACK.json without recreating retired active view after migration', async () => {
     const repo = await makeRepo();
     await seedFlatPack(repo, ['serving-mcp-tools', 'db-expert']);
     const skillsRoot = path.join(repo, '.xtrm', 'skills');
@@ -97,17 +97,9 @@ describe('ensureServiceSkills — foolproof registry-gated migration (xtrm-u54wt
     const packJson = await fs.readJson(path.join(pack, 'PACK.json'));
     expect(packJson.skills).toEqual(['service-skills', 'using-tdd-guard']);
 
-    // Part 2: the active view is rebuilt after migration — both the regular pack skill and
-    // the generated '<repo>-services' umbrella now appear as symlinks. They would be absent if
-    // the rebuild were skipped on a migration-only pass (the bug). The umbrella's runtime name
-    // derives from the repo basename, so read it from the generated frontmatter.
-    const active = path.join(skillsRoot, 'active');
-    expect((await fs.lstat(path.join(active, 'using-tdd-guard'))).isSymbolicLink()).toBe(true);
-    const umbrellaName = (await fs.readFile(path.join(pack, 'service-skills', 'SKILL.md'), 'utf8'))
-      .match(/^name:\s*(.+)$/m)?.[1]?.trim();
-    expect(umbrellaName).toBeTruthy();
-    expect((await fs.lstat(path.join(active, umbrellaName!))).isSymbolicLink()).toBe(true);
-    expect(result.notes.some(n => n.includes('active view rebuilt'))).toBe(true);
+    // Migration only updates canonical pack metadata. Runtime reconciliation happens in
+    // command flow, so this helper must not recreate retired active view.
+    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
   });
 
   it('dry-run does not migrate', async () => {

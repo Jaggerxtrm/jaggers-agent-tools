@@ -63,7 +63,7 @@ async function writeState(skillsRoot: string, claudePacks: readonly string[], pi
 }
 
 describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', () => {
-  it('materializes active runtime trees as direct child symlinks with valid relative targets', async () => {
+  it('materializes direct Claude and Pi child symlinks and persists manifest ownership', async () => {
     const projectRoot = await createTempProjectRoot();
     const skillsRoot = path.join(projectRoot, '.xtrm', 'skills');
 
@@ -74,30 +74,24 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', 
     await writeState(skillsRoot, ['pack-claude', 'pack-shared'], ['pack-shared']);
 
     await ensureAgentsSkillsSymlink(projectRoot);
-    await fs.ensureDir(path.join(projectRoot, '.pi'));
-    await fs.writeJson(path.join(projectRoot, '.pi', 'settings.json'), {
-      skills: ['../.xtrm/skills/active'],
-    });
 
-    const activeView = path.join(skillsRoot, 'active');
-
-    expect((await fs.readdir(activeView)).sort()).toEqual(['alpha', 'beta', 'delta', 'gamma']);
-
-    for (const runtimeView of [activeView]) {
-      const entries = await fs.readdir(runtimeView);
-      for (const entryName of entries) {
-        const entryPath = path.join(runtimeView, entryName);
-        const stat = await fs.lstat(entryPath);
-        expect(stat.isSymbolicLink()).toBe(true);
-
+    for (const [runtime, expectedSkills] of [
+      ['claude', ['delta', 'gamma']],
+      ['pi', ['delta']],
+    ] as const) {
+      const runtimeRoot = path.join(projectRoot, runtime === 'claude' ? '.claude' : '.pi', 'skills');
+      expect((await fs.readdir(runtimeRoot)).sort()).toEqual(expectedSkills);
+      for (const entryName of expectedSkills) {
+        const entryPath = path.join(runtimeRoot, entryName);
+        expect((await fs.lstat(entryPath)).isSymbolicLink()).toBe(true);
         const target = await fs.readlink(entryPath);
-        expect(path.isAbsolute(target)).toBe(false);
-
-        const resolvedTarget = path.resolve(path.dirname(entryPath), target);
-        expect(await fs.pathExists(resolvedTarget)).toBe(true);
-        expect(await fs.pathExists(path.join(resolvedTarget, 'SKILL.md'))).toBe(true);
+        expect(path.isAbsolute(target)).toBe(true);
+        expect(await fs.pathExists(path.join(target, 'SKILL.md'))).toBe(true);
       }
     }
+
+    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
+    expect(await fs.pathExists(path.join(projectRoot, '.pi', 'settings.json'))).toBe(false);
 
     const check = await checkRuntimeSkillsViews(projectRoot);
     expect(check.activeReady).toBe(true);
@@ -105,43 +99,40 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', 
     expect(check.projectPiPointerState).toBe('ready');
   });
 
-  it('aborts before swapping active view when runtime collisions are detected', async () => {
+  it('uses enabled optional skill when default has same runtime name', async () => {
     const projectRoot = await createTempProjectRoot();
     const skillsRoot = path.join(projectRoot, '.xtrm', 'skills');
-    const activeRoot = path.join(skillsRoot, 'active');
 
     await writeSkill(path.join(skillsRoot, 'default'), 'alpha');
     await writePack(skillsRoot, 'optional', 'dup-pack', ['alpha']);
     await writeState(skillsRoot, ['dup-pack'], []);
 
-    await fs.ensureDir(activeRoot);
-    await fs.writeFile(path.join(activeRoot, 'sentinel.txt'), 'keep', 'utf8');
-
-    await expect(ensureAgentsSkillsSymlink(projectRoot)).rejects.toThrow(/Duplicate skill name 'alpha'/);
-    expect(await fs.readFile(path.join(activeRoot, 'sentinel.txt'), 'utf8')).toBe('keep');
-
-    const activeRootEntries = await fs.readdir(path.join(skillsRoot, 'active'));
-    expect(activeRootEntries.some(name => name.includes('.tmp-'))).toBe(false);
-    expect(activeRootEntries.some(name => name.includes('.bak-'))).toBe(false);
+    await expect(ensureAgentsSkillsSymlink(projectRoot)).resolves.toMatchObject({ activatedClaudeSkills: 1 });
+    const runtimeLink = path.join(projectRoot, '.claude', 'skills', 'alpha');
+    expect(await fs.readlink(runtimeLink)).toBe(path.join(skillsRoot, 'optional', 'dup-pack', 'alpha'));
+    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
   });
 
-  it('handles malformed runtime pointer/settings checks with clear failures', async () => {
+  it('reports malformed reconciled runtime directories without consulting Pi settings', async () => {
     const projectRoot = await createTempProjectRoot();
     const skillsRoot = path.join(projectRoot, '.xtrm', 'skills');
 
-    await writeSkill(path.join(skillsRoot, 'default'), 'alpha');
     await writeState(skillsRoot, [], []);
-    await ensureAgentsSkillsSymlink(projectRoot);
-
+    await fs.ensureDir(path.join(projectRoot, '.claude', 'skills'));
+    await fs.writeJson(path.join(skillsRoot, 'state.json'), {
+      schemaVersion: '2',
+      enabledPacks: { claude: [], pi: [] },
+      managedLinks: { claude: { alpha: '.xtrm/skills/missing' }, pi: {} },
+    });
     await fs.ensureDir(path.join(projectRoot, '.pi'));
     await fs.writeFile(path.join(projectRoot, '.pi', 'settings.json'), '{ malformed', 'utf8');
 
     const check = await checkRuntimeSkillsViews(projectRoot);
-    expect(check.activeReady).toBe(true);
-    expect(check.projectPiPointerState).toBe('missing');
+    expect(check.activeReady).toBe(false);
+    expect(check.projectPiPointerState).toBe('skipped');
 
     await expect(assertRuntimeSkillsViews(projectRoot, { scope: 'project' })).rejects.toThrow(
-      /\.pi\/settings\.json\.skills does not include \.\.\/\.xtrm\/skills\/active/,
+      /\.claude\/skills is not a real reconciled directory/,
     );
   });
 
