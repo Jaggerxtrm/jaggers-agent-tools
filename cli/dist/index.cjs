@@ -61886,10 +61886,6 @@ async function launchWorktreeSession(opts) {
   const cwd = process.cwd();
   let resolvedRole = null;
   if (roleName) {
-    if (runtime !== "pi") {
-      console.error(kleur_default.red("\n  \u2717 --role is currently only supported for pi\n"));
-      process.exit(1);
-    }
     try {
       resolvedRole = resolveRole(roleName, cwd);
     } catch (err) {

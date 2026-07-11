@@ -552,10 +552,6 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // creating a worktree (which would otherwise leak on a bad --role typo).
     let resolvedRole: ResolvedRole | null = null;
     if (roleName) {
-        if (runtime !== 'pi') {
-            console.error(kleur.red('\n  ✗ --role is currently only supported for pi\n'));
-            process.exit(1);
-        }
         try {
             resolvedRole = resolveRole(roleName, cwd);
         } catch (err) {
