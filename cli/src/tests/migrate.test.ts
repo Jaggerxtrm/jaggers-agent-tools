@@ -464,6 +464,28 @@ describe('xt migrate command', () => {
     expect(restored).toEqual(originalSettings);
   });
 
+  it('cleans xtrm hooks from direct .pi/settings.json while leaving retired agent settings untouched', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+
+    const directSettingsPath = path.join(repoDir, '.pi', 'settings.json');
+    const retiredSettingsPath = path.join(repoDir, '.pi', 'agent', 'settings.json');
+    const xtrmHook = { _source: 'xtrm-global', matcher: 'Bash', hooks: [{ type: 'command', command: 'node /home/x/.xtrm/hooks/foo.mjs' }] };
+    const userHook = { matcher: 'Read', hooks: [{ type: 'command', command: '/usr/bin/user-hook' }] };
+    await fs.ensureDir(path.dirname(directSettingsPath));
+    await fs.ensureDir(path.dirname(retiredSettingsPath));
+    await fs.writeJson(directSettingsPath, { hooks: { PreToolUse: [xtrmHook, userHook] } });
+    await fs.writeJson(retiredSettingsPath, { hooks: { PreToolUse: [xtrmHook] } });
+
+    const result = runCli(['migrate', 'hooks', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('settings: cleaned xtrm-owned entries from .pi/settings.json');
+    expect((await fs.readJson(directSettingsPath)).hooks.PreToolUse).toEqual([userHook]);
+    expect((await fs.readJson(retiredSettingsPath)).hooks.PreToolUse).toEqual([xtrmHook]);
+  });
+
   it('logs migration events to skills-migration.jsonl', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     await createGlobalSkillsRoot(tmpHome);

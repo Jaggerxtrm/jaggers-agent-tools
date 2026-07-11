@@ -57,14 +57,14 @@ const runtimePackCases: RuntimePackCase[] = [
 ];
 
 describe('skills-state', () => {
-  it('initializes missing state.json with schemaVersion 1 and runtime enabledPacks', async () => {
+  it('initializes schemaVersion 2 state with per-runtime manifests and no active view', async () => {
     const skillsRoot = await createTempSkillsRoot();
 
     const state = await readSkillsState(skillsRoot);
 
     expect(state).toEqual(createDefaultSkillsState());
     expect(await fs.pathExists(path.join(skillsRoot, 'state.json'))).toBe(true);
-    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(true);
+    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
     expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(true);
     expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(true);
   });
@@ -82,8 +82,14 @@ describe('skills-state', () => {
     const state = await readSkillsState(skillsRoot);
 
     expect(state).toEqual({
+      schemaVersion: '2',
+      enabledPacks: { claude: ['alpha'], pi: [] },
+      managedLinks: { claude: {}, pi: {} },
+    });
+    expect(await fs.readJson(path.join(skillsRoot, 'state.json'))).toEqual({
       schemaVersion: '1',
       enabledPacks: { claude: ['alpha'], pi: [] },
+      futureField: 'kept-on-disk-ignored-in-memory',
     });
   });
 
