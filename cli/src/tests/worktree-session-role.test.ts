@@ -137,7 +137,7 @@ describe('buildRoleTmuxPlan', () => {
             parentSessionId: '$3',
             promptFile: '/tmp/prompt.md',
         });
-        expect(plan.sessionName).toBe('role-chain-coordinator-xtmux-2i5');
+        expect(plan.sessionName).toBe('role-pi-chain-coordinator-xtmux-2i5');
         expect(plan.runtimeArgs.slice(0, 2)).toEqual(['--append-system-prompt', '/tmp/prompt.md']);
         expect(plan.runtimeArgs.filter((a) => a === '--skill')).toHaveLength(2);
         const bead = plan.paneOptions.find((o) => o.key === '@agent_bead');
@@ -160,7 +160,7 @@ describe('buildRoleTmuxPlan', () => {
             parentSessionId: '',
             promptFile: '/tmp/prompt.md',
         });
-        expect(plan.sessionName).toBe('role-chain-coordinator');
+        expect(plan.sessionName).toBe('role-pi-chain-coordinator');
         expect(plan.paneOptions.some((o) => o.key === '@agent_bead')).toBe(false);
         const parent = plan.paneOptions.find((o) => o.key === '@agent_parent_session');
         expect(parent?.value).toBe(''); // no-tmux fallback: empty, not omitted
@@ -178,6 +178,28 @@ describe('buildRoleTmuxPlan', () => {
         expect(plan.runtimeCmdString).toContain("'/tmp/it'\\''s-mine.md'");
     });
 
+    it('encodes runtime in the session name so pi/claude do not collide (xtmux-3h8)', () => {
+        const piPlan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            role,
+            bead: 'xtmux-3h8',
+            parentSessionId: '',
+            promptFile: '/tmp/p.md',
+            systemPrompt: SAMPLE_SPECIALIST,
+        });
+        const claudePlan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            bead: 'xtmux-3h8',
+            parentSessionId: '',
+            promptFile: '/tmp/p.md',
+            systemPrompt: SAMPLE_SPECIALIST,
+        });
+        expect(piPlan.sessionName).toBe('role-pi-chain-coordinator-xtmux-3h8');
+        expect(claudePlan.sessionName).toBe('role-claude-chain-coordinator-xtmux-3h8');
+        expect(piPlan.sessionName).not.toBe(claudePlan.sessionName);
+    });
+
     it('slugifies bead ids with weird characters', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
@@ -187,7 +209,7 @@ describe('buildRoleTmuxPlan', () => {
             parentSessionId: '',
             promptFile: '/tmp/prompt.md',
         });
-        expect(plan.sessionName).toBe('role-chain-coordinator-my-bead-1');
+        expect(plan.sessionName).toBe('role-pi-chain-coordinator-my-bead-1');
     });
 
     it('does not emit --no-extensions or -e — pi discovers its own extensions', () => {
