@@ -92,6 +92,7 @@ export async function syncManagedPiThemes(
 ): Promise<void> {
     if (!sourceDir || !await fs.pathExists(sourceDir)) return;
 
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- name is a closed package-owned allowlist.
     const missing = MANAGED_XTRM_THEME_FILES.filter((name) => !fs.existsSync(path.join(sourceDir, name)));
     if (missing.length > 0) {
         throw new Error(`Missing managed Pi theme files: ${missing.join(', ')}`);
@@ -104,8 +105,10 @@ export async function syncManagedPiThemes(
 
     await fs.ensureDir(themeDir);
     for (const name of MANAGED_XTRM_THEME_FILES) {
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- name is a closed package-owned allowlist.
         const target = path.join(themeDir, name);
         await fs.remove(target);
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- name is a closed package-owned allowlist.
         await fs.symlink(path.relative(themeDir, path.join(sourceDir, name)), target);
     }
     log?.('Synced XTRM Pi themes');
@@ -1237,6 +1240,7 @@ export async function cleanupConflictingPiPackageSettings(
     agentDir = PI_AGENT_DIR,
 ): Promise<void> {
     await pruneConflictingPiPackagesFromSettings(
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- agentDir is an internal runtime path and filename is fixed.
         path.join(agentDir, 'settings.json'),
         '~/.pi/agent/settings.json',
         dryRun,
