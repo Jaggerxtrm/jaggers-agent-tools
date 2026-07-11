@@ -25,7 +25,7 @@ Inside `$TMUX`, both commands **run in the current pane** by default — no nest
 | Flag | Meaning | Notes |
 | --- | --- | --- |
 | `--role <name>` | Resolve `<name>` via `sp view <name> --raw` and boot the runtime with the specialist's system prompt, skills, model, and thinking level. | The role's `execution.model` / `execution.thinking_level` from `sp view` are the defaults; CLI flags override. |
-| `--bead <id>` | Attach `<id>` to the pane via `@agent_bead`; also included in the session name slug (`role-<slug>-<bead>`). | Optional. Enables `bv` claim discovery and hook-based gating. |
+| `--bead <id>` | Attach `<id>` to the pane via `@agent_bead`; also included in the session name slug (`role-<runtime>-<slug>-<bead>`). | Optional. Enables `bv` claim discovery and hook-based gating. |
 | `--no-attach` | New-session mode only. Print `session_name:pane_id` on stdout and exit — orchestrator-capture pattern. | Inside `$TMUX` without `--new-session`, `--no-attach` **errors** with a clear hint. |
 | `--model <name>` | Forward `--model <name>` to the runtime; overrides `specialist.execution.model`. | Both pi and claude accept `--model`. |
 | `--thinking <level>` | pi only. Forward `--thinking <level>`; overrides `specialist.execution.thinking_level`. | claude has no `--thinking` flag — `xt claude --thinking X` warns loudly and drops. |
@@ -44,17 +44,28 @@ Run `xt pi --help` or `xt claude --help` for the canonical (auto-generated) flag
 | Context | Flags | Result |
 | --- | --- | --- |
 | inside `$TMUX` | (none) | Runtime runs in the **current pane**; pane options + `XTMUX_AGENT_*` env set on this pane. `tmux ls` unchanged. |
-| inside `$TMUX` | `--new-session` | New session (`role-<slug>-<bead>`); `switch-client` moves the current client to it. |
+| inside `$TMUX` | `--new-session` | New session (`role-<runtime>-<slug>-<bead>`); `switch-client` moves the current client to it. |
 | inside `$TMUX` | `--new-session --no-attach` | New session detached; prints `session_name:pane_id` on stdout. Exit 0. |
 | inside `$TMUX` | `--no-attach` alone | **Error** — `--no-attach requires --new-session (or exit tmux first)`. |
 | outside `$TMUX` | (any) | New session; `attach-session` attaches. `--no-attach` still valid. |
 
-**Session-name collision.** When the resolved session name (`role-<slug>[-<bead>]`) is already in use, the launcher does one of two things:
+**Session-name collision.** When the resolved session name (`role-<runtime>-<slug>[-<bead>]`, e.g. `role-pi-chain-coordinator-xyz-1` vs `role-claude-chain-coordinator-xyz-1`) is already in use, the launcher does one of two things:
 
 - `--reuse` passed → attach to the existing session (or print `session:pane` with `--no-attach`) and exit. Skips the pane-option write + `agent.role.launched` emission since the pane is not fresh.
-- otherwise → auto-suffix a 4-char hex slug and retry up to 10 times (`role-<slug>[-<bead>]-<hex>`). If all 10 candidates collide, errors with a hint to pass `--reuse` or free some session names.
+- otherwise → auto-suffix a 4-char hex slug and retry up to 10 times (`role-<runtime>-<slug>[-<bead>]-<hex>`). If all 10 candidates collide, errors with a hint to pass `--reuse` or free some session names.
 
 ---
+
+## Session names
+
+Session names encode both the runtime and the specialist role so `xt pi --role X` and `xt claude --role X` produce distinguishable sessions:
+
+```
+role-pi-<role-slug>[-<bead-slug>]
+role-claude-<role-slug>[-<bead-slug>]
+```
+
+Example: `xt pi --role chain-coordinator --bead xyz-1` → `role-pi-chain-coordinator-xyz-1`; `xt claude --role chain-coordinator --bead xyz-1` → `role-claude-chain-coordinator-xyz-1`. Both coexist without `--reuse` or auto-suffix.
 
 ## Pane options set at launch
 
