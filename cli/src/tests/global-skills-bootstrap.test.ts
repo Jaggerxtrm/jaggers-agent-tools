@@ -47,14 +47,16 @@ describe('global-skills-bootstrap', () => {
     await writeSkill(path.join(pkgRoot, '.xtrm', 'skills', 'optional', 'optional-pack'), 'optional-skill');
 
     const first = await ensureGlobalSkillsBootstrapped(pkgRoot);
+    const activeRoot = path.join(fakeHome, '.xtrm', 'skills', 'active');
+    expect(await fs.pathExists(activeRoot)).toBe(false);
+
+    await fs.ensureDir(activeRoot);
+    await fs.writeFile(path.join(activeRoot, 'preserved.txt'), 'preserved', 'utf8');
     const second = await ensureGlobalSkillsBootstrapped(pkgRoot);
 
     expect(first).toEqual({ installedVersion: '9.9.9', changed: true });
     expect(second).toEqual({ installedVersion: '9.9.9', changed: false });
-
-    const activeEntries = (await fs.readdir(path.join(fakeHome, '.xtrm', 'skills', 'active'))).sort();
-    expect(activeEntries).toEqual(['default-skill']);
-    expect((await fs.lstat(path.join(fakeHome, '.xtrm', 'skills', 'active', 'default-skill'))).isSymbolicLink()).toBe(true);
+    expect(await fs.readFile(path.join(activeRoot, 'preserved.txt'), 'utf8')).toBe('preserved');
 
     const state = await fs.readJson(path.join(fakeHome, '.xtrm', 'skills', 'state.json')) as {
       schemaVersion: string;
@@ -62,7 +64,7 @@ describe('global-skills-bootstrap', () => {
       installedFrom: string;
       installedAt: string;
     };
-    expect(state.schemaVersion).toBe('1');
+    expect(state.schemaVersion).toBe('2');
     expect(state.installedVersion).toBe('9.9.9');
     expect(typeof state.installedFrom).toBe('string');
     expect(typeof state.installedAt).toBe('string');

@@ -119,7 +119,6 @@ export async function ensureGlobalSkillsBootstrapped(pkgRoot: string, opts: Boot
 
   try {
     const currentState = await readSkillsState(globalSkillsRoot);
-    await fs.remove(path.join(globalSkillsRoot, 'active'));
     if (!opts.force && currentState.installedVersion === installedVersion) {
       await appendLog({
         timestamp: new Date().toISOString(),
