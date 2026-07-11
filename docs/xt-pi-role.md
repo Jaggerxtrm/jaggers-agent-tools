@@ -32,6 +32,7 @@ Inside `$TMUX`, both commands **run in the current pane** by default — no nest
 | `--new-session` / `--ns` | Force a fresh tmux session even when inside `$TMUX`. | Default outside `$TMUX`. Combines with `--no-attach`. |
 | `--parent <target>` | Override `@agent_parent_session` on the target pane. `<target>` = tmux session name, session id (`$3`), or `#{session_id}` string. | Bogus targets fail with a clear error before the runtime spawns. Precedence: `--parent` > `--child` > auto. |
 | `--child` | Explicit form of the auto-behavior (`@agent_parent_session` = current pane's `#{session_id}`). | Kept as a stable opt-in against a future default flip. |
+| `--reuse` | Only with `--new-session` (or outside `$TMUX`): if a session with the resolved name already exists, attach to it (or, with `--no-attach`, print its coordinates) instead of auto-suffixing. | Skips `agent.role.launched` emission — we don't own the reused pane's metadata. |
 | `--` `<passthrough>` | Everything after `--` forwarded verbatim to the runtime. | Guarded flags (`--session-dir`, `--name`, `--system-prompt`, `--append-system-prompt`) are rejected. Batch-mode flags (`--print`, `--list-models`, `--export`, `--mode`) are dropped with a warning. |
 
 Run `xt pi --help` or `xt claude --help` for the canonical (auto-generated) flag list plus concrete examples.
@@ -47,6 +48,11 @@ Run `xt pi --help` or `xt claude --help` for the canonical (auto-generated) flag
 | inside `$TMUX` | `--new-session --no-attach` | New session detached; prints `session_name:pane_id` on stdout. Exit 0. |
 | inside `$TMUX` | `--no-attach` alone | **Error** — `--no-attach requires --new-session (or exit tmux first)`. |
 | outside `$TMUX` | (any) | New session; `attach-session` attaches. `--no-attach` still valid. |
+
+**Session-name collision.** When the resolved session name (`role-<slug>[-<bead>]`) is already in use, the launcher does one of two things:
+
+- `--reuse` passed → attach to the existing session (or print `session:pane` with `--no-attach`) and exit. Skips the pane-option write + `agent.role.launched` emission since the pane is not fresh.
+- otherwise → auto-suffix a 4-char hex slug and retry up to 10 times (`role-<slug>[-<bead>]-<hex>`). If all 10 candidates collide, errors with a hint to pass `--reuse` or free some session names.
 
 ---
 
