@@ -82,6 +82,31 @@ describe('reconcileRuntimeLinks', () => {
     expect(result.state.managedLinks.claude).toEqual({});
   });
 
+  it.each(['claude', 'pi'] as const)('rejects unsafe runtime names before mutating %s runtime', async (runtime) => {
+    const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'user', 'packs', 'local');
+    const state = {
+      ...createDefaultSkillsState(),
+      enabledPacks: { claude: runtime === 'claude' ? ['local'] : [], pi: runtime === 'pi' ? ['local'] : [] },
+    };
+    const unsafePack = pack('local', localPackPath, '../outside');
+
+    await expect(reconcileRuntimeLinks({ runtime, projectRoot, state, discoveredPacks: [unsafePack], globalDefaultRoot: path.join(globalRoot, 'default'), globalOptionalRoot: path.join(globalRoot, 'optional') })).rejects.toThrow(/Unsafe runtime skill name/);
+    expect(await fs.pathExists(path.join(projectRoot, runtime === 'claude' ? '.claude' : '.pi', 'skills'))).toBe(false);
+  });
+
+  it.each(['claude', 'pi'] as const)('rejects unsafe managed-link keys before mutating %s runtime', async (runtime) => {
+    const state: SkillsState = {
+      ...createDefaultSkillsState(),
+      enabledPacks: { claude: [], pi: [] },
+      managedLinks: runtime === 'claude'
+        ? { claude: { '../outside': '.xtrm/skills/old' }, pi: {} }
+        : { claude: {}, pi: { '../outside': '.xtrm/skills/old' } },
+    };
+
+    await expect(reconcileRuntimeLinks({ runtime, projectRoot, state, discoveredPacks: [], globalDefaultRoot: path.join(globalRoot, 'default'), globalOptionalRoot: path.join(globalRoot, 'optional') })).rejects.toThrow(/Unsafe runtime skill name/);
+    expect(await fs.pathExists(path.join(projectRoot, runtime === 'claude' ? '.claude' : '.pi', 'skills'))).toBe(false);
+  });
+
   it('rejects same-name optional packs from global and project scope', async () => {
     const globalPackPath = path.join(globalRoot, 'optional', 'shared');
     const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'optional', 'shared');

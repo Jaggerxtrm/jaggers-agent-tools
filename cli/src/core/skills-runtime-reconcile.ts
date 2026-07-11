@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { DiscoveredPack, DiscoveredSkill } from './skill-discovery.js';
 import { discoverDefaultSkills, discoverDirectSkills, discoverTierPacks } from './skill-discovery.js';
 import { resolveSkillsRoot } from './skills-layout.js';
-import { writeSkillsState, type SkillsState } from './skills-state.js';
+import { assertSafeRuntimeLinkName, writeSkillsState, type SkillsState } from './skills-state.js';
 import type { SkillsRuntime } from './skills-layout.js';
 
 export interface ReconcileRuntimeLinksOptions {
@@ -26,6 +26,15 @@ export interface RuntimeLinksReconcileResult {
 function isInside(child: string, parent: string): boolean {
   const relative = path.relative(path.resolve(parent), path.resolve(child));
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function resolveRuntimeLinkPath(runtimeDirectory: string, name: string): string {
+  assertSafeRuntimeLinkName(name);
+  const linkPath = path.resolve(runtimeDirectory, name);
+  if (!isInside(linkPath, runtimeDirectory)) {
+    throw new Error(`Runtime skill link '${name}' resolves outside runtime directory ${runtimeDirectory}.`);
+  }
+  return linkPath;
 }
 
 function targetRelativePath(projectRoot: string, target: string): string {
@@ -58,6 +67,7 @@ function resolveDesiredSkills(options: ReconcileRuntimeLinksOptions, defaults: r
   const selected = matchingPacks.flatMap((pack) => getPackSkills(pack, pack.name));
   const seen = new Map<string, string>();
   for (const skill of [...defaults, ...selected]) {
+    assertSafeRuntimeLinkName(skill.runtimeName);
     const first = seen.get(skill.runtimeName);
     if (first && first !== skill.path) {
       const against = defaults.some((entry) => entry.runtimeName === skill.runtimeName) ? 'global default' : 'another enabled pack';
@@ -99,7 +109,7 @@ async function discoverManagedLinks(
   const result: Record<string, string> = {};
   const entries = await fs.readdir(directory, { withFileTypes: true }).catch(() => [] as fs.Dirent[]);
   for (const entry of entries) {
-    const linkPath = path.join(directory, entry.name);
+    const linkPath = resolveRuntimeLinkPath(directory, entry.name);
     const stat = await fs.lstat(linkPath).catch(() => null);
     if (!stat?.isSymbolicLink()) continue;
     const resolved = path.resolve(directory, await fs.readlink(linkPath));
@@ -125,14 +135,17 @@ export async function selectRuntimeSkills(runtime: SkillsRuntime, skillsRoot: st
 export async function reconcileRuntimeLinks(options: ReconcileRuntimeLinksOptions): Promise<RuntimeLinksReconcileResult> {
   const { projectRoot, runtime, state, globalDefaultRoot, globalOptionalRoot } = options;
   const runtimeDirectory = path.join(projectRoot, runtime === 'claude' ? '.claude' : '.pi', 'skills');
-  await ensureRuntimeDirectory(runtimeDirectory);
-
   const defaults = await discoverDirectSkills(globalDefaultRoot);
   const selected = resolveDesiredSkills(options, defaults);
   const desiredLinks: Record<string, string> = {};
-  for (const skill of selected) desiredLinks[skill.runtimeName] = path.resolve(skill.path);
+  for (const skill of selected) {
+    resolveRuntimeLinkPath(runtimeDirectory, skill.runtimeName);
+    desiredLinks[skill.runtimeName] = path.resolve(skill.path);
+  }
 
   const oldManifest = state.managedLinks?.[runtime] ?? {};
+  for (const name of Object.keys(oldManifest)) resolveRuntimeLinkPath(runtimeDirectory, name);
+  await ensureRuntimeDirectory(runtimeDirectory);
   const roots = [path.join(projectRoot, '.xtrm', 'skills'), globalOptionalRoot];
   const bootstrapped = Object.keys(oldManifest).length === 0
     ? await discoverManagedLinks(projectRoot, runtimeDirectory, desiredLinks, roots)
@@ -142,7 +155,7 @@ export async function reconcileRuntimeLinks(options: ReconcileRuntimeLinksOption
 
   for (const [name, relativeTarget] of Object.entries(managed)) {
     if (desiredLinks[name]) continue;
-    const linkPath = path.join(runtimeDirectory, name);
+    const linkPath = resolveRuntimeLinkPath(runtimeDirectory, name);
     const stat = await fs.lstat(linkPath).catch(() => null);
     if (stat?.isSymbolicLink()) {
       const resolved = path.resolve(runtimeDirectory, await fs.readlink(linkPath));
@@ -153,7 +166,7 @@ export async function reconcileRuntimeLinks(options: ReconcileRuntimeLinksOption
   }
 
   for (const [name, target] of Object.entries(desiredLinks)) {
-    const linkPath = path.join(runtimeDirectory, name);
+    const linkPath = resolveRuntimeLinkPath(runtimeDirectory, name);
     const existing = await fs.lstat(linkPath).catch(() => null);
     const tracked = Object.prototype.hasOwnProperty.call(managed, name);
     if (existing && !tracked) {

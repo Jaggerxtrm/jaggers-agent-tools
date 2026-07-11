@@ -6,9 +6,32 @@ const runtimeEnabledPacksSchema = z.object({
   claude: z.array(z.string().min(1)).default([]),
   pi: z.array(z.string().min(1)).default([]),
 });
+
+export function isSafeRuntimeLinkName(name: string): boolean {
+  if (name.length === 0 || name.includes('\0') || /[\\/]/.test(name)) return false;
+  return name !== '.' && name !== '..';
+}
+
+export function assertSafeRuntimeLinkName(name: string): void {
+  if (!isSafeRuntimeLinkName(name)) {
+    throw new Error(`Unsafe runtime skill name '${name}': expected a single path basename.`);
+  }
+}
+
+const managedLinksMapSchema = z.record(z.string(), z.string()).superRefine((links, context) => {
+  for (const name of Object.keys(links)) {
+    if (!isSafeRuntimeLinkName(name)) {
+      context.addIssue({
+        code: 'custom',
+        path: [name],
+        message: 'must be a single path basename without separators, dot segments, or NUL bytes',
+      });
+    }
+  }
+});
 const managedLinksSchema = z.object({
-  claude: z.record(z.string(), z.string()).default({}),
-  pi: z.record(z.string(), z.string()).default({}),
+  claude: managedLinksMapSchema.default({}),
+  pi: managedLinksMapSchema.default({}),
 });
 const skillsStateSchema = z.object({
   schemaVersion: z.union([z.literal('1'), z.literal(SKILLS_STATE_SCHEMA_VERSION)]),
@@ -47,8 +70,8 @@ export async function ensureSkillsTreeStructure(skillsRoot: string): Promise<voi
 }
 
 export async function writeSkillsState(skillsRoot: string, state: SkillsStateInput): Promise<SkillsState> {
-  await ensureSkillsTreeStructure(skillsRoot);
   const validated = normalizeState(skillsStateSchema.parse(state));
+  await ensureSkillsTreeStructure(skillsRoot);
   const statePath = resolveStateFilePath(skillsRoot);
   await fs.writeJson(statePath, validated, { spaces: 2 });
   await fs.appendFile(statePath, '\n');
@@ -56,14 +79,17 @@ export async function writeSkillsState(skillsRoot: string, state: SkillsStateInp
 }
 
 export async function readSkillsState(skillsRoot: string): Promise<SkillsState> {
-  await ensureSkillsTreeStructure(skillsRoot);
   const statePath = resolveStateFilePath(skillsRoot);
   if (!await fs.pathExists(statePath)) return writeSkillsState(skillsRoot, createDefaultSkillsState());
   const raw = await fs.readJson(statePath);
   const parsed = skillsStateSchema.safeParse(raw);
-  if (parsed.success) return normalizeState(parsed.data);
+  if (parsed.success) {
+    await ensureSkillsTreeStructure(skillsRoot);
+    return normalizeState(parsed.data);
+  }
+  const hasManagedLinks = typeof raw === 'object' && raw !== null && Object.prototype.hasOwnProperty.call(raw, 'managedLinks');
   const legacy = z.object({ schemaVersion: z.union([z.literal('1'), z.literal(SKILLS_STATE_SCHEMA_VERSION)]), enabledPacks: runtimeEnabledPacksSchema }).safeParse(raw);
-  if (!legacy.success) throw new Error(`Invalid skills state at ${statePath}: ${parsed.error.message}`);
+  if (hasManagedLinks || !legacy.success) throw new Error(`Invalid skills state at ${statePath}: ${parsed.error.message}`);
   return writeSkillsState(skillsRoot, { schemaVersion: SKILLS_STATE_SCHEMA_VERSION, enabledPacks: legacy.data.enabledPacks, managedLinks: { claude: {}, pi: {} } });
 }
 

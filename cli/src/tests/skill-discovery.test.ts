@@ -82,6 +82,29 @@ describe('skill-discovery', () => {
     });
   });
 
+  it('preserves valid frontmatter runtime names', async () => {
+    const skillsRoot = await createTempSkillsRoot();
+    const skillDir = path.join(skillsRoot, 'default', 'filesystem-name');
+
+    await fs.ensureDir(skillDir);
+    await fs.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: runtime-name\n---\n', 'utf8');
+
+    await expect(discoverDefaultSkills(skillsRoot)).resolves.toEqual([
+      { name: 'filesystem-name', runtimeName: 'runtime-name', path: skillDir },
+    ]);
+  });
+
+  it('rejects unsafe frontmatter runtime names', async () => {
+    const skillsRoot = await createTempSkillsRoot();
+    const defaultRoot = path.join(skillsRoot, 'default');
+    const skillDir = path.join(defaultRoot, 'safe-directory');
+
+    await fs.ensureDir(skillDir);
+    await fs.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: ../outside\n---\n', 'utf8');
+
+    await expect(discoverDefaultSkills(skillsRoot)).rejects.toThrow(/Unsafe runtime skill name/);
+  });
+
   it('reports invariant violations for nested runtime roots', async () => {
     const skillsRoot = await createTempSkillsRoot();
     const defaultRoot = path.join(skillsRoot, 'default');

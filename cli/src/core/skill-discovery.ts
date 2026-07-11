@@ -10,6 +10,7 @@ import {
   resolveUserPacksRoot,
 } from './skills-layout.js';
 import { diffPackMetadataSkills, readPackMetadata, type PackMetadataMismatch } from './pack-metadata.js';
+import { assertSafeRuntimeLinkName } from './skills-state.js';
 
 export type DiscoveredSkill = {
   /** Filesystem directory name — the identity used for PACK.json metadata invariants. */
@@ -112,7 +113,9 @@ export async function discoverDirectSkills(root: string): Promise<DiscoveredSkil
     }
 
     const frontmatterName = await readSkillFrontmatterName(path.join(skillPath, SKILL_FILE_NAME));
-    discoveredSkills.push({ name: childDirectory, runtimeName: frontmatterName ?? childDirectory, path: skillPath });
+    const runtimeName = frontmatterName ?? childDirectory;
+    assertSafeRuntimeLinkName(runtimeName);
+    discoveredSkills.push({ name: childDirectory, runtimeName, path: skillPath });
   }
 
   return discoveredSkills;
