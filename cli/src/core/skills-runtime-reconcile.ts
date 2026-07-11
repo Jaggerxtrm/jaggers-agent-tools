@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { DiscoveredPack, DiscoveredSkill } from './skill-discovery.js';
-import { discoverDefaultSkills, discoverTierPacks } from './skill-discovery.js';
+import { discoverDefaultSkills, discoverDirectSkills, discoverTierPacks } from './skill-discovery.js';
 import { resolveSkillsRoot } from './skills-layout.js';
 import { writeSkillsState, type SkillsState } from './skills-state.js';
 import type { SkillsRuntime } from './skills-layout.js';
@@ -127,7 +127,7 @@ export async function reconcileRuntimeLinks(options: ReconcileRuntimeLinksOption
   const runtimeDirectory = path.join(projectRoot, runtime === 'claude' ? '.claude' : '.pi', 'skills');
   await ensureRuntimeDirectory(runtimeDirectory);
 
-  const defaults = await discoverDefaultSkills(globalDefaultRoot);
+  const defaults = await discoverDirectSkills(globalDefaultRoot);
   const selected = resolveDesiredSkills(options, defaults);
   const desiredLinks: Record<string, string> = {};
   for (const skill of selected) desiredLinks[skill.runtimeName] = path.resolve(skill.path);

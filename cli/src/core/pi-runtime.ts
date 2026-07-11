@@ -1284,11 +1284,15 @@ export async function updatePiSettings(
     const nextSettings: PiSettingsShape = {
         ...existingSettings,
         extensions: existingExtensions,
-        skills: normalizedSkills,
         packages: existingPackages,
         serena: normalizeSerenaSettings(existingSettings.serena),
         theme: normalizeXtrmTheme(existingSettings.theme),
     };
+    if (normalizedSkills.length > 0) {
+        nextSettings.skills = normalizedSkills;
+    } else {
+        delete nextSettings.skills;
+    }
     delete nextSettings.xtrmExternalCompact;
 
     await fs.writeJson(piSettingsPath, nextSettings, { spaces: 2 });
