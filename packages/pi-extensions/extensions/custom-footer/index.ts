@@ -266,23 +266,26 @@ export default function (pi: ExtensionAPI) {
 
 	const attachBranchChangeListener = (footerData: any) => {
 		branchChangeUnsub?.();
-		branchChangeUnsub = footerData.onBranchChange(() => {
+		const unsubscribe = footerData.onBranchChange(() => {
 			runtimeState.lastFetch = 0;
 			scheduleRefresh(["runtime"]);
 		});
+		branchChangeUnsub = unsubscribe;
+		return unsubscribe;
 	};
 
 	const applyCustomFooter = (ctx: any) => {
 		capturedCtx = ctx;
 		ctx.ui.setFooter((tui, theme, footerData) => {
-			requestRender = () => tui.requestRender();
-			attachBranchChangeListener(footerData);
+			const instanceRequestRender = () => tui.requestRender();
+			requestRender = instanceRequestRender;
+			const instanceBranchChangeUnsub = attachBranchChangeListener(footerData);
 
 			return {
 				dispose() {
-					branchChangeUnsub?.();
-					branchChangeUnsub = null;
-					requestRender = null;
+					instanceBranchChangeUnsub?.();
+					if (branchChangeUnsub === instanceBranchChangeUnsub) branchChangeUnsub = null;
+					if (requestRender === instanceRequestRender) requestRender = null;
 				},
 				invalidate() {},
 				render(width: number): string[] {
@@ -405,6 +408,7 @@ export default function (pi: ExtensionAPI) {
 		scheduledRefreshKinds.clear();
 		branchChangeUnsub?.();
 		branchChangeUnsub = null;
+		requestRender = null;
 	});
 
 	pi.on("tool_result", async (event: any) => {
