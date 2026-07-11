@@ -61720,6 +61720,9 @@ function slugifyForSession(input) {
 function shellQuote(s) {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
+function chooseAttachCommand(sessionName, insideTmux) {
+  return insideTmux ? ["switch-client", "-t", sessionName] : ["attach-session", "-t", sessionName];
+}
 function buildRoleTmuxPlan(args) {
   const { role, bead, parentSessionId, promptFile, modelOverride, thinkingOverride, passthrough } = args;
   const roleSlug = slugifyForSession(role.name);
@@ -62103,7 +62106,8 @@ async function launchRoleTmuxSession(args) {
 `);
     process.exit(0);
   }
-  const attachResult = (0, import_node_child_process2.spawnSync)("tmux", ["attach-session", "-t", plan.sessionName], {
+  const attachCmd = chooseAttachCommand(plan.sessionName, Boolean(process.env.TMUX));
+  const attachResult = (0, import_node_child_process2.spawnSync)("tmux", attachCmd, {
     stdio: "inherit"
   });
   process.exit(attachResult.status ?? 0);
