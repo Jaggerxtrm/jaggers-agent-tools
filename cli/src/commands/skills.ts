@@ -20,12 +20,12 @@ import {
   type SkillsRuntime,
   resolveSkillsRoot,
   resolveStateFilePath,
-  resolveUserPacksRoot,
-  PACK_FILE_NAME,
+  resolveRepoPackRoot,
 } from '../core/skills-layout.js';
 import { createDefaultSkillsState, readSkillsState, setRuntimeEnabledPacks } from '../core/skills-state.js';
 import {
   discoverDefaultSkills,
+  discoverRepoPacks,
   discoverTierPacks,
   type DiscoveredPack,
   type InvariantViolation,
@@ -46,10 +46,6 @@ type ListPackEntry = {
   readonly tier: 'optional' | 'user';
   readonly path: string;
   readonly skills: string[];
-  readonly metadataMismatch: {
-    readonly metadataOnlySkills: string[];
-    readonly filesystemOnlySkills: string[];
-  };
   readonly enabledIn: SkillsRuntime[];
   readonly source?: 'global' | 'local' | 'both';
 };
@@ -132,8 +128,8 @@ async function collectListState(
     isLocalScope ? discoverDefaultSkills(skillsRoot) : null,
     discoverTierPacks(globalSkillsRoot, 'optional'),
     isLocalScope ? discoverTierPacks(skillsRoot, 'optional') : null,
-    discoverTierPacks(globalSkillsRoot, 'user'),
-    isLocalScope ? discoverTierPacks(skillsRoot, 'user') : null,
+    discoverRepoPacks(globalSkillsRoot),
+    isLocalScope ? discoverRepoPacks(skillsRoot) : null,
   ]);
 
   const effectiveState = isLocalScope && localState
@@ -150,7 +146,7 @@ async function collectListState(
     ? [...globalUserPacks, ...localUserPacks]
     : globalUserPacks;
 
-  const allPacksMap = new Map<string, { tier: 'optional' | 'user'; path: string; skills: any[]; metadataMismatch: any; source: 'global' | 'local' | 'both' }>();
+  const allPacksMap = new Map<string, { name: string; tier: 'optional' | 'user'; path: string; skills: DiscoveredPack['skills']; source: 'global' | 'local' | 'both' }>();
   for (const pack of globalOptionalPacks) {
     allPacksMap.set(pack.name, { ...pack, tier: 'optional' as const, source: 'global' as const });
   }
@@ -212,7 +208,6 @@ async function collectListState(
       tier: pack.tier,
       path: pack.path,
       skills: pack.skills.map(skill => skill.name).sort((a, b) => a.localeCompare(b)),
-      metadataMismatch: pack.metadataMismatch,
       enabledIn,
       source: pack.source,
     };
@@ -264,13 +259,11 @@ function printListSummary(skillsRoot: string, data: {
       const enabledText = pack.enabledIn.length > 0
         ? pack.enabledIn.join(', ')
         : 'disabled';
-      const mismatch = pack.metadataMismatch.metadataOnlySkills.length > 0 || pack.metadataMismatch.filesystemOnlySkills.length > 0;
-      const mismatchText = mismatch ? kleur.yellow(' metadata-mismatch') : '';
       const sourceLabel = data.scope === 'local' && pack.source === 'global' ? ' [global]'
         : data.scope === 'local' && pack.source === 'local' ? ' [local]'
         : data.scope === 'local' && pack.source === 'both' ? ' [global+local]'
         : '';
-      console.log(`  - ${kleur.bold(pack.name)} [${pack.tier}] enabled: ${enabledText}${mismatchText}${sourceLabel}`);
+      console.log(`  - ${kleur.bold(pack.name)} [${pack.tier}] enabled: ${enabledText}${sourceLabel}`);
     }
   }
 
@@ -298,7 +291,7 @@ function ensureValidPackName(name: string): void {
 async function resolveAvailablePackNames(skillsRoot: string): Promise<string[]> {
   const [optionalPacks, userPacks] = await Promise.all([
     discoverTierPacks(skillsRoot, 'optional'),
-    discoverTierPacks(skillsRoot, 'user'),
+    discoverRepoPacks(skillsRoot),
   ]);
 
   const names = [...optionalPacks, ...userPacks].map(pack => pack.name);
@@ -325,7 +318,7 @@ async function resolveRequestedPacks(
     throw new Error(`Cannot disable '${packArg}' - it's a default skill, not a pack.`);
   }
 
-  throw new Error(`Pack '${packArg}' not found in optional/ or user/packs/.`);
+  throw new Error(`Pack '${packArg}' not found in .xtrm/skills packs.`);
 }
 
 async function mutatePacks(opts: {
@@ -396,83 +389,15 @@ async function mutatePacks(opts: {
   };
 }
 
-async function writePackSkillsMetadata(pack: DiscoveredPack): Promise<void> {
-  const metadataPath = path.join(pack.path, PACK_FILE_NAME);
-  const metadata = await fs.readJson(metadataPath) as {
-    schemaVersion: string;
-    name: string;
-    version: string;
-    description: string;
-    skills?: string[];
-  };
-
-  const discoveredSkills = pack.skills.map(skill => skill.name).sort((a, b) => a.localeCompare(b));
-  await fs.writeJson(metadataPath, {
-    ...metadata,
-    skills: discoveredSkills,
-  }, { spaces: 2 });
-  await fs.appendFile(metadataPath, '\n');
-}
-
-async function syncPackMetadataToFilesystem(skillsRoot: string, packArg: string): Promise<string[]> {
-  const [optionalPacks, userPacks] = await Promise.all([
-    discoverTierPacks(skillsRoot, 'optional'),
-    discoverTierPacks(skillsRoot, 'user'),
-  ]);
-
-  const allPacks = [...optionalPacks, ...userPacks];
-  const selectedPackNames = packArg === 'all'
-    ? allPacks.map(pack => pack.name)
-    : [packArg];
-
-  const syncedPacks: string[] = [];
-
-  for (const packName of selectedPackNames) {
-    const pack = allPacks.find(candidate => candidate.name === packName);
-    if (!pack) {
-      continue;
-    }
-
-    const { metadataOnlySkills, filesystemOnlySkills } = pack.metadataMismatch;
-    if (metadataOnlySkills.length === 0 && filesystemOnlySkills.length === 0) {
-      continue;
-    }
-
-    await writePackSkillsMetadata(pack);
-    syncedPacks.push(pack.name);
-  }
-
-  return syncedPacks.sort((a, b) => a.localeCompare(b));
-}
-
-async function createUserPack(skillsRoot: string, packName: string): Promise<{ path: string; metadataPath: string }> {
+async function createUserPack(skillsRoot: string, packName: string): Promise<{ path: string }> {
   ensureValidPackName(packName);
-
   const allPackNames = await resolveAvailablePackNames(skillsRoot);
-  if (allPackNames.includes(packName)) {
-    throw new Error(`Pack '${packName}' already exists.`);
-  }
+  if (allPackNames.includes(packName)) throw new Error(`Pack '${packName}' already exists.`);
 
-  const packRoot = path.join(resolveUserPacksRoot(skillsRoot), packName);
-  if (await fs.pathExists(packRoot)) {
-    throw new Error(`Pack path already exists: ${packRoot}`);
-  }
-
+  const packRoot = resolveRepoPackRoot(skillsRoot, packName);
+  if (await fs.pathExists(packRoot)) throw new Error(`Pack path already exists: ${packRoot}`);
   await fs.ensureDir(packRoot);
-
-  const metadataPath = path.join(packRoot, PACK_FILE_NAME);
-  const metadata = {
-    schemaVersion: '1',
-    name: packName,
-    version: '1.0.0',
-    description: 'User-created skill pack',
-    skills: [],
-  };
-
-  await fs.writeJson(metadataPath, metadata, { spaces: 2 });
-  await fs.appendFile(metadataPath, '\n');
-
-  return { path: packRoot, metadataPath };
+  return { path: packRoot };
 }
 
 export function createSkillsCommand(): Command {
@@ -515,15 +440,11 @@ export function createSkillsCommand(): Command {
           return;
         }
 
-        const syncedPacks = await syncPackMetadataToFilesystem(skillsRoot, 'all');
-        const warningViolations = await assertSkillsInvariants(skillsRoot, {
-          nonBlockingCodes: ['PACK_METADATA_MISMATCH'],
-        });
+        const warningViolations = await assertSkillsInvariants(skillsRoot);
         const listData = await collectListState(skillsRoot, runtimes, scope);
 
         const warnings = [
           ...warningViolations.map(violation => violation.message),
-          ...syncedPacks.map(packName => `Auto-synced PACK.json skills from filesystem for '${packName}'.`),
         ];
 
         if (opts.json) {
@@ -535,7 +456,6 @@ export function createSkillsCommand(): Command {
             packs: listData.packs,
             runtimeStatus: listData.runtimeStatus,
             warnings,
-            syncedPacks,
           }, null, 2));
           return;
         }
@@ -566,7 +486,6 @@ export function createSkillsCommand(): Command {
         const skillsRoot = resolveSkillsRoot(scopeRoot);
         const runtimes = resolveTargetRuntimes(opts);
 
-        const syncedPacks = await syncPackMetadataToFilesystem(skillsRoot, pack);
         await assertSkillsInvariants(skillsRoot);
         const result = await mutatePacks({
           skillsRoot,
@@ -580,15 +499,11 @@ export function createSkillsCommand(): Command {
           console.log(JSON.stringify({
             scope,
             skillsRoot,
-            syncedPacks,
             ...result,
           }, null, 2));
           return;
         }
 
-        if (syncedPacks.length > 0) {
-          console.log(`\n  ${sym.ok} Synced PACK.json skills from filesystem for: ${syncedPacks.join(', ')}`);
-        }
         console.log(`\n  ${sym.ok} Enabled ${result.resolvedPacks.length} pack(s): ${result.resolvedPacks.join(', ') || '(none)'}`);
         console.log(`  runtimes: ${result.runtimes.join(', ')}\n`);
       } catch (err) {
@@ -642,7 +557,7 @@ export function createSkillsCommand(): Command {
 
   skills
     .command('create-pack <name>')
-    .description('Create a user skill pack scaffold under .xtrm/skills/user/packs/<name>/ (default: --local)')
+    .description('Create an empty skill pack under .xtrm/skills/<name>/ (default: --local)')
     .option('--global', 'Use user-global scope (~/.xtrm/skills)', false)
     .option('--local', 'Use project-local scope (./.xtrm/skills)', false)
     .option('--json', 'Output JSON', false)
@@ -661,13 +576,12 @@ export function createSkillsCommand(): Command {
             skillsRoot,
             pack: name,
             path: created.path,
-            metadataPath: created.metadataPath,
           }, null, 2));
           return;
         }
 
         console.log(`\n  ${sym.ok} Created pack '${name}'`);
-        console.log(`  ${kleur.dim(created.metadataPath)}\n`);
+        console.log(`  ${kleur.dim(created.path)}\n`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(kleur.red(`\n  ${sym.fail} ${msg}\n`));

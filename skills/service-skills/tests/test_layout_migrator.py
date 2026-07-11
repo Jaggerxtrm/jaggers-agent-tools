@@ -54,7 +54,7 @@ class TestMigratePack(unittest.TestCase):
             self.assertFalse((pack / "service-registry.json").exists())
             new_reg = json.loads((pack / "service-skills" / "service-registry.json").read_text())
             sp = new_reg["services"]["auth-service"]["skill_path"]
-            self.assertEqual(sp, ".xtrm/skills/user/packs/market-data/service-skills/services/auth-service/SKILL.md")
+            self.assertEqual(sp, ".xtrm/skills/market-data/service-skills/services/auth-service/SKILL.md")
             self.assertNotIn(".claude/skills", sp)
             # umbrella generated
             umb = (pack / "service-skills" / "SKILL.md").read_text()
@@ -105,8 +105,8 @@ class TestDemoteShadowingRegistries(unittest.TestCase):
         with TemporaryDirectory() as d:
             root = Path(d)
             # root registry as a stale symlink -> should be removed
-            (root / ".xtrm/skills/user/packs/p/service-skills").mkdir(parents=True)
-            target = root / ".xtrm/skills/user/packs/p/service-skills/service-registry.json"
+            (root / ".xtrm/skills/p/service-skills").mkdir(parents=True)
+            target = root / ".xtrm/skills/p/service-skills/service-registry.json"
             target.write_text("{}", encoding="utf-8")
             link = root / "service-registry.json"
             link.symlink_to(target)

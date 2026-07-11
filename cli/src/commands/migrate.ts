@@ -251,6 +251,55 @@ async function walkDir(dir: string): Promise<string[]> {
   return files;
 }
 
+async function migrateSkillsLayout(
+  repoPath: string,
+  opts: { dryRun: boolean; apply: boolean },
+): Promise<void> {
+  const skillsRoot = path.join(repoPath, '.xtrm', 'skills');
+  const legacyRoot = path.join(skillsRoot, 'user', 'packs');
+  const moves: Array<{ source: string; target: string }> = [];
+  const legacyEntries = await fs.readdir(legacyRoot, { withFileTypes: true }).catch(() => [] as fs.Dirent[]);
+
+  for (const entry of legacyEntries) {
+    if (!entry.isDirectory()) continue;
+    const source = path.join(legacyRoot, entry.name);
+    const target = path.join(skillsRoot, entry.name);
+    moves.push({ source, target });
+  }
+
+  const activeRoot = path.join(skillsRoot, 'active');
+  if (moves.length === 0 && !await fs.pathExists(activeRoot)) {
+    console.log(kleur.dim('  skills-layout: already flat'));
+    return;
+  }
+
+  for (const { source, target } of moves) {
+    if (await fs.pathExists(target)) {
+      throw new Error(`Cannot flatten pack '${path.basename(source)}': target already exists at ${target}.`);
+    }
+    if (opts.dryRun) {
+      console.log(kleur.cyan(`  skills-layout: would move ${source} → ${target}`));
+      continue;
+    }
+    await fs.remove(path.join(source, 'PACK.json'));
+    await fs.rename(source, target);
+    await fs.remove(path.join(target, 'PACK.json'));
+    console.log(kleur.green(`  skills-layout: moved ${source} → ${target}`));
+  }
+
+  if (opts.dryRun) {
+    if (await fs.pathExists(activeRoot)) console.log(kleur.cyan(`  skills-layout: would remove ${activeRoot}`));
+    return;
+  }
+
+  if (await fs.pathExists(activeRoot)) {
+    await fs.remove(activeRoot);
+    console.log(kleur.green(`  skills-layout: removed ${activeRoot}`));
+  }
+  await fs.remove(legacyRoot);
+  await fs.remove(path.join(skillsRoot, 'user'));
+}
+
 async function migrateSkills(
   repoPath: string,
   opts: { dryRun: boolean; apply: boolean },
@@ -290,8 +339,6 @@ async function migrateSkills(
     if (!opts.dryRun && opts.apply) {
       const legacyRoot = path.join(
         repoSkillsRoot,
-        'user',
-        'packs',
         'local-legacy',
       );
       await fs.ensureDir(legacyRoot);
@@ -302,7 +349,7 @@ async function migrateSkills(
       for (const relPath of divergedFiles) {
         const tierPrefix = relPath.startsWith('optional/') ? 'optional/' : 'default/';
         const pathInTier = relPath.slice(tierPrefix.length);
-        // ponytail: skip source-pack PACK.json so it never overwrites the authoritative one we write below.
+          // Ignore retired pack metadata while preserving all skill files.
         if (path.basename(pathInTier) === 'PACK.json' && !pathInTier.includes('/')) continue;
         const sourcePath = relPath.startsWith('optional/')
           ? path.join(optionalTierRoot, pathInTier)
@@ -315,21 +362,7 @@ async function migrateSkills(
         }
       }
 
-      const dirEntries = (await fs.readdir(legacyRoot, { withFileTypes: true }))
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name);
-      const skillDirs: string[] = [];
-      for (const name of dirEntries) {
-        if (await fs.pathExists(path.join(legacyRoot, name, 'SKILL.md'))) {
-          skillDirs.push(name);
-        }
-      }
-      skillDirs.sort();
-      await fs.writeJson(
-        path.join(legacyRoot, 'PACK.json'),
-        { schemaVersion: '1', name: 'local-legacy', version: '0.0.0', description: 'Files preserved during xt migrate that diverged from the global canonical.', skills: skillDirs },
-        { spaces: 2 },
-      );
+      // local-legacy is identified by its filesystem shape; no PACK.json is emitted.
     }
   }
 
@@ -626,7 +659,7 @@ export function createMigrateCommand(): Command {
     .option('--force', 'Override target-exists refusal on --restore', false)
     .action(async (target: string, opts: MigrateOptions) => {
       try {
-        const validTargets = ['skills', 'hooks', 'all'];
+        const validTargets = ['skills', 'hooks', 'skills-layout', 'all'];
         if (!validTargets.includes(target)) {
           console.error(
             kleur.red(
@@ -718,6 +751,15 @@ export function createMigrateCommand(): Command {
             process.exitCode = 1;
             return;
           }
+        }
+
+        if (target === 'skills-layout') {
+          await migrateSkillsLayout(repoPath, {
+            dryRun: opts.dryRun ?? false,
+            apply: opts.apply ?? false,
+          });
+          process.exitCode = 0;
+          return;
         }
 
         console.log(kleur.bold(`\n  Migrating ${path.basename(repoPath)}`));

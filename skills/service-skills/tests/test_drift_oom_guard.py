@@ -32,13 +32,13 @@ def _init_repo(d: str, territory: list[str]) -> Path:
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     _git(root, "config", "user.email", "t@t.t")
     _git(root, "config", "user.name", "t")
-    reg_dir = root / ".xtrm/skills/user/packs/p1/service-skills"
+    reg_dir = root / ".xtrm/skills/p1/service-skills"
     reg_dir.mkdir(parents=True)
     (reg_dir / "service-registry.json").write_text(json.dumps({
         "version": "1.0.0",
         "services": {"alpha": {
             "name": "Alpha", "territory": territory,
-            "skill_path": ".xtrm/skills/user/packs/p1/service-skills/services/alpha/SKILL.md",
+            "skill_path": ".xtrm/skills/p1/service-skills/services/alpha/SKILL.md",
             # old last_sync so every freshly-written file counts as mtime-drifted
             "last_sync": "2020-01-01T00:00:00Z"}}}), encoding="utf-8")
     return root
@@ -54,7 +54,7 @@ def test_scan_drift_respects_gitignore():
         (root / "src/build/junk.py").write_text("# generated\n", encoding="utf-8")
         (root / ".gitignore").write_text("src/build/\n", encoding="utf-8")
         _git(root, "add", "src/tracked.py", ".gitignore",
-             ".xtrm/skills/user/packs/p1/service-skills/service-registry.json")
+             ".xtrm/skills/p1/service-skills/service-registry.json")
         _git(root, "commit", "-qm", "init")
 
         drift_detector = _load()
@@ -73,7 +73,7 @@ def test_scan_drift_caps_enrichment(monkeypatch):
         for f in files:
             (root / f).write_text("x = 1\n", encoding="utf-8")
         _git(root, "add", *files,
-             ".xtrm/skills/user/packs/p1/service-skills/service-registry.json")
+             ".xtrm/skills/p1/service-skills/service-registry.json")
         _git(root, "commit", "-qm", "init")
 
         drift_detector = _load()

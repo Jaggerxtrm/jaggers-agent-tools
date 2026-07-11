@@ -191,7 +191,7 @@ describe('xt migrate command', () => {
     expect(result.stdout).toContain('diverged');
     expect(result.stdout).toContain('preserving as override');
 
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
     const legacyFileExists = await fs.pathExists(path.join(legacyRoot, 'diverged-skill.md'));
     expect(legacyFileExists).toBe(true);
   });
@@ -211,13 +211,13 @@ describe('xt migrate command', () => {
     const result = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
 
     expect(result.exitCode).toBe(0);
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
     expect(await fs.pathExists(path.join(legacyRoot, 'nested-skill', 'SKILL.md'))).toBe(true);
     expect(await fs.pathExists(path.join(legacyRoot, 'nested-skill', 'script.py'))).toBe(true);
     expect(await fs.readFile(path.join(legacyRoot, 'nested-skill', 'SKILL.md'), 'utf8')).toBe('repo skill');
   });
 
-  it('local-legacy PACK.json has name=local-legacy and lists only dirs with SKILL.md', async () => {
+  it('local-legacy has no PACK.json and preserves partial trees', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     const globalSkillsRoot = await createGlobalSkillsRoot(tmpHome);
 
@@ -233,20 +233,11 @@ describe('xt migrate command', () => {
     await fs.ensureDir(path.join(globalSkillsRoot, 'default', 'partial-tree', 'refs'));
     await fs.writeFile(path.join(globalSkillsRoot, 'default', 'partial-tree', 'refs', 'note.md'), 'global partial');
 
-    // Pack marker under optional (PACK.json only) — should be skipped, never overwrite our authoritative PACK.json
-    await fs.ensureDir(path.join(repoDir, '.xtrm', 'skills', 'optional', 'xt-optional'));
-    await fs.writeJson(path.join(repoDir, '.xtrm', 'skills', 'optional', 'xt-optional', 'PACK.json'), { schemaVersion: '1', name: 'xt-optional', version: '1.0.0', skills: ['a'] });
-    await fs.ensureDir(path.join(globalSkillsRoot, 'optional', 'xt-optional'));
-    await fs.writeJson(path.join(globalSkillsRoot, 'optional', 'xt-optional', 'PACK.json'), { schemaVersion: '1', name: 'xt-optional', version: '1.0.0', skills: ['b'] });
-
     const result = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
     expect(result.exitCode).toBe(0);
 
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
-    const legacyPack = await fs.readJson(path.join(legacyRoot, 'PACK.json'));
-    expect(legacyPack.name).toBe('local-legacy');
-    expect(legacyPack.schemaVersion).toBe('1');
-    expect(legacyPack.skills).toEqual(['real-skill']);
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
+    expect(await fs.pathExists(path.join(legacyRoot, 'PACK.json'))).toBe(false);
     expect(await fs.pathExists(path.join(legacyRoot, 'partial-tree', 'refs', 'note.md'))).toBe(true);
     expect(await fs.pathExists(path.join(legacyRoot, 'partial-tree'))).toBe(true);
   });
@@ -267,7 +258,7 @@ describe('xt migrate command', () => {
     expect(result.stdout).toContain('diverged');
     expect(result.stdout).toContain('preserving as override');
 
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
     const legacyFileExists = await fs.pathExists(path.join(legacyRoot, 'optional-diverged.md'));
     expect(legacyFileExists).toBe(true);
   });

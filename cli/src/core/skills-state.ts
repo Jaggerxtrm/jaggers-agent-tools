@@ -3,11 +3,9 @@ import { z } from 'zod';
 import {
   SKILLS_STATE_SCHEMA_VERSION,
   type SkillsRuntime,
-  resolveActiveRuntimeRoot,
   resolveDefaultTierRoot,
   resolveOptionalTierRoot,
   resolveStateFilePath,
-  resolveUserPacksRoot,
 } from './skills-layout.js';
 
 const runtimeEnabledPacksSchema = z.strictObject({
@@ -59,11 +57,9 @@ export function createDefaultSkillsState(): SkillsState {
 }
 
 export async function ensureSkillsTreeStructure(skillsRoot: string): Promise<void> {
+  await fs.ensureDir(skillsRoot);
   await fs.ensureDir(resolveDefaultTierRoot(skillsRoot));
   await fs.ensureDir(resolveOptionalTierRoot(skillsRoot));
-  await fs.ensureDir(resolveUserPacksRoot(skillsRoot));
-
-  await fs.ensureDir(resolveActiveRuntimeRoot(skillsRoot));
 }
 
 export async function writeSkillsState(skillsRoot: string, state: SkillsState): Promise<SkillsState> {
