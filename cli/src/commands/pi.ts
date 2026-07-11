@@ -74,6 +74,10 @@ export function createPiCommand(): Command {
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
         .option('--model <name>', 'With --role: forward `--model <name>` to pi (overrides specialist.execution.model)')
         .option('--thinking <level>', 'With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)')
+        .option('--new-session', 'With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)')
+        .option('--ns', 'Alias for --new-session')
+        .option('--parent <target>', 'With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})')
+        .option('--child', 'With --role: explicit form of the auto-behavior — @agent_parent_session = current pane\'s session_id')
         .allowUnknownOption(true)
         .action(async (name: string | undefined, opts: {
             role?: string;
@@ -81,6 +85,10 @@ export function createPiCommand(): Command {
             attach?: boolean;
             model?: string;
             thinking?: string;
+            newSession?: boolean;
+            ns?: boolean;
+            parent?: string;
+            child?: boolean;
         }) => {
             // Everything after `--` is forwarded verbatim to pi (with guards
             // enforced in the launcher). This is the primary escape hatch for
@@ -95,6 +103,9 @@ export function createPiCommand(): Command {
                 attach: opts.attach,
                 model: opts.model,
                 thinking: opts.thinking,
+                newSession: Boolean(opts.newSession || opts.ns),
+                parent: opts.parent,
+                child: Boolean(opts.child),
                 passthrough,
             });
         });

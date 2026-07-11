@@ -18,6 +18,12 @@ export interface WorktreeSessionOptions {
     model?: string;
     /** Explicit --thinking level override for pi role sessions; wins over specialist default. */
     thinking?: string;
+    /** With --role: force a new tmux session even when inside $TMUX. Outside $TMUX this is the (unchanged) default. */
+    newSession?: boolean;
+    /** With --role: override @agent_parent_session on the target pane (tmux session name, id, or #{session_id}). */
+    parent?: string;
+    /** With --role: explicit form of the auto-behavior — @agent_parent_session = current pane's #{session_id}. --parent wins over --child when both set. */
+    child?: boolean;
     /** Raw argv after `--` on the xt pi command; forwarded verbatim to pi. */
     passthrough?: string[];
 }
@@ -275,13 +281,43 @@ export function buildRoleTmuxPlan(args: {
 
     const piCmdString = ['pi', ...piArgs].map(shellQuote).join(' ');
 
+    // Pane metadata written on the target pane at launch time. Picker + safe-
+    // send-pointer + handoff read these. @agent_state=idle so the picker sees
+    // the pane immediately (pi's own agent-state hook won't fire until the
+    // first turn). @agent_prompt_file lets the picker preview show which role
+    // is running.
     const paneOptions: Array<{ key: string; value: string }> = [
         { key: '@agent_parent_session', value: parentSessionId },
         { key: '@agent_task', value: `role:${role.name}` },
+        { key: '@agent_state', value: 'idle' },
+        { key: '@agent_prompt_file', value: promptFile },
     ];
     if (bead) paneOptions.push({ key: '@agent_bead', value: bead });
 
     return { sessionName, piArgs, piCmdString, paneOptions };
+}
+
+/**
+ * Environment variables exported to the pi child process so scripts/agent-
+ * state.sh (and the picker's own reads) can find the metadata without an
+ * extra tmux query. Redundant with paneOptions on purpose — the launcher
+ * writes options once at spawn (state=idle etc.), and env vars survive re-
+ * execs the way pane options do not. xtmux-1lb.5.1.
+ */
+export function buildAgentEnv(args: {
+    bead?: string;
+    role: string;
+    promptFile: string;
+    parentSessionId: string;
+}): Record<string, string> {
+    const { bead, role, promptFile, parentSessionId } = args;
+    const env: Record<string, string> = {
+        XTMUX_AGENT_TASK: `role:${role}`,
+        XTMUX_AGENT_PROMPT_FILE: promptFile,
+        XTMUX_AGENT_PARENT_SESSION: parentSessionId,
+    };
+    if (bead) env.XTMUX_AGENT_BEAD = bead;
+    return env;
 }
 
 function currentTmuxSessionId(): string {
@@ -703,6 +739,9 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             modelOverride: model,
             thinkingOverride: thinking,
             passthrough: guardedPassthrough,
+            newSession: opts.newSession,
+            parent: opts.parent,
+            child: opts.child,
         });
         return; // launchRoleTmuxSession never returns (calls process.exit)
     }
@@ -718,6 +757,39 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     process.exit(launchResult.status ?? 0);
 }
 
+/**
+ * Resolve a --parent target (session name, id, or `#{session_id}` string) to
+ * a concrete tmux session id via `tmux display-message`. Returns null on
+ * failure so the launcher can print a clear error before spawning pi.
+ * xtmux-1lb.5.1.
+ */
+function resolveParentSession(target: string): string | null {
+    if (/^\$\d+$/.test(target)) return target; // already a sid
+    const r = spawnSync('tmux', ['display-message', '-p', '-t', target, '#{session_id}'], {
+        stdio: 'pipe', encoding: 'utf8',
+    });
+    if (r.status !== 0) return null;
+    const sid = (r.stdout ?? '').trim();
+    return sid || null;
+}
+
+/**
+ * Fire-and-forget log emission via tmux-session-picker. Non-fatal if the
+ * picker binary is missing — the launcher must not fail the user's launch on
+ * observability. xtmux-1lb.5.1.
+ */
+function emitAgentRoleLaunched(fields: Record<string, string>): void {
+    const picker = process.env.XTMUX_PICKER
+        || path.join(os.homedir(), '.local', 'bin', 'tmux-session-picker');
+    if (!existsSync(picker)) return;
+    const kvArgs = Object.entries(fields)
+        .filter(([, v]) => v !== '' && v != null)
+        .map(([k, v]) => `${k}=${v}`);
+    spawnSync(picker, ['log', 'emit', 'agent.role.launched', ...kvArgs], {
+        stdio: 'ignore',
+    });
+}
+
 async function launchRoleTmuxSession(args: {
     role: ResolvedRole;
     bead?: string;
@@ -726,8 +798,52 @@ async function launchRoleTmuxSession(args: {
     modelOverride?: string;
     thinkingOverride?: string;
     passthrough?: string[];
+    newSession?: boolean;
+    parent?: string;
+    child?: boolean;
 }): Promise<never> {
-    const { role, bead, attach, worktreePath, modelOverride, thinkingOverride, passthrough } = args;
+    const {
+        role, bead, attach, worktreePath, modelOverride, thinkingOverride, passthrough,
+        newSession, parent, child,
+    } = args;
+
+    const insideTmux = Boolean(process.env.TMUX);
+    // Current-pane mode: inside $TMUX with no explicit --new-session. This is
+    // the new default — matches operator intent "if i'm in tmux and want a
+    // role, launch it in this pane and that's that." Outside $TMUX the only
+    // sensible thing is still `tmux new-session`, so mode collapses to
+    // new-session there regardless of --new-session. xtmux-1lb.5.1.
+    const currentPaneMode = insideTmux && !newSession;
+
+    // Guard: --no-attach only makes sense when we're actually creating a
+    // session that could be attached-to later. In current-pane mode there IS
+    // no separate session, so --no-attach has nowhere to go.
+    if (currentPaneMode && !attach) {
+        process.stderr.write(kleur.red(
+            `\n  ✗ --no-attach requires --new-session (or exit tmux first)\n`,
+        ));
+        process.exit(1);
+    }
+
+    // Resolve parent session id. Precedence: --parent wins over --child
+    // wins over auto (current session).
+    let parentSessionId: string;
+    if (parent) {
+        const resolved = resolveParentSession(parent);
+        if (!resolved) {
+            process.stderr.write(kleur.red(
+                `\n  ✗ --parent '${parent}': tmux session not found\n`,
+            ));
+            process.exit(1);
+        }
+        parentSessionId = resolved;
+    } else if (child) {
+        // Explicit form of the auto-behavior. Kept as an opt-in so a future
+        // default flip (to 'no auto-parent') doesn't break scripts.
+        parentSessionId = currentTmuxSessionId();
+    } else {
+        parentSessionId = currentTmuxSessionId();
+    }
 
     // Transport file for the system prompt. `.xtrm/` is gitignored so this
     // never rides a checkpoint commit.
@@ -739,7 +855,6 @@ async function launchRoleTmuxSession(args: {
     mkdirSync(path.dirname(promptFile), { recursive: true });
     writeFileSync(promptFile, role.systemPrompt);
 
-    const parentSessionId = currentTmuxSessionId();
     const plan = buildRoleTmuxPlan({
         role,
         bead,
@@ -750,6 +865,43 @@ async function launchRoleTmuxSession(args: {
         passthrough,
     });
 
+    const agentEnv = buildAgentEnv({ bead, role: role.name, promptFile, parentSessionId });
+
+    if (currentPaneMode) {
+        // Resolve the current pane id (the pane the launcher was invoked
+        // from). All @agent_* pane options get written here; pi then runs
+        // in this same pane with stdio inherited.
+        const paneQuery = spawnSync('tmux', ['display-message', '-p', '#{pane_id}'], {
+            stdio: 'pipe', encoding: 'utf8',
+        });
+        const paneId = (paneQuery.stdout ?? '').trim();
+        if (!paneId) {
+            process.stderr.write(kleur.red('\n  ✗ Could not resolve current pane id\n'));
+            process.exit(1);
+        }
+
+        for (const { key, value } of plan.paneOptions) {
+            spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
+        }
+
+        emitAgentRoleLaunched({
+            pane: paneId,
+            session: currentTmuxSessionId(),
+            bead: bead ?? '',
+            role: role.name,
+            parent: parentSessionId,
+            worktree: worktreePath,
+        });
+
+        const piResult = spawnSync('pi', plan.piArgs, {
+            cwd: worktreePath,
+            stdio: 'inherit',
+            env: { ...process.env, ...agentEnv },
+        });
+        process.exit(piResult.status ?? 0);
+    }
+
+    // New-session path (default outside $TMUX, or --new-session inside).
     // Fail fast if the session name already exists — do not silently attach
     // to a stale session with unknown metadata.
     const hasSess = spawnSync('tmux', ['has-session', '-t', `=${plan.sessionName}`], {
@@ -762,10 +914,18 @@ async function launchRoleTmuxSession(args: {
         process.exit(1);
     }
 
+    // Pass XTMUX_AGENT_* through to the new session's environment via -e so
+    // scripts/agent-state.sh (running inside the new pane) can pick them up.
+    const envArgs: string[] = [];
+    for (const [k, v] of Object.entries(agentEnv)) {
+        envArgs.push('-e', `${k}=${v}`);
+    }
+
     const newSess = spawnSync('tmux', [
         'new-session', '-d',
         '-s', plan.sessionName,
         '-c', worktreePath,
+        ...envArgs,
         plan.piCmdString,
     ], { stdio: 'pipe', encoding: 'utf8' });
     if (newSess.status !== 0) {
@@ -787,13 +947,22 @@ async function launchRoleTmuxSession(args: {
         spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
     }
 
+    emitAgentRoleLaunched({
+        pane: paneId,
+        session: plan.sessionName,
+        bead: bead ?? '',
+        role: role.name,
+        parent: parentSessionId,
+        worktree: worktreePath,
+    });
+
     if (!attach) {
         // Contract: exactly one line on stdout, session_name:pane_id
         process.stdout.write(`${plan.sessionName}:${paneId}\n`);
         process.exit(0);
     }
 
-    const attachCmd = chooseAttachCommand(plan.sessionName, Boolean(process.env.TMUX));
+    const attachCmd = chooseAttachCommand(plan.sessionName, insideTmux);
     const attachResult = spawnSync('tmux', attachCmd, {
         stdio: 'inherit',
     });

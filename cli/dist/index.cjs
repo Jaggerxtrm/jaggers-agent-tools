@@ -61741,10 +61741,22 @@ function buildRoleTmuxPlan(args) {
   const piCmdString = ["pi", ...piArgs].map(shellQuote).join(" ");
   const paneOptions = [
     { key: "@agent_parent_session", value: parentSessionId },
-    { key: "@agent_task", value: `role:${role.name}` }
+    { key: "@agent_task", value: `role:${role.name}` },
+    { key: "@agent_state", value: "idle" },
+    { key: "@agent_prompt_file", value: promptFile }
   ];
   if (bead) paneOptions.push({ key: "@agent_bead", value: bead });
   return { sessionName, piArgs, piCmdString, paneOptions };
+}
+function buildAgentEnv(args) {
+  const { bead, role, promptFile, parentSessionId } = args;
+  const env3 = {
+    XTMUX_AGENT_TASK: `role:${role}`,
+    XTMUX_AGENT_PROMPT_FILE: promptFile,
+    XTMUX_AGENT_PARENT_SESSION: parentSessionId
+  };
+  if (bead) env3.XTMUX_AGENT_BEAD = bead;
+  return env3;
 }
 function currentTmuxSessionId() {
   if (!process.env.TMUX) return "";
@@ -62028,7 +62040,10 @@ async function launchWorktreeSession(opts) {
       worktreePath,
       modelOverride: model,
       thinkingOverride: thinking,
-      passthrough: guardedPassthrough
+      passthrough: guardedPassthrough,
+      newSession: opts.newSession,
+      parent: opts.parent,
+      child: opts.child
     });
     return;
   }
@@ -62040,8 +62055,64 @@ async function launchWorktreeSession(opts) {
   });
   process.exit(launchResult.status ?? 0);
 }
+function resolveParentSession(target) {
+  if (/^\$\d+$/.test(target)) return target;
+  const r = (0, import_node_child_process2.spawnSync)("tmux", ["display-message", "-p", "-t", target, "#{session_id}"], {
+    stdio: "pipe",
+    encoding: "utf8"
+  });
+  if (r.status !== 0) return null;
+  const sid = (r.stdout ?? "").trim();
+  return sid || null;
+}
+function emitAgentRoleLaunched(fields) {
+  const picker = process.env.XTMUX_PICKER || import_node_path9.default.join(import_node_os5.default.homedir(), ".local", "bin", "tmux-session-picker");
+  if (!(0, import_node_fs2.existsSync)(picker)) return;
+  const kvArgs = Object.entries(fields).filter(([, v]) => v !== "" && v != null).map(([k, v]) => `${k}=${v}`);
+  (0, import_node_child_process2.spawnSync)(picker, ["log", "emit", "agent.role.launched", ...kvArgs], {
+    stdio: "ignore"
+  });
+}
 async function launchRoleTmuxSession(args) {
-  const { role, bead, attach, worktreePath, modelOverride, thinkingOverride, passthrough } = args;
+  const {
+    role,
+    bead,
+    attach,
+    worktreePath,
+    modelOverride,
+    thinkingOverride,
+    passthrough,
+    newSession,
+    parent,
+    child
+  } = args;
+  const insideTmux = Boolean(process.env.TMUX);
+  const currentPaneMode = insideTmux && !newSession;
+  if (currentPaneMode && !attach) {
+    process.stderr.write(kleur_default.red(
+      `
+  \u2717 --no-attach requires --new-session (or exit tmux first)
+`
+    ));
+    process.exit(1);
+  }
+  let parentSessionId;
+  if (parent) {
+    const resolved = resolveParentSession(parent);
+    if (!resolved) {
+      process.stderr.write(kleur_default.red(
+        `
+  \u2717 --parent '${parent}': tmux session not found
+`
+      ));
+      process.exit(1);
+    }
+    parentSessionId = resolved;
+  } else if (child) {
+    parentSessionId = currentTmuxSessionId();
+  } else {
+    parentSessionId = currentTmuxSessionId();
+  }
   const promptFile = import_node_path9.default.join(
     worktreePath,
     ".xtrm",
@@ -62049,7 +62120,6 @@ async function launchRoleTmuxSession(args) {
   );
   (0, import_node_fs2.mkdirSync)(import_node_path9.default.dirname(promptFile), { recursive: true });
   (0, import_node_fs2.writeFileSync)(promptFile, role.systemPrompt);
-  const parentSessionId = currentTmuxSessionId();
   const plan = buildRoleTmuxPlan({
     role,
     bead,
@@ -62059,6 +62129,35 @@ async function launchRoleTmuxSession(args) {
     thinkingOverride,
     passthrough
   });
+  const agentEnv = buildAgentEnv({ bead, role: role.name, promptFile, parentSessionId });
+  if (currentPaneMode) {
+    const paneQuery2 = (0, import_node_child_process2.spawnSync)("tmux", ["display-message", "-p", "#{pane_id}"], {
+      stdio: "pipe",
+      encoding: "utf8"
+    });
+    const paneId2 = (paneQuery2.stdout ?? "").trim();
+    if (!paneId2) {
+      process.stderr.write(kleur_default.red("\n  \u2717 Could not resolve current pane id\n"));
+      process.exit(1);
+    }
+    for (const { key, value } of plan.paneOptions) {
+      (0, import_node_child_process2.spawnSync)("tmux", ["set-option", "-p", "-t", paneId2, key, value], { stdio: "pipe" });
+    }
+    emitAgentRoleLaunched({
+      pane: paneId2,
+      session: currentTmuxSessionId(),
+      bead: bead ?? "",
+      role: role.name,
+      parent: parentSessionId,
+      worktree: worktreePath
+    });
+    const piResult = (0, import_node_child_process2.spawnSync)("pi", plan.piArgs, {
+      cwd: worktreePath,
+      stdio: "inherit",
+      env: { ...process.env, ...agentEnv }
+    });
+    process.exit(piResult.status ?? 0);
+  }
   const hasSess = (0, import_node_child_process2.spawnSync)("tmux", ["has-session", "-t", `=${plan.sessionName}`], {
     stdio: "pipe"
   });
@@ -62070,6 +62169,10 @@ async function launchRoleTmuxSession(args) {
     ));
     process.exit(1);
   }
+  const envArgs = [];
+  for (const [k, v] of Object.entries(agentEnv)) {
+    envArgs.push("-e", `${k}=${v}`);
+  }
   const newSess = (0, import_node_child_process2.spawnSync)("tmux", [
     "new-session",
     "-d",
@@ -62077,6 +62180,7 @@ async function launchRoleTmuxSession(args) {
     plan.sessionName,
     "-c",
     worktreePath,
+    ...envArgs,
     plan.piCmdString
   ], { stdio: "pipe", encoding: "utf8" });
   if (newSess.status !== 0) {
@@ -62101,12 +62205,20 @@ async function launchRoleTmuxSession(args) {
   for (const { key, value } of plan.paneOptions) {
     (0, import_node_child_process2.spawnSync)("tmux", ["set-option", "-p", "-t", paneId, key, value], { stdio: "pipe" });
   }
+  emitAgentRoleLaunched({
+    pane: paneId,
+    session: plan.sessionName,
+    bead: bead ?? "",
+    role: role.name,
+    parent: parentSessionId,
+    worktree: worktreePath
+  });
   if (!attach) {
     process.stdout.write(`${plan.sessionName}:${paneId}
 `);
     process.exit(0);
   }
-  const attachCmd = chooseAttachCommand(plan.sessionName, Boolean(process.env.TMUX));
+  const attachCmd = chooseAttachCommand(plan.sessionName, insideTmux);
   const attachResult = (0, import_node_child_process2.spawnSync)("tmux", attachCmd, {
     stdio: "inherit"
   });
@@ -62896,7 +63008,7 @@ async function getPiProjectPointer(projectRoot) {
   }
 }
 function createPiCommand() {
-  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to pi (overrides specialist.execution.model)").option("--thinking <level>", "With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)").allowUnknownOption(true).action(async (name, opts) => {
+  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to pi (overrides specialist.execution.model)").option("--thinking <level>", "With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)").option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").allowUnknownOption(true).action(async (name, opts) => {
     const dashIdx = process.argv.indexOf("--");
     const passthrough = dashIdx >= 0 ? process.argv.slice(dashIdx + 1) : [];
     await launchWorktreeSession({
@@ -62907,6 +63019,9 @@ function createPiCommand() {
       attach: opts.attach,
       model: opts.model,
       thinking: opts.thinking,
+      newSession: Boolean(opts.newSession || opts.ns),
+      parent: opts.parent,
+      child: Boolean(opts.child),
       passthrough
     });
   });
