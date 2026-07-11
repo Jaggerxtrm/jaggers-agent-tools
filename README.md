@@ -47,6 +47,7 @@ Specialists are first-class in v0.7.19. `xtrm-tools` vendors specialist skills i
 | [docs/plans/global-skills-migration.md](docs/plans/global-skills-migration.md) | Global skills migration — architecture and operator workflow |
 | [docs/pi-extensions.md](docs/pi-extensions.md) | Pi extensions — managed sync, authoring, parity notes |
 | [docs/worktrees.md](docs/worktrees.md) | xt worktrees — `xt claude/pi`, `xt attach`, `xt end`, isolation model |
+| [docs/xt-pi-role.md](docs/xt-pi-role.md) | `xt pi --role` / `xt claude --role` — specialist launcher: flags, behavior matrix, pane options, `XTMUX_AGENT_*` env, coordination pattern |
 | [docs/mcp-servers.md](docs/mcp-servers.md) | MCP servers — gitnexus, github-grep, deepwiki, official plugins |
 | [docs/bash-tools.md](docs/bash-tools.md) | Bash-native specialist CLIs — ghgrep, ctx7, deepwiki |
 | [docs/cli-architecture.md](docs/cli-architecture.md) | CLI internals — install flow, diff/sync engine, config merge |
