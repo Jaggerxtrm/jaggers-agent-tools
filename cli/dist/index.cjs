@@ -60213,8 +60213,13 @@ async function reconcileRuntimeLinks(options) {
         throw new Error(`Cannot enable skill '${name}': ${linkPath} is user-owned.`);
       }
     }
-    if (existing?.isSymbolicLink() && import_node_path7.default.resolve(runtimeDirectory, await import_fs_extra8.default.readlink(linkPath)) === target) continue;
-    if (existing && !existing.isSymbolicLink()) throw new Error(`Cannot replace non-symlink managed entry ${linkPath}.`);
+    if (existing?.isSymbolicLink() && import_node_path7.default.resolve(runtimeDirectory, await import_fs_extra8.default.readlink(linkPath)) === target) {
+      const targetExists = await import_fs_extra8.default.pathExists(target);
+      if (targetExists) continue;
+      await import_fs_extra8.default.remove(linkPath);
+    } else if (existing && !existing.isSymbolicLink()) {
+      throw new Error(`Cannot replace non-symlink managed entry ${linkPath}.`);
+    }
     await atomicSymlink(target, linkPath);
   }
   const nextManaged = Object.fromEntries(Object.entries(desiredLinks).map(([name, target]) => [name, targetRelativePath(projectRoot, target)]));
