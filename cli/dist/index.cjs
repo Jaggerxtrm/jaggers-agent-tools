@@ -63118,6 +63118,67 @@ async function scaffoldSkillsDefaultFromPackage(params) {
 function getAssetInstallScope(asset) {
   return asset.install_scope ?? "project";
 }
+function collectManagedDefaultSkillNames(registry2) {
+  const names = /* @__PURE__ */ new Set();
+  for (const asset of Object.values(registry2.assets)) {
+    if (asset.source_dir !== ".xtrm/skills/default") continue;
+    for (const filePath of Object.keys(asset.files)) {
+      const first = filePath.split("/")[0];
+      if (first) names.add(first);
+    }
+  }
+  return names;
+}
+async function isDirLike(entryPath, entryStat) {
+  if (entryStat.isDirectory()) return true;
+  if (!entryStat.isSymbolicLink()) return false;
+  const resolved = await import_fs_extra15.default.stat(entryPath).catch(() => null);
+  return Boolean(resolved?.isDirectory());
+}
+async function pruneRetiredManagedSkills(params) {
+  const { userXtrmDir, registry: registry2, dryRun, overrideRoots } = params;
+  const defaultRoot = overrideRoots?.skills ?? import_path7.default.join(userXtrmDir, "skills", "default");
+  const rootStat = await import_fs_extra15.default.lstat(defaultRoot).catch(() => null);
+  if (!rootStat || rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+    return { removed: [] };
+  }
+  const managedNames = collectManagedDefaultSkillNames(registry2);
+  if (managedNames.size === 0) {
+    return { removed: [] };
+  }
+  const onDisk = await import_fs_extra15.default.readdir(defaultRoot);
+  const removed = [];
+  for (const name of onDisk) {
+    if (managedNames.has(name)) continue;
+    const entryPath = import_path7.default.join(defaultRoot, name);
+    const entryStat = await import_fs_extra15.default.lstat(entryPath).catch(() => null);
+    if (!entryStat) continue;
+    if (!await isDirLike(entryPath, entryStat)) continue;
+    removed.push(name);
+    if (!dryRun) {
+      await import_fs_extra15.default.remove(entryPath);
+    }
+  }
+  const activeRoot = import_path7.default.join(userXtrmDir, "skills", "active");
+  const activeStat = await import_fs_extra15.default.lstat(activeRoot).catch(() => null);
+  if (activeStat?.isDirectory() && !activeStat.isSymbolicLink()) {
+    const resolvedDefaultRoot = import_path7.default.resolve(defaultRoot);
+    for (const name of removed) {
+      const activeEntry = import_path7.default.join(activeRoot, name);
+      const linkStat = await import_fs_extra15.default.lstat(activeEntry).catch(() => null);
+      if (!linkStat || !linkStat.isSymbolicLink()) continue;
+      const linkTarget = await import_fs_extra15.default.readlink(activeEntry).catch(() => null);
+      if (!linkTarget) continue;
+      const resolvedTarget = import_path7.default.resolve(import_path7.default.dirname(activeEntry), linkTarget);
+      if (resolvedTarget === import_path7.default.join(resolvedDefaultRoot, name)) {
+        if (!dryRun) {
+          await import_fs_extra15.default.remove(activeEntry);
+        }
+      }
+    }
+  }
+  return { removed };
+}
 async function appendGlobalSkillsSkipLog(asset, count) {
   const logPath = import_path7.default.join(import_path7.default.dirname(resolveGlobalSkillsRoot()), "logs", "skills-migration.jsonl");
   await import_fs_extra15.default.ensureDir(import_path7.default.dirname(logPath));
@@ -72012,7 +72073,7 @@ async function runInstall(opts = {}) {
     return;
   }
   const effectiveYes = yes || process.argv.includes("--yes") || process.argv.includes("-y");
-  const packageRoot = resolvePackageRoot2();
+  const packageRoot = opts.packageRoot ?? resolvePackageRoot2();
   const projectRoot = opts.projectRoot ?? getProjectRoot2();
   if (!skipMachineBootstrap) {
     await runMachineBootstrap({ yes: effectiveYes });
@@ -72049,6 +72110,16 @@ async function runInstall(opts = {}) {
   });
   if (scaffoldResult === "copy") {
     console.log(kleur_default.dim("  \u2022 Repaired .xtrm/skills/default from package payload"));
+  }
+  const pruneResult = await pruneRetiredManagedSkills({
+    userXtrmDir,
+    registry: registry2,
+    dryRun,
+    overrideRoots: getGlobalSkillsOverrideRoots()
+  });
+  if (pruneResult.removed.length > 0) {
+    const verb = dryRun ? "Would remove" : "Removed";
+    console.log(kleur_default.dim(`  \u2022 ${verb} ${pruneResult.removed.length} retired managed skill(s): ${pruneResult.removed.join(", ")}`));
   }
   const stats = await installFromRegistry({
     packageRoot,

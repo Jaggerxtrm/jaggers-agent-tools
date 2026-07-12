@@ -165,6 +165,96 @@ function getAssetInstallScope(asset: RegistryAsset): 'global' | 'project' {
     return asset.install_scope ?? 'project';
 }
 
+export function collectManagedDefaultSkillNames(registry: RegistryManifest): Set<string> {
+    const names = new Set<string>();
+    for (const asset of Object.values(registry.assets)) {
+        if (asset.source_dir !== '.xtrm/skills/default') continue;
+        for (const filePath of Object.keys(asset.files)) {
+            const first = filePath.split('/')[0];
+            if (first) names.add(first);
+        }
+    }
+    return names;
+}
+
+async function isDirLike(entryPath: string, entryStat: import('fs').Stats): Promise<boolean> {
+    if (entryStat.isDirectory()) return true;
+    if (!entryStat.isSymbolicLink()) return false;
+    const resolved = await fs.stat(entryPath).catch(() => null);
+    return Boolean(resolved?.isDirectory());
+}
+
+export async function pruneRetiredManagedSkills(params: {
+    userXtrmDir: string;
+    registry: RegistryManifest;
+    dryRun: boolean;
+    overrideRoots?: Record<string, string>;
+}): Promise<{ removed: string[] }> {
+    const { userXtrmDir, registry, dryRun, overrideRoots } = params;
+
+    // Prune where installFromRegistry would write: honor the same skills override root.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    const defaultRoot = overrideRoots?.skills ?? path.join(userXtrmDir, 'skills', 'default');
+
+    const rootStat = await fs.lstat(defaultRoot).catch(() => null);
+    if (!rootStat || rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+        return { removed: [] };
+    }
+
+    const managedNames = collectManagedDefaultSkillNames(registry);
+    if (managedNames.size === 0) {
+        // No default skills asset in this registry (e.g. project snapshot under global mode).
+        // Refuse to prune — we can't distinguish retired vs simply not-in-scope.
+        return { removed: [] };
+    }
+
+    const onDisk = await fs.readdir(defaultRoot);
+    const removed: string[] = [];
+
+    for (const name of onDisk) {
+        if (managedNames.has(name)) continue;
+
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+        const entryPath = path.join(defaultRoot, name);
+        const entryStat = await fs.lstat(entryPath).catch(() => null);
+        if (!entryStat) continue;
+        if (!(await isDirLike(entryPath, entryStat))) continue;
+
+        removed.push(name);
+        if (!dryRun) {
+            await fs.remove(entryPath);
+        }
+    }
+
+    // Sweep matching active-view symlinks that point at the pruned default entries.
+    // User-owned active content (real dirs, or symlinks pointing outside the default root) is untouched.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    const activeRoot = path.join(userXtrmDir, 'skills', 'active');
+    const activeStat = await fs.lstat(activeRoot).catch(() => null);
+    if (activeStat?.isDirectory() && !activeStat.isSymbolicLink()) {
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+        const resolvedDefaultRoot = path.resolve(defaultRoot);
+        for (const name of removed) {
+            // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+            const activeEntry = path.join(activeRoot, name);
+            const linkStat = await fs.lstat(activeEntry).catch(() => null);
+            if (!linkStat || !linkStat.isSymbolicLink()) continue;
+            const linkTarget = await fs.readlink(activeEntry).catch(() => null);
+            if (!linkTarget) continue;
+            // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+            const resolvedTarget = path.resolve(path.dirname(activeEntry), linkTarget);
+            // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+            if (resolvedTarget === path.join(resolvedDefaultRoot, name)) {
+                if (!dryRun) {
+                    await fs.remove(activeEntry);
+                }
+            }
+        }
+    }
+
+    return { removed };
+}
+
 async function appendGlobalSkillsSkipLog(asset: string, count: number): Promise<void> {
     const logPath = path.join(path.dirname(resolveGlobalSkillsRoot()), 'logs', 'skills-migration.jsonl');
     await fs.ensureDir(path.dirname(logPath));
