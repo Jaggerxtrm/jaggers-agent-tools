@@ -163,6 +163,38 @@ describe('xt migrate command', () => {
     expect(await fs.pathExists(path.join(skillsRoot, 'user'))).toBe(false);
   });
 
+  it('removes dangling .claude/skills and .pi/skills symlinks pointing at retired active/', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
+    const activeRoot = path.join(skillsRoot, 'active');
+    await fs.ensureDir(activeRoot);
+    await fs.ensureDir(path.join(repoDir, '.claude'));
+    await fs.ensureDir(path.join(repoDir, '.pi'));
+    await fs.symlink('../.xtrm/skills/active', path.join(repoDir, '.claude', 'skills'));
+    await fs.symlink('../.xtrm/skills/active', path.join(repoDir, '.pi', 'skills'));
+
+    await migrateSkillsLayout(repoDir, { dryRun: false, apply: true });
+
+    expect(await fs.pathExists(activeRoot)).toBe(false);
+    expect(await fs.lstat(path.join(repoDir, '.claude', 'skills')).catch(() => null)).toBeNull();
+    expect(await fs.lstat(path.join(repoDir, '.pi', 'skills')).catch(() => null)).toBeNull();
+  });
+
+  it('preserves user-owned .claude/skills symlink pointing elsewhere during migration', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
+    await fs.ensureDir(path.join(skillsRoot, 'active'));
+    await fs.ensureDir(path.join(repoDir, '.claude'));
+    const userTarget = path.join(tmpHome, 'user-skills');
+    await fs.ensureDir(userTarget);
+    await fs.symlink(userTarget, path.join(repoDir, '.claude', 'skills'));
+
+    await migrateSkillsLayout(repoDir, { dryRun: false, apply: true });
+
+    const stat = await fs.lstat(path.join(repoDir, '.claude', 'skills'));
+    expect(stat.isSymbolicLink()).toBe(true);
+  });
+
   it('preflights all targets before moving any legacy pack', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     const skillsRoot = path.join(repoDir, '.xtrm', 'skills');

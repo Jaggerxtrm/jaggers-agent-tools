@@ -293,7 +293,16 @@ export async function migrateSkillsLayout(
   }
 
   const activeRoot = path.join(skillsRoot, 'active');
-  if (moves.length === 0 && !await fs.pathExists(activeRoot)) {
+  const danglingRuntimeSymlinks: string[] = [];
+  for (const runtimeRel of ['.claude/skills', '.pi/skills']) {
+    const runtimeDir = path.join(repoPath, runtimeRel);
+    const stat = await fs.lstat(runtimeDir).catch(() => null);
+    if (!stat?.isSymbolicLink()) continue;
+    const linkTarget = await fs.readlink(runtimeDir);
+    const resolvedTarget = path.resolve(path.dirname(runtimeDir), linkTarget);
+    if (resolvedTarget === activeRoot) danglingRuntimeSymlinks.push(runtimeDir);
+  }
+  if (moves.length === 0 && !await fs.pathExists(activeRoot) && danglingRuntimeSymlinks.length === 0) {
     console.log(kleur.dim('  skills-layout: already flat'));
     return;
   }
@@ -310,6 +319,9 @@ export async function migrateSkillsLayout(
 
   if (dryRun) {
     if (await fs.pathExists(activeRoot)) console.log(kleur.cyan(`  skills-layout: would remove ${activeRoot}`));
+    for (const runtimeDir of danglingRuntimeSymlinks) {
+      console.log(kleur.cyan(`  skills-layout: would remove dangling ${path.relative(repoPath, runtimeDir)} symlink`));
+    }
     return;
   }
 
@@ -319,6 +331,11 @@ export async function migrateSkillsLayout(
   }
   await fs.remove(legacyRoot);
   await fs.remove(path.join(skillsRoot, 'user'));
+
+  for (const runtimeDir of danglingRuntimeSymlinks) {
+    await fs.remove(runtimeDir);
+    console.log(kleur.green(`  skills-layout: removed dangling ${path.relative(repoPath, runtimeDir)} symlink`));
+  }
 }
 
 async function migrateSkills(

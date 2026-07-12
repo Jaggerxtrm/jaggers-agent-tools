@@ -74074,7 +74074,16 @@ async function migrateSkillsLayout(repoPath, opts) {
     }
   }
   const activeRoot = import_node_path49.default.join(skillsRoot, "active");
-  if (moves.length === 0 && !await import_fs_extra56.default.pathExists(activeRoot)) {
+  const danglingRuntimeSymlinks = [];
+  for (const runtimeRel of [".claude/skills", ".pi/skills"]) {
+    const runtimeDir = import_node_path49.default.join(repoPath, runtimeRel);
+    const stat = await import_fs_extra56.default.lstat(runtimeDir).catch(() => null);
+    if (!stat?.isSymbolicLink()) continue;
+    const linkTarget = await import_fs_extra56.default.readlink(runtimeDir);
+    const resolvedTarget = import_node_path49.default.resolve(import_node_path49.default.dirname(runtimeDir), linkTarget);
+    if (resolvedTarget === activeRoot) danglingRuntimeSymlinks.push(runtimeDir);
+  }
+  if (moves.length === 0 && !await import_fs_extra56.default.pathExists(activeRoot) && danglingRuntimeSymlinks.length === 0) {
     console.log(kleur_default.dim("  skills-layout: already flat"));
     return;
   }
@@ -74089,6 +74098,9 @@ async function migrateSkillsLayout(repoPath, opts) {
   }
   if (dryRun) {
     if (await import_fs_extra56.default.pathExists(activeRoot)) console.log(kleur_default.cyan(`  skills-layout: would remove ${activeRoot}`));
+    for (const runtimeDir of danglingRuntimeSymlinks) {
+      console.log(kleur_default.cyan(`  skills-layout: would remove dangling ${import_node_path49.default.relative(repoPath, runtimeDir)} symlink`));
+    }
     return;
   }
   if (await import_fs_extra56.default.pathExists(activeRoot)) {
@@ -74097,6 +74109,10 @@ async function migrateSkillsLayout(repoPath, opts) {
   }
   await import_fs_extra56.default.remove(legacyRoot);
   await import_fs_extra56.default.remove(import_node_path49.default.join(skillsRoot, "user"));
+  for (const runtimeDir of danglingRuntimeSymlinks) {
+    await import_fs_extra56.default.remove(runtimeDir);
+    console.log(kleur_default.green(`  skills-layout: removed dangling ${import_node_path49.default.relative(repoPath, runtimeDir)} symlink`));
+  }
 }
 async function migrateSkills(repoPath, opts) {
   const repoSkillsRoot = import_node_path49.default.join(repoPath, ".xtrm", "skills");
