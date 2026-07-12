@@ -96,8 +96,13 @@ jobs:
       - name: Check asset contract
         run: node scripts/verify-asset-contract.mjs --contract ./specialists-src/dist/asset-contract.json --vendor-root .xtrm/skills/default
 
-      - name: Publish to npm
+      - name: Publish xtrm-tools to npm
         run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           SPECIALISTS_REPO_PATH: ${{ github.workspace }}/specialists-src
+
+      - name: Publish @jaggerxtrm/pi-extensions to npm
+        run: npm publish -w @jaggerxtrm/pi-extensions --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
