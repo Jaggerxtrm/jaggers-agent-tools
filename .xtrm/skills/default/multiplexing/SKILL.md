@@ -286,13 +286,34 @@ SINCE_MS=$(date +%s%3N)                             # for time-bounded polling
 
 # 2. Spawn detached; stdout is machine-parseable as `session_name:pane_id`.
 TARGET=$(xt pi --role chain-coordinator --bead $EPIC_BEAD --no-attach 2>/dev/null | tail -1)
-SESSION_NAME="${TARGET%:*}"   # role-chain-coordinator-<slug>
+SESSION_NAME="${TARGET%:*}"   # role-<runtime>-<slug>[-<bead>]  e.g. role-pi-chain-coordinator-abc-1
 PANE_ID="${TARGET#*:}"        # %1656
 
 # 3. Verify pane metadata is what you expect.
 tmux show-options -p -t "$PANE_ID" -qv @agent_task            # should print role:chain-coordinator
 tmux show-options -p -t "$PANE_ID" -qv @agent_parent_session  # should equal $MY_SID
 ```
+
+**Launcher flag surface (xtmux-1lb).** The command above uses `--no-attach` because a coordinator you monitor from outside should not steal your pane. The full surface:
+
+| Flag | Behavior |
+|---|---|
+| (no session flag inside `$TMUX`) | **Default**: runs pi in the CURRENT PANE. Use only when you want the coordinator to replace your pane. |
+| `--no-attach` | Spawn a new session, print `session_name:pane_id`, do not attach. Canonical for orchestrator-monitored coordinators. |
+| `--new-session` / `--ns` | Spawn a new session and attach (`switch-client` inside `$TMUX`, `attach-session` outside). Use for hands-on coordinators. |
+| `--parent <name-or-sid>` | Bind the child to a specific parent — sets `@agent_parent_session` to that parent's `#{session_id}` regardless of where you launch. |
+| `--child` | Auto-detect the current session as parent. Redundant when launching from inside a session that will monitor the child; explicit and safe. |
+| `--reuse` | If the target session name already exists, attach/print its coordinates instead of failing. Skips `agent.role.launched` emission. Only meaningful with `--new-session` / `--no-attach`. |
+| (no `--reuse`, collision) | Launcher auto-suffixes `-<hex>` and retries up to 10× before erroring. |
+| `--model <id>` / `--thinking <level>` | Override `specialist.execution.model` / `.thinking_level` per launch. |
+| `--` (trailing) | Everything after `--` forwards verbatim to the pi runtime. Guards reject `--session-dir`/`--name`/`--system-prompt`/`--append-system-prompt`; warn-and-drop `--print`/`--list-models`/`--export`/`--mode`. |
+
+Session-name shape post-xtmux-3h8: `role-<runtime>-<slug>[-<bead>]`. The `<runtime>` prefix (`pi` or `claude`) is what distinguishes a pi coordinator from a claude one on the same specialist — earlier shape (no runtime) collided.
+
+**`xt claude --role` has full parity** with `xt pi --role` (same flags, same scaffold, same pane options, same session-name shape). Reach for it when you want a Claude-Code coordinator instead of pi — same monitoring loop.
+
+**Env vars exported to the child runtime** (both current-pane and new-session modes): `XTMUX_AGENT_BEAD`, `XTMUX_AGENT_TASK`, `XTMUX_AGENT_PROMPT_FILE`, `XTMUX_AGENT_PARENT_SESSION`. A coordinator prompt that resolves its bead from env instead of an argv slot reads these directly.
+
 
 **Monitor the coordinator via three signals — pick the one that matches the address space:**
 
