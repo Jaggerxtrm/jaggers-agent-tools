@@ -7,7 +7,7 @@ default branch (master/main) — that is the single moment the code is final, an
 v2 design measures drift semantically from each service's `last_sync_ref`
 (committed range `last_sync_ref..HEAD`). The in-session PostToolUse nudge is
 best-effort and only fires on edits made inside an agent session, so drift can
-accumulate silently (dogfood: ~5000 items observed in an early consumer since 2026-04-23).
+accumulate silently (dogfood: market-data, ~5000 items since 2026-04-23).
 
 This hook is the proactive backstop. On a default-branch merge it:
   1. self-gates: no-op unless a service-registry is present AND HEAD is the
@@ -102,11 +102,16 @@ def _run_sp_subprocess(cmd: list[str], env: dict[str, str], timeout_s: float) ->
 
 
 def _resolve_pack(root: Path) -> str | None:
-    """Return the first pack name under .xtrm/skills/user/packs that owns a service-registry."""
-    packs = root / ".xtrm" / "skills" / "user" / "packs"
-    if packs.is_dir():
+    """Return first v2 pack, with v1 user/packs fallback, owning a service registry."""
+    packs_roots = [
+        root / ".xtrm" / "skills",
+        root / ".xtrm" / "skills" / "user" / "packs",
+    ]
+    for packs in packs_roots:
+        if not packs.is_dir():
+            continue
         for pack in sorted(packs.iterdir()):
-            if not pack.is_dir():
+            if not pack.is_dir() or pack.name in {"default", "optional", "user", "active", "local-legacy"}:
                 continue
             if (pack / "service-skills" / "service-registry.json").exists() or (pack / "service-registry.json").exists():
                 return pack.name
@@ -129,7 +134,7 @@ def _auto_reconcile(root: Path) -> tuple[bool, str]:
 
     pack = _resolve_pack(root)
     if not pack:
-        return (False, "no pack with service-registry resolvable under .xtrm/skills/user/packs")
+        return (False, "no pack with service-registry resolvable under .xtrm/skills")
 
     try:
         timeout_ms = int(os.environ.get(AUTO_RECONCILE_TIMEOUT_MS_ENV, AUTO_RECONCILE_TIMEOUT_MS_DEFAULT))
@@ -185,13 +190,17 @@ def _append_runlog(root: Path, line: str) -> None:
 
 
 def _has_registry(root: Path) -> bool:
-    packs = root / ".xtrm" / "skills" / "user" / "packs"
-    if packs.is_dir():
-        for pack in packs.iterdir():
-            if not pack.is_dir():
-                continue
-            if (pack / "service-skills" / "service-registry.json").exists() or (pack / "service-registry.json").exists():
-                return True
+    packs_roots = [
+        root / ".xtrm" / "skills",
+        root / ".xtrm" / "skills" / "user" / "packs",
+    ]
+    for packs in packs_roots:
+        if packs.is_dir():
+            for pack in packs.iterdir():
+                if not pack.is_dir() or pack.name in {"default", "optional", "user", "active", "local-legacy"}:
+                    continue
+                if (pack / "service-skills" / "service-registry.json").exists() or (pack / "service-registry.json").exists():
+                    return True
     return (root / "service-registry.json").exists() or (root / ".claude" / "skills" / "service-registry.json").exists()
 
 
