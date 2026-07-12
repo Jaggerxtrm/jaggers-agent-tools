@@ -187,7 +187,7 @@ describe('xtrm install integration', () => {
 
     expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'default'))).toBe(true);
     expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'optional'))).toBe(true);
-    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'user', 'packs'))).toBe(true);
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'user', 'packs'))).toBe(false);
     expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'active'))).toBe(false);
     expect(fs.pathExistsSync(path.join(process.env.HOME!, '.xtrm', 'skills', 'default'))).toBe(true);
   });

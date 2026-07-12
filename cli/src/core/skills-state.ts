@@ -73,7 +73,6 @@ export function createDefaultSkillsState(): SkillsState {
 export async function ensureSkillsTreeStructure(skillsRoot: string): Promise<void> {
   await fs.ensureDir(resolveDefaultTierRoot(skillsRoot));
   await fs.ensureDir(resolveOptionalTierRoot(skillsRoot));
-  await fs.ensureDir(resolveUserPacksRoot(skillsRoot));
 }
 
 export async function writeSkillsState(skillsRoot: string, state: SkillsStateInput): Promise<SkillsState> {

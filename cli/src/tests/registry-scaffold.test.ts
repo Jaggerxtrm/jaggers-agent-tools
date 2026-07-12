@@ -224,7 +224,7 @@ describe('scaffoldSkillsDefaultFromPackage', () => {
     expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'default'))).toBe(false);
   });
 
-  it('under XTRM_GLOBAL_SKILLS only ensures user packs when global tree already exists', async () => {
+  it('under XTRM_GLOBAL_SKILLS is a noop when global tree already exists and does not eagerly scaffold user packs', async () => {
     const tempDir = await createTempDir();
     const packageRoot = path.join(tempDir, 'pkg');
     const userXtrmDir = path.join(tempDir, 'user-xtrm');
@@ -247,7 +247,7 @@ describe('scaffoldSkillsDefaultFromPackage', () => {
 
       expect(result).toBe('noop');
       expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'default'))).toBe(false);
-      expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'user', 'packs'))).toBe(true);
+      expect(await fs.pathExists(path.join(userXtrmDir, 'skills', 'user', 'packs'))).toBe(false);
     } finally {
       process.env.HOME = previousHome;
       process.env.XTRM_GLOBAL_SKILLS = previousFlag;
