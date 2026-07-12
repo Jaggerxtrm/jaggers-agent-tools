@@ -212,8 +212,8 @@ See [skills-tier-architecture.md](skills-tier-architecture.md) for full CLI refe
 | `documenting` | SSOT documentation + drift workflow |
 | `delegating` | Delegation routing and model strategy |
 | `using-specialists` | Specialist routing and execution workflow (`specialists run/feed/result`) |
-| `using-specialists-v2` | Legacy specialist orchestration (v2 contract) |
-| `using-specialists-v3` | Specialist orchestration with 7-section bead contract |
+| `using-specialists` | Legacy specialist orchestration (v2 contract) |
+| `using-specialists` | Specialist orchestration with 7-section bead contract |
 | `using-specialists-auto` | Automatic specialist selection and dispatch |
 | `using-script-specialists` | Script-based specialist invocation |
 | `update-specialists` | Sync vendored specialists-owned skills |
@@ -240,8 +240,8 @@ Owned by the [specialists repo](https://github.com/Jaggerxtrm/specialists) and v
 | Skill | Primary Use |
 |---|---|
 | `using-specialists` | Specialist routing and execution workflow |
-| `using-specialists-v2` | Legacy specialist orchestration (v2 contract) |
-| `using-specialists-v3` | Specialist orchestration with 7-section bead contract |
+| `using-specialists` | Legacy specialist orchestration (v2 contract) |
+| `using-specialists` | Specialist orchestration with 7-section bead contract |
 | `using-specialists-auto` | Automatic specialist selection and dispatch |
 | `using-script-specialists` | Script-based specialist invocation |
 | `update-specialists` | Sync vendored specialists-owned skills |

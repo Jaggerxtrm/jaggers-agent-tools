@@ -32,16 +32,6 @@
       "source": "specialists",
       "kind": "skill"
     },
-    "using-specialists-v2": {
-      "owner": "specialists",
-      "source": "specialists",
-      "kind": "skill"
-    },
-    "using-specialists-v3": {
-      "owner": "specialists",
-      "source": "specialists",
-      "kind": "skill"
-    },
     "using-script-specialists": {
       "owner": "specialists",
       "source": "specialists",

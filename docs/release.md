@@ -76,7 +76,7 @@ The npm tarball that ships to users must match the specialists package the proje
 | `verify-asset-contract.mjs` | specialists' `dist/asset-contract.json` (per-file sha256) | A skill in `.xtrm/skills/default/` has the right path but a stale content hash |
 | `fresh-machine-smoke.yml` | live `npm install` + `xt init -y` + `sp init` end-to-end | A fresh user can't get to a working repo (PATH bug, missing prerequisite, broken bootstrap step) |
 
-`verify-asset-contract.mjs` enforces sha256 only for `shipped_skills[]` entries owned-by-specialists (per `docs/skills-ownership.json`). The two must-have skills are hard-named: `using-specialists-v3` and `update-specialists` — their absence is a fail.
+`verify-asset-contract.mjs` enforces sha256 only for `shipped_skills[]` entries owned-by-specialists (per `docs/skills-ownership.json`). The two must-have skills are hard-named: `using-specialists` and `update-specialists` — their absence is a fail.
 
 ---
 
@@ -186,9 +186,9 @@ docs/skills-ownership.json
 
 5. **`fresh-machine-smoke.yml` must keep BOTH `workflow_dispatch:` and `workflow_call:` triggers.** Removing `workflow_call:` breaks `publish.yml`. Removing `workflow_dispatch:` breaks the operator pre-flight.
 
-6. **`verify-asset-contract.mjs` parses paths, not skill names.** The specialists `asset-contract.json` schema has `shipped_skills[].path` (e.g. `config/skills/using-specialists-v3/SKILL.md`) and `shipped_skills[].sha256` — there is no `entry.skill` or `entry.name` field. Skill name = `path.basename(path.dirname(entry.path))`, file basename = `path.basename(entry.path)`. Vendor mirror = `.xtrm/skills/default/<skill>/<basename>`.
+6. **`verify-asset-contract.mjs` parses paths, not skill names.** The specialists `asset-contract.json` schema has `shipped_skills[].path` (e.g. `config/skills/using-specialists/SKILL.md`) and `shipped_skills[].sha256` — there is no `entry.skill` or `entry.name` field. Skill name = `path.basename(path.dirname(entry.path))`, file basename = `path.basename(entry.path)`. Vendor mirror = `.xtrm/skills/default/<skill>/<basename>`.
 
-7. **Must-have skills are hardcoded by name in the verifier.** `using-specialists-v3` and `update-specialists`. If the bead asks you to drop or rename a must-have, push back — these are the two skills xtrm-tools cannot ship without breaking the agent install flow.
+7. **Must-have skills are hardcoded by name in the verifier.** `using-specialists` and `update-specialists`. If the bead asks you to drop or rename a must-have, push back — these are the two skills xtrm-tools cannot ship without breaking the agent install flow.
 
 8. **Never run a destructive shell command (`rm -rf`, `git reset --hard`, force-push, drop table) inside any of these workflows.** Operator confirmation only.
 
@@ -212,7 +212,7 @@ The three previously-deferred items are all closed as of `xtrm-lhqy`:
 
 `fresh-machine-smoke.yml` runs the full bootstrap (`xt init -y`, `xt doctor`, `xt update`, `sp init/doctor/list`) and captures every output. But its **gate assertions** are deliberately narrow — only the three things the release contract actually owns:
 
-1. The three must-have specialists skills exist under `.xtrm/skills/default/<skill>/SKILL.md` (`using-specialists-v3`, `update-specialists`, `using-specialists-auto`).
+1. The three must-have specialists skills exist under `.xtrm/skills/default/<skill>/SKILL.md` (`using-specialists`, `update-specialists`, `using-specialists-auto`).
 2. No symlinks anywhere under `.xtrm/`.
 3. No "Source and destination must not be the same" regression in any log.
 
@@ -230,5 +230,5 @@ The three previously-deferred items are all closed as of `xtrm-lhqy`:
 
 - Session report that closed the contract epic: `.xtrm/reports/2026-05-13-release-contract-completion.md`
 - Specialists side: `unitAI-ye5s9` (master `484aced8`), `dist/asset-contract.json` + `release-gate.yml`
-- Auto-mode playbook for tracked edits: `.xtrm/skills/active/using-specialists-v3/SKILL.md`
+- Auto-mode playbook for tracked edits: `.xtrm/skills/active/using-specialists/SKILL.md`
 - CLI command reference: `node cli/dist/index.cjs --help`

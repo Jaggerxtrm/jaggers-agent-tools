@@ -83,7 +83,7 @@ Use pointers like these instead of copying full command references:
 ```md
 For beads commands, run `bd --help` or `bd <cmd> --help`.
 For xtrm workflow details, load `/using-xtrm`.
-For specialist orchestration, load the latest available `/using-specialists-*` skill, preferring `/using-specialists-v3` when present.
+For specialist orchestration, load the latest available `/using-specialists-*` skill, preferring `/using-specialists` when present.
 For GitNexus debugging/refactor/impact workflows, load the matching `/gitnexus-*` skill.
 ```
 
@@ -162,7 +162,7 @@ Run `bd prime` at session start, claim with `bd update <id> --claim` before edit
 
 ```md
 ## Specialists
-For substantial implementation, review, debugging, test generation, or orchestration, load the latest available `/using-specialists-*` skill. Prefer `/using-specialists-v3` when present. Check `sp --help` and `sp list` / `specialists list` before choosing a role.
+For substantial implementation, review, debugging, test generation, or orchestration, load the latest available `/using-specialists-*` skill. Prefer `/using-specialists` when present. Check `sp --help` and `sp list` / `specialists list` before choosing a role.
 ```
 
 **Service wiki → service-skill routing**

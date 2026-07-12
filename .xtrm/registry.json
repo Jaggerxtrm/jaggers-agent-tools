@@ -118,7 +118,7 @@
       "install_scope": "global",
       "files": {
         "agent-docs-maintainer/references/agents-template.md": {
-          "hash": "3782e8389f689e4786418920f997010af3fbe11bf616615e707154b5423e65c5",
+          "hash": "1c1f9b93ad13c2c76245fb13ff9f2663043bc6cc5fb0448dc16ab11cb4001e01",
           "version": "0.9.1"
         },
         "agent-docs-maintainer/references/audit-rules.md": {
@@ -126,7 +126,7 @@
           "version": "0.9.1"
         },
         "agent-docs-maintainer/references/claude-template.md": {
-          "hash": "566e27d7a9968219f8d39d8fd6142f91dc3ceac042d7be3ca0df0ca810bfe06d",
+          "hash": "ea8b5b0d45c5559704b7b2aa0cbfbe38f3c29abf5e4a1ec3c4170e587e292718",
           "version": "0.9.1"
         },
         "agent-docs-maintainer/references/stack-overview-template.md": {
@@ -138,7 +138,7 @@
           "version": "0.9.1"
         },
         "agent-docs-maintainer/SKILL.md": {
-          "hash": "01480b1489bae39781f13b7508c49ed7776bb1e102d7a368883a82773722fe2a",
+          "hash": "a80ff7960f24889f49e3a213cc7f5a191319aa04fbecca2fd1681c8323c09f63",
           "version": "0.9.1"
         },
         "clean-code/SKILL.md": {
@@ -622,7 +622,7 @@
           "version": "0.9.1"
         },
         "multiplexing-team/SKILL.md": {
-          "hash": "30cf7881252b8057ba3bd199a904393e4865161012ae789b5963c5366bd28a03",
+          "hash": "25f3fd1a096e8955eb33dbbe5e0079d37350d6ee4659731d9eb4b5ee2dc90f79",
           "version": "0.9.1"
         },
         "multiplexing/scripts/verify-deploy-applied.sh": {
@@ -630,11 +630,11 @@
           "version": "0.9.1"
         },
         "multiplexing/SKILL.md": {
-          "hash": "9d6e7868999f6bb841cf4156cafd60876b0dac6006ffece3437faa7abb822e97",
+          "hash": "5dd50ad65631cc40d1a7197d6afed998c621ed0c0e2b607ae5d973bda4b2ba3a",
           "version": "0.9.1"
         },
         "planning/SKILL.md": {
-          "hash": "a9f1d578c03aee5b3dc130ebf1e50458e1feb20c5669dbdfbff3c0282eecc99c",
+          "hash": "1483058d23b4e3332eaf36b05107dc69edd5e9110c163abff75d8415f7023cc6",
           "version": "0.9.1"
         },
         "pr-reviewer/SKILL.md": {
@@ -1050,23 +1050,15 @@
           "version": "0.9.1"
         },
         "using-script-specialists/SKILL.md": {
-          "hash": "b73f6113a76c598cd6cf4fc9a910df0ca6cedba5e8280b0028df1ca2fe86187d",
+          "hash": "e87511d685eb7bc95c374641056194931a9da79434b624fdfb2805bd9dbac7b6",
           "version": "0.9.1"
         },
         "using-specialists-auto/SKILL.md": {
-          "hash": "4cf6adb2bf50a0896e9d424025d05cbf6ba9d16f9830c56949b524f97ed998f6",
-          "version": "0.9.1"
-        },
-        "using-specialists-v2/SKILL.md": {
-          "hash": "0a8613391c8bc627f6ce065c3eb8909da893735c3542a636b7fe441af2d599e0",
-          "version": "0.9.1"
-        },
-        "using-specialists-v3/SKILL.md": {
-          "hash": "3f2f24c27f563c40b77293f3e7033ccd35b4e1d6dd21e46f86e5c88bba40c523",
+          "hash": "932f4248cd4a8bcece747bcc08c6e0dc775126cbb83aab5318e1ea82dde09686",
           "version": "0.9.1"
         },
         "using-specialists/SKILL.md": {
-          "hash": "5072d3356f9741557fba1b1419614301277f807c0799976099b9226c6f542e3f",
+          "hash": "b1172e9405f6c6d2c9e8fdf2f9b53404d73467b83e4fabd64403baf981fd60a3",
           "version": "0.9.1"
         },
         "using-tdd/SKILL.md": {
@@ -1404,11 +1396,11 @@
           "version": "0.9.1"
         },
         "instructions/agents-top.md": {
-          "hash": "f0bdc59485d8fcf2ac9ee98072b1612fe16ca0c4648e7ead747e83a18b9663f6",
+          "hash": "dfacc5c4df5d3db1426b90d4a3a54a018442567aa190805e9af3fb99c421f0b4",
           "version": "0.9.1"
         },
         "instructions/claude-top.md": {
-          "hash": "2a4e8679d03504229e30b434f1027c5df40fd125ac4636ac27ed6ffefd676421",
+          "hash": "ce474443c408a29c537f6ee9a2fb98a723af349a4c9ef375c5519ec7d5bd7dd1",
           "version": "0.9.1"
         },
         "pi.mcp.json": {
@@ -1449,9 +1441,9 @@
   "specialists_source": {
     "version": 1,
     "source": {
-      "kind": "repo",
-      "ref": "master",
-      "resolved_sha": "782b572e1e5ca854d0318060615cbcc23ad9fe96",
+      "kind": "ref",
+      "ref": "v3.18.2",
+      "resolved_sha": "fb5ba95c988f808095a451cf77b2c6388371c1a0",
       "repo_path": "../specialists",
       "source_path": "config/skills"
     },
@@ -1462,9 +1454,7 @@
       "using-nodes",
       "using-script-specialists",
       "using-specialists",
-      "using-specialists-auto",
-      "using-specialists-v2",
-      "using-specialists-v3"
+      "using-specialists-auto"
     ],
     "files": {
       "specialists-creator": {
@@ -1483,26 +1473,19 @@
         "SKILL.md": "742e9d2ad512a05c86855b88ae65f9065370876d9e7c1b10db2b68958248bc7b"
       },
       "using-script-specialists": {
-        "SKILL.md": "b73f6113a76c598cd6cf4fc9a910df0ca6cedba5e8280b0028df1ca2fe86187d"
+        "SKILL.md": "e87511d685eb7bc95c374641056194931a9da79434b624fdfb2805bd9dbac7b6"
       },
       "using-specialists": {
-        "evals/evals.json": "d69d2ee9e9cb3739ca38cc8d5d73a12845c99c8c0e2da721b0ee1db10fb17bab",
-        "SKILL.md": "5072d3356f9741557fba1b1419614301277f807c0799976099b9226c6f542e3f"
-      },
-      "using-specialists-auto": {
-        "SKILL.md": "4cf6adb2bf50a0896e9d424025d05cbf6ba9d16f9830c56949b524f97ed998f6"
-      },
-      "using-specialists-v2": {
-        "SKILL.md": "0a8613391c8bc627f6ce065c3eb8909da893735c3542a636b7fe441af2d599e0"
-      },
-      "using-specialists-v3": {
-        "evals/evals.json": "eb1fd3b19f3305c6692f6a92029e1ede1ca6b687bb3e1fc9fd0cbdb23ea36341",
+        "evals/evals.json": "6c5fb21fec152a42978fee6ad8ea617b8513f3b28ce9b6599f6a47788ff52022",
         "evals/fixtures/qa-routing/bad-test-result.json": "20e0d3698809c87f9445ea533545998143ffc151a0c2774ea37415b5a984a011",
         "evals/fixtures/qa-routing/reviewer-input.json": "8c3bea5b93a55944aef036c498a090c3e2a6ae4a86c378d66cddfe7cda2aa093",
         "evals/fixtures/qa-routing/source-regression-result.json": "0f566ca2ad84458ce183a1ca4a925ef0b308c8d8cc61fa75b90dc14685d9e3bf",
         "evals/fixtures/qa-routing/source-regression.diff": "7fc1868c75cae4ec9ecd87eeead1b4f0b82d9e1f41d1edf1697d7ab4d40598d0",
-        "evals/README.md": "c42afbcf224501847a0db198f2c2a5c2f681417cf4c4faa46beb1a782f6e99dc",
-        "SKILL.md": "3f2f24c27f563c40b77293f3e7033ccd35b4e1d6dd21e46f86e5c88bba40c523"
+        "evals/README.md": "c6c871a9e2a5ca8d9cea7b23f89033018791fd1fcdb8fec775b888fe88d4dfa9",
+        "SKILL.md": "b1172e9405f6c6d2c9e8fdf2f9b53404d73467b83e4fabd64403baf981fd60a3"
+      },
+      "using-specialists-auto": {
+        "SKILL.md": "932f4248cd4a8bcece747bcc08c6e0dc775126cbb83aab5318e1ea82dde09686"
       }
     }
   }

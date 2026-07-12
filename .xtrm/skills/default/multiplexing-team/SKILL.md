@@ -7,7 +7,7 @@ description: Team-member operating guide for delegated tmux pane agents working 
 
 You are a delegated agent running in a tmux pane as part of a coordinated team. A parent orchestrator or judge assigned you a bounded task, usually via a Beads issue plus an optional `/tmp` prompt file. Your job is to complete your own contract, report status back efficiently, and avoid creating orchestration mess for the operator.
 
-This skill is for **team members**, not the top-level orchestrator. If you are coordinating many sessions for the operator, use `/multiplexing`. If you need to spawn focused specialist workers for your own subproblem, use `/using-specialists-v3` after you understand the rules below.
+This skill is for **team members**, not the top-level orchestrator. If you are coordinating many sessions for the operator, use `/multiplexing`. If you need to spawn focused specialist workers for your own subproblem, use `/using-specialists` after you understand the rules below.
 
 ## Core identity model
 
@@ -218,7 +218,7 @@ Safety reminders:
 
 ## When you need your own subordinates
 
-Use `/using-specialists-v3` only when a smaller independent subtask benefits from a specialist. Before doing so:
+Use `/using-specialists` only when a smaller independent subtask benefits from a specialist. Before doing so:
 
 1. Create or identify a child bead for the subtask.
 2. Keep your own parent bead as the roll-up contract.

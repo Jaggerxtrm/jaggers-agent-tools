@@ -35,7 +35,7 @@ For full xtrm/beads workflow details, load `/using-xtrm` and use `bd --help`, `b
 | Need | Load/use |
 |---|---|
 | xtrm workflow, beads gates, session behavior | `/using-xtrm`; `bd --help`; `xt --help` |
-| Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists-v3`; `sp --help` / `specialists --help` |
+| Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists`; `sp --help` / `specialists --help` |
 | Planning feature/epic work | `/planning` plus `/test-planning` |
 | Tests and quality workflow | `/using-quality-gates`, `/using-tdd`, `/test-planning` |
 | Docs sync | `/sync-docs`; use the canonical service-skills skill set for project/service context |
@@ -90,7 +90,7 @@ Keep only the commands an agent needs without another manual. Use `--help` for f
 - `sp ps` — inspect running specialist jobs.
 - `sp feed <job-id>` — monitor job progress.
 - `sp result <job-id>` — read final output.
-- For orchestration policy, load latest `/using-specialists-*`, preferring `/using-specialists-v3`.
+- For orchestration policy, load latest `/using-specialists-*`, preferring `/using-specialists`.
 
 ### GitNexus safety
 

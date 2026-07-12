@@ -20,7 +20,7 @@ If a short summary is not enough for a fresh agent to understand the repo, add a
 | Need | Use |
 |---|---|
 | xtrm/beads workflow | `/using-xtrm`, `bd --help`, `xt --help` |
-| Specialists | latest `/using-specialists-*`, prefer `/using-specialists-v3`; check `sp --help` and `sp list` |
+| Specialists | latest `/using-specialists-*`, prefer `/using-specialists`; check `sp --help` and `sp list` |
 | Service expertise and docs/project context | `/scope`, `/using-service-skills` if service skills are present |
 | Planning/tests/docs | `/planning`, `/test-planning`, `/sync-docs` |
 ## Project map
