@@ -22,8 +22,8 @@ def find_registry() -> Path | None:
 
     Precedence (see bootstrap.get_registry_path):
       1. $SERVICE_REGISTRY_PATH override
-      2. <root>/.xtrm/skills/user/packs/<pack>/service-skills/service-registry.json  (canonical)
-      3. <root>/.xtrm/skills/user/packs/<pack>/service-registry.json                 (pre-umbrella)
+      2. <root>/.xtrm/skills/<pack>/service-skills/service-registry.json  (canonical)
+      3. <root>/.xtrm/skills/<pack>/service-registry.json                 (pre-umbrella)
       4. <root>/service-registry.json                                                (root symlink)
       5. <root>/.claude/skills/service-registry.json                                  (legacy)
 

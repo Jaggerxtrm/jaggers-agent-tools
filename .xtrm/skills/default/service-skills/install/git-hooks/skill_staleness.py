@@ -20,18 +20,26 @@ from pathlib import Path
 # A skill is flagged as potentially stale if any changed file in the push
 # starts with one of these paths for that service.
 #
-# Populate this dict to match your project's layout. Example shape:
-#
-#   SERVICE_SOURCE_PATHS = {
-#       "api":            ["src/api/", "src/schema/"],
-#       "worker":         ["src/worker/", "src/tasks/"],
-#       "migrations":     ["alembic/", "scripts/migrations/"],
-#       "db":             ["docker-compose.yml"],
-#   }
-#
-# Empty by default — the hook no-ops until you fill this in.
+# Customise this dict to match your project's layout.
 # ---------------------------------------------------------------------------
-SERVICE_SOURCE_PATHS: dict[str, list[str]] = {}
+SERVICE_SOURCE_PATHS: dict[str, list[str]] = {
+    "mmd-data-feed":          ["scripts/data/import_unified.py",
+                                "scripts/database/unified_import.py"],
+    "mmd-snapshot-feed":      ["scripts/data/feeds/snapshot_feed.py",
+                                "scripts/core/"],
+    "mmd-curve-feed":         ["scripts/data/feeds/spread_feed.py"],
+    "mmd-curve-backfill":     ["scripts/data/feeds/spread_feed.py"],
+    "mmd-stir-feed":          ["scripts/data/feeds/stir_feed.py"],
+    "mmd-api":                ["mcp_server/"],
+    "mmd-mcp-server":         ["mcp_server/mcp_server.py",
+                                "mcp_server/docstrings/"],
+    "mmd-cme-ingestion":      ["scripts/ingestion/cme/"],
+    "mmd-migrations":         ["alembic/", "scripts/data/migrations.py",
+                                "scripts/database/run_migrations.py"],
+    "mmd-tick-ingestor-rust": ["rust_ingestor/"],
+    "mmd-backup-service":     ["scripts/backup/"],
+    "mmd-timescaledb":        ["docker-compose.yml"],
+}
 
 # These files, if changed, flag ALL skills for review
 GLOBAL_TRIGGERS = [
