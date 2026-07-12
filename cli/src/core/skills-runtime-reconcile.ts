@@ -176,8 +176,16 @@ export async function reconcileRuntimeLinks(options: ReconcileRuntimeLinksOption
         throw new Error(`Cannot enable skill '${name}': ${linkPath} is user-owned.`);
       }
     }
-    if (existing?.isSymbolicLink() && path.resolve(runtimeDirectory, await fs.readlink(linkPath)) === target) continue;
-    if (existing && !existing.isSymbolicLink()) throw new Error(`Cannot replace non-symlink managed entry ${linkPath}.`);
+    if (existing?.isSymbolicLink() && path.resolve(runtimeDirectory, await fs.readlink(linkPath)) === target) {
+      // Symlink already points at the desired target string. Verify the target actually resolves
+      // on disk; a broken symlink (points at a since-removed path) must be re-materialized rather
+      // than left dangling. (xtrm-4cqxc: mercury repos surfaced this on v2 migration.)
+      const targetExists = await fs.pathExists(target);
+      if (targetExists) continue;
+      await fs.remove(linkPath);
+    } else if (existing && !existing.isSymbolicLink()) {
+      throw new Error(`Cannot replace non-symlink managed entry ${linkPath}.`);
+    }
     await atomicSymlink(target, linkPath);
   }
 

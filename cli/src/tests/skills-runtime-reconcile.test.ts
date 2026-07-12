@@ -58,6 +58,73 @@ describe('reconcileRuntimeLinks', () => {
     expect(await fs.pathExists(path.join(projectRoot, '.pi', 'settings.json'))).toBe(false);
   });
 
+  it('re-materializes a broken managed symlink whose target no longer exists (xtrm-4cqxc)', async () => {
+    // Bootstrap: create a valid managed symlink through the normal reconciler flow.
+    const first = await run();
+    const link = path.join(projectRoot, '.claude', 'skills', 'local-skill');
+    const validTarget = path.join(projectRoot, '.xtrm', 'skills', 'local', 'local-skill');
+    expect(await fs.readlink(link)).toBe(validTarget);
+    expect(await fs.pathExists(link)).toBe(true);
+
+    // Simulate the mercury-repo class of drift: replace the managed symlink with one that points
+    // at the same STRING (readlink matches) but at a target that no longer exists on disk.
+    // Under v2 migration, .xtrm/skills/active/ was retired; existing symlinks pointing there
+    // would readlink-match nothing (different string) — but symlinks pointing at a since-deleted
+    // .xtrm/skills/default/<skill> path (e.g. an intermediate rename) would readlink-match yet
+    // dangle. Force the dangling case:
+    await fs.remove(validTarget);
+    expect(await fs.pathExists(link)).toBe(false); // broken through the symlink
+
+    // Re-materialize the target under a fresh pack path so the reconciler has something to point at.
+    await fs.ensureDir(validTarget);
+    await fs.writeFile(path.join(validTarget, 'SKILL.md'), '---\nname: local-skill\n---\n');
+
+    // Now leave the (still valid readlink-string) link in place and re-run reconcile — but first
+    // corrupt the link so it points at a since-removed path with the same target string:
+    // simplest reproducer: point at a subdirectory of the target that we then delete.
+    const staleSubpath = path.join(validTarget, 'stale-inner');
+    await fs.ensureDir(staleSubpath);
+    await fs.remove(link);
+    await fs.symlink(staleSubpath, link);
+    await fs.remove(staleSubpath); // link now dangles
+
+    // Preserve the managedLinks manifest as-if reconciler previously wrote it (relative path).
+    const brokenState: SkillsState = {
+      ...first.state,
+      managedLinks: {
+        claude: { 'local-skill': path.relative(projectRoot, staleSubpath) },
+        pi: {},
+      },
+    };
+
+    const result = await reconcileRuntimeLinks({
+      projectRoot,
+      state: brokenState,
+      runtime: 'claude',
+      discoveredPacks: [pack('local', path.join(projectRoot, '.xtrm', 'skills', 'local'), 'local-skill')],
+      globalDefaultRoot: path.join(globalRoot, 'default'),
+      globalOptionalRoot: path.join(globalRoot, 'optional'),
+    });
+
+    // The link should now point at the valid desired target, not the stale dangling one.
+    expect(await fs.readlink(link)).toBe(validTarget);
+    expect(await fs.pathExists(link)).toBe(true);
+    expect(result.state.managedLinks.claude['local-skill']).toBe('.xtrm/skills/local/local-skill');
+  });
+
+  it('does not touch a healthy managed symlink whose target exists (regression against over-eager repair)', async () => {
+    const first = await run();
+    const link = path.join(projectRoot, '.claude', 'skills', 'local-skill');
+    const inodeBefore = (await fs.lstat(link)).ino;
+
+    const second = await run('claude', first.state);
+    const inodeAfter = (await fs.lstat(link)).ino;
+
+    // Same inode → symlink was not removed+recreated.
+    expect(inodeAfter).toBe(inodeBefore);
+    expect(second.removedLinks).toEqual([]);
+  });
+
   it('reconciles v1 state into schema v2 manifest ownership', async () => {
     const legacyState = { schemaVersion: '1', enabledPacks: { claude: ['local'], pi: [] } } as unknown as SkillsState;
     const result = await run('claude', legacyState);
