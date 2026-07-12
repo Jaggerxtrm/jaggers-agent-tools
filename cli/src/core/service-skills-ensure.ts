@@ -2,7 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'fs-extra';
-
+import { RESERVED_PACK_NAMES } from './skills-layout.js';
 
 /**
  * Registry-gated, idempotent service-skills migration runner.
@@ -20,6 +20,7 @@ import fs from 'fs-extra';
  */
 
 const PACKS_REL = path.join('.xtrm', 'skills', 'user', 'packs');
+const FLAT_PACKS_REL = path.join('.xtrm', 'skills');
 const MIGRATOR_REL = path.join('.xtrm', 'skills', 'default', 'service-skills', 'scripts', 'layout_migrator.py');
 const INSTALLER_REL = path.join('.xtrm', 'skills', 'default', 'service-skills', 'install', 'install-service-skills.py');
 
@@ -35,24 +36,20 @@ export interface ServiceSkillsEnsureResult {
 }
 
 async function packsWithRegistry(projectRoot: string): Promise<string[]> {
-  const packsRoot = path.join(projectRoot, PACKS_REL);
-  if (!await fs.pathExists(packsRoot)) {
-    return [];
-  }
-  const entries = await fs.readdir(packsRoot, { withFileTypes: true });
-  const packs: string[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue;
-    }
-    const packPath = path.join(packsRoot, entry.name);
-    const hasUmbrellaRegistry = await fs.pathExists(path.join(packPath, 'service-skills', 'service-registry.json'));
-    const hasFlatRegistry = await fs.pathExists(path.join(packPath, 'service-registry.json'));
-    if (hasUmbrellaRegistry || hasFlatRegistry) {
-      packs.push(entry.name);
+  const packRoots = [path.join(projectRoot, PACKS_REL), path.join(projectRoot, FLAT_PACKS_REL)];
+  const packs = new Set<string>();
+  for (const packsRoot of packRoots) {
+    if (!await fs.pathExists(packsRoot)) continue;
+    const entries = await fs.readdir(packsRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || RESERVED_PACK_NAMES.has(entry.name)) continue;
+      const packPath = path.join(packsRoot, entry.name);
+      const hasUmbrellaRegistry = await fs.pathExists(path.join(packPath, 'service-skills', 'service-registry.json'));
+      const hasFlatRegistry = await fs.pathExists(path.join(packPath, 'service-registry.json'));
+      if (hasUmbrellaRegistry || hasFlatRegistry) packs.add(entry.name);
     }
   }
-  return packs.sort((a, b) => a.localeCompare(b));
+  return [...packs].sort((left, right) => left.localeCompare(right));
 }
 
 /** True when the repo has any service-registry (pack, root, or legacy .claude). */

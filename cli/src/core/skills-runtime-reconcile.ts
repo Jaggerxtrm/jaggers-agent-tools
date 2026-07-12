@@ -112,7 +112,10 @@ async function discoverManagedLinks(
     const stat = await fs.lstat(linkPath).catch(() => null);
     if (!stat?.isSymbolicLink()) continue;
     const resolved = path.resolve(directory, await fs.readlink(linkPath));
-    if (expected[entry.name] === resolved && roots.some((root) => isInside(resolved, root))) {
+    if (Object.prototype.hasOwnProperty.call(expected, entry.name) && roots.some((root) => isInside(resolved, root))) {
+      // Claim v1 links by location, not exact target. Layout migration changes
+      // `.xtrm/skills/user/packs/...` targets to v2 flat targets; reconcile owns
+      // both so it can replace stale links and persist v2-relative ownership.
       result[entry.name] = targetRelativePath(projectRoot, resolved);
     }
   }

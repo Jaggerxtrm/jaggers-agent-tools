@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 
-export const SKILLS_STATE_SCHEMA_VERSION = '1' as const;
+export const SKILLS_STATE_SCHEMA_VERSION = '2' as const;
 
 export const SKILLS_RUNTIMES = ['claude', 'pi'] as const;
 export type SkillsRuntime = typeof SKILLS_RUNTIMES[number];
@@ -12,6 +12,7 @@ export type SkillsTier = typeof SKILLS_TIERS[number];
 export const RUNTIME_ROOT_MARKERS = ['.claude', '.agents', '.pi'] as const;
 
 export const SKILL_FILE_NAME = 'SKILL.md';
+export const PACK_FILE_NAME = 'PACK.json';
 /** Reserved top-level names during v1 shim window. */
 export const RESERVED_PACK_NAMES = new Set([
   'default',
