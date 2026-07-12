@@ -34,16 +34,18 @@ function createSkill(skillRoot: string, skillName: string): void {
   fs.writeFileSync(path.join(dir, 'SKILL.md'), `# ${skillName}\n`, 'utf8');
 }
 
-function createPack(packRoot: string, packName: string, skills: readonly string[]): void {
+function createPack(packRoot: string, packName: string, skills: readonly string[], includeMetadata = true): void {
   const dir = path.join(packRoot, packName);
   fs.mkdirSync(dir, { recursive: true });
-  writeJson(path.join(dir, 'PACK.json'), {
-    schemaVersion: '1',
-    name: packName,
-    version: '1.0.0',
-    description: `${packName} pack`,
-    skills,
-  });
+  if (includeMetadata) {
+    writeJson(path.join(dir, 'PACK.json'), {
+      schemaVersion: '1',
+      name: packName,
+      version: '1.0.0',
+      description: `${packName} pack`,
+      skills,
+    });
+  }
 
   for (const skill of skills) {
     createSkill(dir, skill);
@@ -83,11 +85,11 @@ describe('xt skills CLI integration', () => {
     expect(result.stdout).not.toMatch(/pi: \d+ active skills/i);
   });
 
-  it('shows warning rows for stale PACK.json metadata without failing list', () => {
+  it('ignores retired PACK.json metadata in flat packs without failing list', () => {
     const skillsRoot = path.join(tmpHome, '.xtrm', 'skills');
     createSkill(path.join(skillsRoot, 'default'), 'always-on');
 
-    const packDir = path.join(skillsRoot, 'optional', 'drift-pack');
+    const packDir = path.join(skillsRoot, 'drift-pack');
     fs.mkdirSync(packDir, { recursive: true });
     writeJson(path.join(packDir, 'PACK.json'), {
       schemaVersion: '1',
@@ -109,8 +111,7 @@ describe('xt skills CLI integration', () => {
     const result = run(['skills', 'list', '--global'], { env: { HOME: tmpHome } });
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toMatch(/warnings/i);
-    expect(result.stdout).toMatch(/auto-synced pack\.json skills from filesystem for 'drift-pack'/i);
+    expect(result.stdout).not.toMatch(/warnings/i);
     expect(result.stdout).toMatch(/drift-pack/i);
   });
 
@@ -137,18 +138,18 @@ describe('xt skills CLI integration', () => {
       env: { HOME: tmpHome },
     });
     expect(enableMissing.status).not.toBe(0);
-    expect(enableMissing.stderr).toMatch(/not found in optional\/ or user\/packs/i);
+    expect(enableMissing.stderr).toMatch(/not found in \.xtrm\/skills packs/i);
 
     const disableMissing = run(['skills', 'disable', 'missing-pack', '--global'], {
       env: { HOME: tmpHome },
     });
     expect(disableMissing.status).not.toBe(0);
-    expect(disableMissing.stderr).toMatch(/not found in optional\/ or user\/packs/i);
+    expect(disableMissing.stderr).toMatch(/not found in \.xtrm\/skills packs/i);
   });
 
   it('create-pack reports collisions and invalid names as failures', () => {
     const skillsRoot = path.join(tmpHome, '.xtrm', 'skills');
-    createPack(path.join(skillsRoot, 'user', 'packs'), 'existing-pack', []);
+    createPack(skillsRoot, 'existing-pack', [], false);
 
     const created = run(['skills', 'create-pack', 'fresh-pack', '--global'], {
       env: { HOME: tmpHome },

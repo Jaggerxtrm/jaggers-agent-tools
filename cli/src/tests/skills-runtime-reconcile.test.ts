@@ -40,7 +40,7 @@ describe('reconcileRuntimeLinks', () => {
     const link = path.join(projectRoot, '.claude', 'skills', 'local-skill');
     expect((await fs.lstat(path.dirname(link))).isDirectory()).toBe(true);
     expect((await fs.lstat(link)).isSymbolicLink()).toBe(true);
-    expect(await fs.readlink(link)).toBe(path.join(projectRoot, '.xtrm', 'skills', 'user', 'packs', 'local', 'local-skill'));
+    expect(await fs.readlink(link)).toBe(path.join(projectRoot, '.xtrm', 'skills', 'local', 'local-skill'));
     expect((await readSkillsState(path.join(projectRoot, '.xtrm', 'skills'))).managedLinks.claude).toEqual({
       'local-skill': '.xtrm/skills/local/local-skill',
     });
