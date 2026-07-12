@@ -16,6 +16,7 @@ const mocked = vi.hoisted(() => ({
   })),
   resolvePackageRoot: vi.fn(),
   scaffoldSkillsDefaultFromPackage: vi.fn(),
+  pruneRetiredManagedSkills: vi.fn(async () => ({ removed: [] })),
   runPiInstall: vi.fn(async () => undefined),
   syncProjectMcpConfig: vi.fn(async () => ({ wroteFile: false, createdFile: false, mcpPath: '.mcp.json', addedServers: [], missingEnvWarnings: [] })),
   syncPiMcpConfig: vi.fn(async () => ({ wroteFile: false, createdFile: false, mcpPath: '.pi/mcp.json', addedServers: [], missingEnvWarnings: [] })),
@@ -37,6 +38,7 @@ vi.mock('../core/registry-scaffold.js', () => ({
   installFromRegistry: mocked.installFromRegistry,
   resolvePackageRoot: mocked.resolvePackageRoot,
   scaffoldSkillsDefaultFromPackage: mocked.scaffoldSkillsDefaultFromPackage,
+  pruneRetiredManagedSkills: mocked.pruneRetiredManagedSkills,
 }));
 vi.mock('../core/project-mcp-sync.js', () => ({
   syncProjectMcpConfig: mocked.syncProjectMcpConfig,
@@ -69,6 +71,8 @@ describe('runInstall broken default symlink repair', () => {
     mocked.resolvePackageRoot.mockReturnValue(path.join(tmpDir, 'pkg'));
     mocked.scaffoldSkillsDefaultFromPackage.mockReset();
     mocked.installFromRegistry.mockReset();
+    mocked.pruneRetiredManagedSkills.mockReset();
+    mocked.pruneRetiredManagedSkills.mockResolvedValue({ removed: [] });
   });
 
   afterEach(() => {
@@ -104,6 +108,10 @@ describe('runInstall broken default symlink repair', () => {
       callOrder.push('ensureGlobalSkillsBootstrapped');
       return { installedVersion: '1.0.0', changed: false };
     });
+    mocked.pruneRetiredManagedSkills.mockImplementation(async () => {
+      callOrder.push('pruneRetiredManagedSkills');
+      return { removed: [] };
+    });
     mocked.installFromRegistry.mockImplementation(async () => {
       callOrder.push('installFromRegistry');
       return {
@@ -124,7 +132,12 @@ describe('runInstall broken default symlink repair', () => {
       skipClaudeRuntimeSync: true,
     });
 
-    expect(callOrder).toEqual(['ensureGlobalSkillsBootstrapped', 'scaffoldSkillsDefaultFromPackage', 'installFromRegistry']);
+    expect(callOrder).toEqual([
+      'ensureGlobalSkillsBootstrapped',
+      'scaffoldSkillsDefaultFromPackage',
+      'pruneRetiredManagedSkills',
+      'installFromRegistry',
+    ]);
     expect((await fs.lstat(targetDir)).isSymbolicLink()).toBe(false);
     expect(await fs.readFile(path.join(targetDir, 'README.md'), 'utf8')).toBe('# skill\n');
   });

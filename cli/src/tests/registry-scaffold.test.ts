@@ -4,10 +4,12 @@ import path from 'node:path';
 import { rmSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  collectManagedDefaultSkillNames,
   hashFile,
   installFromRegistry,
   isSkillsDefaultPath,
   isUserOwnedPath,
+  pruneRetiredManagedSkills,
   scaffoldSkillsDefaultFromPackage,
   stripXtrmPrefix,
   toPosix,
@@ -252,6 +254,195 @@ describe('scaffoldSkillsDefaultFromPackage', () => {
       process.env.HOME = previousHome;
       process.env.XTRM_GLOBAL_SKILLS = previousFlag;
     }
+  });
+});
+
+describe('pruneRetiredManagedSkills', () => {
+  const buildRegistry = (skillNames: readonly string[]) => ({
+    version: '1.0.0',
+    assets: {
+      skills: {
+        source_dir: '.xtrm/skills/default',
+        install_mode: 'copy' as const,
+        files: Object.fromEntries(skillNames.map(name => [
+          `${name}/SKILL.md`,
+          { hash: `${name}-hash`, version: '1.0.0' },
+        ])),
+      },
+    },
+  });
+
+  it('removes managed default dirs no longer in the registry and reports them', async () => {
+    const tempDir = await createTempDir();
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const defaultRoot = path.join(userXtrmDir, 'skills', 'default');
+    await fs.ensureDir(defaultRoot);
+    await writeSkill(defaultRoot, 'using-specialists');
+    await writeSkill(defaultRoot, 'using-specialists-v3');
+
+    const registry = buildRegistry(['using-specialists']);
+
+    const result = await pruneRetiredManagedSkills({
+      userXtrmDir,
+      registry,
+      dryRun: false,
+    });
+
+    expect(result.removed).toEqual(['using-specialists-v3']);
+    expect(await fs.pathExists(path.join(defaultRoot, 'using-specialists'))).toBe(true);
+    expect(await fs.pathExists(path.join(defaultRoot, 'using-specialists-v3'))).toBe(false);
+  });
+
+  it('also removes matching active-view symlinks that point at the pruned default', async () => {
+    const tempDir = await createTempDir();
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const defaultRoot = path.join(userXtrmDir, 'skills', 'default');
+    const activeRoot = path.join(userXtrmDir, 'skills', 'active');
+    await fs.ensureDir(defaultRoot);
+    await fs.ensureDir(activeRoot);
+    await writeSkill(defaultRoot, 'using-specialists-v3');
+    await fs.symlink(
+      path.join('..', 'default', 'using-specialists-v3'),
+      path.join(activeRoot, 'using-specialists-v3'),
+    );
+
+    const registry = buildRegistry(['using-specialists']);
+
+    const result = await pruneRetiredManagedSkills({
+      userXtrmDir,
+      registry,
+      dryRun: false,
+    });
+
+    expect(result.removed).toEqual(['using-specialists-v3']);
+    expect(await fs.pathExists(path.join(defaultRoot, 'using-specialists-v3'))).toBe(false);
+    expect(await fs.pathExists(path.join(activeRoot, 'using-specialists-v3'))).toBe(false);
+  });
+
+  it('preserves user-owned active content: real dirs and symlinks pointing outside default/', async () => {
+    const tempDir = await createTempDir();
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const defaultRoot = path.join(userXtrmDir, 'skills', 'default');
+    const activeRoot = path.join(userXtrmDir, 'skills', 'active');
+    await fs.ensureDir(defaultRoot);
+    await fs.ensureDir(activeRoot);
+    await writeSkill(defaultRoot, 'using-specialists-v3');
+
+    // user real-dir entry that shares name with retired skill — must not be touched
+    const userRealDir = path.join(activeRoot, 'using-specialists-v3');
+    await fs.ensureDir(userRealDir);
+    await fs.writeFile(path.join(userRealDir, 'SKILL.md'), '# user override\n', 'utf8');
+
+    // user pack elsewhere: active symlink to a different tree
+    const userPackDir = path.join(userXtrmDir, 'skills', 'my-pack', 'my-skill');
+    await fs.ensureDir(userPackDir);
+    await fs.writeFile(path.join(userPackDir, 'SKILL.md'), '# user pack\n', 'utf8');
+    await fs.symlink(
+      path.join('..', 'my-pack', 'my-skill'),
+      path.join(activeRoot, 'my-skill'),
+    );
+
+    const registry = buildRegistry(['using-specialists']);
+
+    const result = await pruneRetiredManagedSkills({
+      userXtrmDir,
+      registry,
+      dryRun: false,
+    });
+
+    expect(result.removed).toEqual(['using-specialists-v3']);
+    expect(await fs.pathExists(path.join(defaultRoot, 'using-specialists-v3'))).toBe(false);
+    // user real dir at active/using-specialists-v3 remains
+    expect((await fs.lstat(path.join(activeRoot, 'using-specialists-v3'))).isSymbolicLink()).toBe(false);
+    expect(await fs.readFile(path.join(activeRoot, 'using-specialists-v3', 'SKILL.md'), 'utf8')).toBe('# user override\n');
+    // user pack symlink remains
+    expect(await fs.pathExists(path.join(activeRoot, 'my-skill'))).toBe(true);
+  });
+
+  it('respects dryRun: reports removals without touching disk', async () => {
+    const tempDir = await createTempDir();
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const defaultRoot = path.join(userXtrmDir, 'skills', 'default');
+    const activeRoot = path.join(userXtrmDir, 'skills', 'active');
+    await fs.ensureDir(defaultRoot);
+    await fs.ensureDir(activeRoot);
+    await writeSkill(defaultRoot, 'using-specialists-v3');
+    await fs.symlink(
+      path.join('..', 'default', 'using-specialists-v3'),
+      path.join(activeRoot, 'using-specialists-v3'),
+    );
+
+    const registry = buildRegistry(['using-specialists']);
+
+    const result = await pruneRetiredManagedSkills({
+      userXtrmDir,
+      registry,
+      dryRun: true,
+    });
+
+    expect(result.removed).toEqual(['using-specialists-v3']);
+    expect(await fs.pathExists(path.join(defaultRoot, 'using-specialists-v3'))).toBe(true);
+    expect(await fs.pathExists(path.join(activeRoot, 'using-specialists-v3'))).toBe(true);
+  });
+
+  it('noop when the registry carries no default skills asset (e.g. project snapshot under global mode)', async () => {
+    const tempDir = await createTempDir();
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    const defaultRoot = path.join(userXtrmDir, 'skills', 'default');
+    await fs.ensureDir(defaultRoot);
+    await writeSkill(defaultRoot, 'using-specialists-v3');
+
+    const registry = {
+      version: '1.0.0',
+      assets: {
+        hooks: {
+          source_dir: '.xtrm/hooks',
+          install_mode: 'copy' as const,
+          files: { 'pre-commit.mjs': { hash: 'x', version: '1.0.0' } },
+        },
+      },
+    };
+
+    const result = await pruneRetiredManagedSkills({
+      userXtrmDir,
+      registry,
+      dryRun: false,
+    });
+
+    expect(result.removed).toEqual([]);
+    expect(await fs.pathExists(path.join(defaultRoot, 'using-specialists-v3'))).toBe(true);
+  });
+
+  it('noop when default root does not exist', async () => {
+    const tempDir = await createTempDir();
+    const userXtrmDir = path.join(tempDir, 'user-xtrm');
+    // no skills/default/ at all
+    const registry = buildRegistry(['using-specialists']);
+    const result = await pruneRetiredManagedSkills({ userXtrmDir, registry, dryRun: false });
+    expect(result.removed).toEqual([]);
+  });
+
+  it('collectManagedDefaultSkillNames pulls first-segment names from the skills asset', () => {
+    const registry = {
+      version: '1.0.0',
+      assets: {
+        skills: {
+          source_dir: '.xtrm/skills/default',
+          install_mode: 'copy' as const,
+          files: {
+            'foo/SKILL.md': { hash: 'a', version: '1.0.0' },
+            'foo/scripts/x.mjs': { hash: 'b', version: '1.0.0' },
+            'bar/SKILL.md': { hash: 'c', version: '1.0.0' },
+          },
+        },
+        hooks: {
+          source_dir: '.xtrm/hooks',
+          install_mode: 'copy' as const,
+          files: { 'pre-commit.mjs': { hash: 'd', version: '1.0.0' } },
+        },
+      },
+    };
+    expect([...collectManagedDefaultSkillNames(registry)].sort()).toEqual(['bar', 'foo']);
   });
 });
 

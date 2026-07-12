@@ -23,6 +23,7 @@ import {
     installFromRegistry,
     resolvePackageRoot,
     scaffoldSkillsDefaultFromPackage,
+    pruneRetiredManagedSkills,
     type InstallStats,
     type RegistryManifest,
 } from '../core/registry-scaffold.js';
@@ -38,6 +39,8 @@ export interface InstallOpts {
     global?: boolean;
     strictRegistry?: boolean;
     projectRoot?: string;
+    /** Override the resolved package root (source of .xtrm/registry.json + skills payload). Test hermetics; production callers omit this. */
+    packageRoot?: string;
     /** Skip machine bootstrap (beads/dolt/bv/deepwiki) — used by the init orchestrator which handles it in a dedicated phase. */
     skipMachineBootstrap?: boolean;
     /** Skip Claude runtime sync (hooks/settings wiring). */
@@ -151,7 +154,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     }
 
     const effectiveYes = yes || process.argv.includes('--yes') || process.argv.includes('-y');
-    const packageRoot = resolvePackageRoot();
+    const packageRoot = opts.packageRoot ?? resolvePackageRoot();
     const projectRoot = opts.projectRoot ?? getProjectRoot();
 
     if (!skipMachineBootstrap) {
@@ -165,6 +168,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     });
     const userXtrmDir = ctx.targets[0];
 
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     const pkgJson = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };
     await logBootstrapTrigger({
         command: 'install',
@@ -180,6 +184,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
         }
     }
 
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
     const registry = await fs.readJson(registryPath) as RegistryManifest;
 
@@ -194,6 +199,17 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     });
     if (scaffoldResult === 'copy') {
         console.log(kleur.dim('  • Repaired .xtrm/skills/default from package payload'));
+    }
+
+    const pruneResult = await pruneRetiredManagedSkills({
+        userXtrmDir,
+        registry,
+        dryRun,
+        overrideRoots: getGlobalSkillsOverrideRoots(),
+    });
+    if (pruneResult.removed.length > 0) {
+        const verb = dryRun ? 'Would remove' : 'Removed';
+        console.log(kleur.dim(`  • ${verb} ${pruneResult.removed.length} retired managed skill(s): ${pruneResult.removed.join(', ')}`));
     }
 
     const stats = await installFromRegistry({
