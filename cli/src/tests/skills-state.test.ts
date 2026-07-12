@@ -67,7 +67,7 @@ describe('skills-state', () => {
     expect(await fs.pathExists(path.join(skillsRoot, 'state.json'))).toBe(true);
     expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
     expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(true);
-    expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(true);
+    expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(false);
   });
 
   it('accepts forward-compatible unknown state keys', async () => {

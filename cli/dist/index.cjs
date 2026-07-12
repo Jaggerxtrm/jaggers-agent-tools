@@ -59865,7 +59865,6 @@ function createDefaultSkillsState() {
 async function ensureSkillsTreeStructure(skillsRoot) {
   await import_fs_extra5.default.ensureDir(resolveDefaultTierRoot(skillsRoot));
   await import_fs_extra5.default.ensureDir(resolveOptionalTierRoot(skillsRoot));
-  await import_fs_extra5.default.ensureDir(resolveUserPacksRoot(skillsRoot));
 }
 async function writeSkillsState(skillsRoot, state) {
   const validated = normalizeState(skillsStateSchema.parse(state));
@@ -63088,9 +63087,6 @@ async function scaffoldSkillsDefaultFromPackage(params) {
     const globalSkillsRoot = resolveGlobalSkillsRoot();
     const hasGlobalTree = await import_fs_extra15.default.pathExists(import_path7.default.join(globalSkillsRoot, "default")) && await import_fs_extra15.default.pathExists(import_path7.default.join(globalSkillsRoot, "optional"));
     if (hasGlobalTree) {
-      if (!dryRun) {
-        await import_fs_extra15.default.ensureDir(import_path7.default.join(userXtrmDir, "skills", "user", "packs"));
-      }
       return "noop";
     }
   }

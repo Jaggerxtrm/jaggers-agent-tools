@@ -41,7 +41,7 @@ describe('skills-state', () => {
     expect(await fs.pathExists(path.join(skillsRoot, 'state.json'))).toBe(true);
     expect(await fs.pathExists(path.join(skillsRoot, 'default'))).toBe(true);
     expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(true);
-    expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(true);
+    expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(false);
     expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
   });
 
