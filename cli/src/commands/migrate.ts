@@ -205,7 +205,12 @@ async function verifySkillsIdentity(
   }
 
   if (!(await fs.pathExists(globalTierRoot))) {
-    return { identical: false, divergedFiles: [] };
+    const localFiles = await walkDir(repoTierRoot);
+    const tierPrefix = assetType === 'default' ? 'default/' : 'optional/';
+    return {
+      identical: false,
+      divergedFiles: localFiles.map(file => `${tierPrefix}${path.relative(repoTierRoot, file)}`),
+    };
   }
 
   const repoFiles = await walkDir(repoTierRoot);
@@ -258,8 +263,9 @@ async function walkDir(dir: string): Promise<string[]> {
 
 export async function migrateSkillsLayout(
   repoPath: string,
-  opts: { dryRun: boolean },
+  opts: { dryRun: boolean; apply?: boolean },
 ): Promise<void> {
+  const dryRun = opts.dryRun || opts.apply === false;
   const skillsRoot = path.join(repoPath, '.xtrm', 'skills');
   const legacyRoot = path.join(skillsRoot, 'user', 'packs');
   const moves: Array<{ source: string; target: string }> = [];
@@ -293,7 +299,7 @@ export async function migrateSkillsLayout(
   }
 
   for (const { source, target } of moves) {
-    if (opts.dryRun) {
+    if (dryRun) {
       console.log(kleur.cyan(`  skills-layout: would move ${source} → ${target}`));
       continue;
     }
@@ -302,7 +308,7 @@ export async function migrateSkillsLayout(
     console.log(kleur.green(`  skills-layout: moved ${source} → ${target}`));
   }
 
-  if (opts.dryRun) {
+  if (dryRun) {
     if (await fs.pathExists(activeRoot)) console.log(kleur.cyan(`  skills-layout: would remove ${activeRoot}`));
     return;
   }
@@ -776,6 +782,7 @@ export function createMigrateCommand(): Command {
           }
           await migrateSkillsLayout(repoPath, {
             dryRun: opts.dryRun ?? false,
+            apply: opts.apply ?? false,
           });
           process.exitCode = 0;
           return;

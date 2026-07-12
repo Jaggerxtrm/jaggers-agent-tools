@@ -31,7 +31,8 @@ import {
   type InvariantViolation,
   validateSkillsInvariants,
 } from '../core/skill-discovery.js';
-import { rebuildRuntimeActiveView, selectRuntimeSkills } from '../core/skills-materializer.js';
+import { selectRuntimeSkills } from '../core/skills-materializer.js';
+import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 
 type Scope = 'global' | 'local';
 
@@ -363,7 +364,10 @@ async function mutatePacks(opts: {
     }
 
     await setRuntimeEnabledPacks(skillsRoot, runtime, [...current]);
-    await rebuildRuntimeActiveView(runtime, skillsRoot);
+  }
+
+  if (scope === 'local') {
+    await ensureAgentsSkillsSymlink(await findProjectRoot());
   }
 
   const afterState = await readSkillsState(skillsRoot);

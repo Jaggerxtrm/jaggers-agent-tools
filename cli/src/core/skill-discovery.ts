@@ -9,6 +9,8 @@ import {
   resolveUserPacksRoot,
   RESERVED_PACK_NAMES,
 } from './skills-layout.js';
+import { assertSafeRuntimeLinkName } from './skills-state.js';
+import { diffPackMetadataSkills, readPackMetadata, type PackMetadataMismatch } from './pack-metadata.js';
 
 export type DiscoveredSkill = {
   /** Directory identity, or pack name for a root SKILL.md. */
@@ -21,6 +23,7 @@ export type DiscoveredSkill = {
 export type InvariantViolationCode =
   | 'SKILL_AND_PACK_CONFLICT'
   | 'NESTED_RUNTIME_ROOT'
+  | 'PACK_METADATA_MISMATCH'
   | 'PACK_NAME_COLLISION';
 
 export type InvariantViolation = {
@@ -34,6 +37,7 @@ export type DiscoveredPack = {
   readonly path: string;
   readonly tier: Exclude<SkillsTier, 'default'>;
   readonly skills: DiscoveredSkill[];
+  readonly metadataMismatch?: PackMetadataMismatch;
 };
 
 const warnedMessages = new Set<string>();
@@ -85,7 +89,9 @@ async function readSkillFrontmatterName(skillFilePath: string): Promise<string |
 
 async function discoverSkill(skillPath: string, name: string): Promise<DiscoveredSkill> {
   const frontmatterName = await readSkillFrontmatterName(path.join(skillPath, SKILL_FILE_NAME));
-  return { name, runtimeName: frontmatterName ?? name, path: skillPath };
+  const runtimeName = frontmatterName ?? name;
+  assertSafeRuntimeLinkName(runtimeName);
+  return { name, runtimeName, path: skillPath };
 }
 
 export async function discoverDirectSkills(root: string): Promise<DiscoveredSkill[]> {
@@ -112,25 +118,32 @@ function isReservedPackName(name: string): boolean {
   return RESERVED_PACK_NAMES.has(name);
 }
 
-async function discoverPack(packPath: string, tier: Exclude<SkillsTier, 'default'>): Promise<DiscoveredPack> {
+async function discoverPack(
+  packPath: string,
+  tier: Exclude<SkillsTier, 'default'>,
+  validateMetadata: boolean,
+): Promise<DiscoveredPack> {
   const packName = path.basename(packPath);
   const metadataPath = path.join(packPath, 'PACK.json');
-  if (await fs.pathExists(metadataPath)) {
+  const skills = await discoverPackSkills(packPath, packName);
+  let metadataMismatch: PackMetadataMismatch | undefined;
+
+  if (validateMetadata && await fs.pathExists(metadataPath)) {
+    const metadata = await readPackMetadata(packPath, tier);
+    metadataMismatch = diffPackMetadataSkills(metadata.skills, skills.map(skill => skill.name));
+  }
+  if (!validateMetadata && await fs.pathExists(metadataPath)) {
     warnOnce(`pack-json:${path.resolve(packPath)}`, `${metadataPath} is ignored; PACK.json is retired in v2.`);
   }
-  return {
-    name: packName,
-    path: packPath,
-    tier,
-    skills: await discoverPackSkills(packPath, packName),
-  };
+
+  return { name: packName, path: packPath, tier, skills, metadataMismatch };
 }
 
 async function discoverFlatPacks(skillsRoot: string): Promise<DiscoveredPack[]> {
   const packs: DiscoveredPack[] = [];
   for (const packName of await listDirectChildDirectories(skillsRoot)) {
     if (isReservedPackName(packName)) continue;
-    packs.push(await discoverPack(path.join(skillsRoot, packName), 'user'));
+    packs.push(await discoverPack(path.join(skillsRoot, packName), 'user', false));
   }
   return packs;
 }
@@ -140,7 +153,7 @@ async function discoverLegacyPacks(skillsRoot: string): Promise<DiscoveredPack[]
   const packs: DiscoveredPack[] = [];
   for (const packName of await listDirectChildDirectories(legacyRoot)) {
     if (isReservedPackName(packName)) continue;
-    packs.push(await discoverPack(path.join(legacyRoot, packName), 'user'));
+    packs.push(await discoverPack(path.join(legacyRoot, packName), 'user', true));
   }
   return packs;
 }
@@ -175,7 +188,9 @@ export async function discoverTierPacks(
   if (tier === 'user') return discoverRepoPacks(skillsRoot);
   const packs: DiscoveredPack[] = [];
   for (const packName of await listDirectChildDirectories(resolveOptionalTierRoot(skillsRoot))) {
-    packs.push(await discoverPack(path.join(resolveOptionalTierRoot(skillsRoot), packName), 'optional'));
+    const packPath = path.join(resolveOptionalTierRoot(skillsRoot), packName);
+    if (!await fs.pathExists(path.join(packPath, 'PACK.json'))) continue;
+    packs.push(await discoverPack(packPath, 'optional', true));
   }
   return packs;
 }
@@ -193,7 +208,10 @@ export async function validateSkillsInvariants(skillsRoot: string): Promise<Inva
     }
   }
 
-  const packs = await discoverRepoPacks(skillsRoot);
+  const packs = [
+    ...(await discoverTierPacks(skillsRoot, 'optional')),
+    ...(await discoverRepoPacks(skillsRoot)),
+  ];
   const seenNames = new Map<string, string>();
   for (const pack of packs) {
     const existing = seenNames.get(pack.name);
@@ -206,6 +224,14 @@ export async function validateSkillsInvariants(skillsRoot: string): Promise<Inva
       if (await hasNestedRuntimeRoot(skill.path)) {
         violations.push({ code: 'NESTED_RUNTIME_ROOT', path: skill.path, message: `Pack skill '${pack.name}/${skill.name}' contains a nested runtime root directory (.claude/.agents/.pi).` });
       }
+    }
+    const mismatch = pack.metadataMismatch;
+    if (mismatch && (mismatch.metadataOnlySkills.length > 0 || mismatch.filesystemOnlySkills.length > 0)) {
+      violations.push({
+        code: 'PACK_METADATA_MISMATCH',
+        path: pack.path,
+        message: `Pack '${pack.name}' metadata skills do not match filesystem (metadata-only: ${mismatch.metadataOnlySkills.join(', ') || 'none'}, filesystem-only: ${mismatch.filesystemOnlySkills.join(', ') || 'none'}).`,
+      });
     }
   }
   return violations;
