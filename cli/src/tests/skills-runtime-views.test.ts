@@ -35,7 +35,7 @@ describe('skills-runtime-views', () => {
 
     try {
       const globalDefaultRoot = path.join(tempHome, '.xtrm', 'skills', 'default');
-      const localSkillRoot = path.join(projectRoot, '.xtrm', 'skills', 'user', 'packs', 'local', 'local-skill');
+      const localSkillRoot = path.join(projectRoot, '.xtrm', 'skills', 'local', 'local-skill');
       await fs.ensureDir(globalDefaultRoot);
       await fs.ensureDir(localSkillRoot);
       await fs.writeFile(path.join(globalDefaultRoot, 'SKILL.md'), '# global\n', 'utf8');
@@ -54,8 +54,8 @@ describe('skills-runtime-views', () => {
         schemaVersion: '2',
         enabledPacks: { claude: ['local'], pi: ['local'] },
         managedLinks: {
-          claude: { 'local-skill': '.xtrm/skills/user/packs/local/local-skill' },
-          pi: { 'local-skill': '.xtrm/skills/user/packs/local/local-skill' },
+          claude: { 'local-skill': '.xtrm/skills/local/local-skill' },
+          pi: { 'local-skill': '.xtrm/skills/local/local-skill' },
         },
       });
 
@@ -73,8 +73,8 @@ describe('skills-runtime-views', () => {
     process.env.HOME = tempHome;
     try {
       const skillsRoot = path.join(projectRoot, '.xtrm', 'skills');
-      const manifestTarget = path.join(skillsRoot, 'user', 'packs', 'local', 'local-skill');
-      const wrongTarget = path.join(skillsRoot, 'user', 'packs', 'other-skill');
+      const manifestTarget = path.join(skillsRoot, 'local', 'local-skill');
+      const wrongTarget = path.join(skillsRoot, 'other-skill');
       const runtimeLink = path.join(projectRoot, '.claude', 'skills', 'local-skill');
       await fs.ensureDir(manifestTarget);
       await fs.ensureDir(wrongTarget);
@@ -83,7 +83,7 @@ describe('skills-runtime-views', () => {
       await fs.writeJson(path.join(skillsRoot, 'state.json'), {
         schemaVersion: '2',
         enabledPacks: { claude: ['local'], pi: [] },
-        managedLinks: { claude: { 'local-skill': '.xtrm/skills/user/packs/local/local-skill' }, pi: {} },
+        managedLinks: { claude: { 'local-skill': '.xtrm/skills/local/local-skill' }, pi: {} },
       });
 
       const wrongTargetCheck = await checkRuntimeSkillsViews(projectRoot);

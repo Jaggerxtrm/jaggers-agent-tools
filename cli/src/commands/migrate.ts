@@ -5,7 +5,12 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
 import { spawnSync } from 'child_process';
-import { resolveGlobalSkillsRoot, resolveDefaultTierRoot, resolveOptionalTierRoot } from '../core/skills-layout.js';
+import {
+  resolveGlobalSkillsRoot,
+  resolveDefaultTierRoot,
+  resolveOptionalTierRoot,
+  RESERVED_PACK_NAMES,
+} from '../core/skills-layout.js';
 import { resolveGlobalHooksRoot } from '../core/global-hooks-bootstrap.js';
 import { isRepoMigrated, markRepoMigrated } from '../utils/known-repos.js';
 import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
@@ -259,12 +264,26 @@ export async function migrateSkillsLayout(
   const legacyRoot = path.join(skillsRoot, 'user', 'packs');
   const moves: Array<{ source: string; target: string }> = [];
   const legacyEntries = await fs.readdir(legacyRoot, { withFileTypes: true }).catch(() => [] as fs.Dirent[]);
+  const unexpectedEntries = legacyEntries.filter((entry) => !entry.isDirectory() || entry.isSymbolicLink());
+  if (unexpectedEntries.length > 0) {
+    throw new Error(
+      `Refusing skills-layout migration: legacy root contains non-pack entries: ${unexpectedEntries.map((entry) => entry.name).join(', ')}`,
+    );
+  }
 
   for (const entry of legacyEntries) {
-    if (!entry.isDirectory()) continue;
+    if (RESERVED_PACK_NAMES.has(entry.name) && entry.name !== 'local-legacy') {
+      throw new Error(`Refusing skills-layout migration: reserved v1 pack name '${entry.name}' cannot be flattened.`);
+    }
     const source = path.join(legacyRoot, entry.name);
     const target = path.join(skillsRoot, entry.name);
     moves.push({ source, target });
+  }
+
+  for (const { source, target } of moves) {
+    if (await fs.pathExists(target)) {
+      throw new Error(`Cannot flatten pack '${path.basename(source)}': target already exists at ${target}.`);
+    }
   }
 
   const activeRoot = path.join(skillsRoot, 'active');
@@ -274,9 +293,6 @@ export async function migrateSkillsLayout(
   }
 
   for (const { source, target } of moves) {
-    if (await fs.pathExists(target)) {
-      throw new Error(`Cannot flatten pack '${path.basename(source)}': target already exists at ${target}.`);
-    }
     if (opts.dryRun) {
       console.log(kleur.cyan(`  skills-layout: would move ${source} → ${target}`));
       continue;
@@ -548,10 +564,10 @@ async function cleanSettingsJsonEntries(
   opts: { dryRun: boolean; apply: boolean; hooksBackupPath?: string },
 ): Promise<void> {
   const claudeSettingsPath = path.join(repoPath, '.claude', 'settings.json');
-  const piSettingsPath = path.join(repoPath, '.pi', 'settings.json');
   const preCleanSnapshot: Record<string, unknown> = {};
 
-  for (const settingsPath of [claudeSettingsPath, piSettingsPath]) {
+  const piAgentSettingsPath = path.join(repoPath, '.pi', 'agent', 'settings.json');
+  for (const settingsPath of [claudeSettingsPath, piAgentSettingsPath]) {
     if (!(await fs.pathExists(settingsPath))) {
       continue;
     }
@@ -753,6 +769,11 @@ export function createMigrateCommand(): Command {
         }
 
         if (target === 'skills-layout') {
+          if (opts.apply && !opts.yes) {
+            console.error(kleur.red('  skills-layout: --apply requires --yes because migration moves packs and removes legacy paths.'));
+            process.exitCode = 1;
+            return;
+          }
           await migrateSkillsLayout(repoPath, {
             dryRun: opts.dryRun ?? false,
           });

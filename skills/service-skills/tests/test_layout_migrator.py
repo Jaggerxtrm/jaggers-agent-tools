@@ -11,8 +11,8 @@ import layout_migrator as lm  # noqa: E402
 
 
 def _flat_pack(root: Path, pack_name: str, services: dict[str, str]) -> Path:
-    """Build a flat-layout pack: packs/<pack>/<svc>/SKILL.md + pack-root registry."""
-    pack = root / ".xtrm" / "skills" / "user" / "packs" / pack_name
+    """Build a flat-layout pack: skills/<pack>/<svc>/SKILL.md + pack-root registry."""
+    pack = root / ".xtrm" / "skills" / pack_name
     reg = {"version": "1.0", "services": {}}
     for sid, body in services.items():
         d = pack / sid

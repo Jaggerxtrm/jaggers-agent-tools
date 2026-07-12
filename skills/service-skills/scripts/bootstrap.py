@@ -99,19 +99,24 @@ def get_pack_path(project_root: str | None = None) -> Path | None:
     packs_root = _packs_root(project_root)
     env_pack = os.environ.get("XTRM_PACK")
 
+    legacy_packs_root = packs_root / "user" / "packs"
     if env_pack:
         pack_path = Path(env_pack)
         if not pack_path.is_absolute():
             pack_path = packs_root / env_pack
-        return _ensure_within_root(pack_path, packs_root, "XTRM_PACK path")
+            if not pack_path.exists():
+                pack_path = legacy_packs_root / env_pack
+        validation_root = packs_root if pack_path.parent == packs_root else legacy_packs_root
+        return _ensure_within_root(pack_path, validation_root, "XTRM_PACK path")
 
-    if not packs_root.exists():
-        return None
-
-    pack_dirs = [
-        path for path in packs_root.iterdir()
-        if path.is_dir() and path.name not in RESERVED_PACK_NAMES
-    ]
+    pack_dirs = []
+    for candidate_root in (packs_root, legacy_packs_root):
+        if not candidate_root.exists():
+            continue
+        pack_dirs.extend(
+            path for path in candidate_root.iterdir()
+            if path.is_dir() and path.name not in RESERVED_PACK_NAMES
+        )
     if len(pack_dirs) == 1:
         return pack_dirs[0].resolve()
 
