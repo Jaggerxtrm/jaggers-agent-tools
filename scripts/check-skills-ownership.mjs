@@ -16,8 +16,6 @@ const canonicalEntries = [
   'using-nodes',
   'specialists-creator',
   'using-specialists',
-  'using-specialists-v2',
-  'using-specialists-v3',
   'using-script-specialists',
 ];
 
@@ -42,7 +40,7 @@ function validateDocs(docsText, manifest) {
     assert(docsText.includes(`\`${name}\``), `docs missing skill name: ${name}`);
   }
   assert(docsText.includes('Machine-readable source:'), 'docs missing manifest note');
-  assert(docsText.includes('using-specialists-v3'), 'docs missing using-specialists-v3');
+  assert(docsText.includes('using-specialists'), 'docs missing using-specialists');
   assert(docsText.includes('update-specialists'), 'docs missing update-specialists');
   assert(docsText.includes('docs/skills-ownership.json'), 'docs missing manifest path');
   assert(manifest.owners.releasing.owner === 'xtrm-tools', 'releasing owner mismatch');
@@ -53,7 +51,7 @@ function validateRelease(release, manifest) {
   assert(mirror, 'missing specialists release metadata');
   assert(mirror.package === 'specialists', 'specialists release package mismatch');
   assert(Array.isArray(mirror.assets), 'specialists release assets missing');
-  assert(mirror.assets.includes('using-specialists-v3'), 'release missing using-specialists-v3');
+  assert(mirror.assets.includes('using-specialists'), 'release missing using-specialists');
   assert(mirror.assets.includes('update-specialists'), 'release missing update-specialists');
   for (const asset of mirror.assets) {
     assert(manifest.owners[asset]?.owner === 'specialists', `release asset not specialists-owned: ${asset}`);

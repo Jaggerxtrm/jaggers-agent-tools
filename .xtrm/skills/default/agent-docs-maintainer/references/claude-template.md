@@ -22,7 +22,7 @@ If a short summary is not enough for a fresh agent to understand the repo, add a
 | Need | Load/use |
 |---|---|
 | xtrm workflow / beads gates | `/using-xtrm`; CLI details: `bd --help`, `xt --help` |
-| Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists-v3` |
+| Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists` |
 | GitNexus impact/debug/refactor | `/gitnexus-impact-analysis`, `/gitnexus-debugging`, `/gitnexus-refactoring` |
 | Service routing and docs/project context | `/scope`, `/using-service-skills` when service registry/skills exist |
 | Release/session close | `/releasing`, `/xt-end`, `/session-close-report` |

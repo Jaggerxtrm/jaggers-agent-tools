@@ -15,8 +15,8 @@ These skills stay canonical in `specialists` and ship as vendored copies at publ
 - `using-nodes`
 - `specialists-creator`
 - `using-specialists`
-- `using-specialists-v2`
-- `using-specialists-v3`
+- `using-specialists`
+- `using-specialists`
 - `using-specialists-auto`
 - `using-script-specialists`
 

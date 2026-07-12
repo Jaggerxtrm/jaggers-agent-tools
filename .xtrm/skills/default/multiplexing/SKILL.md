@@ -1,6 +1,6 @@
 ---
 name: multiplexing
-description: Help the operator coordinate work across N concurrent tmux sessions (Claude Code, pi, raw shells, vim, REPLs). Inventory state, hand off tasks cleanly, prevent messy-run failure modes, keep hygiene. Not an agent harness; not a /using-specialists-v3 replacement; tool-agnostic. Invoked explicitly via /multiplexing — do not rely on auto-activation.
+description: Help the operator coordinate work across N concurrent tmux sessions (Claude Code, pi, raw shells, vim, REPLs). Inventory state, hand off tasks cleanly, prevent messy-run failure modes, keep hygiene. Not an agent harness; not a /using-specialists replacement; tool-agnostic. Invoked explicitly via /multiplexing — do not rely on auto-activation.
 ---
 
 # Multiplexing
@@ -20,7 +20,7 @@ The operator triggers `/multiplexing` when they want:
 
 ## When it does NOT apply
 
-- Specialist chain orchestration → use `/using-specialists-v3`
+- Specialist chain orchestration → use `/using-specialists`
 - Delegated pane/team-member self-protocol → have that pane use `/multiplexing-team`
 - Designing a new agent runtime or harness → out of scope
 - In-process subagent spawn (Claude Agent SDK, Cline, Cursor subagents, etc.) → out of scope; this skill stays tool-agnostic
@@ -60,7 +60,7 @@ Beads carry persistent content. Bootstrap constraints, scope clarifications, and
 
 - Negative constraints ("NEVER merge", "NEVER touch file X", "NO new beads beyond N")
 - Output format and report shape
-- Which skill to invoke (`/using-specialists-v3`, `/btw`, etc.)
+- Which skill to invoke (`/using-specialists`, `/btw`, etc.)
 - One-off scope clarifications that do not belong in the bead body
 
 Why separate from beads: these are session-specific instructions that pollute the bead's permanent record. The bead remains a clean task contract; the /tmp file is throwaway.
@@ -78,7 +78,7 @@ EOF
 Three allowed forms, nothing else:
 
 1. **Read pointer**: `'leggi /tmp/<file>.txt e seguilo. <one-line constraint>. report finale.'`
-2. **Slash command**: `/using-specialists-v3`, `/btw`, `/compact`, etc.
+2. **Slash command**: `/using-specialists`, `/btw`, `/compact`, etc.
 3. **Brief correction**: a single redirective sentence (≤ 3 sentences) when an in-flight agent needs a course adjustment. Anything longer goes in a /tmp file.
 
 ### xtmux picker — operational assist, not a comms bus
@@ -334,7 +334,7 @@ Session-name shape post-xtmux-3h8: `role-<runtime>-<slug>[-<bead>]`. The `<runti
 - Kill: `tmux kill-session -t "$SESSION_NAME"` after the epic bead closes. Then `git worktree remove <path> && git worktree prune`. Leaving an idle coordinator alive costs nothing but leaks state on `git worktree list`.
 
 **When NOT to use this pattern.**
-- Single-chain work — dispatch `sp run` directly per `using-specialists-v3`; a coordinator adds ceremony without saving context.
+- Single-chain work — dispatch `sp run` directly per `using-specialists`; a coordinator adds ceremony without saving context.
 - Work you must approve every step of — coordinator's whole value is turning judgment into fewer, higher-level asks; if every dispatch needs your OK, keep the loop in the main session.
 - Work already handled by another running coordinator on the same epic — you cannot claim the same bead twice. `bd show <epic>` shows the active claim.
 
@@ -590,6 +590,6 @@ Before closing the orchestrator session:
 
 - Spawn primitives (Docker, VM, subprocess pool)
 - Custom IPC schemas (inotify, FIFO, Unix sockets, MCP message bus) — beads already serve the comms role
-- Replacement for `/using-specialists-v3` — that skill owns specialist chain orchestration
+- Replacement for `/using-specialists` — that skill owns specialist chain orchestration
 - Tool-specific bindings (Claude Agent SDK, Cline, Cursor, etc.) — keep this skill tool-agnostic
 - Auto-activation triggers based on keywords — auto-activation is unreliable across harnesses; this skill is invoked explicitly

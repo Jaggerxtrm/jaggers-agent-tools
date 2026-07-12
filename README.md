@@ -204,7 +204,7 @@ These skills implement the xtrm-specific development workflow — session manage
 | `planning` | Structured issue board from any spec, with phases and deps |
 | `test-planning` | Test coverage planning alongside implementation work |
 | `delegating` | Cost-optimized task delegation to background agents |
-| `using-specialists-v3` | Specialist routing and execution workflow (current vendored contract) |
+| `using-specialists` | Specialist routing and execution workflow (current vendored contract) |
 | `using-specialists-auto` | Auto-mode specialists execution and handoff flow |
 | `update-specialists` | Reconcile specialists runtime drift and xtrm-managed asset drift |
 | `update-xt` | Refresh xtrm-managed assets across one repo or many |

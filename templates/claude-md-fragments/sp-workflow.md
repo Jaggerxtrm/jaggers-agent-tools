@@ -5,7 +5,7 @@ description: Specialists (sp) orchestration invariants — bead-first, worktree,
 ---
 # Specialists (sp) Workflow
 
-> Full skill: `/using-specialists-v2` | CLI reference: `docs/cli-reference.md`
+> Full skill: `/using-specialists` | CLI reference: `docs/cli-reference.md`
 
 ## Hard Rules
 

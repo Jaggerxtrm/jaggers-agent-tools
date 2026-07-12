@@ -46,7 +46,7 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 | Need | Use |
 |---|---|
 | xtrm/beads workflow | `/using-xtrm`; `bd --help`; `xt --help` |
-| Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists-v3`; check `sp --help` + `sp list` first |
+| Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists`; check `sp --help` + `sp list` first |
 | Service/docs/project context | canonical service-skills skill set: `/scope`, `/using-service-skills` |
 | Planning/tests/docs | `/planning`, `/test-planning`, `/sync-docs` |
 | Board unclear/backlog messy | `/issue-triage`; `bv --robot-triage --format toon`; `bv --robot-plan` |
