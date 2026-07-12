@@ -9,140 +9,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### `xt pi/claude --role` — runtime prefix in session name (xtmux-3h8, PR #388)
+## [v0.10.0] — 2026-07-12
 
-Session names now include the runtime so `xt pi --role X` and `xt claude --role X` produce distinguishable sessions: `role-pi-<slug>[-<bead>]` vs `role-claude-<slug>[-<bead>]`. Both coexist in `tmux ls` without `--reuse` or auto-suffix. Backwards-incompatible for anyone relying on the pre-flip `role-<slug>[-<bead>]` shape; nobody parses this format programmatically, so no migration needed beyond re-launching.
+Root `xtrm-tools` release rolling up the Global Skills Migration epic (both global SSOT + repo-side v2 flat layout with `xt migrate` tooling), the `xt pi --role` / `xt claude --role` role-launcher family (xtmux-1lb.*), pi runtime hardening (per-call latency, footer scheduling, theme preflight), and the `multiplexing` deploy-gap chain. Publish root `xtrm-tools` from this release commit/tag. `@jaggerxtrm/pi-extensions` v0.9.4 and v0.9.5 were published independently to npm earlier in the cycle (2026-07-08 / 2026-07-11) and are captured in their own blocks below.
 
-### `xt claude --role` — remove leftover pi-only runtime guard (xtmux-1lb.1 followup, PR #387)
+### `xtrm-tools` v0.10.0 — 2026-07-12
 
-PR #383 shipped the CLI surface but missed removing an up-front guard that hard-refused `runtime !== 'pi'`. `xt claude --role X` now actually launches instead of erroring with `"--role is currently only supported for pi"`.
+#### Added
 
-### `xt pi --role` session-name collision handling (xtmux-1lb.6, PR #386)
+- **Global Skills Migration — global SSOT + repo v2 flat layout (Epic xtrm-bq7yd, PRs #372, #390, #392, #393, #394).** Skills migrated from per-repo materialization to a global source of truth at `~/.xtrm/skills/{default,optional,user}/`; project residual keeps only user packs and composed state. Repo-side pack layout flattens to `<repo>/.xtrm/skills/<pack>/` — no `PACK.json`, no `user/packs/` nesting, no `active/` view. Direct-symlink runtime model populates real dirs at `<repo>/.claude/skills/` and `<repo>/.pi/skills/`; `state.json` gains a `managedLinks` manifest tracking xt-owned links so reap-time cleanup only touches tracked entries. `xt migrate skills-layout --dry-run/--apply/--restore` performs SHA-256 verification, tarball backup, idempotent cleanup, dangling runtime-symlink pruning (retired `active/` targets), and audit logging to `~/.xtrm/logs/skills-migration.jsonl`. `xt skills list/enable/disable` default to `--global`; `xt skills create-pack` defaults to `--local`. Docs: `docs/plans/global-skills-migration.md`, `docs/skills.md`, `docs/skills-tier-architecture.md`, `docs/project-skills.md`, `docs/xtrm-directory.md`. Followups: PR #393 stops scaffolding empty `.xtrm/skills/user/packs/` on init; PR #394 syncs shipped `service-skills` mirror with v2-aware source (unblocks mercury service-skills discovery); PR #390 reconciles direct runtime links after batch migration; PR #373 makes the `local-legacy` pack preserve nested tree with correct `PACK.json` `name`.
+- **`xt pi --role` launcher (PR #362, xtmux-1lb).** Launch pi as a specialist role in a tmux session with `--role <name>`, `--bead <id>`, `--no-attach`. Role resolves via `sp view`; worktree provisioned; `@agent_*` metadata set on the target pane; `agent.role.launched` event emitted via `tmux-session-picker log emit`. Extended in-flight:
+  - PR #364 (xtmux-e1o): scaffold `.xtrm/skills` + `.specialists` in the worktree so pi resolves skills.
+  - PR #365 (xtmux-2dy): `--model` / `--thinking` flags, `--` passthrough forwarded verbatim, curated extension policy.
+  - PR #382 (xtmux-1lb.5.1): current-pane default inside `$TMUX`; new `--new-session/--ns`, `--parent <target>`, `--child` flags. Behavior matrix in `xt pi --help`.
+  - PR #386 (xtmux-1lb.6): `--reuse` attaches an existing session (no `agent.role.launched` emitted since metadata isn't guaranteed current); default auto-suffixes `-<hex>` on collision using the same 4-char random slug as the worktree layer, retries up to 10 times.
+- **`xt claude --role` — full parity with `xt pi --role` (PR #383, xtmux-1lb.1).** Same launcher surface (`--role`, `--bead`, `--no-attach`, `--model`, `--thinking` warn-and-drop, `--new-session/--ns`, `--parent`, `--child`, `--` passthrough). Shared plumbing (`buildRoleTmuxPlan`, `launchRoleTmuxSession`) is runtime-aware: pi gets `--append-system-prompt <file>` + `--skill <path>` per role skill; claude gets `--append-system-prompt <prompt>` + `--dangerously-skip-permissions` (skills resolve from cwd's `.claude/skills/`).
+- **`xt --role` — runtime encoded in session name (PR #388, xtmux-3h8).** Session names now include the runtime so `xt pi --role X` and `xt claude --role X` produce distinguishable sessions: `role-pi-<slug>[-<bead>]` vs `role-claude-<slug>[-<bead>]`. Both coexist in `tmux ls` without `--reuse` or auto-suffix. Backwards-incompatible for anyone relying on the pre-flip `role-<slug>[-<bead>]` shape; nobody parses this format programmatically, so no migration needed beyond re-launching.
+- **`xt migrate` — local-legacy repair recipe (PRs #373, #374).** Migrator preserves the nested legacy tree on the `local-legacy` pack and sets the correct `PACK.json` `name`; `update-xt` skill documents the repair recipe and the `xt migrate --restore` flow.
+- **`multiplexing` — deploy-gap chain + `verify-deploy-applied.sh` (PR #369, nsur).** Codifies the deploy-gap chain (build → deploy → verify) and ships `scripts/verify-deploy-applied.sh` for post-deploy verification.
+- **`multiplexing` / user docs — `xt pi/claude --role` launcher flag surface (PRs #385, #391, xtmux-1lb.3, xtmux-08f).** User-facing docs page + README link; multiplexing skill documents launcher flag surface with parity coverage.
+- **`xt pi --help` documents `--` passthrough (PR #381, xtmux-1lb.2).** `xt pi --help` now surfaces the `--` passthrough contract with two concrete examples. Same treatment lands on `xt claude` via the shared parity work.
 
-Prior refusal on session-name collision replaced by two operator-friendly outcomes:
+#### Changed
 
-- `--reuse` — attach to the existing session (or with `--no-attach`, print its coordinates + exit). Does NOT emit `agent.role.launched` — the session isn't ours and metadata isn't guaranteed to be current.
-- default — auto-suffix `-<hex>` and create a fresh sibling. Uses the same 4-char random slug as the worktree layer. Retries up to 10 times before erroring loudly.
+- **Code restraint section in top-level agent injections (PR #359, docs commit b491d5bd).** Companion to specialists PR #173 (unitAI-pzmwf) which introduced a unified code-restraint discipline at the mandatory-rule level and in the orchestrator skill; this layer is for when the agent implements directly without delegating to a specialist. `.xtrm/config/instructions/{claude,agents}-top.md` gain a 3-bullet `## Code restraint (when implementing directly)` section: the ladder in one line (YAGNI → reuse → stdlib → native → one line → minimum), the never-simplify-away boundary (input validation at trust boundaries, error handling that prevents data loss, security, accessibility, explicitly requested behavior, understanding the problem), and the deliberate-shortcut marker `// SIMPLIFIED: <ceiling>. upgrade when <trigger>.`. Full ladder + rules + tag vocabulary specifics live in the specialists mandatory rule and are not repeated here (reuse over rewrite — the same discipline being taught). Identical text in both files so all downstream propagation (~30 consumer repos via existing `xt update` flow) picks up the same rule regardless of runtime. Zero external plugin brand references in shipped text.
+- **Pi runtime hardening (PR #363).** `quality-gates` extension disabled by default (inert-by-bug — hardcoded pre-plugin-era paths, never fired). `pi-gitnexus` `autoAugment` seeded off in `~/.pi/pi-gitnexus.json` (was ON by default and was the dominant per-call latency source, running up to 3 `gitnexus augment` subprocesses after every grep/read/bash `tool_result`). Serena `blockedTools` migrated so legacy blocklists no longer force agents onto Serena tools when built-in file ops would work; existing custom blocklists preserved. `xt updatePiSettings` now seeds `serena.blockedTools=[]` and migrates built-in-only legacy blocklists.
+- **Bounded statusline refresh work (PR #376).** Statusline no longer stampedes on cache miss; the five-Git-plus-Beads `execSync` path now uses atomic stale cache + one per-user refresh lease + detached best-effort refresh. Node startup still sets a ~100ms wall-time floor.
+- **Registry regenerated to include multiplexing/deploy-gap script (PR #371).** `scripts/verify-deploy-applied.sh` was missing from `.xtrm/registry.json` after PR #369; regen picks it up so consumers get it on `xt update --apply`.
 
-`--reuse` only makes sense with `--new-session` (or outside `$TMUX`).
+#### Fixed
 
-### `xt pi --help` documents `--` passthrough (xtmux-1lb.2, PR #381)
+- **`xt pi --role` — drop broken `-e` extension allow-list; `$HOME` fallback for skill resolution (PR #377, xtmux-3rs, xtmux-1rn).** Curated `-e` allow-list from PR #365 broke real launches when a role's skills lived under `$HOME/.pi/agent/skills/` or `~/.agents/skills/` (Pi's global skill paths). `$HOME` fallback added so skill resolution walks the same paths Pi natively discovers.
+- **`xt pi --role` switch-client attach inside `$TMUX` (PR #380, xtmux-1lb.5).** `launchRoleTmuxSession` uses `tmux switch-client` when the caller is inside an existing tmux client (was `tmux attach-session`, which refused with "sessions should be nested with care, unset TMUX to force"). Outside tmux, `attach-session` is retained. Extracted as a pure `chooseAttachCommand(sessionName, insideTmux)` helper. `--no-attach` path unchanged. Superseded by PR #382's current-pane default for the common case; retained for `--new-session` flows.
+- **`xt claude --role` — leftover pi-only runtime guard removed (PR #387, xtmux-1lb.1 followup).** PR #383 shipped the CLI surface but missed removing an up-front guard that hard-refused `runtime !== 'pi'`. `xt claude --role X` now actually launches instead of erroring with `"--role is currently only supported for pi"`.
 
-`xt pi --help` now surfaces the `--` passthrough contract with two concrete examples. Same treatment lands on `xt claude` via the shared parity work above.
+## [pi-extensions v0.9.5] — 2026-07-11
 
-### `xt pi --role` switch-client inside `$TMUX` (xtmux-1lb.5, PR #380 — superseded by xtmux-1lb.5.1)
+This section documents an independently-published `@jaggerxtrm/pi-extensions` patch release; root `xtrm-tools` remains on the v0.9.1 line until v0.10.0 above.
 
-Intermediate fix that used `tmux switch-client` when `xt pi --role` runs inside `$TMUX`, avoiding the pre-fix nested-attach refusal. Superseded by the current-pane default in xtmux-1lb.5.1 (see entry below); `--new-session` still uses `chooseAttachCommand` to pick `switch-client` vs `attach-session` correctly.
+### `@jaggerxtrm/pi-extensions` v0.9.5 — 2026-07-11
 
-### `xt claude` — full role-launcher parity with `xt pi` (xtmux-1lb.1)
+#### Added
 
-`xt claude` now accepts the same role-launcher surface as `xt pi`:
+- **`xtprompt` generalized (PR #375).** Removes Mercury-specific branding/domain rules from what is now shipped as generic package surface; canonical rewrite behavior aligns planning + prompt-improving intents, and asks one clarification for vague prompts before inventing detail. Context summaries pass through the same `MAX_CONTEXT_CHARS` bounding path as recent entries. `ctx.ui.input()` only used in TUI mode for isolated clarification; registry smoke imports `src/registry.ts` directly.
+- **`xtrm-ui` richer compact rendering (PR #370).** Plain-pi-like details on external tool rows with color-coded state; native/external tool row parity improved for compact mode.
 
-- `--role <name>` — launch claude as a specialist role resolved via `sp view`. Same sandbox / worktree / `@agent_*` metadata semantics as `xt pi --role`.
-- `--bead <id>` — attach bead id to `@agent_bead`; slug into the session name.
-- `--no-attach` — new-session mode only; detached + print `session:pane` on stdout.
-- `--model <name>` — override specialist default; forwarded to claude verbatim.
-- `--thinking <level>` — warn-and-drop (claude has no `--thinking` flag; configure thinking on the underlying model).
-- `--new-session` / `--ns` — force fresh tmux session inside `$TMUX` (matches xt pi).
-- `--parent <target>` — override `@agent_parent_session`; same resolution as xt pi.
-- `--child` — explicit form of auto-parent.
-- `--` passthrough — forwarded verbatim to claude (guarded flags rejected, batch-mode flags dropped with warning).
+#### Fixed
 
-Shared launcher plumbing (`buildRoleTmuxPlan`, `launchRoleTmuxSession`) is now runtime-aware: pi gets `--append-system-prompt <file>` + `--skill <path>` per role skill; claude gets `--append-system-prompt <prompt>` + `--dangerously-skip-permissions` (skills resolve from cwd's `.claude/skills/`).
+- **XTRM theme availability before Pi startup (PR #378).** Pi resolves `settings.theme` before package extension `resources_discover`, so any XTRM theme persisted in settings must be materialized under `~/.pi/agent/themes` during launch preflight. Preflight now owns the four `xtrm-*.json` filenames and materializes them before Pi resolves the theme, preventing startup fallback to built-in dark.
+- **Custom footer refresh scheduling (PR #379).** Custom-footer was starting subprocess refreshes from render every 5s (stampeded on cache miss and blocked repaint). Refresh state now cached; fixed-command Git/Beads refreshes are scheduled from lifecycle/tool/branch events. Dispose only clears listeners and requestRender callbacks it owns to prevent reapply from detaching the new footer.
 
-### `xt pi --role` launcher — current-pane default inside tmux (xtmux-1lb.5.1)
+## [pi-extensions v0.9.4] — 2026-07-08
 
-**Behavior change (default flip).** Inside an existing `$TMUX` client, `xt pi --role <name>` now runs pi in the **current pane** by default instead of creating a new tmux session and switching to it. This matches operator intent — no nested-tmux warning, no new session in `tmux ls`, and the pane's `@agent_*` metadata is set on the pane you launched from.
+This section documents an independently-published `@jaggerxtrm/pi-extensions` patch release; root `xtrm-tools` remains on the v0.9.1 line.
 
-New flags on `xt pi --role`:
+### `@jaggerxtrm/pi-extensions` v0.9.4 — 2026-07-08
 
-- `--new-session` (alias `--ns`) — opt back into the "fresh tmux session" behavior even inside `$TMUX`. Combines with `--no-attach` for orchestrator capture.
-- `--parent <target>` — override `@agent_parent_session` on the target pane. `<target>` may be a session name, session id (`$3`), or `#{session_id}` string. Bogus targets fail before pi spawns.
-- `--child` — explicit form of the auto-behavior (`@agent_parent_session` = current pane's `#{session_id}`). Redundant with the current default; retained as a stable opt-in against a future default flip.
+#### Changed
 
-Behavior matrix:
+- **`xtrm-ui` cleanup: theme duplication, flattools detection, and xtprompt wiring (PR #366).** Consolidated all contradictions from earlier iterations: keep canonical `themes/xtrm-ui/` (drop duplicate themes dir), `isXtrmTheme` recognizes `flattools`, `xtprompt` registered in managed bundle (was orphaned shim), `pi-serena-compact` removed from registry (`tool_result` no-op — only `xtrm-ui` compacts), `shortenHome` made internal (dead export, used internally by `shortenPath`).
 
-| context | flags | result |
-| --- | --- | --- |
-| inside `$TMUX` | (none) | pi runs in current pane; pane options + `XTMUX_AGENT_*` env set here |
-| inside `$TMUX` | `--new-session` | new session; `switch-client` attaches (from xtmux-1lb.5) |
-| inside `$TMUX` | `--new-session --no-attach` | new session detached; prints `session:pane` |
-| inside `$TMUX` | `--no-attach` alone | **error** — requires `--new-session` or exit tmux first |
-| outside `$TMUX` | (any) | `new-session` + attach (unchanged) |
+#### Fixed
 
-Also wired at launch time (both modes):
-
-- `@agent_state=idle` set on the target pane so the picker sees the pane immediately.
-- `@agent_prompt_file` points at the transported system-prompt file so picker previews + handoff can reuse it.
-- `XTMUX_AGENT_BEAD` / `XTMUX_AGENT_TASK` / `XTMUX_AGENT_PROMPT_FILE` / `XTMUX_AGENT_PARENT_SESSION` exported into pi's environment so `scripts/agent-state.sh` can pick them up on first turn.
-- `agent.role.launched` event emitted via `tmux-session-picker log emit` (non-fatal if picker missing).
-
-Migration notes: scripts using `xt pi --role --no-attach` from **inside** tmux must add `--new-session`. Scripts using `--no-attach` from outside tmux, or `xt pi --role` from outside tmux, are unaffected.
-
-### `xt pi --role` — switch-client attach inside `$TMUX` (xtmux-1lb.5)
-
-`launchRoleTmuxSession` now uses `tmux switch-client` when the caller is inside an existing tmux client (was `tmux attach-session`, which refused with "sessions should be nested with care, unset TMUX to force"). Outside tmux, `attach-session` is retained. Extracted as a pure `chooseAttachCommand(sessionName, insideTmux)` helper. `--no-attach` path unchanged.
-
-### `xt pi --help` — document `--` passthrough (xtmux-1lb.2)
-
-`xt pi --help` now surfaces the `--` passthrough contract (forward arbitrary flags to the pi runtime) with two concrete examples.
-
-### Global Skills Migration (Epic xtrm-bq7yd)
-
-**Batches A–F shipped; Batch H docs sweep complete.**
-
-Skills have migrated from per-repo materialization to a global source of truth at `~/.xtrm/skills/`. This eliminates N-copy drift across a fleet of N repos and centralizes skill updates.
-
-#### Operator Workflow
-
-```bash
-# One-time global bootstrap
-xt bootstrap
-
-# Per-repo migration
-cd <repo>
-xt migrate skills --dry-run   # Preview
-xt migrate skills --apply     # Execute
-```
-
-#### What Changed
-
-- **Global SSOT**: `~/.xtrm/skills/{default,optional,user,active}/` — baseline skills, optional packs, user-authored packs, composed runtime view
-- **Project residual**: `.xtrm/skills/{user,active,state.json}/` — only user packs, service-skills output, and composed active view
-- **Runtime pointers**: `~/.claude/skills → ~/.xtrm/skills/active` (absolute symlink), `.pi/settings.json.skills` array points to global active
-- **CLI scope flip**: `xt skills list/enable/disable` default to `--global`; `xt skills create-pack` defaults to `--local`
-- **Migration tool**: `xt migrate skills` performs SHA-256 verification, tarball backup, idempotent cleanup, and audit logging to `~/.xtrm/logs/skills-migration.jsonl`
-
-#### Batches
-
-- **Batch A** (xtrm-bq7yd.1): Global scaffold primitives (skills-layout, materializer, runtime-views split)
-- **Batch B** (xtrm-bq7yd.2): `xt bootstrap` command + lazy self-heal wiring in install/init/update
-- **Batch C** (xtrm-bq7yd.3): Retire per-repo default/optional scaffold under `XTRM_GLOBAL_SKILLS=1`
-- **Batch D** (xtrm-bq7yd.4): Runtime pointers global (`~/.claude/skills`, `~/.pi/agent/skills`)
-- **Batch E** (xtrm-bq7yd.5): Migration skill (`xt migrate skills|hooks|all`)
-- **Batch F** (xtrm-bq7yd.6): `xt skills` scope flip (list/enable/disable default to `--global`)
-- **Batch H** (xtrm-bq7yd.8): Docs sweep (this changelog entry)
-
-#### Documentation
-
-- [docs/plans/global-skills-migration.md](docs/plans/global-skills-migration.md) — Canonical migration architecture and operator workflow
-- [docs/skills.md](docs/skills.md) — Updated skills catalog with global + project model
-- [docs/skills-tier-architecture.md](docs/skills-tier-architecture.md) — Updated tier architecture reference
-- [docs/project-skills.md](docs/project-skills.md) — Reframed as residual per-repo state
-- [docs/xtrm-directory.md](docs/xtrm-directory.md) — Updated with global scope (`~/.xtrm/`) alongside project scope
-
-#### Feature Flag Lifecycle
-
-| Version | Default | Behavior |
-|---------|---------|----------|
-| v-next-1 (preview) | OFF | Per-repo scaffold unchanged; `XTRM_GLOBAL_SKILLS=1` opts in |
-| v-next-2 (default) | ON | Global bootstrap runs; per-repo scaffold skipped with migration nudge |
-| v-next-3 (enforced) | ON (locked) | Per-repo scaffold code removed; global-only model |
-
-### Changed
-- xtrm-ui now owns XTRM-named themes and one native/external tool renderer; retired footer, external compaction, and box-chrome preferences/commands, with legacy Pi theme migration. Pi launch preflight materializes the four owned theme files before settings are resolved, preventing startup fallback to dark.
-
-- **Add `## Code restraint (when implementing directly)` to `agents-top.md` and `claude-top.md`.** Companion to specialists PR #173 (unitAI-pzmwf) which introduced a unified code-restraint discipline at the mandatory-rule level and in the orchestrator skill. This layer is for when the agent implements directly without delegating to a specialist. Compact 3-bullet section fits the "managed block" style the file's own header enforces (`This is a compact managed block. Use CLI --help and skills for details; do not paste full manuals here.`): the ladder in one line (YAGNI → reuse → stdlib → native → one line → minimum), the "never simplify away" boundary (input validation at trust boundaries, error handling that prevents data loss, security, accessibility, explicitly requested behavior, understanding the problem), and the deliberate-shortcut marker `// SIMPLIFIED: <ceiling>. upgrade when <trigger>.` The full ladder + rules + tag vocabulary specifics live in the specialists mandatory rule and are not repeated here (reuse over rewrite — the same discipline being taught). Identical text in both files so all downstream propagation (~30 consumer repos via existing `xt update` flow) picks up the same rule regardless of runtime. Zero external plugin brand references in shipped text.
+- **`xtprompt` import path corrected + enrollment shim restored (PR #367).** v0.9.3 rewrite of `@mariozechner/*` → `@earendil-works/*` (PR #358) missed the `xtprompt` extension's fallback filesystem path and enrollment shim; corrected so `xtprompt` loads cleanly under `pi 0.80.3+` and enrollment surfaces in the picker again.
 
 ## [pi-extensions v0.9.3] — 2026-07-05
 
