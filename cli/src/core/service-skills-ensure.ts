@@ -35,6 +35,17 @@ export interface ServiceSkillsEnsureResult {
   readonly notes: string[];
 }
 
+async function syncPackMetadata(packPath: string, metadata: Record<string, unknown>): Promise<void> {
+  const entries = await fs.readdir(packPath, { withFileTypes: true });
+  const skills: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (await fs.pathExists(path.join(packPath, entry.name, 'SKILL.md'))) skills.push(entry.name);
+  }
+  metadata.skills = skills.sort((left, right) => left.localeCompare(right));
+  await fs.writeJson(path.join(packPath, 'PACK.json'), metadata, { spaces: 2 });
+}
+
 async function packsWithRegistry(projectRoot: string): Promise<string[]> {
   const packRoots = [path.join(projectRoot, PACKS_REL), path.join(projectRoot, FLAT_PACKS_REL)];
   const packs = new Set<string>();
@@ -89,6 +100,11 @@ export async function ensureServiceSkills(
   const repoName = path.basename(projectRoot);
   const targetPacks = packs.length > 0 ? packs : [''];
   for (const pack of targetPacks) {
+    const packPath = pack ? path.join(projectRoot, PACKS_REL, pack) : '';
+    const packJsonPath = packPath ? path.join(packPath, 'PACK.json') : '';
+    const originalPackMetadata = packJsonPath && await fs.pathExists(packJsonPath)
+      ? await fs.readJson(packJsonPath).catch(() => null) as Record<string, unknown> | null
+      : null;
     // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
     const run = spawnSync('python3', [migrator, repoName], {
       cwd: projectRoot,
@@ -105,6 +121,10 @@ export async function ensureServiceSkills(
     if (run.status === 2) {
       notes.push(`service-skills: pack '${pack}' migration refused — ${(run.stderr ?? '').trim()}`);
       continue;
+    }
+    if (run.status === 0 && packPath && originalPackMetadata && !Array.isArray(originalPackMetadata)) {
+      await syncPackMetadata(packPath, originalPackMetadata);
+      notes.push(`service-skills: synced PACK.json for '${pack}'.`);
     }
     const lines = output.split('\n');
     if (lines.some(line => line.startsWith('migrated:'))) {
