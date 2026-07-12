@@ -18,7 +18,7 @@ import layout_migrator as lm  # noqa: E402
 
 def _flat_pack(root: Path, pack_name: str, services: dict[str, dict]) -> Path:
     """services: {sid: {"body": str, "container": str|None}} -> flat-layout pack on disk."""
-    pack = root / ".xtrm" / "skills" / "user" / "packs" / pack_name
+    pack = root / ".xtrm" / "skills" / pack_name
     reg: dict = {"version": "1.0", "services": {}}
     for sid, spec in services.items():
         d = pack / sid
@@ -38,7 +38,7 @@ class TestRewriteClaudeRefs(unittest.TestCase):
     def test_rewrites_self_container_and_cross_refs(self):
         with TemporaryDirectory() as d:
             root = Path(d)
-            base = ".xtrm/skills/user/packs/market-data/service-skills/services"
+            base = ".xtrm/skills/market-data/service-skills/services"
             pack = _flat_pack(root, "market-data", {
                 "ingesting-ohlcv": {
                     "container": "mmd-data-feed",

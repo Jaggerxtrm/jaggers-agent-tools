@@ -1,6 +1,13 @@
 import fs from 'fs-extra';
 import { z } from 'zod';
-import { SKILLS_STATE_SCHEMA_VERSION, type SkillsRuntime, resolveDefaultTierRoot, resolveOptionalTierRoot, resolveStateFilePath, resolveUserPacksRoot } from './skills-layout.js';
+import {
+  SKILLS_STATE_SCHEMA_VERSION,
+  type SkillsRuntime,
+  resolveDefaultTierRoot,
+  resolveOptionalTierRoot,
+  resolveStateFilePath,
+  resolveUserPacksRoot,
+} from './skills-layout.js';
 
 const runtimeEnabledPacksSchema = z.object({
   claude: z.array(z.string().min(1)).default([]),
@@ -34,7 +41,7 @@ const managedLinksSchema = z.object({
   pi: managedLinksMapSchema.default({}),
 });
 const skillsStateSchema = z.object({
-  schemaVersion: z.union([z.literal('1'), z.literal(SKILLS_STATE_SCHEMA_VERSION)]),
+  schemaVersion: z.union([z.literal('1'), z.literal('2')]),
   enabledPacks: runtimeEnabledPacksSchema,
   managedLinks: managedLinksSchema.default({ claude: {}, pi: {} }),
   installedVersion: z.string().min(1).optional(),

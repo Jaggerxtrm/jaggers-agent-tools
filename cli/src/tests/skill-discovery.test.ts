@@ -3,117 +3,54 @@ import os from 'node:os';
 import path from 'node:path';
 import { rmSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  detectDirectChildSkill,
-  discoverDefaultSkills,
-  discoverTierPacks,
-  validateSkillsInvariants,
-} from '../core/skill-discovery.js';
+import { discoverRepoPacks, discoverTierPacks, validateSkillsInvariants } from '../core/skill-discovery.js';
 
 const tempDirs: string[] = [];
+afterEach(() => { for (const tempDir of tempDirs.splice(0)) rmSync(tempDir, { recursive: true, force: true }); });
 
-afterEach(() => {
-  for (const tempDir of tempDirs.splice(0)) {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-async function createTempSkillsRoot(): Promise<string> {
+async function createRoot(): Promise<string> {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-skill-discovery-test-'));
   tempDirs.push(tempDir);
   return path.join(tempDir, '.xtrm', 'skills');
 }
 
-async function createSkill(root: string, skillName: string): Promise<void> {
-  const skillDir = path.join(root, skillName);
-  await fs.ensureDir(skillDir);
-  await fs.writeFile(path.join(skillDir, 'SKILL.md'), `# ${skillName}\n`, 'utf8');
+async function writeSkill(dir: string, name?: string): Promise<void> {
+  await fs.ensureDir(dir);
+  await fs.writeFile(path.join(dir, 'SKILL.md'), name ? `---\nname: ${name}\n---\n# skill\n` : '# skill\n');
 }
 
-describe('skill-discovery', () => {
-  it('treats only direct children containing SKILL.md as skills', async () => {
-    const skillsRoot = await createTempSkillsRoot();
-    const defaultRoot = path.join(skillsRoot, 'default');
+describe('skill-discovery v2', () => {
+  it('discovers root and direct-child skills from flat packs', async () => {
+    const root = await createRoot();
+    await writeSkill(path.join(root, 'pack-one'), 'renamed-pack');
+    await writeSkill(path.join(root, 'pack-one', 'child'));
+    await writeSkill(path.join(root, 'default', 'reserved'));
+    await fs.writeJson(path.join(root, 'pack-one', 'PACK.json'), { ignored: true });
 
-    await createSkill(defaultRoot, 'valid-skill');
-    await fs.ensureDir(path.join(defaultRoot, 'missing-skill-file'));
-    await fs.ensureDir(path.join(defaultRoot, 'nested-skill', 'inner'));
-    await fs.writeFile(path.join(defaultRoot, 'nested-skill', 'inner', 'SKILL.md'), '# not-direct\n', 'utf8');
-
-    const skills = await discoverDefaultSkills(skillsRoot);
-
-    expect(skills.map(skill => skill.name)).toEqual(['valid-skill']);
-  });
-
-  it('ignores directories that contain both SKILL.md and PACK.json', async () => {
-    const skillsRoot = await createTempSkillsRoot();
-    const defaultRoot = path.join(skillsRoot, 'default');
-    const conflictedDir = path.join(defaultRoot, 'conflicted');
-
-    await fs.ensureDir(conflictedDir);
-    await fs.writeFile(path.join(conflictedDir, 'SKILL.md'), '# conflicted\n', 'utf8');
-    await fs.writeJson(path.join(conflictedDir, 'PACK.json'), { name: 'conflicted' });
-
-    expect(await detectDirectChildSkill(conflictedDir)).toBe(false);
-    expect(await discoverDefaultSkills(skillsRoot)).toEqual([]);
-  });
-
-  it('discovers pack skills from optional and validates metadata mismatch', async () => {
-    const skillsRoot = await createTempSkillsRoot();
-    const packRoot = path.join(skillsRoot, 'optional', 'service-pack');
-
-    await fs.ensureDir(packRoot);
-    await fs.writeJson(path.join(packRoot, 'PACK.json'), {
-      schemaVersion: '1',
-      name: 'service-pack',
-      version: '1.0.0',
-      description: 'Service tools',
-      skills: ['listed-only'],
-    });
-    await createSkill(packRoot, 'filesystem-only');
-
-    const packs = await discoverTierPacks(skillsRoot, 'optional');
-
-    expect(packs).toHaveLength(1);
-    expect(packs[0]?.skills.map(skill => skill.name)).toEqual(['filesystem-only']);
-    expect(packs[0]?.metadataMismatch).toEqual({
-      metadataOnlySkills: ['listed-only'],
-      filesystemOnlySkills: ['filesystem-only'],
-    });
-  });
-
-  it('preserves valid frontmatter runtime names', async () => {
-    const skillsRoot = await createTempSkillsRoot();
-    const skillDir = path.join(skillsRoot, 'default', 'filesystem-name');
-
-    await fs.ensureDir(skillDir);
-    await fs.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: runtime-name\n---\n', 'utf8');
-
-    await expect(discoverDefaultSkills(skillsRoot)).resolves.toEqual([
-      { name: 'filesystem-name', runtimeName: 'runtime-name', path: skillDir },
+    const packs = await discoverRepoPacks(root);
+    expect(packs.map(pack => pack.name)).toEqual(['pack-one']);
+    expect(packs[0]?.skills.map(skill => [skill.name, skill.runtimeName])).toEqual([
+      ['pack-one', 'renamed-pack'],
+      ['child', 'child'],
     ]);
   });
 
-  it('rejects unsafe frontmatter runtime names', async () => {
-    const skillsRoot = await createTempSkillsRoot();
-    const defaultRoot = path.join(skillsRoot, 'default');
-    const skillDir = path.join(defaultRoot, 'safe-directory');
+  it('uses v2 pack over v1 shim and discovers legacy-only packs', async () => {
+    const root = await createRoot();
+    await writeSkill(path.join(root, 'same', 'v2'));
+    await writeSkill(path.join(root, 'user', 'packs', 'same', 'v1'));
+    await writeSkill(path.join(root, 'user', 'packs', 'legacy-only', 'skill'));
 
-    await fs.ensureDir(skillDir);
-    await fs.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: ../outside\n---\n', 'utf8');
-
-    await expect(discoverDefaultSkills(skillsRoot)).rejects.toThrow(/Unsafe runtime skill name/);
+    const packs = await discoverTierPacks(root, 'user');
+    expect(packs.map(pack => pack.name)).toEqual(['legacy-only', 'same']);
+    expect(packs.find(pack => pack.name === 'same')?.skills.map(skill => skill.name)).toEqual(['v2']);
   });
 
-  it('reports invariant violations for nested runtime roots', async () => {
-    const skillsRoot = await createTempSkillsRoot();
-    const defaultRoot = path.join(skillsRoot, 'default');
-
-    await createSkill(defaultRoot, 'bad-skill');
-    await fs.ensureDir(path.join(defaultRoot, 'bad-skill', '.claude'));
-
-    const violations = await validateSkillsInvariants(skillsRoot);
-
-    expect(violations.some(violation => violation.code === 'NESTED_RUNTIME_ROOT')).toBe(true);
+  it('filters reserved names', async () => {
+    const root = await createRoot();
+    for (const name of ['default', 'optional', 'user', 'active', 'local-legacy']) await writeSkill(path.join(root, name));
+    await fs.writeFile(path.join(root, 'state.json'), '{}');
+    expect(await discoverRepoPacks(root)).toEqual([]);
+    expect(await validateSkillsInvariants(root)).toEqual([]);
   });
 });

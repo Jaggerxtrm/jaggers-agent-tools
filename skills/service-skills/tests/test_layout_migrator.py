@@ -11,8 +11,8 @@ import layout_migrator as lm  # noqa: E402
 
 
 def _flat_pack(root: Path, pack_name: str, services: dict[str, str]) -> Path:
-    """Build a flat-layout pack: packs/<pack>/<svc>/SKILL.md + pack-root registry."""
-    pack = root / ".xtrm" / "skills" / "user" / "packs" / pack_name
+    """Build a flat-layout pack: skills/<pack>/<svc>/SKILL.md + pack-root registry."""
+    pack = root / ".xtrm" / "skills" / pack_name
     reg = {"version": "1.0", "services": {}}
     for sid, body in services.items():
         d = pack / sid
@@ -54,7 +54,7 @@ class TestMigratePack(unittest.TestCase):
             self.assertFalse((pack / "service-registry.json").exists())
             new_reg = json.loads((pack / "service-skills" / "service-registry.json").read_text())
             sp = new_reg["services"]["auth-service"]["skill_path"]
-            self.assertEqual(sp, ".xtrm/skills/user/packs/market-data/service-skills/services/auth-service/SKILL.md")
+            self.assertEqual(sp, ".xtrm/skills/market-data/service-skills/services/auth-service/SKILL.md")
             self.assertNotIn(".claude/skills", sp)
             # umbrella generated
             umb = (pack / "service-skills" / "SKILL.md").read_text()
@@ -105,8 +105,8 @@ class TestDemoteShadowingRegistries(unittest.TestCase):
         with TemporaryDirectory() as d:
             root = Path(d)
             # root registry as a stale symlink -> should be removed
-            (root / ".xtrm/skills/user/packs/p/service-skills").mkdir(parents=True)
-            target = root / ".xtrm/skills/user/packs/p/service-skills/service-registry.json"
+            (root / ".xtrm/skills/p/service-skills").mkdir(parents=True)
+            target = root / ".xtrm/skills/p/service-skills/service-registry.json"
             target.write_text("{}", encoding="utf-8")
             link = root / "service-registry.json"
             link.symlink_to(target)

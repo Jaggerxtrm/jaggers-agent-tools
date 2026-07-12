@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs-extra';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { execSync } from 'child_process';
+import { migrateSkillsLayout } from '../commands/migrate.js';
 
 const CLI_PATH = path.join(__dirname, '../../dist/index.cjs');
 
@@ -99,6 +100,115 @@ describe('xt migrate command', () => {
     expect(result.stderr).toContain('Invalid target');
   });
 
+  it('preserves pack metadata when legacy pack rename fails', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const source = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'legacy-pack');
+    const packMetadata = { schemaVersion: '1', name: 'legacy-pack', version: '1.0.0' };
+    await fs.ensureDir(source);
+    await fs.writeJson(path.join(source, 'PACK.json'), packMetadata);
+
+    const renameSpy = vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('rename failed'));
+    try {
+      await expect(migrateSkillsLayout(repoDir, { dryRun: false })).rejects.toThrow('rename failed');
+      expect(await fs.readJson(path.join(source, 'PACK.json'))).toEqual(packMetadata);
+      expect(await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'legacy-pack'))).toBe(false);
+    } finally {
+      renameSpy.mockRestore();
+    }
+
+    await migrateSkillsLayout(repoDir, { dryRun: false });
+    const target = path.join(repoDir, '.xtrm', 'skills', 'legacy-pack');
+    expect(await fs.pathExists(path.join(target, 'PACK.json'))).toBe(false);
+    expect(await fs.pathExists(path.join(source, 'PACK.json'))).toBe(false);
+  });
+
+  it('requires --yes before applying destructive skills-layout migration', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const source = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'plain-pack');
+    await fs.ensureDir(source);
+    await fs.writeFile(path.join(source, 'SKILL.md'), '# plain\n');
+
+    const result = runCli(['migrate', 'skills-layout', '--apply', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('--apply requires --yes');
+    expect(await fs.pathExists(source)).toBe(true);
+    expect(await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'plain-pack'))).toBe(false);
+  });
+
+  it('flattens packs, removes stale PACK.json and active view with --yes', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
+    const plainPack = path.join(skillsRoot, 'user', 'packs', 'plain-pack');
+    const servicePack = path.join(skillsRoot, 'user', 'packs', 'service-pack');
+    const localLegacy = path.join(skillsRoot, 'user', 'packs', 'local-legacy');
+    await fs.ensureDir(path.join(plainPack, 'plain-skill'));
+    await fs.writeFile(path.join(plainPack, 'plain-skill', 'SKILL.md'), '# plain\n');
+    await fs.writeJson(path.join(plainPack, 'PACK.json'), { name: 'plain-pack' });
+    await fs.ensureDir(path.join(servicePack, 'service-skills', 'services', 'svc'));
+    await fs.writeFile(path.join(servicePack, 'service-skills', 'services', 'svc', 'SKILL.md'), '# svc\n');
+    await fs.writeFile(path.join(servicePack, 'service-skills', 'service-registry.json'), '{"services": {}}\n');
+    await fs.ensureDir(path.join(localLegacy, 'partial', 'refs'));
+    await fs.writeFile(path.join(localLegacy, 'partial', 'refs', 'note.md'), 'keep\n');
+    await fs.ensureDir(path.join(skillsRoot, 'active'));
+
+    const result = runCli(['migrate', 'skills-layout', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    expect(await fs.pathExists(path.join(skillsRoot, 'plain-pack', 'plain-skill', 'SKILL.md'))).toBe(true);
+    expect(await fs.pathExists(path.join(skillsRoot, 'service-pack', 'service-skills', 'service-registry.json'))).toBe(true);
+    expect(await fs.pathExists(path.join(skillsRoot, 'local-legacy', 'partial', 'refs', 'note.md'))).toBe(true);
+    expect(await fs.pathExists(path.join(skillsRoot, 'plain-pack', 'PACK.json'))).toBe(false);
+    expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
+    expect(await fs.pathExists(path.join(skillsRoot, 'user'))).toBe(false);
+  });
+
+  it('removes dangling .claude/skills and .pi/skills symlinks pointing at retired active/', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
+    const activeRoot = path.join(skillsRoot, 'active');
+    await fs.ensureDir(activeRoot);
+    await fs.ensureDir(path.join(repoDir, '.claude'));
+    await fs.ensureDir(path.join(repoDir, '.pi'));
+    await fs.symlink('../.xtrm/skills/active', path.join(repoDir, '.claude', 'skills'));
+    await fs.symlink('../.xtrm/skills/active', path.join(repoDir, '.pi', 'skills'));
+
+    await migrateSkillsLayout(repoDir, { dryRun: false, apply: true });
+
+    expect(await fs.pathExists(activeRoot)).toBe(false);
+    expect(await fs.lstat(path.join(repoDir, '.claude', 'skills')).catch(() => null)).toBeNull();
+    expect(await fs.lstat(path.join(repoDir, '.pi', 'skills')).catch(() => null)).toBeNull();
+  });
+
+  it('preserves user-owned .claude/skills symlink pointing elsewhere during migration', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
+    await fs.ensureDir(path.join(skillsRoot, 'active'));
+    await fs.ensureDir(path.join(repoDir, '.claude'));
+    const userTarget = path.join(tmpHome, 'user-skills');
+    await fs.ensureDir(userTarget);
+    await fs.symlink(userTarget, path.join(repoDir, '.claude', 'skills'));
+
+    await migrateSkillsLayout(repoDir, { dryRun: false, apply: true });
+
+    const stat = await fs.lstat(path.join(repoDir, '.claude', 'skills'));
+    expect(stat.isSymbolicLink()).toBe(true);
+  });
+
+  it('preflights all targets before moving any legacy pack', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
+    const first = path.join(skillsRoot, 'user', 'packs', 'first');
+    const second = path.join(skillsRoot, 'user', 'packs', 'second');
+    await fs.ensureDir(first);
+    await fs.ensureDir(second);
+    await fs.ensureDir(path.join(skillsRoot, 'second'));
+
+    await expect(migrateSkillsLayout(repoDir, { dryRun: false })).rejects.toThrow('target already exists');
+    expect(await fs.pathExists(first)).toBe(true);
+    expect(await fs.pathExists(second)).toBe(true);
+  });
+
   it('dry-run mode prints planned actions without touching filesystem', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     await createGlobalSkillsRoot(tmpHome);
@@ -191,7 +301,7 @@ describe('xt migrate command', () => {
     expect(result.stdout).toContain('diverged');
     expect(result.stdout).toContain('preserving as override');
 
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
     const legacyFileExists = await fs.pathExists(path.join(legacyRoot, 'diverged-skill.md'));
     expect(legacyFileExists).toBe(true);
   });
@@ -211,13 +321,13 @@ describe('xt migrate command', () => {
     const result = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
 
     expect(result.exitCode).toBe(0);
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
     expect(await fs.pathExists(path.join(legacyRoot, 'nested-skill', 'SKILL.md'))).toBe(true);
     expect(await fs.pathExists(path.join(legacyRoot, 'nested-skill', 'script.py'))).toBe(true);
     expect(await fs.readFile(path.join(legacyRoot, 'nested-skill', 'SKILL.md'), 'utf8')).toBe('repo skill');
   });
 
-  it('local-legacy PACK.json has name=local-legacy and lists only dirs with SKILL.md', async () => {
+  it('local-legacy has no PACK.json and preserves partial trees', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     const globalSkillsRoot = await createGlobalSkillsRoot(tmpHome);
 
@@ -233,20 +343,11 @@ describe('xt migrate command', () => {
     await fs.ensureDir(path.join(globalSkillsRoot, 'default', 'partial-tree', 'refs'));
     await fs.writeFile(path.join(globalSkillsRoot, 'default', 'partial-tree', 'refs', 'note.md'), 'global partial');
 
-    // Pack marker under optional (PACK.json only) — should be skipped, never overwrite our authoritative PACK.json
-    await fs.ensureDir(path.join(repoDir, '.xtrm', 'skills', 'optional', 'xt-optional'));
-    await fs.writeJson(path.join(repoDir, '.xtrm', 'skills', 'optional', 'xt-optional', 'PACK.json'), { schemaVersion: '1', name: 'xt-optional', version: '1.0.0', skills: ['a'] });
-    await fs.ensureDir(path.join(globalSkillsRoot, 'optional', 'xt-optional'));
-    await fs.writeJson(path.join(globalSkillsRoot, 'optional', 'xt-optional', 'PACK.json'), { schemaVersion: '1', name: 'xt-optional', version: '1.0.0', skills: ['b'] });
-
     const result = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
     expect(result.exitCode).toBe(0);
 
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
-    const legacyPack = await fs.readJson(path.join(legacyRoot, 'PACK.json'));
-    expect(legacyPack.name).toBe('local-legacy');
-    expect(legacyPack.schemaVersion).toBe('1');
-    expect(legacyPack.skills).toEqual(['real-skill']);
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
+    expect(await fs.pathExists(path.join(legacyRoot, 'PACK.json'))).toBe(false);
     expect(await fs.pathExists(path.join(legacyRoot, 'partial-tree', 'refs', 'note.md'))).toBe(true);
     expect(await fs.pathExists(path.join(legacyRoot, 'partial-tree'))).toBe(true);
   });
@@ -267,7 +368,7 @@ describe('xt migrate command', () => {
     expect(result.stdout).toContain('diverged');
     expect(result.stdout).toContain('preserving as override');
 
-    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'user', 'packs', 'local-legacy');
+    const legacyRoot = path.join(repoDir, '.xtrm', 'skills', 'local-legacy');
     const legacyFileExists = await fs.pathExists(path.join(legacyRoot, 'optional-diverged.md'));
     expect(legacyFileExists).toBe(true);
   });

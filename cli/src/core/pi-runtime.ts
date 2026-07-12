@@ -17,7 +17,7 @@ import kleur from 'kleur';
 import path from 'path';
 import { homedir } from 'node:os';
 import { t, sym } from '../utils/theme.js';
-import { resolveSkillsRoot, resolveUserPacksRoot } from './skills-layout.js';
+import { resolveSkillsRoot } from './skills-layout.js';
 import { validateSkillsInvariants } from './skill-discovery.js';
 
 import { hasProjectScopedSkillsContent } from './project-skills-content.js';

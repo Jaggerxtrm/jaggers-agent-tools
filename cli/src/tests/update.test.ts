@@ -17,6 +17,8 @@ const {
   reconcileGlobalClaudeHooksMock,
   reconcileGlobalPiHooksMock,
   logBootstrapTriggerMock,
+  ensureUserAgentsSkillsSymlinkMock,
+  ensureAgentsSkillsSymlinkMock,
 } = vi.hoisted(() => ({
   checkDriftMock: vi.fn(),
   runInstallMock: vi.fn(),
@@ -31,6 +33,8 @@ const {
   reconcileGlobalClaudeHooksMock: vi.fn(),
   reconcileGlobalPiHooksMock: vi.fn(),
   logBootstrapTriggerMock: vi.fn(),
+  ensureUserAgentsSkillsSymlinkMock: vi.fn(),
+  ensureAgentsSkillsSymlinkMock: vi.fn(),
 }));
 
 vi.mock('../core/drift.js', () => ({
@@ -86,15 +90,25 @@ vi.mock('../core/global-hooks-flag.js', () => ({
   shouldUseGlobalHooks: () => process.env.XTRM_GLOBAL_HOOKS === '1',
 }));
 
+vi.mock('../core/skills-scaffold.js', () => ({
+  ensureUserAgentsSkillsSymlink: ensureUserAgentsSkillsSymlinkMock,
+  ensureAgentsSkillsSymlink: ensureAgentsSkillsSymlinkMock,
+}));
+
 import { createUpdateCommand } from '../commands/update.js';
 
 let tmpDir = '';
 let previousCwd = '';
+let previousHome = '';
 
 beforeEach(() => {
   previousCwd = process.cwd();
+  previousHome = process.env.HOME ?? '';
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-update-test-'));
   process.chdir(tmpDir);
+  const happyHome = path.join(tmpDir, 'happy-home');
+  fs.ensureDirSync(path.join(happyHome, '.xtrm', 'skills', 'default'));
+  process.env.HOME = happyHome;
   checkDriftMock.mockReset();
   runInstallMock.mockReset();
   assureXtManagedPiPackagesMock.mockReset();
@@ -130,10 +144,19 @@ beforeEach(() => {
   reconcileGlobalPiHooksMock.mockResolvedValue({ settingsPath: '', changed: false, hooksEntries: 0 });
   logBootstrapTriggerMock.mockReset();
   logBootstrapTriggerMock.mockResolvedValue(undefined);
+  ensureUserAgentsSkillsSymlinkMock.mockReset();
+  ensureUserAgentsSkillsSymlinkMock.mockImplementation(async () => {
+    const target = path.join(process.env.HOME || os.homedir(), '.xtrm', 'skills', 'default');
+    if (!await fs.pathExists(target)) throw new Error(`Global runtime skills root missing: ${target}`);
+  });
+  ensureAgentsSkillsSymlinkMock.mockReset();
+  ensureAgentsSkillsSymlinkMock.mockResolvedValue({ claude: 0, pi: 0 });
 });
 
 afterEach(() => {
   process.chdir(previousCwd);
+  if (previousHome) process.env.HOME = previousHome;
+  else delete process.env.HOME;
   fs.removeSync(tmpDir);
   vi.restoreAllMocks();
 });

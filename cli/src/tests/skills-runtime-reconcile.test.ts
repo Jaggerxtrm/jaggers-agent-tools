@@ -11,7 +11,7 @@ let projectRoot: string;
 let globalRoot: string;
 
 function pack(name: string, packPath: string, skillName: string): DiscoveredPack {
-  return { name, path: packPath, tier: 'user', skills: [{ name: skillName, runtimeName: skillName, path: path.join(packPath, skillName) }], metadataMismatch: { metadataOnlySkills: [], filesystemOnlySkills: [] } };
+  return { name, path: packPath, tier: 'user', skills: [{ name: skillName, runtimeName: skillName, path: path.join(packPath, skillName) }] };
 }
 
 beforeEach(async () => {
@@ -24,7 +24,7 @@ beforeEach(async () => {
 afterEach(async () => fs.remove(root));
 
 async function run(runtime: 'claude' | 'pi' = 'claude', state: SkillsState = { ...createDefaultSkillsState(), enabledPacks: { claude: runtime === 'claude' ? ['local'] : [], pi: runtime === 'pi' ? ['local'] : [] } }) {
-  const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'user', 'packs', 'local');
+  const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'local');
   await fs.ensureDir(path.join(localPackPath, 'local-skill'));
   await fs.writeFile(path.join(localPackPath, 'PACK.json'), '{}');
   await fs.writeFile(path.join(localPackPath, 'local-skill', 'SKILL.md'), '---\nname: local-skill\n---\n');
@@ -40,9 +40,9 @@ describe('reconcileRuntimeLinks', () => {
     const link = path.join(projectRoot, '.claude', 'skills', 'local-skill');
     expect((await fs.lstat(path.dirname(link))).isDirectory()).toBe(true);
     expect((await fs.lstat(link)).isSymbolicLink()).toBe(true);
-    expect(await fs.readlink(link)).toBe(path.join(projectRoot, '.xtrm', 'skills', 'user', 'packs', 'local', 'local-skill'));
+    expect(await fs.readlink(link)).toBe(path.join(projectRoot, '.xtrm', 'skills', 'local', 'local-skill'));
     expect((await readSkillsState(path.join(projectRoot, '.xtrm', 'skills'))).managedLinks.claude).toEqual({
-      'local-skill': '.xtrm/skills/user/packs/local/local-skill',
+      'local-skill': '.xtrm/skills/local/local-skill',
     });
   });
 
@@ -53,7 +53,7 @@ describe('reconcileRuntimeLinks', () => {
     expect((await fs.lstat(path.dirname(link))).isDirectory()).toBe(true);
     expect((await fs.lstat(link)).isSymbolicLink()).toBe(true);
     expect(result.state.managedLinks.pi).toEqual({
-      'local-skill': '.xtrm/skills/user/packs/local/local-skill',
+      'local-skill': '.xtrm/skills/local/local-skill',
     });
     expect(await fs.pathExists(path.join(projectRoot, '.pi', 'settings.json'))).toBe(false);
   });
@@ -63,7 +63,7 @@ describe('reconcileRuntimeLinks', () => {
     const result = await run('claude', legacyState);
 
     expect(result.state.schemaVersion).toBe('2');
-    expect(result.state.managedLinks.claude['local-skill']).toBe('.xtrm/skills/user/packs/local/local-skill');
+    expect(result.state.managedLinks.claude['local-skill']).toBe('.xtrm/skills/local/local-skill');
   });
 
   it('reaps only manifest-owned links and preserves untracked runtime symlinks', async () => {
@@ -92,7 +92,7 @@ describe('reconcileRuntimeLinks', () => {
   });
 
   it.each(['claude', 'pi'] as const)('rejects unsafe runtime names before mutating %s runtime', async (runtime) => {
-    const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'user', 'packs', 'local');
+    const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'local');
     const state = {
       ...createDefaultSkillsState(),
       enabledPacks: { claude: runtime === 'claude' ? ['local'] : [], pi: runtime === 'pi' ? ['local'] : [] },
@@ -125,7 +125,7 @@ describe('reconcileRuntimeLinks', () => {
   });
 
   it('rejects collision with global default and preserves user links', async () => {
-    const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'user', 'packs', 'local');
+    const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'local');
     const collision = pack('local', localPackPath, 'base');
     await expect(reconcileRuntimeLinks({ projectRoot, state: { ...createDefaultSkillsState(), enabledPacks: { claude: ['local'], pi: [] } }, runtime: 'claude', discoveredPacks: [collision], globalDefaultRoot: path.join(globalRoot, 'default'), globalOptionalRoot: path.join(globalRoot, 'optional') })).rejects.toThrow(/global default/);
     await fs.ensureDir(path.join(projectRoot, '.claude', 'skills'));

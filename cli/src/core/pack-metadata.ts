@@ -19,26 +19,25 @@ export type PackMetadataMismatch = {
 };
 
 function normalizeNames(names: readonly string[]): string[] {
-  return [...new Set(names)].sort((a, b) => a.localeCompare(b));
+  return [...new Set(names)].sort((left, right) => left.localeCompare(right));
 }
 
-export async function readPackMetadata(packRoot: string, tier: Exclude<SkillsTier, 'default'>): Promise<PackMetadata> {
-  const packName = path.basename(packRoot);
+export async function readPackMetadata(
+  packRoot: string,
+  tier: Exclude<SkillsTier, 'default'>,
+): Promise<PackMetadata> {
   const metadataPath = path.join(packRoot, PACK_FILE_NAME);
+  const packName = path.basename(packRoot);
   const metadata = packMetadataSchema.parse(await fs.readJson(metadataPath));
 
   if (metadata.name !== packName) {
     throw new Error(`Invalid pack metadata at ${metadataPath}: name must match directory '${packName}'.`);
   }
-
   if (tier === 'user' && metadata.name.startsWith('default-')) {
     throw new Error(`Invalid user pack metadata at ${metadataPath}: reserved 'default-' prefix.`);
   }
 
-  return {
-    ...metadata,
-    skills: normalizeNames(metadata.skills),
-  };
+  return { ...metadata, skills: normalizeNames(metadata.skills) };
 }
 
 export function diffPackMetadataSkills(
@@ -47,9 +46,8 @@ export function diffPackMetadataSkills(
 ): PackMetadataMismatch {
   const metadataSet = new Set(metadataSkills);
   const filesystemSet = new Set(filesystemSkills);
-
   return {
-    metadataOnlySkills: normalizeNames(metadataSkills.filter(skillName => !filesystemSet.has(skillName))),
-    filesystemOnlySkills: normalizeNames(filesystemSkills.filter(skillName => !metadataSet.has(skillName))),
+    metadataOnlySkills: normalizeNames(metadataSkills.filter(name => !filesystemSet.has(name))),
+    filesystemOnlySkills: normalizeNames(filesystemSkills.filter(name => !metadataSet.has(name))),
   };
 }
