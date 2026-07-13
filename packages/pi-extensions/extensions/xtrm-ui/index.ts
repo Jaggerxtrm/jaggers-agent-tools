@@ -229,7 +229,7 @@ type PatchableToolExecutionComponent = {
 type ExternalToolFrameKind = "serena" | "gitnexus" | "structured" | "process" | "external";
 
 const PATCHED_EXTERNAL_TOOL_FRAME = "__xtrmUiExternalToolFrame";
-const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 17;
+const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 18;
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 
 function stripAnsi(text: string): string {
@@ -302,7 +302,21 @@ function externalToolBadgeColor(kind: ExternalToolFrameKind, text: string): stri
   return `\x1b[38;2;3;8;12m\x1b[48;2;${badgeR};${badgeG};${badgeB}m${text}\x1b[39m\x1b[49m`;
 }
 
+function boldExternalToolAction(action: string): string {
+  return `\x1b[1m${action}\x1b[22m`;
+}
+
 export function highlightExternalToolBadge(kind: ExternalToolFrameKind, line: string): string {
+  const markedHeader = line.match(/^([•›]\s+)(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])(\s+)(\S+)(.*)$/u);
+  if (markedHeader?.[1] && markedHeader[2] && markedHeader[3] && markedHeader[4]) {
+    return `${markedHeader[1]}${externalToolBadgeColor(kind, markedHeader[2])}${markedHeader[3]}${boldExternalToolAction(markedHeader[4])}${markedHeader[5] ?? ""}`;
+  }
+
+  const providerHeader = line.match(/^(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])(\s+)(\S+)(.*)$/u);
+  if (providerHeader?.[1] && providerHeader[2] && providerHeader[3]) {
+    return `${externalToolBadgeColor(kind, providerHeader[1])}${providerHeader[2]}${boldExternalToolAction(providerHeader[3])}${providerHeader[4] ?? ""}`;
+  }
+
   const marked = line.match(/^([•›]\s+)(\S+)/u);
   if (marked?.[1] && marked[2]) {
     return marked[1] + externalToolBadgeColor(kind, marked[2]) + line.slice(marked[1].length + marked[2].length);
@@ -318,6 +332,38 @@ export function collapsedExternalToolLines(contentLines: string[], expanded: boo
     ...contentLines.slice(0, 6),
     `... (${contentLines.length - 6} more lines, ctrl+o to expand)`,
   ];
+}
+
+function externalToolProvider(kind: ExternalToolFrameKind, toolName?: string): string {
+  if (kind === "serena") return "Serena";
+  if (kind === "gitnexus") return "GitNexus";
+  if (kind === "structured") return "structured_return";
+  if (kind === "process") return "process";
+
+  const separator = toolName?.indexOf("_") ?? -1;
+  return separator > 0 ? toolName?.slice(0, separator) ?? "external" : normalizeToolLabel(toolName ?? "external");
+}
+
+function externalToolAction(kind: ExternalToolFrameKind, toolName?: string): string | undefined {
+  if (!toolName || kind === "structured" || kind === "process") return undefined;
+  if (kind === "gitnexus" && toolName.startsWith("gitnexus_")) return toolName.slice("gitnexus_".length);
+  if (kind === "serena") return toolName;
+
+  const separator = toolName.indexOf("_");
+  return separator > 0 ? toolName.slice(separator + 1).replace(/^_+/u, "") : undefined;
+}
+
+function externalToolHeader(
+  kind: ExternalToolFrameKind,
+  toolName: string | undefined,
+  firstLine: string,
+): { provider: string; action?: string } {
+  const bracketHeader = firstLine.match(/^(?:[•›]\s+)?\[([A-Za-z][A-Za-z0-9 _-]{0,31})\](?:\s+(\S+))?/u);
+  const markerHeader = firstLine.match(/^[•›]\s+(\S+)(?:\s+(\S+))?/u);
+  return {
+    provider: bracketHeader?.[1] ?? externalToolProvider(kind, toolName),
+    action: externalToolAction(kind, toolName) ?? bracketHeader?.[2] ?? markerHeader?.[2],
+  };
 }
 
 export function renderExternalToolBackgroundLines(
@@ -339,27 +385,16 @@ export function renderExternalToolBackgroundLines(
   }
 
   const firstLine = displayLines[0] ?? "";
-  const action = kind === "gitnexus" && toolName?.startsWith("gitnexus_")
-    ? toolName.slice("gitnexus_".length)
-    : kind === "serena" ? toolName : undefined;
-  const providerHeader = /^\[[A-Za-z][A-Za-z0-9 _-]{0,31}\]/u.test(firstLine);
+  const hasHeader = /^(?:[•›]\s+)?\[[A-Za-z][A-Za-z0-9 _-]{0,31}\]/u.test(firstLine)
+    || /^[•›]\s+\S+/u.test(firstLine);
+  const header = externalToolHeader(kind, toolName, firstLine);
+  const payloadLines = hasHeader ? displayLines.slice(1) : displayLines;
+  displayLines = [
+    `${TOOL_ROW_MARKER} [${header.provider}]${header.action ? ` ${header.action}` : ""}`,
+    ...payloadLines,
+  ];
 
-  if (providerHeader && action && !firstLine.endsWith(` ${action}`)) {
-    displayLines = [`${firstLine} ${action}`, ...displayLines.slice(1)];
-  } else if (!/^(?:[•›]\s+|\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])/u.test(firstLine)) {
-    const labels: Record<ExternalToolFrameKind, string> = {
-      serena: "Serena",
-      gitnexus: "GitNexus",
-      structured: "structured_return",
-      process: "process",
-      external: "external",
-    };
-    const label = kind === "external" && toolName ? normalizeToolLabel(toolName) : labels[kind];
-    displayLines = [`[${label}]${action ? ` ${action}` : ""}`, ...displayLines];
-  }
-
-  const header = displayLines[0] ?? "";
-  const payloadLines = displayLines.slice(1);
+  const renderedHeader = displayLines[0] ?? "";
   const visiblePayload = expanded ? payloadLines : payloadLines.slice(0, 6);
   const shown = visiblePayload.length;
   const total = payloadLines.length;
@@ -372,10 +407,10 @@ export function renderExternalToolBackgroundLines(
     formatPayloadSize(contentLines.join("\n")),
   ]);
   const renderWidth = Math.max(8, width);
-  const body = [header, ...visiblePayload].map((rawLine) => {
-    const line = truncateToWidth(rawLine, renderWidth);
-    return highlightExternalToolBadge(kind, line);
-  });
+  const body = [
+    highlightExternalToolBadge(kind, truncateToWidth(renderedHeader, renderWidth)),
+    ...visiblePayload.map((rawLine) => truncateToWidth(rawLine, renderWidth)),
+  ];
   return footerMeta
     ? [...body, `\x1b[2m${truncateToWidth(`└─ ${footerMeta}`, renderWidth)}\x1b[22m`]
     : body;
@@ -1275,8 +1310,6 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
   void installExternalToolFramePatch().catch(() => undefined);
 
   let prefs: XtrmUiPrefs = { ...DEFAULT_PREFS };
-  const extensionThemeDir = join(__dirname, "../../themes/xtrm-ui");
-
   const getPrefs = () => prefs;
   const setPrefs = (nextPrefs: XtrmUiPrefs) => {
     prefs = nextPrefs;
@@ -1290,10 +1323,6 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
     applyXtrmChrome(ctx, prefs, getThinkingLevel);
     applyThinkingChrome(ctx);
   };
-
-  pi.on("resources_discover", async () => ({
-    themePaths: [extensionThemeDir],
-  }));
 
   pi.on("session_start", async (_event, ctx) => {
     setPrefs(loadPrefs(ctx.sessionManager.getEntries() as Array<MaybeCustomEntry>));
