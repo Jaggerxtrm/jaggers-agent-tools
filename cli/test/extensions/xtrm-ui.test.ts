@@ -132,22 +132,9 @@ describe("xtrm-ui commands", () => {
     expect(Object.keys(commands).sort()).toEqual(supportedCommands);
   });
 
-  it("discovers only XTRM-named themes", async () => {
+  it("leaves theme ownership to the global Pi runtime sync", () => {
     const { handlers } = loadExtension();
-    const resources = await handlers.resources_discover[0]();
-    const themeDir = resources.themePaths[0];
-    const files = readdirSync(themeDir).filter((file) => file.endsWith(".json")).sort();
-
-    expect(files).toEqual([
-      "xtrm-dark-flattools.json",
-      "xtrm-dark.json",
-      "xtrm-light-flattools.json",
-      "xtrm-light.json",
-    ]);
-    for (const file of files) {
-      const theme = JSON.parse(readFileSync(join(themeDir, file), "utf8"));
-      expect(theme.name).toBe(file.replace(/\.json$/u, ""));
-    }
+    expect(handlers.resources_discover).toBeUndefined();
   });
 
   it("reports only active preferences and rejects subcommands", async () => {
@@ -341,7 +328,7 @@ describe("xtrm-ui external tool rendering", () => {
     );
 
     expect(rendered[0]).toContain("\x1b[48;2;82;210;255m[Serena]");
-    expect(rendered[0]).toContain("\x1b[49m find_symbol");
+    expect(rendered[0]).toContain("\x1b[49m \x1b[1mfind_symbol\x1b[22m");
     expect(rendered.length).toBeGreaterThan(2);
     expect(rendered.join("\n")).toContain('"name_path": "highlightExternalToolBadge"');
   });
@@ -355,7 +342,7 @@ describe("xtrm-ui external tool rendering", () => {
       "mcp_custom_tool",
     );
 
-    expect(rendered[0]).toContain("[mcp custom_tool]");
+    expect(rendered[0]).toContain("› \x1b[38;2;3;8;12m\x1b[48;2;178;190;210m[mcp]\x1b[39m\x1b[49m \x1b[1mcustom_tool\x1b[22m");
   });
 
   it("keeps a colored provider badge and action for raw GitNexus output", () => {
@@ -368,7 +355,28 @@ describe("xtrm-ui external tool rendering", () => {
     );
 
     expect(rendered[0]).toContain("\x1b[48;2;178;154;255m[GitNexus]");
-    expect(rendered[0]).toContain("\x1b[49m query");
+    expect(rendered[0]).toContain("\x1b[49m \x1b[1mquery\x1b[22m");
+  });
+
+  it("keeps the provider header and bold action stable across lifecycle states", () => {
+    const stripAnsi = (value: string) => value.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
+    const states = [
+      ["› [Serena] execute_shell_command", "running"],
+      ["[Serena] execute_shell_command", "success"],
+      ["[Serena] execute_shell_command", "failure"],
+    ] as const;
+
+    for (const [header] of states) {
+      const rendered = renderExternalToolBackgroundLines(
+        [header, "result"],
+        200,
+        "serena",
+        false,
+        "execute_shell_command",
+      );
+      expect(stripAnsi(rendered[0] ?? "")).toBe("› [Serena] execute_shell_command");
+      expect(rendered[0]).toContain("\x1b[1mexecute_shell_command\x1b[22m");
+    }
   });
 
   it("keeps collapsed structured output multiline and bounded", () => {

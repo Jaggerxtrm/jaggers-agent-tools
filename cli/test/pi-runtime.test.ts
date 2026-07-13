@@ -18,7 +18,7 @@ async function makeExtension(baseDir: string, name: string, extraFiles: Record<s
 }
 
 describe('syncManagedPiThemes', () => {
-    it('symlinks every XTRM theme before Pi settings are read', async () => {
+    it('symlinks every XTRM theme and replaces copied assets', async () => {
         const sourceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-theme-source-'));
         const targetDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-theme-target-'));
         const themes = ['xtrm-dark.json', 'xtrm-dark-flattools.json', 'xtrm-light.json', 'xtrm-light-flattools.json'];
@@ -26,10 +26,12 @@ describe('syncManagedPiThemes', () => {
         try {
             await Promise.all(themes.map((name) => fs.writeFile(path.join(sourceDir, name), `{"name":"${name}"}`)));
             await fs.writeFile(path.join(sourceDir, 'ignored.json'), '{}');
+            await Promise.all(themes.map((name) => fs.writeFile(path.join(targetDir, name), `{"name":"legacy-${name}"}`)));
+            await fs.writeFile(path.join(targetDir, 'custom.json'), '{}');
 
             await syncManagedPiThemes(sourceDir, false, undefined, targetDir);
 
-            expect((await fs.readdir(targetDir)).sort()).toEqual(themes.sort());
+            expect((await fs.readdir(targetDir)).sort()).toEqual([...themes, 'custom.json'].sort());
             for (const name of themes) {
                 expect((await fs.lstat(path.join(targetDir, name))).isSymbolicLink()).toBe(true);
                 expect(await fs.readFile(path.join(targetDir, name), 'utf8')).toContain(name);
