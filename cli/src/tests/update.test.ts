@@ -7,6 +7,7 @@ const {
   checkDriftMock,
   runInstallMock,
   assureXtManagedPiPackagesMock,
+  runExternalPiToolPatchMock,
   resolvePackageRootMock,
   ensureBdAutoStagePatchMock,
   runDependencyMaintenanceMock,
@@ -23,6 +24,7 @@ const {
   checkDriftMock: vi.fn(),
   runInstallMock: vi.fn(),
   assureXtManagedPiPackagesMock: vi.fn(),
+  runExternalPiToolPatchMock: vi.fn(),
   resolvePackageRootMock: vi.fn(),
   ensureBdAutoStagePatchMock: vi.fn(),
   runDependencyMaintenanceMock: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock('../core/registry-scaffold.js', () => ({
 
 vi.mock('../core/pi-runtime.js', () => ({
   assureXtManagedPiPackages: assureXtManagedPiPackagesMock,
+  runExternalPiToolPatch: runExternalPiToolPatchMock,
 }));
 
 vi.mock('../commands/install.js', () => ({
@@ -112,6 +115,7 @@ beforeEach(() => {
   checkDriftMock.mockReset();
   runInstallMock.mockReset();
   assureXtManagedPiPackagesMock.mockReset();
+  runExternalPiToolPatchMock.mockReset();
   resolvePackageRootMock.mockReset();
   ensureBdAutoStagePatchMock.mockReset();
   runDependencyMaintenanceMock.mockReset();
@@ -262,6 +266,8 @@ describe('xtrm update', () => {
     expect(checkDriftMock).toHaveBeenCalledWith(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(repo, '.xtrm'), undefined);
     expect(runInstallMock).toHaveBeenCalledTimes(1);
     expect(assureXtManagedPiPackagesMock).toHaveBeenCalledWith(true);
+    expect(runExternalPiToolPatchMock).toHaveBeenCalledWith(packageRoot, false);
+    expect(assureXtManagedPiPackagesMock.mock.invocationCallOrder[0]).toBeLessThan(runExternalPiToolPatchMock.mock.invocationCallOrder[0]);
     expect(result.logs.join('\n')).toContain('refreshed');
   });
 
@@ -380,6 +386,7 @@ describe('xtrm update', () => {
 
     expect(logBootstrapTriggerMock).not.toHaveBeenCalled();
     expect(ensureGlobalSkillsBootstrappedMock).not.toHaveBeenCalled();
+    expect(runExternalPiToolPatchMock).not.toHaveBeenCalled();
   });
 
   it('does not drift-check absent direct global roots when XTRM_GLOBAL_SKILLS=1', async () => {

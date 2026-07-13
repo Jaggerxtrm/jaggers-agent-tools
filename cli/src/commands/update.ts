@@ -11,7 +11,7 @@ import { getGlobalSkillsOverrideRoots, shouldUseGlobalSkills } from '../core/glo
 import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { reconcileGlobalClaudeHooks } from '../core/claude-runtime-sync.js';
 import { reconcileGlobalPiHooks } from '../core/pi-runtime-hooks.js';
-import { assureXtManagedPiPackages } from '../core/pi-runtime.js';
+import { assureXtManagedPiPackages, runExternalPiToolPatch } from '../core/pi-runtime.js';
 import { scanXtrmRepos } from '../core/repo-discovery.js';
 import { isStrictRegistryMode, runInstall } from './install.js';
 import { ensureBeadsSharedServerEnabled, hasBeadsDir } from '../core/beads-shared-server.js';
@@ -307,6 +307,7 @@ export function createUpdateCommand(): Command {
             }
 
             const packageAssurance = await assureXtManagedPiPackages(Boolean(typedOpts.apply));
+            if (typedOpts.apply) runExternalPiToolPatch(resolvePackageRoot(), false);
 
             if (opts.json) {
                 console.log(JSON.stringify({ repos: rows, packages: packageAssurance }, null, 2));
