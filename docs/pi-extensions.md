@@ -154,12 +154,13 @@ Use `DEBUG=serena-pool` to print startup, lock, reuse, and orphan-cleanup traces
 
 ### Serena tool ownership boundary
 
-`pi-serena-tools` is restricted at registration time to read-only semantic code navigation:
+`pi-serena-tools` is restricted at registration time to semantic code operations:
 
-- `find_symbol`, `find_referencing_symbols`, `get_symbols_overview`
-- `jet_brains_find_symbol`, `jet_brains_find_referencing_symbols`, `jet_brains_get_symbols_overview`, `jet_brains_type_hierarchy`
+- Navigation: `find_symbol`, `find_referencing_symbols`, `get_symbols_overview`
+- Semantic edits: `insert_after_symbol`, `insert_before_symbol`, `replace_symbol_body`, `rename_symbol`
+- JetBrains navigation: `jet_brains_find_symbol`, `jet_brains_find_referencing_symbols`, `jet_brains_get_symbols_overview`, `jet_brains_type_hierarchy`
 
-Serena does not register shell, file read/write/edit, directory listing, filename search, ordinary text search, memory, workflow, or project-management tools. Those operations remain owned by Pi's direct `bash`/`structured_return`/`process` and `read`/`write`/`edit`/`find`/`grep`/`ls` tools, so they continue to work when Serena is unavailable.
+Serena does not register shell, raw file read/write/edit, directory listing, filename search, ordinary text search, memory, workflow, or project-management tools. Pi's native `bash`/`read`/`write`/`edit`/`find`/`grep`/`ls` tools remain registered and unblocked, while tests/builds and long-running processes stay with `structured_return`/`process`. Generic operations therefore continue to work when Serena is unavailable.
 
 Runtime install and `xt update --apply` repair existing user package installs. Manual verification:
 

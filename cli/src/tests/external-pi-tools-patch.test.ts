@@ -10,6 +10,10 @@ const expectedNavigationTools = [
   'find_symbol',
   'find_referencing_symbols',
   'get_symbols_overview',
+  'insert_after_symbol',
+  'insert_before_symbol',
+  'replace_symbol_body',
+  'rename_symbol',
   'jet_brains_get_symbols_overview',
   'jet_brains_find_symbol',
   'jet_brains_find_referencing_symbols',
@@ -23,7 +27,7 @@ afterEach(async () => {
 });
 
 describe('external Pi tool patch', () => {
-  it('exposes only Serena read-only semantic navigation tools', async () => {
+  it('exposes only Serena semantic code tools', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-pi-tools-'));
     tempRoots.push(root);
     const serenaDir = path.join(root, 'pi-serena-tools');
