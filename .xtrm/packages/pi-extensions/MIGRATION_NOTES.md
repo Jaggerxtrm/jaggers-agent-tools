@@ -5,7 +5,6 @@
 | Legacy path | New path | Notes |
 |---|---|---|
 | `packages/pi-extensions/extensions/auto-session-name` | `packages/pi-extensions/extensions/auto-session-name` | extension source moved unchanged |
-| `packages/pi-extensions/extensions/auto-update` | `packages/pi-extensions/extensions/auto-update` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/beads` | `packages/pi-extensions/extensions/beads` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/compact-header` | `packages/pi-extensions/extensions/compact-header` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/custom-footer` | `packages/pi-extensions/extensions/custom-footer` | now imports `../../src/core` |

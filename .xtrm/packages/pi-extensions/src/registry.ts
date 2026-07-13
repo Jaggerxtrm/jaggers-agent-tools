@@ -1,7 +1,6 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 import autoSessionNameExtension from "./extensions/auto-session-name.ts";
-import autoUpdateExtension from "./extensions/auto-update.ts";
 import beadsExtension from "./extensions/beads.ts";
 import compactHeaderExtension from "./extensions/compact-header.ts";
 import customFooterExtension from "./extensions/custom-footer.ts";
@@ -22,7 +21,6 @@ export type ManagedPiExtension = {
 
 export const managedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "auto-session-name", register: autoSessionNameExtension },
-  { id: "auto-update", register: autoUpdateExtension },
   { id: "beads", register: beadsExtension },
   { id: "compact-header", register: compactHeaderExtension },
   { id: "custom-footer", register: customFooterExtension },
