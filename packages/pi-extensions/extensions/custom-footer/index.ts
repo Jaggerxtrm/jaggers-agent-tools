@@ -142,6 +142,17 @@ function renderEpicTree(cache: BeadsCache, width: number, theme: any): string[] 
 	return lines;
 }
 
+function renderActiveIssues(cache: BeadsCache, width: number, theme: any): string[] {
+	const lines = [theme.fg("muted", `in progress (${cache.counts.in_progress})`)];
+	for (const issue of cache.activeIssues) {
+		const shortId = issue.id.split("-").pop() ?? issue.id;
+		lines.push(truncateToWidth(theme.fg("accent", `  ${STATUS.in_progress.icon} ${shortId}  ${issue.title ?? ""}`), width));
+	}
+	const overflow = cache.counts.in_progress - cache.activeIssues.length;
+	if (overflow > 0) lines.push(theme.fg("dim", `  +${overflow} more`));
+	return lines;
+}
+
 export default function registerCustomFooter(pi: ExtensionAPI): void {
 	let capturedCtx: any = null;
 	let cacheModule: CacheModule | null = null;
@@ -350,12 +361,16 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 
 					const compact = cacheModule?.formatCompact(beadsCache, { cols: width }) ?? "beads unavailable";
 					lines.push(truncateToWidth(compact, width));
-					if (beadsExpanded && beadsCache?.activeEpic) {
-						const descendants = beadsCache.descendants;
-						if (!descendants || descendants.epicId !== beadsCache.activeEpic.id || Date.now() - descendants.ts >= (cacheModule?.TTL_DESCENDANTS_MS ?? 30_000)) {
-							scheduleDescendants();
+					if (beadsExpanded && beadsCache) {
+						if (beadsCache.activeEpic) {
+							const descendants = beadsCache.descendants;
+							if (!descendants || descendants.epicId !== beadsCache.activeEpic.id || Date.now() - descendants.ts >= (cacheModule?.TTL_DESCENDANTS_MS ?? 30_000)) {
+								scheduleDescendants();
+							}
+							lines.push(...renderEpicTree(beadsCache, width, theme));
+						} else {
+							lines.push(...renderActiveIssues(beadsCache, width, theme));
 						}
-						lines.push(...renderEpicTree(beadsCache, width, theme));
 					}
 					return lines;
 				},
@@ -380,16 +395,16 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 
 	const toggleBeads = (): void => {
 		beadsExpanded = !beadsExpanded;
-		if (beadsExpanded) scheduleDescendants();
+		if (beadsExpanded && beadsCache?.activeEpic) scheduleDescendants();
 		requestRender?.();
 	};
 
 	pi.registerCommand("beads", {
-		description: "Toggle the active epic tree",
+		description: "Toggle active beads details",
 		handler: async () => toggleBeads(),
 	});
-	pi.registerShortcut("ctrl+b", {
-		description: "Toggle the active epic tree",
+	pi.registerShortcut("alt+b", {
+		description: "Toggle active beads details",
 		handler: async () => toggleBeads(),
 	});
 

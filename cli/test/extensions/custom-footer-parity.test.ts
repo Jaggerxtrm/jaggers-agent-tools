@@ -128,6 +128,27 @@ describe("custom-footer shared beads cache", () => {
 		expect(SubprocessRunner.run).not.toHaveBeenCalled();
 	});
 
+	it("expands cached in-progress issues without an epic on Alt+B", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 2, in_progress: 3, blocked: 0 },
+			activeIssues: [
+				{ id: "xtrm-one", title: "First claim", status: "in_progress" },
+				{ id: "xtrm-two", title: "Second claim", status: "in_progress" },
+				{ id: "xtrm-three", title: "Third claim", status: "in_progress" },
+			],
+			activeEpic: null,
+		});
+		await start();
+		expect(shortcuts["ctrl+b"]).toBeUndefined();
+		expect(shortcuts["alt+b"]).toBeDefined();
+		await shortcuts["alt+b"].handler(ctx);
+		const text = footerRenderer.render(120).join("\n");
+		expect(text).toContain("in progress (3)");
+		expect(text).toContain("◐ one  First claim");
+		expect(text).toContain("◐ two  Second claim");
+		expect(text).toContain("◐ three  Third claim");
+	});
+
 	it("keeps Ctrl+O tool expansion independent from the beads tree", async () => {
 		beadsCache.writeCache(cacheRoot, {
 			counts: { open: 2, in_progress: 1, blocked: 0 },
@@ -145,7 +166,7 @@ describe("custom-footer shared beads cache", () => {
 		toolsExpanded = true;
 		await start();
 		expect(footerRenderer.render(120).join("\n")).not.toContain("First child");
-		await shortcuts["ctrl+b"].handler(ctx);
+		await commands.beads.handler("", ctx);
 		const text = footerRenderer.render(120).join("\n");
 		expect(text).toContain("epic epic (1/3 done) — Compact footer");
 		expect(text).toContain("  ◐ .1  in progress  First child");
@@ -184,7 +205,7 @@ describe("custom-footer shared beads cache", () => {
 			return { code: 1, stdout: "", stderr: "" };
 		});
 		await start();
-		await shortcuts["ctrl+b"].handler(ctx);
+		await commands.beads.handler("", ctx);
 		expect(footerRenderer.render(120).join("\n")).toContain("loading epic tree…");
 		await vi.runOnlyPendingTimersAsync();
 		await Promise.resolve();
