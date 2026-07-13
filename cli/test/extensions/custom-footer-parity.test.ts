@@ -27,7 +27,9 @@ describe("custom-footer shared beads cache", () => {
 	let handlers: Record<string, Function[]>;
 	let footerRenderer: any;
 	let ctx: any;
-	let expanded: boolean;
+	let toolsExpanded: boolean;
+	let commands: Record<string, any>;
+	let shortcuts: Record<string, any>;
 	let requestRenderSpy: ReturnType<typeof vi.fn>;
 	let cacheRoot: string;
 
@@ -36,7 +38,9 @@ describe("custom-footer shared beads cache", () => {
 		vi.resetAllMocks();
 		handlers = {};
 		footerRenderer = null;
-		expanded = false;
+		toolsExpanded = false;
+		commands = {};
+		shortcuts = {};
 		requestRenderSpy = vi.fn();
 		cacheRoot = mkdtempSync(join(tmpdir(), "xtrm-footer-cache-"));
 		process.env.XTRM_BEADS_CACHE_ROOT = cacheRoot;
@@ -47,7 +51,7 @@ describe("custom-footer shared beads cache", () => {
 			hasUI: true,
 			mode: "tui",
 			ui: {
-				getToolsExpanded: () => expanded,
+				getToolsExpanded: () => toolsExpanded,
 				setFooter: vi.fn((factory: any) => {
 					footerRenderer = factory(
 						{ requestRender: requestRenderSpy },
@@ -81,6 +85,8 @@ describe("custom-footer shared beads cache", () => {
 			handlers[event].push(fn);
 		},
 		getThinkingLevel: () => "off",
+		registerCommand: (name: string, options: any) => { commands[name] = options; },
+		registerShortcut: (key: string, options: any) => { shortcuts[key] = options; },
 	});
 
 	async function start() {
@@ -122,7 +128,7 @@ describe("custom-footer shared beads cache", () => {
 		expect(SubprocessRunner.run).not.toHaveBeenCalled();
 	});
 
-	it("renders arbitrarily nested cached epic descendants when tools are expanded", async () => {
+	it("keeps Ctrl+O tool expansion independent from the beads tree", async () => {
 		beadsCache.writeCache(cacheRoot, {
 			counts: { open: 2, in_progress: 1, blocked: 0 },
 			activeIssues: [],
@@ -136,8 +142,10 @@ describe("custom-footer shared beads cache", () => {
 				],
 			},
 		});
-		expanded = true;
+		toolsExpanded = true;
 		await start();
+		expect(footerRenderer.render(120).join("\n")).not.toContain("First child");
+		await shortcuts["ctrl+b"].handler(ctx);
 		const text = footerRenderer.render(120).join("\n");
 		expect(text).toContain("epic epic (1/3 done) — Compact footer");
 		expect(text).toContain("  ◐ .1  in progress  First child");
@@ -157,8 +165,8 @@ describe("custom-footer shared beads cache", () => {
 			activeEpic: { id: "xtrm-epic", title: "Large epic", closed: 0, total: 52 },
 			descendants: { epicId: "xtrm-epic", ts: Date.now(), items: items.slice(0, 50), overflow: 2 },
 		});
-		expanded = true;
 		await start();
+		await commands.beads.handler("", ctx);
 		expect(footerRenderer.render(120).join("\n")).toContain("+2 more (bd show xtrm-epic)");
 	});
 
@@ -167,7 +175,6 @@ describe("custom-footer shared beads cache", () => {
 			counts: { open: 2, in_progress: 1, blocked: 0 }, activeIssues: [],
 			activeEpic: { id: "xtrm-epic", title: "Compact footer", closed: 0, total: 1 },
 		});
-		expanded = true;
 		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
 			if (command === "bd" && args[0] === "query") {
 				return { code: 0, stdout: JSON.stringify([
@@ -177,6 +184,7 @@ describe("custom-footer shared beads cache", () => {
 			return { code: 1, stdout: "", stderr: "" };
 		});
 		await start();
+		await shortcuts["ctrl+b"].handler(ctx);
 		expect(footerRenderer.render(120).join("\n")).toContain("loading epic tree…");
 		await vi.runOnlyPendingTimersAsync();
 		await Promise.resolve();

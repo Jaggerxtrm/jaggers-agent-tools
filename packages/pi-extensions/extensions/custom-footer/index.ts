@@ -159,6 +159,7 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 	let refreshingRuntime = false;
 	let refreshingCompact = false;
 	let refreshingDescendants = false;
+	let beadsExpanded = false;
 	let runtimeState = { branch: null as string | null, gitStatus: "", lastFetch: 0 };
 
 	const cwd = () => capturedCtx?.cwd || process.cwd();
@@ -349,7 +350,7 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 
 					const compact = cacheModule?.formatCompact(beadsCache, { cols: width }) ?? "beads unavailable";
 					lines.push(truncateToWidth(compact, width));
-					if (ctx.ui.getToolsExpanded?.() && beadsCache?.activeEpic) {
+					if (beadsExpanded && beadsCache?.activeEpic) {
 						const descendants = beadsCache.descendants;
 						if (!descendants || descendants.epicId !== beadsCache.activeEpic.id || Date.now() - descendants.ts >= (cacheModule?.TTL_DESCENDANTS_MS ?? 30_000)) {
 							scheduleDescendants();
@@ -370,11 +371,27 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 		}, FOOTER_REAPPLY_DELAY_MS);
 	};
 	const reset = (): void => {
+		beadsExpanded = false;
 		runtimeState.lastFetch = 0;
 		beadsCache = null;
 		cacheModule = null;
 		mainRoot = "";
 	};
+
+	const toggleBeads = (): void => {
+		beadsExpanded = !beadsExpanded;
+		if (beadsExpanded) scheduleDescendants();
+		requestRender?.();
+	};
+
+	pi.registerCommand("beads", {
+		description: "Toggle the active epic tree",
+		handler: async () => toggleBeads(),
+	});
+	pi.registerShortcut("ctrl+b", {
+		description: "Toggle the active epic tree",
+		handler: async () => toggleBeads(),
+	});
 
 	pi.on("session_start", async (_event, ctx) => {
 		capturedCtx = ctx;
