@@ -13,9 +13,6 @@
   "pi": {
     "extensions": [
       "./index.ts"
-    ],
-    "themes": [
-      "../../themes/xtrm-ui"
     ]
   }
 }

@@ -128,7 +128,7 @@ describe("custom-footer shared beads cache", () => {
 		expect(SubprocessRunner.run).not.toHaveBeenCalled();
 	});
 
-	it("expands cached in-progress issues without an epic on Alt+B", async () => {
+	it("expands cached in-progress issues without an epic on Alt+G", async () => {
 		beadsCache.writeCache(cacheRoot, {
 			counts: { open: 2, in_progress: 3, blocked: 0 },
 			activeIssues: [
@@ -140,8 +140,9 @@ describe("custom-footer shared beads cache", () => {
 		});
 		await start();
 		expect(shortcuts["ctrl+b"]).toBeUndefined();
-		expect(shortcuts["alt+b"]).toBeDefined();
-		await shortcuts["alt+b"].handler(ctx);
+		expect(shortcuts["alt+b"]).toBeUndefined();
+		expect(shortcuts["alt+g"]).toBeDefined();
+		await shortcuts["alt+g"].handler(ctx);
 		const text = footerRenderer.render(120).join("\n");
 		expect(text).toContain("in progress (3)");
 		expect(text).toContain("◐ one  First claim");

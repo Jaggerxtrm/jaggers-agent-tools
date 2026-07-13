@@ -403,7 +403,7 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 		description: "Toggle active beads details",
 		handler: async () => toggleBeads(),
 	});
-	pi.registerShortcut("alt+b", {
+	pi.registerShortcut("alt+g", {
 		description: "Toggle active beads details",
 		handler: async () => toggleBeads(),
 	});
