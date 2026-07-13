@@ -349,6 +349,27 @@ describe('pi runtime safeguards', () => {
       expect(settings).not.toHaveProperty('skills');
     });
 
+    it('strips per-runtime suffix variants of legacy active/ path (xtrm-ec9um)', async () => {
+      const { updatePiSettings } = await import('../core/pi-runtime.js');
+      const projectRoot = path.join(tempRoot, 'suffix-variants');
+      await fs.ensureDir(path.join(projectRoot, '.pi'));
+
+      await fs.writeJson(path.join(projectRoot, '.pi', 'settings.json'), {
+        skills: [
+          '../.xtrm/skills/active/pi',
+          '../.xtrm/skills/active/claude',
+          '~/.xtrm/skills/active/pi',
+          '~/.xtrm/skills/active/claude',
+          './user-managed',
+        ],
+      });
+
+      await updatePiSettings(projectRoot, false);
+
+      const settings = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
+      expect(settings.skills).toEqual(['./user-managed']);
+    });
+
     it('does not write in dry-run mode', async () => {
       const { updatePiSettings } = await import('../core/pi-runtime.js');
       const projectRoot = path.join(tempRoot, 'dry-run');
