@@ -35,6 +35,7 @@ describe('external Pi tool patch', () => {
     await fs.writeFile(path.join(serenaDir, 'index.ts'), [
       'import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";',
       'export default function (pi: ExtensionAPI) {',
+      '  const defaultBlockedToolNames = ["read", "write", "edit", "ls", "find", "grep"];',
       '  registerSerenaTools({',
       '    pi,',
       '  });',
@@ -52,6 +53,8 @@ describe('external Pi tool patch', () => {
       ?.map((name) => name.slice(1, -1));
 
     expect(allowlist).toEqual(expectedNavigationTools);
+    expect(patched).toContain('const defaultBlockedToolNames = [];');
+    expect(patched).not.toContain('defaultBlockedToolNames = ["read"');
     expect(patched).toContain('if (!SERENA_CODE_NAVIGATION_TOOLS.has(tool.name)) return;');
     expect(patched).toContain('pi.registerTool = originalRegisterTool;');
     for (const genericTool of ['read_file', 'search_for_pattern', 'list_dir', 'find_file', 'create_text_file', 'replace_content', 'execute_shell_command']) {

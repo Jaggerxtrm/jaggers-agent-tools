@@ -160,7 +160,7 @@ Use `DEBUG=serena-pool` to print startup, lock, reuse, and orphan-cleanup traces
 - Semantic edits: `insert_after_symbol`, `insert_before_symbol`, `replace_symbol_body`, `rename_symbol`
 - JetBrains navigation: `jet_brains_find_symbol`, `jet_brains_find_referencing_symbols`, `jet_brains_get_symbols_overview`, `jet_brains_type_hierarchy`
 
-Serena does not register shell, raw file read/write/edit, directory listing, filename search, ordinary text search, memory, workflow, or project-management tools. Pi's native `bash`/`read`/`write`/`edit`/`find`/`grep`/`ls` tools remain registered and unblocked, while tests/builds and long-running processes stay with `structured_return`/`process`. Generic operations therefore continue to work when Serena is unavailable.
+Serena does not register shell, raw file read/write/edit, directory listing, filename search, ordinary text search, memory, workflow, or project-management tools. Pi's native `bash`/`read`/`write`/`edit`/`find`/`grep`/`ls` tools remain registered and unblocked, while tests/builds and long-running processes stay with `structured_return`/`process`. The managed patch also empties `pi-serena-tools`' built-in native-tool blocklist, so worktrees without their own `.pi/settings.json` fail open instead of reverting to Serena's blocking defaults. Generic operations therefore continue to work when Serena is unavailable.
 
 Runtime install and `xt update --apply` repair existing user package installs. Manual verification:
 

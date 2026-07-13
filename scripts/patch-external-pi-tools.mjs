@@ -60,6 +60,10 @@ function patchSerena(baseDir) {
       'import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";\nimport { Text } from "@mariozechner/pi-tui";\n',
     ),
     (s) => s.replace(
+      'const defaultBlockedToolNames = ["read", "write", "edit", "ls", "find", "grep"];',
+      'const defaultBlockedToolNames = [];',
+    ),
+    (s) => s.replace(
       /(?:  const SERENA_CODE_NAVIGATION_TOOLS[^\n]*\n)?  const originalRegisterTool = pi\.registerTool\.bind\(pi\);[\s\S]*?(?=  registerSerenaTools\(\{)/,
       SERENA_REGISTER_PATCH,
     ),
