@@ -695,7 +695,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
 
         // 1. Rebuild generated runtime skills view and pointer inside worktree.
         try {
-            if (shouldUseGlobalSkills() && !worktreeHasProjectUserPacks(worktreePath)) {
+            if (shouldUseGlobalSkills(worktreePath) && !worktreeHasProjectUserPacks(worktreePath)) {
                 verifyGlobalPointer();
             } else {
                 await ensureAgentsSkillsSymlink(worktreePath);

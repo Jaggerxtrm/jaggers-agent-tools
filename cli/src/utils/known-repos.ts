@@ -85,6 +85,29 @@ export async function isRepoMigrated(
   return true;
 }
 
+// Sync variant for hot paths (global-skills-flag). Reads the JSON on every
+// call — the file is tiny (<1KB fleet-scale) and this only fires during
+// install/update/skills-enable, not per-render.
+export function isRepoMigratedSync(
+  repoPath: string,
+  opts: { skills?: boolean; hooks?: boolean },
+): boolean {
+  const knownReposPath = resolveKnownReposPath();
+  if (!fs.pathExistsSync(knownReposPath)) return false;
+  let data: KnownReposData;
+  try {
+    data = fs.readJsonSync(knownReposPath) as KnownReposData;
+  } catch {
+    return false;
+  }
+  const normalizedPath = path.resolve(repoPath);
+  const entry = data.repos?.[normalizedPath];
+  if (!entry) return false;
+  if (opts.skills && !entry.skillsMigrated) return false;
+  if (opts.hooks && !entry.hooksMigrated) return false;
+  return true;
+}
+
 export async function getKnownRepos(): Promise<Record<string, KnownRepoEntry>> {
   const data = await readKnownRepos();
   return data.repos;

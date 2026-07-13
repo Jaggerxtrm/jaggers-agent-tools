@@ -245,16 +245,31 @@ async function verifySkillsIdentity(
   };
 }
 
+// Runtime-generated / non-shippable content that only exists locally — excluded
+// from divergence hashing so it never inflates local-legacy on migrate (xtrm-y0tdg.4).
+const WALK_DIR_EXCLUDED_DIRS = new Set([
+  '__pycache__',
+  '.pytest_cache',
+  '.serena',
+  '.mypy_cache',
+  '.ruff_cache',
+  'node_modules',
+  '.venv',
+  'workspace',
+]);
+const WALK_DIR_EXCLUDED_SUFFIXES = ['.pyc', '.pyo'];
+
 async function walkDir(dir: string): Promise<string[]> {
   const files: string[] = [];
   const entries = await fs.readdir(dir, { withFileTypes: true });
 
   for (const entry of entries) {
-    const entryPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...(await walkDir(entryPath)));
+      if (WALK_DIR_EXCLUDED_DIRS.has(entry.name)) continue;
+      files.push(...(await walkDir(path.join(dir, entry.name))));
     } else {
-      files.push(entryPath);
+      if (WALK_DIR_EXCLUDED_SUFFIXES.some(suffix => entry.name.endsWith(suffix))) continue;
+      files.push(path.join(dir, entry.name));
     }
   }
 
@@ -836,7 +851,7 @@ export function createMigrateCommand(): Command {
         let hooksResult: { migrated: boolean; backupPath?: string; divergedFiles: string[]; skipped: boolean } = { migrated: false, backupPath: undefined, divergedFiles: [], skipped: false };
 
         if (target === 'skills' || target === 'all') {
-          if (!shouldUseGlobalSkills()) {
+          if (!shouldUseGlobalSkills(repoPath)) {
             console.log(
               kleur.yellow(
                 '  ⚠  XTRM_GLOBAL_SKILLS not set. Migration may be premature.',

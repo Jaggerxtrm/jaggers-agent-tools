@@ -112,11 +112,11 @@ describe('referenced files exist', () => {
     raw = quoted ? quoted[1] : raw.split(/\s+/)[0];
     // …plugin-root commands resolve relative to repo root…
     raw = raw.replace(/^\$\{[A-Z_]+\}\//, '');
-    // …and project-runtime commands rooted at $CLAUDE_PROJECT_DIR resolve to the repo
-    // source mirror. In v0.10.2 the service-skills hooks canonicalized on
-    // $CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-skills/ (works with or without
-    // the direct-runtime-links symlink). Older policies could still use the
-    // $CLAUDE_PROJECT_DIR/.claude/skills/service-skills/ form — accept both.
+    // …service-skills hooks in v0.10.4+ use $HOME/.xtrm/skills/default/service-skills/
+    // pointing at the global machinery (xtrm-zayg6). Since the source repo IS the payload,
+    // the repo-relative check resolves the same relative path.
+    raw = raw.replace(/^\$HOME\/\.xtrm\/skills\/default\/service-skills\//, '.xtrm/skills/default/service-skills/');
+    // Legacy pre-v0.10.4 forms — accept both for backwards compat in policy tests.
     raw = raw.replace(/^\$CLAUDE_PROJECT_DIR\/\.claude\/skills\/service-skills\//, '.xtrm/skills/default/service-skills/');
     raw = raw.replace(/^\$CLAUDE_PROJECT_DIR\//, '');
     return raw;

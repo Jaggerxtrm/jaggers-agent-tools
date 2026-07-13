@@ -109,12 +109,12 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
                 await reconcileGlobalClaudeHooks();
                 await reconcileGlobalPiHooks();
             }
-            if (shouldUseGlobalSkills()) {
+            if (shouldUseGlobalSkills(repoRoot)) {
                 await printSkillsMigrationNudge(repoRoot);
             }
         }
 
-        const drift = await checkDrift(registryPath, userXtrmDir, opts.apply ? getGlobalSkillsOverrideRoots() : undefined);
+        const drift = await checkDrift(registryPath, userXtrmDir, opts.apply ? getGlobalSkillsOverrideRoots(repoRoot) : undefined);
         const hasBeads = await hasBeadsDir(repoRoot);
         const sharedServer = hasBeads
             ? await ensureBeadsSharedServerEnabled(repoRoot, false)

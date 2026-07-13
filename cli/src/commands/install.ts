@@ -205,7 +205,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
         userXtrmDir,
         registry,
         dryRun,
-        overrideRoots: getGlobalSkillsOverrideRoots(),
+        overrideRoots: getGlobalSkillsOverrideRoots(projectRoot),
     });
     if (pruneResult.removed.length > 0) {
         const verb = dryRun ? 'Would remove' : 'Removed';
@@ -220,7 +220,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
         force,
         yes: effectiveYes,
         strictRegistry,
-        overrideRoots: getGlobalSkillsOverrideRoots(),
+        overrideRoots: getGlobalSkillsOverrideRoots(projectRoot),
     });
 
     if (prune) {
@@ -268,7 +268,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
             await ensureUserAgentsSkillsSymlink();
             await ensureAgentsSkillsSymlink(projectRoot);
         }
-        await assertRuntimeSkillsViews(projectRoot, { scope: shouldUseGlobalSkills() ? 'global' : 'both' });
+        await assertRuntimeSkillsViews(projectRoot, { scope: shouldUseGlobalSkills(projectRoot) ? 'global' : 'both' });
         await ensureBeadsSharedServerEnabled(projectRoot, true);
     }
 
