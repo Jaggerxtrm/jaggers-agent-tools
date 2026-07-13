@@ -142,9 +142,11 @@ export async function runClaudeRuntimeSyncPhase(opts: ClaudeRuntimeSyncOptions):
     const hasExistingSettings = await fs.pathExists(settingsPath);
     const baseSettings = await readBaseSettings(settingsTemplatePath);
     const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
-    const filteredHooks = shouldUseGlobalHooks()
-        ? filterGlobalOwnedProjectHooks(existingSettings.hooks ?? {}, generatedHooks)
-        : generatedHooks;
+    // xtrm-61cdl: preserve third-party (unmanaged) wrappers on merge instead of
+    // wholesale-replacing the project settings.json hooks map. Applies to both
+    // shouldUseGlobalHooks() branches — the mode toggle only affects which paths
+    // get rewritten, not whether we clobber user hooks.
+    const filteredHooks = mergeProjectOwnedHooks(existingSettings.hooks ?? {}, generatedHooks, projectHooksDir);
 
     const mergedSettings: ClaudeSettings = hasExistingSettings
         ? { ...existingSettings, hooks: filteredHooks }
@@ -194,9 +196,8 @@ export async function reconcileProjectClaudeHooks(
     const projectHooksDir = path.join(repoRoot, '.xtrm', 'hooks');
     const generatedHooks = resolveHooksForProjectRuntime(hooksConfig.hooks ?? {}, projectHooksDir);
     const generatedStatusLine = resolveStatusLineForProjectRuntime(hooksConfig.statusLine, projectHooksDir);
-    const hooksToWrite = shouldUseGlobalHooks()
-        ? filterGlobalOwnedProjectHooks(await readExistingHooks(settingsPath), generatedHooks)
-        : generatedHooks;
+    // xtrm-61cdl: preserve third-party (unmanaged) wrappers on reconcile.
+    const hooksToWrite = mergeProjectOwnedHooks(await readExistingHooks(settingsPath), generatedHooks, projectHooksDir);
     const hooksEntries = countHookEntries(hooksToWrite);
 
     const hasExistingSettings = await fs.pathExists(settingsPath);
@@ -420,22 +421,73 @@ function isOwnedWrapper(wrapper: HookWrapper, canonicalHashes: Set<string>): boo
     return canonicalHashes.has(wrapperHash);
 }
 
-function filterGlobalOwnedProjectHooks(existingHooks: Record<string, HookWrapper[]>, generatedHooks: Record<string, HookWrapper[]>): Record<string, HookWrapper[]> {
+// Substrings that mark a command as xtrm-managed regardless of exact path shape.
+// Covers: project .xtrm/hooks (rewritten from ${CLAUDE_PLUGIN_ROOT}), global ~/.xtrm/hooks,
+// the v0.10.5 service-skills sh -c fail-open wrappers, and unrewritten plugin-root forms
+// (both ${CLAUDE_PLUGIN_ROOT}/ and $CLAUDE_PLUGIN_ROOT/ — bare `CLAUDE_PLUGIN_ROOT`
+// substring matches both, since the token only appears in xtrm-managed contexts).
+const XTRM_MANAGED_COMMAND_MARKERS = [
+    '/.xtrm/hooks/',
+    '/.xtrm/skills/default/service-skills/scripts/',
+    'CLAUDE_PLUGIN_ROOT',
+];
+
+function isXtrmManagedCommand(command: string, projectHooksDir: string): boolean {
+    if (typeof command !== 'string' || command.length === 0) {
+        return false;
+    }
+    if (XTRM_MANAGED_COMMAND_MARKERS.some((marker) => command.includes(marker))) {
+        return true;
+    }
+    // Handle out-of-tree project hooks dirs (unusual but supported).
+    if (projectHooksDir && command.includes(projectHooksDir)) {
+        return true;
+    }
+    return false;
+}
+
+function isProjectOwnedWrapper(wrapper: HookWrapper, canonicalHashes: Set<string>, projectHooksDir: string): boolean {
+    if (isOwnedWrapper(wrapper, canonicalHashes)) {
+        return true;
+    }
+    if (!Array.isArray(wrapper.hooks)) {
+        return false;
+    }
+    return wrapper.hooks.some((hook) => isXtrmManagedCommand(hook.command ?? '', projectHooksDir));
+}
+
+// Merge canonical (generated) xtrm hooks with an existing project settings.json,
+// preserving any wrapper that is NOT xtrm-managed (third-party integrations,
+// per-repo scanners, user-local hooks). "xtrm-managed" is detected via
+// stableHookHash match against the current canonical set OR command-path match
+// against known xtrm-owned prefixes (`.xtrm/hooks/`, service-skills scripts,
+// `${CLAUDE_PLUGIN_ROOT}/`). Stale xtrm hooks whose hash no longer matches are
+// still dropped because their command still targets an xtrm-owned path — the
+// canonical version replaces them. Third-party wrappers survive verbatim.
+//
+// Reported as xtrm-61cdl (xtmux-qa0): the previous wholesale-replace ate
+// xtmux's auto-monitor hook three times in one week.
+export function mergeProjectOwnedHooks(
+    existingHooks: Record<string, HookWrapper[]>,
+    generatedHooks: Record<string, HookWrapper[]>,
+    projectHooksDir: string,
+): Record<string, HookWrapper[]> {
     const canonicalHashes = new Set(Object.values(generatedHooks).flat().map((wrapper) => stableHookHash(wrapper)));
-    const filtered: Record<string, HookWrapper[]> = {};
+    const merged: Record<string, HookWrapper[]> = {};
 
     for (const [eventName, wrappers] of Object.entries(existingHooks)) {
-        const kept = wrappers.filter((wrapper) => !isOwnedWrapper(wrapper, canonicalHashes));
+        if (!Array.isArray(wrappers)) continue;
+        const kept = wrappers.filter((wrapper) => !isProjectOwnedWrapper(wrapper, canonicalHashes, projectHooksDir));
         if (kept.length > 0) {
-            filtered[eventName] = kept;
+            merged[eventName] = kept;
         }
     }
 
     for (const [eventName, wrappers] of Object.entries(generatedHooks)) {
-        filtered[eventName] = filtered[eventName] ? [...wrappers, ...filtered[eventName]] : wrappers;
+        merged[eventName] = merged[eventName] ? [...wrappers, ...merged[eventName]] : wrappers;
     }
 
-    return filtered;
+    return merged;
 }
 
 export async function safeMergeOwnedHookSettings(

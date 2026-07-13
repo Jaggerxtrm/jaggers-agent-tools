@@ -45015,7 +45015,7 @@ async function runClaudeRuntimeSyncPhase(opts) {
   const hasExistingSettings = await import_fs_extra4.default.pathExists(settingsPath);
   const baseSettings = await readBaseSettings(settingsTemplatePath);
   const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
-  const filteredHooks = shouldUseGlobalHooks() ? filterGlobalOwnedProjectHooks(existingSettings.hooks ?? {}, generatedHooks) : generatedHooks;
+  const filteredHooks = mergeProjectOwnedHooks(existingSettings.hooks ?? {}, generatedHooks, projectHooksDir);
   const mergedSettings = hasExistingSettings ? { ...existingSettings, hooks: filteredHooks } : { ...baseSettings, hooks: filteredHooks };
   if (generatedStatusLine) {
     mergedSettings.statusLine = generatedStatusLine;
@@ -45049,7 +45049,7 @@ async function reconcileProjectClaudeHooks(repoRoot, opts = {}) {
   const projectHooksDir = import_path2.default.join(repoRoot, ".xtrm", "hooks");
   const generatedHooks = resolveHooksForProjectRuntime(hooksConfig.hooks ?? {}, projectHooksDir);
   const generatedStatusLine = resolveStatusLineForProjectRuntime(hooksConfig.statusLine, projectHooksDir);
-  const hooksToWrite = shouldUseGlobalHooks() ? filterGlobalOwnedProjectHooks(await readExistingHooks(settingsPath), generatedHooks) : generatedHooks;
+  const hooksToWrite = mergeProjectOwnedHooks(await readExistingHooks(settingsPath), generatedHooks, projectHooksDir);
   const hooksEntries = countHookEntries(hooksToWrite);
   const hasExistingSettings = await import_fs_extra4.default.pathExists(settingsPath);
   const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
@@ -45232,19 +45232,46 @@ function isOwnedWrapper(wrapper, canonicalHashes) {
   const wrapperHash = wrapper._xtrm?.hash ?? stableHookHash(wrapper);
   return canonicalHashes.has(wrapperHash);
 }
-function filterGlobalOwnedProjectHooks(existingHooks, generatedHooks) {
+var XTRM_MANAGED_COMMAND_MARKERS = [
+  "/.xtrm/hooks/",
+  "/.xtrm/skills/default/service-skills/scripts/",
+  "CLAUDE_PLUGIN_ROOT"
+];
+function isXtrmManagedCommand(command, projectHooksDir) {
+  if (typeof command !== "string" || command.length === 0) {
+    return false;
+  }
+  if (XTRM_MANAGED_COMMAND_MARKERS.some((marker) => command.includes(marker))) {
+    return true;
+  }
+  if (projectHooksDir && command.includes(projectHooksDir)) {
+    return true;
+  }
+  return false;
+}
+function isProjectOwnedWrapper(wrapper, canonicalHashes, projectHooksDir) {
+  if (isOwnedWrapper(wrapper, canonicalHashes)) {
+    return true;
+  }
+  if (!Array.isArray(wrapper.hooks)) {
+    return false;
+  }
+  return wrapper.hooks.some((hook) => isXtrmManagedCommand(hook.command ?? "", projectHooksDir));
+}
+function mergeProjectOwnedHooks(existingHooks, generatedHooks, projectHooksDir) {
   const canonicalHashes = new Set(Object.values(generatedHooks).flat().map((wrapper) => stableHookHash(wrapper)));
-  const filtered = {};
+  const merged = {};
   for (const [eventName, wrappers] of Object.entries(existingHooks)) {
-    const kept = wrappers.filter((wrapper) => !isOwnedWrapper(wrapper, canonicalHashes));
+    if (!Array.isArray(wrappers)) continue;
+    const kept = wrappers.filter((wrapper) => !isProjectOwnedWrapper(wrapper, canonicalHashes, projectHooksDir));
     if (kept.length > 0) {
-      filtered[eventName] = kept;
+      merged[eventName] = kept;
     }
   }
   for (const [eventName, wrappers] of Object.entries(generatedHooks)) {
-    filtered[eventName] = filtered[eventName] ? [...wrappers, ...filtered[eventName]] : wrappers;
+    merged[eventName] = merged[eventName] ? [...wrappers, ...merged[eventName]] : wrappers;
   }
-  return filtered;
+  return merged;
 }
 async function safeMergeOwnedHookSettings(currentSettings, generatedHooks, opts = {}) {
   const installedVersion = await readInstalledVersion();

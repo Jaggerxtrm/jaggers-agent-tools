@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.6] — 2026-07-14
+
+Merge-not-rewrite on project settings.json hooks — the wholesale-replace was eating third-party integrations.
+
+### `xtrm-tools`
+
+#### Fixed
+
+- **`xt update --apply` and `xt init` wholesale-replaced project `.claude/settings.json` hooks, silently dropping every entry not in the canonical xtrm source (xtrm-61cdl, reported as xtmux-qa0, P1).** `reconcileProjectClaudeHooks` + `runClaudeRuntimeSyncPhase` did an event-scoped wholesale replace of the hooks map with the canonical set from `packageRoot/.xtrm/config/hooks.json`. Third-party integrations paid the price — xtmux's auto-monitor was killed three times in one week; last murder at commit `26fe3c7`. Same bug class as `xtrm-0p7bp` (v0.10.4) which fixed additive-only merge (nothing new landed) by going wholesale-replace (everything not-ours dropped). Both directions overshoot. Fix: new `mergeProjectOwnedHooks(existingHooks, generatedHooks, projectHooksDir)` — wrappers are dropped IFF owned (hash matches a canonical wrapper, `_source === XTRM_GLOBAL_SOURCE`, or any command references a known xtrm-managed path via substring markers `/.xtrm/hooks/`, `/.xtrm/skills/default/service-skills/scripts/`, `CLAUDE_PLUGIN_ROOT`). The command-path check catches STALE xtrm hooks that no longer match the canonical hash — they get replaced by the canonical version rather than preserved as "third-party". Everything else — user hooks, third-party integrations, per-repo scanners, project-local lint hooks — is preserved verbatim. Wired into both call sites (init + update-apply), replacing the previous `shouldUseGlobalHooks()` branching; the `filterGlobalOwnedProjectHooks` helper was subsumed. Tests: 9 new cases in `claude-runtime-sync-reconcile.test.ts` (2 integration + 7 direct helper unit tests covering third-party preservation, canonical dedupe, stale `.xtrm/hooks/` drop, stale service-skills path drop, event with only third-party hooks, malformed hooks tolerated). Full CLI suite 816 passed / 98 skipped / 0 failed.
+
 ## [v0.10.5] — 2026-07-13
 
 Fail-open guard on service-skills hooks + durable content-fingerprint bootstrap detection + fleet-dirty-state prevention. Ships the class-level fix for the outage that bricked every basic tool in every session three times on 2026-07-13.
