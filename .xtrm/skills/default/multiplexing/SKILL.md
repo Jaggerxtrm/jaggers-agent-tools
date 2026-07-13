@@ -83,23 +83,23 @@ Three allowed forms, nothing else:
 
 ### xtmux picker — operational assist, not a comms bus
 
-When the repository has the `tmux-session-picker` features from the `xtmux-rib` epic, use them to make multiplexing safer and faster. They do **not** replace beads, `/tmp` prompt files, or the send-keys rules; they only improve inventory, pre-flight checks, monitoring, and cleanup.
+When the repository has the `xtmux` features from the `xtmux-rib` epic, use them to make multiplexing safer and faster. They do **not** replace beads, `/tmp` prompt files, or the send-keys rules; they only improve inventory, pre-flight checks, monitoring, and cleanup.
 
 Useful features:
 - `@agent_state` pane option: prefer this as the structured signal for `working` / idle / waiting state before sending input or firing timers. Fall back to capture-pane UI greps only when the option is absent.
-- `tmux-session-picker dashboard sessions-only|expanded`: preferred orchestrator inventory. It emits TSV rows with session/pane, `@agent_state`, bead/task, repo/branch, dirty count, shared-worktree flag, idle age, and cwd/path. Use `sessions-only` for a compact map and `expanded` when pane detail is needed.
+- `xtmux dashboard sessions-only|expanded`: preferred orchestrator inventory. It emits TSV rows with session/pane, `@agent_state`, bead/task, repo/branch, dirty count, shared-worktree flag, idle age, and cwd/path. Use `sessions-only` for a compact map and `expanded` when pane detail is needed.
 - `xtmux picker` sessions-only / expanded toggle: useful for the human interactive map; for agent-readable output prefer `dashboard`.
 - Rich filters (`repo:<x>`, `branch:<x>`, `cmd:agent`, `grep:<text>`): use them to find the target agent/session without scraping every pane.
 - Specialist `sp-*` awareness and bottom grouping: useful for delegated specialist chains; stale/orphan badges help cleanup.
 - Staleness badges / idle time: useful as a cleanup hint, never as sole proof that a prompt is safe. Confirm with `@agent_state` or pane capture.
-- `tmux-session-picker wait-agent <target> --timeout 30m --interval 30s`: preferred one-shot timer primitive; fires when the target leaves working/running/busy/thinking.
-- `tmux-session-picker monitor-agent <target> --timeout 30m --interval 30s` + `monitor-list`/`monitor-kill`: preferred registered timer primitive when the orchestrator needs to see active waits. Entries show target, pane, state, start, timeout, interval, and last update; they clean up on completion or kill.
-- `tmux-session-picker safe-send-pointer <target> 'leggi /tmp/file.txt e seguilo'`: preferred dry-run-first send wrapper. It rejects working targets, multiline payloads, shell substitution, and non-pointer inline instructions; use `--yes` only after inspecting the printed command. Safety defaults now include auto-double-Enter for Claude Code targets detected via `pane_current_command=claude` or `claude-*`, and `--force-freeform` for brief corrections. `--force-freeform` bypasses only the payload-shape check; multiline and shell-substitution guards remain enforced.
-- `tmux-session-picker handoff --target <target> --bead <id> --note <meta>`: assisted handoff flow. It creates the `/tmp` prompt-file, keeps the bead as the durable contract, prints the exact `safe-send-pointer --yes` command, and refuses working targets before creating/sending.
+- `xtmux wait-agent <target> --timeout 30m --interval 30s`: preferred one-shot timer primitive; fires when the target leaves working/running/busy/thinking.
+- `xtmux monitor-agent <target> --timeout 30m --interval 30s` + `monitor-list`/`monitor-kill`: preferred registered timer primitive when the orchestrator needs to see active waits. Entries show target, pane, state, start, timeout, interval, and last update; they clean up on completion or kill.
+- `xtmux safe-send-pointer <target> 'leggi /tmp/file.txt e seguilo'`: preferred dry-run-first send wrapper. It rejects working targets, multiline payloads, shell substitution, and non-pointer inline instructions; use `--yes` only after inspecting the printed command. Safety defaults now include auto-double-Enter for Claude Code targets detected via `pane_current_command=claude` or `claude-*`, and `--force-freeform` for brief corrections. `--force-freeform` bypasses only the payload-shape check; multiline and shell-substitution guards remain enforced.
+- `xtmux handoff --target <target> --bead <id> --note <meta>`: assisted handoff flow. It creates the `/tmp` prompt-file, keeps the bead as the durable contract, prints the exact `safe-send-pointer --yes` command, and refuses working targets before creating/sending.
 - Bead-aware preview: when a pane/session advertises `@agent_bead`, picker preview includes bounded `bd show` context. Use it to inspect delegated task contract/close notes before deciding the next orchestration step.
-- `tmux-session-picker worktree-collisions`: reports git worktrees used by multiple live sessions; picker rows may show `[shared-wt]`. Treat as a warning to consider dedicated `xt pi` / `xt claude` worktrees, not as an automatic blocker.
-- `tmux-session-picker audit`: read-only end-of-session hygiene report. `warning` rows require operator judgment (dirty/shared/working/no-bead/naming); `cleanup` rows are safer candidates (missing paths, stale specialists).
-- `?` in the picker / `tmux-session-picker mux-help`: concise multiplexing-safe delegation cheatsheet. Use it as a reminder, not as a replacement for this skill.
+- `xtmux worktree-collisions`: reports git worktrees used by multiple live sessions; picker rows may show `[shared-wt]`. Treat as a warning to consider dedicated `xt pi` / `xt claude` worktrees, not as an automatic blocker.
+- `xtmux audit`: read-only end-of-session hygiene report. `warning` rows require operator judgment (dirty/shared/working/no-bead/naming); `cleanup` rows are safer candidates (missing paths, stale specialists).
+- `?` in the picker / `xtmux mux-help`: concise multiplexing-safe delegation cheatsheet. Use it as a reminder, not as a replacement for this skill.
 - Act-on-preview controls (`approve`, `interrupt`, `message`): acceptable for micro-actions only. Long instructions still go through beads + `/tmp` pointer.
 - Rename and kill/bulk-kill controls: useful for enforcing naming convention and cleanup hygiene, with the same dirty-worktree caution as shell cleanup.
 
@@ -146,8 +146,8 @@ Forbidden: ad-hoc names like `svc-s24f-tests`, `test-orch-xyz`, `tmp-investigati
 Trigger: operator says "what's running in `<X>`?", "give me a session map", "what state is everything in?"
 
 Steps:
-1. If available, start with `tmux-session-picker dashboard sessions-only` for agent-readable inventory. Use `dashboard expanded` when pane detail is needed.
-2. For human navigation, use `tmux-session-picker` / `xtmux picker` in sessions-only mode; use filters such as `cmd:agent`, `repo:<x>`, `branch:<x>`, or `grep:<text>` to narrow the map.
+1. If available, start with `xtmux dashboard sessions-only` for agent-readable inventory. Use `dashboard expanded` when pane detail is needed.
+2. For human navigation, use `xtmux` / `xtmux picker` in sessions-only mode; use filters such as `cmd:agent`, `repo:<x>`, `branch:<x>`, or `grep:<text>` to narrow the map.
 3. Fallback when the dashboard command is unavailable: `tmux ls`, then for each live session `tmux capture-pane -t <session> -p | tail -8`, `tmux display-message -t <session> -p '#{pane_current_path}'`, and for agent panes `tmux show-options -p -t <pane_id> -qv @agent_state 2>/dev/null || true`.
 4. Return a table: `session | cwd | branch (if git) | model (if agent) | @agent_state | bead/task | dirty/shared | idle/working`
 
@@ -158,9 +158,9 @@ Trigger: operator says "send task X to session Y", "delegate to Y", "ask Y to do
 Steps:
 1. Run the pre-flight checklist on Y. If it fails, report which check and stop.
 2. If the task represents trackable work, create a bead first (`bd create --title ... --description ...`). This is the persistent content.
-3. If available, prefer `tmux-session-picker handoff --target Y --bead <id> --note '<constraints>'` to create the `/tmp` file and print the exact safe-send command. Otherwise write any ephemeral meta-protocol (negative constraints, output format) to `/tmp/<session>-<topic>.txt` via Bash heredoc.
+3. If available, prefer `xtmux handoff --target Y --bead <id> --note '<constraints>'` to create the `/tmp` file and print the exact safe-send command. Otherwise write any ephemeral meta-protocol (negative constraints, output format) to `/tmp/<session>-<topic>.txt` via Bash heredoc.
 4. Show the operator the exact send-keys / `safe-send-pointer --yes` command you would run. Wait for explicit confirmation before executing.
-5. On confirmation: use `tmux-session-picker safe-send-pointer --yes ...` when available; otherwise `tmux send-keys -t Y '<single-line pointer>' Enter`. **Claude Code panes consume the first Enter deterministically as paste-detection**; send a second Enter after 1-2s for Claude Code targets. Codex/pi panes submit on the first Enter.
+5. On confirmation: use `xtmux safe-send-pointer --yes ...` when available; otherwise `tmux send-keys -t Y '<single-line pointer>' Enter`. **Claude Code panes consume the first Enter deterministically as paste-detection**; send a second Enter after 1-2s for Claude Code targets. Codex/pi panes submit on the first Enter.
 6. If polling is appropriate, set up a registered monitor or background polling loop (see Monitoring).
 
 ### Pattern 3 — Cleanup hygiene
@@ -171,7 +171,7 @@ Steps:
 1. Process inventory: `ps -ef | grep -E "(serena|gitnexus|uvx.*serena|bun.*specialists)"`
 2. For each candidate, extract its `--project` argument. Classify into LIVE (path exists on disk), ORPHAN (path is gone), NO_PROJECT (parent uvx wrappers etc.)
 3. Kill ORPHAN PIDs with `kill -9`. Skip LIVE (active work). Skip NO_PROJECT (children will cascade-die after their actual workers are gone)
-4. tmux sessions: if available, run `tmux-session-picker audit` first. Use `cleanup` rows as candidates and treat `warning` rows as requiring operator judgment. Otherwise use the picker to spot stale/orphan/specialist rows quickly, but confirm with shell checks. Identify ones with idle `❯` prompt or non-working `@agent_state` AND no pending commits in their cwd worktree. Those are safe to `tmux kill-session -t <name>`. Sessions in Working state or with dirty trees: leave alone
+4. tmux sessions: if available, run `xtmux audit` first. Use `cleanup` rows as candidates and treat `warning` rows as requiring operator judgment. Otherwise use the picker to spot stale/orphan/specialist rows quickly, but confirm with shell checks. Identify ones with idle `❯` prompt or non-working `@agent_state` AND no pending commits in their cwd worktree. Those are safe to `tmux kill-session -t <name>`. Sessions in Working state or with dirty trees: leave alone
 5. Worktrees: `git worktree list` per affected repo. Remove worktrees whose owning job is in `cancelled` / `error` state per `sp ps`
 6. `sp clean --ps` to hide resolved terminal rows from the default `sp ps` dashboard
 
@@ -320,7 +320,7 @@ Session-name shape post-xtmux-3h8: `role-<runtime>-<slug>[-<bead>]`. The `<runti
 | Signal | Address space | Use for |
 |---|---|---|
 | `wait-agent <pane_id>` / `monitor-agent <pane_id>` | pane (`%1656`) | "wake me when this pane goes done" |
-| `tmux-session-picker message-list --for <session_id>` | session (`$1495`) | pulling escalation messages FROM the coordinator |
+| `xtmux message-list --for <session_id>` | session (`$1495`) | pulling escalation messages FROM the coordinator |
 | observability DB (`.specialists/db/observability.db`) | `bead_id` / `epic_id` | seeing which sub-chains the coordinator has dispatched |
 
 **Address-space warning.** These primitives use different targets: `wait-agent`/`safe-send-pointer` address panes (`%1656` or `session.pane_index`); `message-send` from `pi-agent-state.ts` sets `--to $@agent_parent_session` which is your `#{session_id}` (`$1495`). If you poll `message-list --for xt-design.3` (pane target) you will miss messages routed to `$1495`. Always filter with `MY_SID=$(tmux display-message -p '#{session_id}')`.
@@ -350,7 +350,7 @@ Everything below composes with the primitives already documented above.
 
 - **Env override**: `XTMUX_OBS_V2=on|shadow|off`. Unset defaults to `on`.
   `shadow` runs V1 authoritatively and mirrors writes into V2 for divergence
-  tracking (`tmux-session-picker shadow-summary`). `0`/`off` reverts to the
+  tracking (`xtmux shadow-summary`). `0`/`off` reverts to the
   JSONL path — contract tests still export this because goldens are V1-shaped.
 - **Sender-declared reply obligation**: `message-send --bead <id> ...`
   implicitly sets `--expects-reply=true`. Opt out with `--expects-reply=false`
@@ -368,7 +368,7 @@ Everything below composes with the primitives already documented above.
     touches `${XDG_RUNTIME_DIR:-/tmp}/xtmux-auto-monitor/<target>_pending`.
   - `PostToolUse` on `Monitor|Bash` matching `wait-agent <target>`: deletes marker.
   - `Stop`: if any marker survives, emits `{"decision":"block","reason":"..."}`
-    with the exact `Monitor(command:"tmux-session-picker wait-agent <target>
+    with the exact `Monitor(command:"xtmux wait-agent <target>
     --wait-for-transition --timeout 30m --interval 30s")` Claude must call.
     Loop-guarded via `stop_hook_active`; TTL prune via
     `XTMUX_AUTO_MONITOR_TTL_MS` (default 1h); global bypass via
@@ -416,12 +416,12 @@ export XTMUX_EVENT_LOG_FILE=/path/to/events.jsonl
 Useful commands:
 
 ```bash
-tmux-session-picker log tail 80
-tmux-session-picker log query --since 1h --limit 200
-tmux-session-picker log query --type message.sent --since 4h
-tmux-session-picker log query --type agent.turn.done --since 4h
-tmux-session-picker log query --bead <bead-id> --since 4h
-tmux-session-picker log query --pane %42 --since 1h
+xtmux log tail 80
+xtmux log query --since 1h --limit 200
+xtmux log query --type message.sent --since 4h
+xtmux log query --type agent.turn.done --since 4h
+xtmux log query --bead <bead-id> --since 4h
+xtmux log query --pane %42 --since 1h
 ```
 
 Important event types:
@@ -444,13 +444,13 @@ Long content still belongs in bead notes or a file.
 
 ```bash
 # send short update
-tmux-session-picker message-send --from <orchestrator> --to <session-or-pane> --bead <id> --text 'short update'
+xtmux message-send --from <orchestrator> --to <session-or-pane> --bead <id> --text 'short update'
 
 # read messages for orchestrator/session
-tmux-session-picker message-list --for <session-or-pane> --unacked
+xtmux message-list --for <session-or-pane> --unacked
 
 # acknowledge after acting
-tmux-session-picker message-ack <message-id> --by <session-or-pane>
+xtmux message-ack <message-id> --by <session-or-pane>
 ```
 
 Delegated panes should use `/multiplexing-team` and report upward with
@@ -468,19 +468,19 @@ Telemetry is opt-in and never shadows `git`, `bd`, or `gh` unless the operator
 chooses to alias it in a specific shell.
 
 ```bash
-tmux-session-picker telemetry git -- commit -m 'message'
-tmux-session-picker telemetry git -- push
-tmux-session-picker telemetry bd -- update <id> --claim
-tmux-session-picker telemetry bd -- close <id> --reason 'done'
-tmux-session-picker telemetry gh -- pr create --fill
+xtmux telemetry git -- commit -m 'message'
+xtmux telemetry git -- push
+xtmux telemetry bd -- update <id> --claim
+xtmux telemetry bd -- close <id> --reason 'done'
+xtmux telemetry gh -- pr create --fill
 ```
 
 Optional shell aliases for a dedicated monitored terminal/pane only:
 
 ```bash
-alias git='tmux-session-picker telemetry git --'
-alias bd='tmux-session-picker telemetry bd --'
-alias gh='tmux-session-picker telemetry gh --'
+alias git='xtmux telemetry git --'
+alias bd='xtmux telemetry bd --'
+alias gh='xtmux telemetry gh --'
 ```
 
 Do not add those aliases globally unless the operator explicitly wants all
@@ -509,8 +509,8 @@ If the helper script is unavailable, use tmux panes rather than a single noisy s
 Manual equivalent:
 
 ```bash
-tmux new-session -s xtmux-monitor 'watch -n 5 "tmux-session-picker dashboard sessions-only"'
-tmux split-window -v 'watch -n 10 "tmux-session-picker monitor-list; echo; tmux-session-picker audit"'
+tmux new-session -s xtmux-monitor 'watch -n 5 "xtmux dashboard sessions-only"'
+tmux split-window -v 'watch -n 10 "xtmux monitor-list; echo; xtmux audit"'
 tmux split-window -h 'tail -F ${XDG_STATE_HOME:-$HOME/.local/state}/xtmux/events.jsonl'
 tmux select-layout tiled
 ```
@@ -519,26 +519,26 @@ Optional focused panes:
 
 ```bash
 # recent short messages
-tmux split-window 'me=$(tmux display-message -p "#S"); watch -n 3 "tmux-session-picker message-list --for $me --unacked 2>/dev/null || true"'
+tmux split-window 'me=$(tmux display-message -p "#S"); watch -n 3 "xtmux message-list --for $me --unacked 2>/dev/null || true"'
 
 # recent turn completions
-tmux split-window 'watch -n 5 "tmux-session-picker log query --type agent.turn.done --since 2h --limit 30"'
+tmux split-window 'watch -n 5 "xtmux log query --type agent.turn.done --since 2h --limit 30"'
 
 # recent git/bd/gh telemetry
-tmux split-window 'watch -n 5 "tmux-session-picker log query --since 2h --limit 80 | grep -E '\"type\":\"(git\.|bd\.|gh\.|git.pr)' || true"'
+tmux split-window 'watch -n 5 "xtmux log query --since 2h --limit 80 | grep -E '\"type\":\"(git\.|bd\.|gh\.|git.pr)' || true"'
 ```
 
 For compact ad-hoc monitoring without creating a tmux layout:
 
 ```bash
-watch -n 5 'tmux-session-picker dashboard sessions-only; echo; tmux-session-picker monitor-list; echo; tmux-session-picker audit'
+watch -n 5 'xtmux dashboard sessions-only; echo; xtmux monitor-list; echo; xtmux audit'
 ```
 
 If the JSONL stream is too raw, prefer filtered queries:
 
 ```bash
-watch -n 5 'tmux-session-picker log query --type message.sent --since 1h --limit 20'
-watch -n 5 'tmux-session-picker log query --type agent.turn.done --since 1h --limit 20'
+watch -n 5 'xtmux log query --type message.sent --since 1h --limit 20'
+watch -n 5 'xtmux log query --type agent.turn.done --since 1h --limit 20'
 ```
 
 ## Monitoring — polling via run_in_background
@@ -546,10 +546,10 @@ watch -n 5 'tmux-session-picker log query --type agent.turn.done --since 1h --li
 When a delegated agent runs and the operator wants me to wait without burning context with manual capture-pane calls, prefer the project primitive when available:
 
 ```bash
-tmux-session-picker wait-agent <pane_id> --timeout 30m --interval 30s
+xtmux wait-agent <pane_id> --timeout 30m --interval 30s
 # or, when you need a visible registry of active waits:
-tmux-session-picker monitor-agent <pane_id> --timeout 30m --interval 30s
-tmux-session-picker monitor-list
+xtmux monitor-agent <pane_id> --timeout 30m --interval 30s
+xtmux monitor-list
 ```
 
 If these commands are unavailable, fall back to structured `@agent_state` polling. This is the safest implementation of the rule "do not prompt while Working":
@@ -601,7 +601,7 @@ The preferred pattern remains: the delegated agent writes its output into the be
 
 When a delegated session works on a shared repo checkout where other sessions are also active, sharing the same checkout causes git-state races. One session's `git checkout` or `git stash` affects what every other session sees on disk. Observed live: one discovery session ran a sweep against a different branch than intended because a sibling session had switched the working tree concurrently. The sweep result was still useful only because the analysis was branch-agnostic.
 
-The known mitigation is to spawn delegated sessions in dedicated worktrees via `xt claude` or `xt pi`. This is not currently enforced. When pre-flight detects two live sessions in the same checkout, warn the operator and recommend `xt claude` / `xt pi` for the next delegation. If available, use `tmux-session-picker worktree-collisions` for this check.
+The known mitigation is to spawn delegated sessions in dedicated worktrees via `xt claude` or `xt pi`. This is not currently enforced. When pre-flight detects two live sessions in the same checkout, warn the operator and recommend `xt claude` / `xt pi` for the next delegation. If available, use `xtmux worktree-collisions` for this check.
 
 ## Deploy-gap chain — post-merge observability guard
 

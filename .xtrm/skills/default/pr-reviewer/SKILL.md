@@ -1,6 +1,6 @@
 ---
 name: pr-reviewer
-description: PR review helper for multiplexed sprints. You are a HELPER, not an orchestrator. Fetch Codex (openai-codex) review comments and threads on every PR under review, weigh them as high-signal-but-not-authoritative, cross-check against the actual diff, and emit a verdict from the fixed vocabulary (PASS / PASS_WITH_NOTES / NEEDS_CHANGES / BLOCKED). Report upward via `tmux-session-picker message-send` and persist reasoning in the bead notes. Use when a delegated pane is asked to be the sprint's judge / adversarial reviewer, or when a single-pane orchestrator wants a Codex-informed PR verdict without re-doing the review by hand.
+description: PR review helper for multiplexed sprints. You are a HELPER, not an orchestrator. Fetch Codex (openai-codex) review comments and threads on every PR under review, weigh them as high-signal-but-not-authoritative, cross-check against the actual diff, and emit a verdict from the fixed vocabulary (PASS / PASS_WITH_NOTES / NEEDS_CHANGES / BLOCKED). Report upward via `xtmux message-send` and persist reasoning in the bead notes. Use when a delegated pane is asked to be the sprint's judge / adversarial reviewer, or when a single-pane orchestrator wants a Codex-informed PR verdict without re-doing the review by hand.
 ---
 
 # Judge with Codex
@@ -138,7 +138,7 @@ Do **not** overwrite prior notes on the same bead — `bd update --notes` append
 Every verdict fires a message to the orchestrator:
 
 ```bash
-tmux-session-picker message-send \
+xtmux message-send \
   --from <your-session>:<pane> \
   --to <orchestrator-session>:<orchestrator-pane> \
   --bead <bead-id> \
@@ -184,7 +184,7 @@ The 82wh incident is the standing warning: subtle correctness bugs in high-throu
 If you were just spawned as the judge:
 
 ```bash
-tmux-session-picker message-send \
+xtmux message-send \
   --from <your-session>:<pane> --to <orchestrator-session>:<orchestrator-pane> \
   --text "judge ready — awaiting first PR"
 ```
