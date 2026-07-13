@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.2] — 2026-07-13
+
+Fleet audit after v0.10.1 exposed two mopping-up gaps that survived every `xt update --apply` on consumer repos.
+
+### `xtrm-tools` v0.10.2 — 2026-07-13
+
+#### Fixed
+
+- **Service-skills hook commands referenced a symlink-dependent path (xtrm-ec9um).** `policies/service-skills-claude.json` (compiled to `.xtrm/config/hooks.json`) wired the SessionStart cataloger, PreToolUse `skill_activator`, and PostToolUse `drift_detector` at `$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/`. That path only resolves when the `service-skills` skill is enabled and its direct-runtime-links symlink exists at `.claude/skills/service-skills`. In 17/19 fleet consumers the skill is NOT enabled, so every hook fired `python3: can't open file` and either blocked or emitted noise. The scripts themselves are registry-gated (no-op if no `service-registry.json`), but Python can't gate what it can't load. Hooks now reference the canonical `$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-skills/scripts/` path, which is present in every consumer via `installFromRegistry` regardless of skill enablement. `sre-agent` originally flagged this on `mercury-infra`; the fleet-wide sweep confirmed identical drift on 16 more repos.
+- **`normalizePiSkillsEntries` missed per-runtime suffix variants of the retired `active/` path (xtrm-ec9um).** `LEGACY_XTRM_SKILLS_ENTRIES` in `cli/src/core/pi-runtime.ts` covered `../.xtrm/skills/active`, `~/.xtrm/skills/active`, and `~/.xtrm/skills/default` — but not `../.xtrm/skills/active/pi`, `../.xtrm/skills/active/claude`, or their `~` counterparts. `.pi/settings.json` entries with the per-runtime suffix survived every `xt update --apply`. Fleet audit found 6 repos still carrying `../.xtrm/skills/active/pi` after v0.10.1. Set extended to cover all 8 variants. Regression coverage added in `cli/src/tests/pi-runtime-safeguards.test.ts`.
+
 ## [v0.10.0] — 2026-07-12
 
 Root `xtrm-tools` release rolling up the Global Skills Migration epic (both global SSOT + repo-side v2 flat layout with `xt migrate` tooling), the `xt pi --role` / `xt claude --role` role-launcher family (xtmux-1lb.*), pi runtime hardening (per-call latency, footer scheduling, theme preflight), and the `multiplexing` deploy-gap chain. Publish root `xtrm-tools` from this release commit/tag. `@jaggerxtrm/pi-extensions` v0.9.4 and v0.9.5 were published independently to npm earlier in the cycle (2026-07-08 / 2026-07-11) and are captured in their own blocks below.

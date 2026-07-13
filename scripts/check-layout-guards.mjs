@@ -22,6 +22,20 @@ const transientAllowlist = [
   // self-reference: this script contains the staleActiveTiers strings by
   // necessity to detect them elsewhere; skip itself to avoid a false positive.
   'scripts/check-layout-guards.mjs',
+  // Legitimate references — code and docs that name the retired paths in
+  // order to detect / strip / describe them. Adding these to the guard's
+  // stale-tier check would forbid the very mechanism that keeps the
+  // fleet clean of the drift.
+  //
+  //   pi-runtime.ts: LEGACY_XTRM_SKILLS_ENTRIES set (strips them from .pi/settings.json)
+  //   pi-runtime-safeguards.test.ts: regression case that feeds them in and asserts they get stripped
+  //   cli/dist/*: bundled build artifact of pi-runtime.ts
+  //   CHANGELOG.md: describes the strip fix (xtrm-ec9um in v0.10.2)
+  'cli/src/core/pi-runtime.ts',
+  'cli/src/tests/pi-runtime-safeguards.test.ts',
+  'cli/dist/index.cjs',
+  'cli/dist/index.cjs.map',
+  'CHANGELOG.md',
 ];
 
 function trackedFiles() {

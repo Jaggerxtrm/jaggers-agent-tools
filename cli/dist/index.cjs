@@ -60358,7 +60358,15 @@ async function resolveGlobalNpmRootDir() {
   return npmRootDir.length > 0 ? npmRootDir : null;
 }
 var PROJECT_EXTENSIONS_ENTRY = "../.xtrm/extensions";
-var LEGACY_XTRM_SKILLS_ENTRIES = /* @__PURE__ */ new Set(["../.xtrm/skills/active", "~/.xtrm/skills/active", "~/.xtrm/skills/default"]);
+var LEGACY_XTRM_SKILLS_ENTRIES = /* @__PURE__ */ new Set([
+  "../.xtrm/skills/active",
+  "../.xtrm/skills/active/pi",
+  "../.xtrm/skills/active/claude",
+  "~/.xtrm/skills/active",
+  "~/.xtrm/skills/active/pi",
+  "~/.xtrm/skills/active/claude",
+  "~/.xtrm/skills/default"
+]);
 var PROJECT_EXTENSION_PACKAGE_ID = "npm:@jaggerxtrm/pi-extensions";
 var PROJECT_EXTENSION_PACKAGE = {
   id: PROJECT_EXTENSION_PACKAGE_ID,

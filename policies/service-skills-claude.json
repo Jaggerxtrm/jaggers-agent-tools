@@ -8,17 +8,17 @@
     "hooks": [
       {
         "event": "SessionStart",
-        "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/cataloger.py\""
+        "command": "python3 \"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-skills/scripts/cataloger.py\""
       },
       {
         "event": "PreToolUse",
         "matcher": "Read|Write|Edit|Glob|Grep|Bash|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
-        "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/skill_activator.py\""
+        "command": "python3 \"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-skills/scripts/skill_activator.py\""
       },
       {
         "event": "PostToolUse",
         "matcher": "Write|Edit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
-        "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/drift_detector.py\" check-hook",
+        "command": "python3 \"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-skills/scripts/drift_detector.py\" check-hook",
         "timeout": 10000
       }
     ]

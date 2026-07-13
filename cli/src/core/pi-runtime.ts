@@ -125,7 +125,15 @@ async function resolveGlobalNpmRootDir(): Promise<string | null> {
     return npmRootDir.length > 0 ? npmRootDir : null;
 }
 const PROJECT_EXTENSIONS_ENTRY = '../.xtrm/extensions';
-const LEGACY_XTRM_SKILLS_ENTRIES = new Set(['../.xtrm/skills/active', '~/.xtrm/skills/active', '~/.xtrm/skills/default']);
+const LEGACY_XTRM_SKILLS_ENTRIES = new Set([
+    '../.xtrm/skills/active',
+    '../.xtrm/skills/active/pi',
+    '../.xtrm/skills/active/claude',
+    '~/.xtrm/skills/active',
+    '~/.xtrm/skills/active/pi',
+    '~/.xtrm/skills/active/claude',
+    '~/.xtrm/skills/default',
+]);
 const PROJECT_EXTENSION_PACKAGE_ID = 'npm:@jaggerxtrm/pi-extensions';
 const PROJECT_EXTENSION_PACKAGE: ManagedPackage = {
     id: PROJECT_EXTENSION_PACKAGE_ID,
