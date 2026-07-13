@@ -9,12 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### `xtrm-tools` — Unreleased
+## [v0.10.3] — 2026-07-13
+
+Two multiplexing-runtime and coordination-UX landings that had been queued in `[Unreleased]` since v0.10.2, plus the bd v1.1.0 instruction refresh that shipped alongside them.
+
+### `xtrm-tools` v0.10.3 — 2026-07-13
 
 #### Added
 
 - **`multiplexing` / `multiplexing-team` — V2 SQLite runtime default-on (xtmux-3xs).** Picker delegates message/monitor/audit primitives to a SQLite-backed runtime by default; CLI surface unchanged (`message-send`/`message-list`/`unread-count`/`monitor-list`/`log-emit`); storage moved from JSONL to `${XDG_STATE_HOME}/xtmux/observability.db`. New behaviors: `message-send --bead <id>` implicitly sets `--expects-reply=true`; pane-scoped inbox via `unread-count --for <sid> --pane %N`; auto-monitor coordination hooks in `.claude/settings.json` (PostToolUse + Stop enforce Monitor wake on peer transition); auto-wake on pi side via `pi-inbox-reply` + `pi-auto-monitor` extensions. Env override: `XTMUX_OBS_V2=on|shadow|off`. Companion cross-refs added to `code-review`, `deploy-monitor`, `pr-reviewer` skill guides.
 - **Shared repo-scoped beads-status cache (xtrm-77t9q).** New `.xtrm/hooks/beads-status-cache.mjs` module coalesces N agents in the same repo (Claude statusline + Pi custom-footer, main + linked worktrees) to one `bd` refresh per TTL. Schema v1 cache at `<mainRoot>/.xtrm/cache/beads-status.json` (atomic rename, 0o600, single-flight lease at `.lock`, 5s TTL compact / 30s TTL descendants). `resolveMainRoot` is pure-fs (reads `.git/worktrees/<n>/gitdir` directly, no subprocess). `fetchCompact` walks nested parents up to 8 levels to find the owning epic. `formatCompact` renders the shared one-line spec (`12 open · 2 in progress · epic k2ufi (1/3 done)`) — Pi and Claude statusline get parity by construction. Fail-soft `stale: true` marker + `stale Xm` age tag past 10×TTL. `.xtrm/hooks/statusline.mjs` refactored to consume the module; `runFast(250ms)` for git / `runBd(2000ms)` for bd fixes the pre-existing 250ms-timeout bug that made statusline fall back to `no open issues`. `packages/pi-extensions/extensions/custom-footer/index.ts` consumes the same cache for compact rendering plus an on-demand Ctrl+O expanded epic tree (indent-2 per level, N=50 cap, `+M more` overflow) with skeleton-then-repaint refresh.
+
+#### Changed
+
+- **Instruction routing files caught up to bd v1.1.0 (xtrm-3kccz).** Verified the installed `bd` binary against v1.1.0's documented CLI surface (`bd --help`, `bd ready --help`, `bd create --help`) and added the two genuinely new, stable commands that `bd prime` itself doesn't teach: `bd ready --claim`/`--explain` and `bd create --graph`/`--waits-for`/`--spec-id`/`--skills`, to the `Essential command surface` section of both `.xtrm/config/instructions/agents-top.md` and `claude-top.md`. Deliberately excluded `bd ready --mol`/`--gated` (no formulas/molecules currently in use in this repo) and all `main`-only/unreleased bd features (claim TTL/heartbeat/reclaim, `bd formula schema`, `bd history --events`). Also evaluated and reverted a `bd setup claude`-injected block in `CLAUDE.md` (xtrm-h4cwy): its content duplicated `bd prime`'s live output and contradicted this repo's requirement to use Claude-local task planning (TaskCreate/TodoWrite-style) alongside beads.
 
 ## [v0.10.2] — 2026-07-13
 
