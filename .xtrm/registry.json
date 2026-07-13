@@ -309,6 +309,30 @@
           "hash": "6aab994ee0266063245245483ee3280645aca66c0c5e56730ffad3f32ecbbc5c",
           "version": "0.10.4"
         },
+        "gitnexus/gitnexus-cli/SKILL.md": {
+          "hash": "58f9f765306b285c661b86777e2097b3efb43dabe9e19d42f795e88faf9081a2",
+          "version": "0.10.4"
+        },
+        "gitnexus/gitnexus-debugging/SKILL.md": {
+          "hash": "d8090c85e2c8faffd4767fc2dcc52aeb3f3dab3dc7218bc96b29dacf53635d64",
+          "version": "0.10.4"
+        },
+        "gitnexus/gitnexus-exploring/SKILL.md": {
+          "hash": "21b18eee1f679efff654bf45f9dc32a495c81c014d210ac7e778c58a2a204dbd",
+          "version": "0.10.4"
+        },
+        "gitnexus/gitnexus-guide/SKILL.md": {
+          "hash": "746d057790de5b034d19d603dfa77eb9b596407918025481b4b29214efee2581",
+          "version": "0.10.4"
+        },
+        "gitnexus/gitnexus-impact-analysis/SKILL.md": {
+          "hash": "09e529505da155532059a3656557811f99bafff0f05c8f9e6e47bb96edc340d3",
+          "version": "0.10.4"
+        },
+        "gitnexus/gitnexus-refactoring/SKILL.md": {
+          "hash": "544841cf90c9ebe92a2f3018b034593c2bfd8617f968412d3599a22725e3c73e",
+          "version": "0.10.4"
+        },
         "hook-development/examples/load-context.sh": {
           "hash": "0d614599e711c087b381a4ac7ee3c40758af1022669fc998649d199b9dfe15ed",
           "version": "0.10.4"

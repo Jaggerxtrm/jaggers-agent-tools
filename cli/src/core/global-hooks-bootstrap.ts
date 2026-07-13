@@ -11,6 +11,7 @@ interface GlobalHooksBootstrapOptions {
 interface GlobalHooksBootstrapResult {
   readonly installedVersion: string;
   readonly changed: boolean;
+  readonly sourceFingerprint: string;
 }
 
 interface HookLogEvent {
@@ -22,6 +23,12 @@ interface HookLogEvent {
   readonly action?: string;
   readonly outcome?: 'ok' | 'skipped' | 'error';
   readonly durationMs?: number;
+}
+
+interface GlobalHooksState {
+  readonly installedVersion?: string;
+  readonly installedFrom?: string;
+  readonly sourceFingerprint?: string;
 }
 
 const COPY_FILTER = (sourcePath: string): boolean => !sourcePath.endsWith('__pycache__');
@@ -52,14 +59,59 @@ async function appendHookLog(event: HookLogEvent): Promise<void> {
   await fs.appendFile(logPath, `${JSON.stringify(event)}\n`);
 }
 
-async function readInstalledVersion(): Promise<string | null> {
+async function readState(): Promise<GlobalHooksState | null> {
   const statePath = resolveStatePath();
   if (!await fs.pathExists(statePath)) {
     return null;
   }
 
-  const state = await fs.readJson(statePath) as { installedVersion?: string };
-  return typeof state.installedVersion === 'string' ? state.installedVersion : null;
+  try {
+    return await fs.readJson(statePath) as GlobalHooksState;
+  } catch {
+    return null;
+  }
+}
+
+// Content fingerprint of the source hooks payload — hashes the canonical
+// hooks.json plus every hook file under .xtrm/hooks/ (sorted for determinism).
+// The version string alone is insufficient because bootstrap can be re-sourced
+// from a stale worktree/dev-clone at the same version and silently downgrade
+// the global config (xtrm-bbxzu incident: 11:59 rewrote ~/.xtrm/config/hooks.json
+// with pre-v0.10.4 $CLAUDE_PROJECT_DIR paths from a stale worktree).
+async function computeSourceFingerprint(sourceHooksRoot: string, sourceHooksConfigPath: string): Promise<string> {
+  const hash = crypto.createHash('sha256');
+  if (await fs.pathExists(sourceHooksConfigPath)) {
+    hash.update('config:');
+    hash.update(await fs.readFile(sourceHooksConfigPath));
+  }
+
+  const files: string[] = [];
+  async function walk(dir: string): Promise<void> {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === '__pycache__') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (entry.isFile()) {
+        files.push(full);
+      }
+    }
+  }
+  if (await fs.pathExists(sourceHooksRoot)) {
+    await walk(sourceHooksRoot);
+  }
+
+  files.sort();
+  for (const file of files) {
+    const rel = path.relative(sourceHooksRoot, file);
+    hash.update('file:');
+    hash.update(rel);
+    hash.update('\0');
+    hash.update(await fs.readFile(file));
+  }
+
+  return hash.digest('hex');
 }
 
 export async function ensureGlobalHooksBootstrapped(pkgRoot: string, opts: GlobalHooksBootstrapOptions = {}): Promise<GlobalHooksBootstrapResult> {
@@ -87,8 +139,12 @@ export async function ensureGlobalHooksBootstrapped(pkgRoot: string, opts: Globa
     durationMs: 0,
   });
 
-  const currentVersion = await readInstalledVersion();
-  if (!opts.force && currentVersion === installedVersion && await fs.pathExists(targetHooksRoot) && await fs.pathExists(targetHooksConfigPath)) {
+  const sourceFingerprint = await computeSourceFingerprint(sourceHooksRoot, sourceHooksConfigPath);
+  const currentState = await readState();
+  const targetsExist = await fs.pathExists(targetHooksRoot) && await fs.pathExists(targetHooksConfigPath);
+  const fingerprintMatches = currentState?.sourceFingerprint === sourceFingerprint;
+
+  if (!opts.force && targetsExist && fingerprintMatches) {
     await appendHookLog({
       timestamp: new Date().toISOString(),
       component: 'hooks-migration',
@@ -98,7 +154,7 @@ export async function ensureGlobalHooksBootstrapped(pkgRoot: string, opts: Globa
       outcome: 'skipped',
       durationMs: Date.now() - startedAt,
     });
-    return { installedVersion, changed: false };
+    return { installedVersion, changed: false, sourceFingerprint };
   }
 
   try {
@@ -109,6 +165,7 @@ export async function ensureGlobalHooksBootstrapped(pkgRoot: string, opts: Globa
     await writeJsonAtomic(statePath, {
       installedVersion,
       installedFrom: pkgRoot,
+      sourceFingerprint,
     }, { expectedRoot: targetHooksRoot });
 
     await appendHookLog({
@@ -121,7 +178,7 @@ export async function ensureGlobalHooksBootstrapped(pkgRoot: string, opts: Globa
       durationMs: Date.now() - startedAt,
     });
 
-    return { installedVersion, changed: true };
+    return { installedVersion, changed: true, sourceFingerprint };
   } catch (error) {
     await appendHookLog({
       timestamp: new Date().toISOString(),
@@ -136,4 +193,4 @@ export async function ensureGlobalHooksBootstrapped(pkgRoot: string, opts: Globa
   }
 }
 
-export { appendHookLog, hashValue, resolveGlobalHooksConfigPath, resolveGlobalHooksRoot };
+export { appendHookLog, hashValue, resolveGlobalHooksConfigPath, resolveGlobalHooksRoot, computeSourceFingerprint };

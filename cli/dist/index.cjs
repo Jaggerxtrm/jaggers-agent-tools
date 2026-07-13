@@ -41643,7 +41643,7 @@ var require_utils4 = __commonJS({
         state[info.set] = info.to;
       }
     }
-    function readState(line) {
+    function readState2(line) {
       let code = codeRegex(true);
       let controlChars = code.exec(line);
       let state = {};
@@ -41843,7 +41843,7 @@ var require_utils4 = __commonJS({
       let output = [];
       for (let i = 0; i < input.length; i++) {
         let line = rewindState(state, input[i]);
-        state = readState(line);
+        state = readState2(line);
         let temp = Object.assign({}, state);
         output.push(unwindState(temp, line));
       }
@@ -44716,13 +44716,48 @@ async function appendHookLog(event) {
   await import_fs_extra3.default.appendFile(logPath, `${JSON.stringify(event)}
 `);
 }
-async function readInstalledVersion() {
+async function readState() {
   const statePath = resolveStatePath();
   if (!await import_fs_extra3.default.pathExists(statePath)) {
     return null;
   }
-  const state = await import_fs_extra3.default.readJson(statePath);
-  return typeof state.installedVersion === "string" ? state.installedVersion : null;
+  try {
+    return await import_fs_extra3.default.readJson(statePath);
+  } catch {
+    return null;
+  }
+}
+async function computeSourceFingerprint(sourceHooksRoot, sourceHooksConfigPath) {
+  const hash2 = import_node_crypto2.default.createHash("sha256");
+  if (await import_fs_extra3.default.pathExists(sourceHooksConfigPath)) {
+    hash2.update("config:");
+    hash2.update(await import_fs_extra3.default.readFile(sourceHooksConfigPath));
+  }
+  const files = [];
+  async function walk2(dir) {
+    const entries = await import_fs_extra3.default.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === "__pycache__") continue;
+      const full = import_node_path2.default.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk2(full);
+      } else if (entry.isFile()) {
+        files.push(full);
+      }
+    }
+  }
+  if (await import_fs_extra3.default.pathExists(sourceHooksRoot)) {
+    await walk2(sourceHooksRoot);
+  }
+  files.sort();
+  for (const file2 of files) {
+    const rel = import_node_path2.default.relative(sourceHooksRoot, file2);
+    hash2.update("file:");
+    hash2.update(rel);
+    hash2.update("\0");
+    hash2.update(await import_fs_extra3.default.readFile(file2));
+  }
+  return hash2.digest("hex");
 }
 async function ensureGlobalHooksBootstrapped(pkgRoot, opts = {}) {
   const startedAt = Date.now();
@@ -44745,8 +44780,11 @@ async function ensureGlobalHooksBootstrapped(pkgRoot, opts = {}) {
     outcome: "ok",
     durationMs: 0
   });
-  const currentVersion = await readInstalledVersion();
-  if (!opts.force && currentVersion === installedVersion && await import_fs_extra3.default.pathExists(targetHooksRoot) && await import_fs_extra3.default.pathExists(targetHooksConfigPath)) {
+  const sourceFingerprint = await computeSourceFingerprint(sourceHooksRoot, sourceHooksConfigPath);
+  const currentState = await readState();
+  const targetsExist = await import_fs_extra3.default.pathExists(targetHooksRoot) && await import_fs_extra3.default.pathExists(targetHooksConfigPath);
+  const fingerprintMatches = currentState?.sourceFingerprint === sourceFingerprint;
+  if (!opts.force && targetsExist && fingerprintMatches) {
     await appendHookLog({
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
       component: "hooks-migration",
@@ -44756,7 +44794,7 @@ async function ensureGlobalHooksBootstrapped(pkgRoot, opts = {}) {
       outcome: "skipped",
       durationMs: Date.now() - startedAt
     });
-    return { installedVersion, changed: false };
+    return { installedVersion, changed: false, sourceFingerprint };
   }
   try {
     await import_fs_extra3.default.remove(targetHooksRoot);
@@ -44765,7 +44803,8 @@ async function ensureGlobalHooksBootstrapped(pkgRoot, opts = {}) {
     await import_fs_extra3.default.copy(sourceHooksConfigPath, targetHooksConfigPath);
     await writeJsonAtomic(statePath, {
       installedVersion,
-      installedFrom: pkgRoot
+      installedFrom: pkgRoot,
+      sourceFingerprint
     }, { expectedRoot: targetHooksRoot });
     await appendHookLog({
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -44776,7 +44815,7 @@ async function ensureGlobalHooksBootstrapped(pkgRoot, opts = {}) {
       outcome: "ok",
       durationMs: Date.now() - startedAt
     });
-    return { installedVersion, changed: true };
+    return { installedVersion, changed: true, sourceFingerprint };
   } catch (error51) {
     await appendHookLog({
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -45073,7 +45112,7 @@ function filterGlobalOwnedProjectHooks(existingHooks, generatedHooks) {
   return filtered;
 }
 async function safeMergeOwnedHookSettings(currentSettings, generatedHooks, opts = {}) {
-  const installedVersion = await readInstalledVersion2();
+  const installedVersion = await readInstalledVersion();
   const currentHooks = currentSettings.hooks ?? {};
   const taggedHooks = Object.fromEntries(
     Object.entries(generatedHooks).map(([eventName, wrappers]) => {
@@ -45166,7 +45205,7 @@ async function readExistingHooks(settingsPath) {
   const settings = await readSettings(settingsPath);
   return settings.hooks ?? {};
 }
-async function readInstalledVersion2() {
+async function readInstalledVersion() {
   const packageRoot = await resolvePackageRoot();
   const pkg = await import_fs_extra4.default.readJson(import_path2.default.join(packageRoot, "package.json"));
   return pkg.version ?? "0.0.0";

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### `xtrm-tools`
+
+#### Fixed
+
+- **`ensureGlobalHooksBootstrapped` used version-string equality for staleness detection — silently downgraded `~/.xtrm/config/hooks.json` from a stale worktree source (xtrm-bbxzu, P1).** When bootstrap re-ran from any `pkgRoot` at the same version stamp as the last install, the guard noop'd. But two pkgRoots at the same version (npm-installed vs. dev worktree) can carry different content — worktree checked out before a hotfix would still stamp `installedVersion=X.Y.Z` while shipping stale hook payloads. Concrete incident 2026-07-13 11:59: a background sync (`installedFrom=/home/dawid/dev/core/.xtrm/worktrees/core-xt-pi-i80h`) copied pre-v0.10.4 `$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-skills/...` hook commands into `~/.xtrm/config/hooks.json`, which then propagated into `~/.claude/settings.json` — Bash/Read/Write/Edit blocked in xtmux until manually patched. Fix: `computeSourceFingerprint(sourceHooksRoot, sourceHooksConfigPath)` hashes the canonical `hooks.json` plus every hook file under `.xtrm/hooks/` (sorted, `__pycache__`-excluded). `state.json` now records `sourceFingerprint`; refresh triggers on fingerprint mismatch, not version equality. Same version + different content → refresh. Same content + different version → refresh. Same content + same version → noop. Force flag still bypasses. Return type gains `sourceFingerprint: string`. Existing state.json entries without `sourceFingerprint` are treated as stale on first upgrade (self-heals on next `xt install`/`xt update`/`xt init`/`xt bootstrap`). Tests: 7 cases in `global-hooks-bootstrap.test.ts` (existing idempotence updated + drift-at-same-version + hook-file drift + force + recovery-from-wiped-target + fingerprint determinism + fingerprint-changes-on-content-change).
+
 ## [v0.10.4] — 2026-07-13
 
 Emergency patch bundle after v0.10.3's fleet migration exposed three post-migration bugs (P0 dead hook path + P1 durability regression + P1 divergence-noise bloat). All three found + fixed on the same day the fleet migrated.
