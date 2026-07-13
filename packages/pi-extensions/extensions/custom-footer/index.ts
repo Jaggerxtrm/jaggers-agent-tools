@@ -11,6 +11,7 @@ type RefreshKind = "runtime" | "compact";
 
 type CacheIssue = { id: string; title: string | null; status: string; parent?: string };
 type Descendants = { epicId: string; ts: number; items: CacheIssue[]; overflow: number };
+type ParentGroup = { parent: CacheIssue; ts: number; items: CacheIssue[]; overflow: number };
 type BeadsCache = {
 	v: number;
 	ts: number;
@@ -153,6 +154,30 @@ function renderActiveIssues(cache: BeadsCache, width: number, theme: any): strin
 	return lines;
 }
 
+function activeParentId(cache: BeadsCache): string | null {
+	return cache.activeIssues.find((issue) => issue.parent)?.parent ?? null;
+}
+
+function hasFreshParentGroup(parentId: string, group: ParentGroup | null): boolean {
+	return group?.parent.id === parentId && Date.now() - group.ts < 30_000;
+}
+
+function renderParentGroup(parentId: string, group: ParentGroup | null, width: number, theme: any): string[] {
+	if (!hasFreshParentGroup(parentId, group)) return [theme.fg("dim", "  loading parent-child group…")];
+	const closed = group.items.filter((item) => item.status === "closed").length;
+	const shortParent = group.parent.id.split("-").pop() ?? group.parent.id;
+	const title = group.parent.title ? ` — ${group.parent.title}` : "";
+	const lines = [truncateToWidth(theme.fg("muted", `parent ${shortParent} (${closed}/${group.items.length} done)${title}`), width)];
+	for (const item of group.items) {
+		const status = STATUS[item.status] ?? STATUS.open;
+		const relativeId = item.id.startsWith(`${group.parent.id}.`) ? item.id.slice(group.parent.id.length) : item.id;
+		const row = `  ${status.icon} ${relativeId}  ${status.label}  ${item.title ?? ""}`;
+		lines.push(truncateToWidth(theme.fg(status.color, row), width));
+	}
+	if (group.overflow > 0) lines.push(theme.fg("dim", `  +${group.overflow} more (bd show ${group.parent.id})`));
+	return lines;
+}
+
 export default function registerCustomFooter(pi: ExtensionAPI): void {
 	let capturedCtx: any = null;
 	let cacheModule: CacheModule | null = null;
@@ -164,12 +189,15 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 	let footerReapplyTimer: ReturnType<typeof setTimeout> | null = null;
 	let scheduledRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	let descendantRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+	let parentGroupRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	let cacheSyncTimer: ReturnType<typeof setInterval> | null = null;
 	let scheduledRefreshKinds = new Set<RefreshKind>();
 	let runningRefreshPromise: Promise<void> | null = null;
 	let refreshingRuntime = false;
 	let refreshingCompact = false;
 	let refreshingDescendants = false;
+	let refreshingParentGroup = false;
+	let parentGroup: ParentGroup | null = null;
 	let beadsExpanded = false;
 	let runtimeState = { branch: null as string | null, gitStatus: "", lastFetch: 0 };
 
@@ -288,12 +316,72 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 		}
 	};
 
+	const refreshParentGroup = async (): Promise<void> => {
+		if (refreshingParentGroup || !cacheModule || !beadsCache || beadsCache.activeEpic) return;
+		refreshingParentGroup = true;
+		try {
+			if (!cacheModule.isFresh(beadsCache)) await refreshCompact();
+			if (!beadsCache || beadsCache.activeEpic) return;
+			const activeIssue = beadsCache.activeIssues.find((issue) => issue.parent) ?? beadsCache.activeIssues[0];
+			let parentId = activeIssue?.parent ?? null;
+			if (!parentId && activeIssue) {
+				const activeResult = await run("bd", ["show", activeIssue.id, "--json"], DESCENDANT_REFRESH_TIMEOUT_MS);
+				const active = activeResult.code === 0 ? (JSON.parse(activeResult.stdout) as Array<Record<string, unknown>>)[0] : null;
+				parentId = typeof active?.parent === "string" ? active.parent : typeof active?.parent_id === "string" ? active.parent_id : null;
+				if (parentId) activeIssue.parent = parentId;
+			}
+			if (!parentId || hasFreshParentGroup(parentId, parentGroup)) return;
+			const [parentResult, childrenResult] = await Promise.all([
+				run("bd", ["show", parentId, "--json"], DESCENDANT_REFRESH_TIMEOUT_MS),
+				run("bd", ["children", parentId, "--json"], DESCENDANT_REFRESH_TIMEOUT_MS),
+			]);
+			if (parentResult.code !== 0 || childrenResult.code !== 0) return;
+			const parent = (JSON.parse(parentResult.stdout) as Array<Record<string, unknown>>)[0];
+			const children = JSON.parse(childrenResult.stdout) as Array<Record<string, unknown>>;
+			if (!parent || !Array.isArray(children)) return;
+			const items = children.map((item) => ({
+				id: String(item.id ?? ""),
+				title: typeof item.title === "string" ? item.title.slice(0, 80) : null,
+				status: String(item.status ?? "open"),
+				parent: parentId,
+			})).filter((item) => item.id).sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+			parentGroup = {
+				parent: {
+					id: String(parent.id ?? parentId),
+					title: typeof parent.title === "string" ? parent.title.slice(0, 80) : null,
+					status: String(parent.status ?? "open"),
+				},
+				ts: Date.now(),
+				items: items.slice(0, MAX_DESCENDANTS),
+				overflow: Math.max(0, items.length - MAX_DESCENDANTS),
+			};
+			requestRender?.();
+		} catch {
+			// Keep the previous parent-child context on failures.
+		} finally {
+			refreshingParentGroup = false;
+		}
+	};
+
 	const scheduleDescendants = (): void => {
 		if (descendantRefreshTimer || refreshingDescendants) return;
 		descendantRefreshTimer = setTimeout(() => {
 			descendantRefreshTimer = null;
 			void refreshDescendants();
 		}, 0);
+	};
+
+	const scheduleParentGroup = (): void => {
+		if (parentGroupRefreshTimer || refreshingParentGroup) return;
+		parentGroupRefreshTimer = setTimeout(() => {
+			parentGroupRefreshTimer = null;
+			void refreshParentGroup();
+		}, 0);
+	};
+
+	const scheduleExpandedTree = (): void => {
+		if (beadsCache?.activeEpic) scheduleDescendants();
+		else scheduleParentGroup();
 	};
 
 	const runRefreshes = async (kinds: ReadonlySet<RefreshKind>): Promise<void> => {
@@ -369,7 +457,13 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 							}
 							lines.push(...renderEpicTree(beadsCache, width, theme));
 						} else {
-							lines.push(...renderActiveIssues(beadsCache, width, theme));
+							const parentId = activeParentId(beadsCache);
+							if (parentId) {
+								if (!hasFreshParentGroup(parentId, parentGroup)) scheduleParentGroup();
+								lines.push(...renderParentGroup(parentId, parentGroup, width, theme));
+							} else {
+								lines.push(...renderActiveIssues(beadsCache, width, theme));
+							}
 						}
 					}
 					return lines;
@@ -391,11 +485,12 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 		beadsCache = null;
 		cacheModule = null;
 		mainRoot = "";
+		parentGroup = null;
 	};
 
 	const toggleBeads = (): void => {
 		beadsExpanded = !beadsExpanded;
-		if (beadsExpanded && beadsCache?.activeEpic) scheduleDescendants();
+		if (beadsExpanded) scheduleExpandedTree();
 		requestRender?.();
 	};
 
@@ -445,9 +540,9 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 		return undefined;
 	});
 	pi.on("session_shutdown", async () => {
-		for (const timer of [footerReapplyTimer, scheduledRefreshTimer, descendantRefreshTimer]) if (timer) clearTimeout(timer);
+		for (const timer of [footerReapplyTimer, scheduledRefreshTimer, descendantRefreshTimer, parentGroupRefreshTimer]) if (timer) clearTimeout(timer);
 		if (cacheSyncTimer) clearInterval(cacheSyncTimer);
-		footerReapplyTimer = scheduledRefreshTimer = descendantRefreshTimer = null;
+		footerReapplyTimer = scheduledRefreshTimer = descendantRefreshTimer = parentGroupRefreshTimer = null;
 		cacheSyncTimer = null;
 		scheduledRefreshKinds.clear();
 		branchChangeUnsub?.();

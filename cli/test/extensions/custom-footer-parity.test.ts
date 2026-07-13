@@ -214,4 +214,111 @@ describe("custom-footer shared beads cache", () => {
 		expect(footerRenderer.render(120).join("\n")).toContain("Fetched child");
 		expect(requestRenderSpy).toHaveBeenCalled();
 	});
+
+	it("renders a non-epic parent-child group with closed siblings", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 1, in_progress: 1, blocked: 0 },
+			activeIssues: [{ id: "xtrm-parent.2", parent: "xtrm-parent", title: "Active child", status: "in_progress" }],
+			activeEpic: null,
+		});
+		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
+			if (command !== "bd") return { code: 1, stdout: "", stderr: "" };
+			if (args[0] === "show" && args[1] === "xtrm-parent") {
+				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-parent", title: "Ordinary parent", status: "closed" }]), stderr: "" };
+			}
+			if (args[0] === "children" && args[1] === "xtrm-parent") {
+				return { code: 0, stdout: JSON.stringify([
+					{ id: "xtrm-parent.1", parent: "xtrm-parent", title: "Closed sibling", status: "closed" },
+					{ id: "xtrm-parent.2", parent: "xtrm-parent", title: "Active child", status: "in_progress" },
+				]), stderr: "" };
+			}
+			return { code: 1, stdout: "", stderr: "" };
+		});
+		await start();
+		await commands.beads.handler("", ctx);
+		expect(footerRenderer.render(120).join("\n")).toContain("loading parent-child group…");
+		await vi.runOnlyPendingTimersAsync();
+		await Promise.resolve();
+		const text = footerRenderer.render(120).join("\n");
+		expect(text).toContain("parent parent (1/2 done) — Ordinary parent");
+		expect(text).toContain("✓ .1  closed  Closed sibling");
+		expect(text).toContain("◐ .2  in progress  Active child");
+	});
+
+	it("falls back to the active issue's structural parent when the cache predates parent ids", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 1, in_progress: 1, blocked: 0 },
+			activeIssues: [{ id: "xtrm-parent.2", title: "Active child", status: "in_progress" }],
+			activeEpic: null,
+		});
+		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
+			if (command !== "bd") return { code: 1, stdout: "", stderr: "" };
+			if (args[0] === "show" && args[1] === "xtrm-parent.2") {
+				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-parent.2", parent: "xtrm-parent" }]), stderr: "" };
+			}
+			if (args[0] === "show" && args[1] === "xtrm-parent") {
+				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-parent", title: "Ordinary parent", status: "open" }]), stderr: "" };
+			}
+			if (args[0] === "children" && args[1] === "xtrm-parent") {
+				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-parent.2", title: "Active child", status: "in_progress" }]), stderr: "" };
+			}
+			return { code: 1, stdout: "", stderr: "" };
+		});
+		await start();
+		await commands.beads.handler("", ctx);
+		await vi.runOnlyPendingTimersAsync();
+		await Promise.resolve();
+		expect(footerRenderer.render(120).join("\n")).toContain("parent parent (0/1 done) — Ordinary parent");
+		expect((SubprocessRunner.run as any).mock.calls.filter((call: any[]) => call[0] === "bd")).toHaveLength(3);
+	});
+
+	it("loads only the first active parent-child group", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 2, in_progress: 2, blocked: 0 },
+			activeIssues: [
+				{ id: "xtrm-first.1", parent: "xtrm-first", title: "First child", status: "in_progress" },
+				{ id: "xtrm-second.1", parent: "xtrm-second", title: "Second child", status: "in_progress" },
+			],
+			activeEpic: null,
+		});
+		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
+			if (command !== "bd" || args[1] !== "xtrm-first") return { code: 1, stdout: "", stderr: "" };
+			if (args[0] === "show") return { code: 0, stdout: JSON.stringify([{ id: "xtrm-first", title: "First parent", status: "open" }]), stderr: "" };
+			return { code: 0, stdout: JSON.stringify([{ id: "xtrm-first.1", title: "First child", status: "in_progress" }]), stderr: "" };
+		});
+		await start();
+		await commands.beads.handler("", ctx);
+		await vi.runOnlyPendingTimersAsync();
+		await Promise.resolve();
+		const text = footerRenderer.render(120).join("\n");
+		expect(text).toContain("First parent");
+		expect(text).not.toContain("Second child");
+		expect((SubprocessRunner.run as any).mock.calls.filter((call: any[]) => call[0] === "bd")).toHaveLength(2);
+	});
+
+	it("does not create a group from non-parent dependency metadata", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 1, in_progress: 1, blocked: 0 },
+			activeIssues: [{
+				id: "xtrm-standalone",
+				title: "Standalone",
+				status: "in_progress",
+				dependencies: [{ id: "xtrm-origin", dependency_type: "discovered-from" }],
+			}],
+			activeEpic: null,
+		});
+		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
+			if (command === "bd" && args[0] === "show" && args[1] === "xtrm-standalone") {
+				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-standalone", dependencies: [{ id: "xtrm-origin", dependency_type: "discovered-from" }] }]), stderr: "" };
+			}
+			return { code: 1, stdout: "", stderr: "" };
+		});
+		await start();
+		await commands.beads.handler("", ctx);
+		await vi.runOnlyPendingTimersAsync();
+		expect(footerRenderer.render(120).join("\n")).not.toContain("parent ");
+		const bdCalls = (SubprocessRunner.run as any).mock.calls.filter((call: any[]) => call[0] === "bd");
+		expect(bdCalls).toHaveLength(1);
+		expect(bdCalls[0][1]).toEqual(["show", "xtrm-standalone", "--json"]);
+	});
 });
