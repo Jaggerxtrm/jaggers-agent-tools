@@ -58,7 +58,7 @@ This release retires `active/`. `xt update --apply` reconciles `.claude/skills/`
 
 ## Detection
 
-Run these in order. Report what passes and what drifts.
+Run these in order. Report what passes and what drifts. The `active/` directory is retired in v2 — `.claude/skills/` and `.pi/skills/` are now real directories populated with per-skill symlinks pointing at `~/.xtrm/skills/default/<name>/` (managed) or `<repo>/.xtrm/skills/<pack>/<name>/` (project pack).
 
 ```bash
 # 1. High-level status — shows pending syncs
@@ -67,22 +67,29 @@ xt status
 # 2. Claude hook wiring
 xt claude status
 
-# 3. Skills symlink
-readlink .claude/skills
-# Expected: ../.xtrm/skills/active
-# Stale: ../.xtrm/skills/active/claude
+# 3. Runtime skill directories — real dirs with per-skill symlinks (v2)
+#    Both must exist as directories, not symlinks; each entry must be a valid symlink.
+[ -d .claude/skills ] && [ ! -L .claude/skills ] || echo "DRIFT: .claude/skills missing or is a symlink"
+[ -d .pi/skills ] && [ ! -L .pi/skills ]         || echo "DRIFT: .pi/skills missing or is a symlink"
+for f in .claude/skills/* .pi/skills/*; do
+  [ -L "$f" ] && [ -e "$f" ] || echo "DRIFT: $f not a valid symlink"
+done
 
-# 4. Stale runtime subdirs (should return nothing)
-ls .xtrm/skills/active/pi 2>/dev/null && echo "STALE: active/pi exists"
-ls .xtrm/skills/active/claude 2>/dev/null && echo "STALE: active/claude exists"
+# 4. Retired v1 residuals (should return nothing)
+[ -e .xtrm/skills/active ] && echo "STALE: .xtrm/skills/active still present (retired in v2)"
+[ -d .xtrm/skills/default ] && echo "V1 LAYOUT: run xt migrate skills --apply to move to v2 global-only"
+[ -d .xtrm/skills/optional ] && echo "V1 LAYOUT: .xtrm/skills/optional still per-repo"
+[ -d .xtrm/skills/user/packs ] && echo "V1 SHIM: user/packs/ nesting — v2 uses flat .xtrm/skills/<pack>/"
 
-# 5. Pi settings skills entries (both must be present since xtrm-4h6u)
+# 5. Pi settings skills entries — v2 expects only user entries (pi auto-discovers .pi/skills/)
 node -e "const s=require('./.pi/settings.json'); console.log(s.skills)" 2>/dev/null
-# Expected to include BOTH: ../.xtrm/skills/active  AND  ~/.xtrm/skills/default
-# Stale if only first entry present, or if includes: ../.xtrm/skills/active/pi
+# Expected: empty array or user-added paths only
+# Stale if includes: ../.xtrm/skills/active or ../.xtrm/skills/active/{pi,claude}
 
-# 6. Active view integrity (all entries must be valid symlinks)
-for f in .xtrm/skills/active/*; do [ -L "$f" ] || echo "NOT A SYMLINK: $f"; done
+# 6. Global source of truth (canonical for xtrm-managed skills)
+readlink ~/.claude/skills          # expected: ~/.xtrm/skills/default
+readlink ~/.pi/agent/skills        # expected: ~/.xtrm/skills/default
+[ -d ~/.xtrm/skills/default ] && echo "OK: global default present"
 
 # 7. bd auto-stage patch state (xtrm-h9hqg)
 grep -n '^export\.git-add: false' .beads/config.yaml 2>/dev/null || echo "STALE: bd auto-stage config not disabled"
@@ -90,7 +97,7 @@ hp=$(git config --get core.hooksPath 2>/dev/null || true)
 if [ -n "$hp" ]; then hook="$hp/pre-commit"; else hook=".git/hooks/pre-commit"; fi
 grep -n 'git add -f .beads/issues.jsonl 2>/dev/null || true' "$hook" 2>/dev/null || echo "STALE: bd pre-commit stage shim missing"
 
-# 8. update dry-run (includes dependency maintenance summary)
+# 8. update dry-run (includes dependency maintenance summary + migration hints)
 xt update --repo .
 ```
 
@@ -128,36 +135,38 @@ Two commands cover almost all drift. Know which fixes what:
 | `xt claude install` | Hooks wiring only (settings.json hooks block) |
 | `xt update --apply --repo .` | Registry-managed assets, bd auto-stage patch, bd/GitNexus maintenance, Pi package assurance |
 | `xt update --apply --all-repos` | Standard local fleet sweep (`~/dev` + `~/projects`), with per-repo commits for changed repos |
-| `xt init -y` | Skills symlink, active/ view rebuild, Pi settings, all phases |
-| `xt migrate skills --apply --repo .` | Move per-repo skills payload into `~/.xtrm/skills`, preserving diverged files as a `local-legacy` override |
-| `xt migrate hooks --apply --repo .` | Same for hooks (`~/.xtrm/hooks`) |
+| `xt init -y` | Full bootstrap: hooks, runtime skill dirs (.claude/skills, .pi/skills), Pi settings, all phases |
+| `xt migrate skills --apply --repo .` | v1→v2 move: removes per-repo `.xtrm/skills/{default,optional}`, preserves genuine local overrides in `local-legacy` |
+| `xt migrate hooks --apply --repo .` | v1→v2 move for hooks (`~/.xtrm/hooks`) |
 | `xt migrate --restore <backup.tgz> --apply --repo .` | Undo a migrate from the tarball at `~/.xtrm/migration-backups/` |
 
-### Fix: Skills symlink stale or active/ view wrong
+### Fix: Runtime skill dir missing or drifted (v2)
 
-`xt claude install` does NOT rebuild skills. Only `xt init` does (Phase 6b).
-`xt init -y` will repair missing/outdated registry-managed files, but it will
-preserve locally drifted `.xtrm` files by default.
+`.claude/skills/` and `.pi/skills/` are populated by `xt update --apply`/`xt init` and reconciled against `state.json.managedLinks`. If a repo is on v2 already, `xt update --apply --repo .` self-heals dangling symlinks (memory `xtrm-4cqxc`).
 
 ```bash
-xt init -y
+xt update --apply --repo .
 ```
 
-### Fix: Stale active/pi or active/claude subdirs
+### Fix: Repo still on v1 layout (`.xtrm/skills/default` present)
 
-`xt init` rebuilds `active/` atomically — it does NOT remove old subdirs left over
-from a previous layout. After `xt init -y` confirms the flat view is working, remove
-the stale dirs manually:
+v1→v2 is a one-shot migration. Sequence:
 
 ```bash
-rm -rf .xtrm/skills/active/pi
-rm -rf .xtrm/skills/active/claude
+xt update --apply --repo .            # first sync to canonical v0.10.3+ content
+xt migrate skills --dry-run --repo .  # preview — expect only genuine overrides in diverged set
+xt migrate skills --apply --yes --repo .   # execute — tarball backup to ~/.xtrm/migration-backups/
 ```
 
-Verify flat active/ is intact:
+After migrate: `.xtrm/skills/default` and `.xtrm/skills/optional` are removed; only project packs remain under `.xtrm/skills/<pack>/`. Runtime views (`.claude/skills`, `.pi/skills`) are rebuilt automatically by the migrator using `~/.xtrm/skills/default` as the canonical source.
+
+### Fix: `local-legacy` pack has legitimate overrides but many false-positives
+
+The migrator's divergence check hashes every file including `__pycache__/*.pyc` (bug xtrm-y0tdg.4). Clean those before migrating to keep `local-legacy` minimal:
+
 ```bash
-ls .xtrm/skills/active/
-# Should show skill dirs directly (clean-code, deepwiki, ...) — NOT pi/ or claude/ subdirs
+find .xtrm/skills/default -type d -name __pycache__ -exec rm -rf {} +
+xt migrate skills --dry-run --repo .   # re-check divergence
 ```
 
 ### Fix: Hooks not wired
@@ -227,11 +236,12 @@ xt claude status
 xt status
 # Should show no pending changes (or only optional ones)
 
-readlink .claude/skills
-# Must output: ../.xtrm/skills/active
+# v2 runtime dirs: real directories with per-skill symlinks
+[ -d .claude/skills ] && [ ! -L .claude/skills ] && echo "OK: .claude/skills real dir"
+[ -d .pi/skills ] && [ ! -L .pi/skills ] && echo "OK: .pi/skills real dir"
 
-node -e "const s=require('./.pi/settings.json'); console.log(s.skills.includes('../.xtrm/skills/active'))" 2>/dev/null
-# Must output: true
+# Sample: a shipped skill resolves to global default
+readlink .claude/skills/using-xtrm 2>/dev/null | grep -q '/.xtrm/skills/default/' && echo "OK: managed symlink"
 ```
 
 Also restate the implementation-level conclusion in your report:
@@ -626,9 +636,10 @@ summary:
 ```
 ## xtrm update complete
 
-✓ .claude/skills → ../.xtrm/skills/active
-✓ active/ view: N skills (flat, all valid symlinks)
-✓ active/pi and active/claude stale dirs: removed
+✓ .claude/skills — real dir, N per-skill symlinks (all valid)
+✓ .pi/skills — real dir, N per-skill symlinks (all valid)
+✓ Global source: ~/.claude/skills → ~/.xtrm/skills/default
+✓ v1 residuals: none (.xtrm/skills/active, default/, optional/ absent post-migrate)
 ✓ Hooks wired (X events, Y commands)
 ✓ .pi/settings.json skills entry: current
 
