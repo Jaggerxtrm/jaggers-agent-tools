@@ -1,6 +1,6 @@
 {
   "id": "service-skills-claude",
-  "description": "Service-skills runtime (Claude): inject the service catalog at session start (cataloger.py), enforce expert-skill activation when a service territory is touched (skill_activator.py), and flag documentation drift after edits (drift_detector.py). All three no-op cheaply when the project has no service-registry, so they are safe to wire in every repo.",
+  "description": "Service-skills runtime (Claude): inject the service catalog at session start (cataloger.py), enforce expert-skill activation when a service territory is touched (skill_activator.py), and flag documentation drift after edits (drift_detector.py). All three no-op cheaply when the project has no service-registry, so they are safe to wire in every repo. Each command wraps python3 in an inline `sh -c` fail-open guard: if the machinery script is missing (fleet migration transient, wiped hooks tree during install, path drift) or crashes, the hook exits 0 with no output. These are discovery helpers, not safety gates — a missing helper must never brick Read/Write/Edit/Glob/Grep/Bash (xtrm-d3qud).",
   "version": "1",
   "runtime": "claude",
   "order": 41,
@@ -8,17 +8,17 @@
     "hooks": [
       {
         "event": "SessionStart",
-        "command": "python3 \"$HOME/.xtrm/skills/default/service-skills/scripts/cataloger.py\""
+        "command": "sh -c 'p=\"$HOME/.xtrm/skills/default/service-skills/scripts/cataloger.py\"; [ -f \"$p\" ] && python3 \"$p\"; exit 0'"
       },
       {
         "event": "PreToolUse",
         "matcher": "Read|Write|Edit|Glob|Grep|Bash|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
-        "command": "python3 \"$HOME/.xtrm/skills/default/service-skills/scripts/skill_activator.py\""
+        "command": "sh -c 'p=\"$HOME/.xtrm/skills/default/service-skills/scripts/skill_activator.py\"; [ -f \"$p\" ] && python3 \"$p\"; exit 0'"
       },
       {
         "event": "PostToolUse",
         "matcher": "Write|Edit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
-        "command": "python3 \"$HOME/.xtrm/skills/default/service-skills/scripts/drift_detector.py\" check-hook",
+        "command": "sh -c 'p=\"$HOME/.xtrm/skills/default/service-skills/scripts/drift_detector.py\"; [ -f \"$p\" ] && python3 \"$p\" check-hook; exit 0'",
         "timeout": 10000
       }
     ]

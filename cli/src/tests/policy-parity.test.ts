@@ -106,10 +106,18 @@ describe('matcher macro expansion parity', () => {
 describe('referenced files exist', () => {
   // Resolve a hook command to the repo-relative path of the script it runs.
   const resolveCommand = (command: string): string => {
-    let raw = command.replace(/^(node|python3)\s+/, '');
-    // The script path is the first quoted segment (it may carry trailing args)…
-    const quoted = raw.match(/^"([^"]+)"/) ?? raw.match(/^'([^']+)'/);
-    raw = quoted ? quoted[1] : raw.split(/\s+/)[0];
+    let raw = command;
+    // service-skills fail-open wrapper (xtrm-d3qud): sh -c 'p="…foo.py"; [ -f "$p" ] && python3 "$p" [args]; exit 0'.
+    // Extract the referenced script path from the p= assignment.
+    const failOpen = raw.match(/^sh -c '\s*p="([^"]+)";/);
+    if (failOpen) {
+      raw = failOpen[1];
+    } else {
+      raw = raw.replace(/^(node|python3)\s+/, '');
+      // The script path is the first quoted segment (it may carry trailing args)…
+      const quoted = raw.match(/^"([^"]+)"/) ?? raw.match(/^'([^']+)'/);
+      raw = quoted ? quoted[1] : raw.split(/\s+/)[0];
+    }
     // …plugin-root commands resolve relative to repo root…
     raw = raw.replace(/^\$\{[A-Z_]+\}\//, '');
     // …service-skills hooks in v0.10.4+ use $HOME/.xtrm/skills/default/service-skills/
@@ -139,6 +147,37 @@ describe('referenced files exist', () => {
     const absPath = join(ROOT, policy.pi!.extension);
     expect(existsSync(absPath), `Pi extension not found: ${policy.pi!.extension}`).toBe(true);
   });
+});
+
+
+// ── service-skills fail-open guard (xtrm-d3qud) ───────────────────────────────
+//
+// The three service-skills machinery hooks (cataloger.py, skill_activator.py,
+// drift_detector.py) fire on tool matchers that cover every basic tool
+// (Read|Write|Edit|Glob|Grep|Bash|Serena rename/replace/insert). A missing or
+// crashing script must exit 0 with no output — otherwise a stale bootstrap or
+// mid-install window bricks the whole session. Enforce the wrapper form here
+// so future edits to the policy can't silently drop the guard.
+
+describe('service-skills fail-open guard', () => {
+  const { policy } = policies.find(p => p.file === 'service-skills-claude.json')!;
+  const hooks = policy.claude?.hooks ?? [];
+
+  it('service-skills-claude.json wires exactly three hooks', () => {
+    expect(hooks).toHaveLength(3);
+  });
+
+  it.each(hooks.map(h => ({ event: h.event, command: h.command })))(
+    '$event hook wraps python3 in an inline sh -c fail-open guard',
+    ({ command }) => {
+      // Shape: sh -c 'p="…foo.py"; [ -f "$p" ] && python3 "$p" [args]; exit 0'
+      expect(command, 'command must start with `sh -c \'`').toMatch(/^sh -c '/);
+      expect(command, 'command must set `p=` to the script path').toMatch(/p="\$HOME\/\.xtrm\/skills\/default\/service-skills\/scripts\/[^"]+\.py"/);
+      expect(command, 'command must gate python3 on `[ -f "$p" ]`').toMatch(/\[ -f "\$p" \] && python3 "\$p"/);
+      expect(command, 'command must end with `; exit 0\'` so a python crash still exits 0').toMatch(/; exit 0'$/);
+      expect(command, 'command must not reference legacy $CLAUDE_PROJECT_DIR (v0.10.4+ uses $HOME)').not.toMatch(/\$CLAUDE_PROJECT_DIR/);
+    },
+  );
 });
 
 
