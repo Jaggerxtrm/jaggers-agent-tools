@@ -257,6 +257,8 @@ sqlite3 "$DB" "SELECT job_id, specialist, bead_id, last_output FROM specialist_j
 
 Interactive coordinators (chain-coordinator role sessions launched via `xt pi --role` or `xt claude --role`) should prefer this pattern over `sp ps` polling because they escalate to the parent orchestrator via `message-send` only when a job actually transitions, not on every poll cycle. Full launcher-flag surface (`--reuse` / `--new-session` / `--parent` / `--child` / `--model` / `--thinking` / `--` passthrough), session-name shape (`role-<runtime>-<slug>[-<bead>]`), pane options + `XTMUX_AGENT_*` env vars, and address-space split (`@agent_parent_session` = tmux `#{session_id}`; poll `message-list --for $MY_SID`, not by session name) live in `/multiplexing` Pattern 7 — do not re-derive them here.
 
+_[xtmux-3xs]_ Under V2 (default 2026-07-13), the coordinator's `message-send --bead` implicitly sets `--expects-reply=true`. A pi parent surfaces coordinator escalations as reply obligations via the `pi-inbox-reply` extension — the parent will wake itself and respond, no operator prod needed. Mechanism in `/multiplexing` § V2 SQLite runtime; delegated-pane side in `/multiplexing-team` § Auto-wake.
+
 ## Worktree Cleanup After Merge
 
 Merge is now manual (see `Merge And Publication` below). You own cleanup after every merge.

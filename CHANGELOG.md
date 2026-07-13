@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### `xtrm-tools` — Unreleased
+
+#### Added
+
+- **Shared repo-scoped beads-status cache (xtrm-77t9q).** New `.xtrm/hooks/beads-status-cache.mjs` module coalesces N agents in the same repo (Claude statusline + Pi custom-footer, main + linked worktrees) to one `bd` refresh per TTL. Schema v1 cache at `<mainRoot>/.xtrm/cache/beads-status.json` (atomic rename, 0o600, single-flight lease at `.lock`, 5s TTL compact / 30s TTL descendants). `resolveMainRoot` is pure-fs (reads `.git/worktrees/<n>/gitdir` directly, no subprocess). `fetchCompact` walks nested parents up to 8 levels to find the owning epic. `formatCompact` renders the shared one-line spec (`12 open · 2 in progress · epic k2ufi (1/3 done)`) — Pi and Claude statusline get parity by construction. Fail-soft `stale: true` marker + `stale Xm` age tag past 10×TTL. `.xtrm/hooks/statusline.mjs` refactored to consume the module; `runFast(250ms)` for git / `runBd(2000ms)` for bd fixes the pre-existing 250ms-timeout bug that made statusline fall back to `no open issues`. `packages/pi-extensions/extensions/custom-footer/index.ts` consumes the same cache for compact rendering plus an on-demand Ctrl+O expanded epic tree (indent-2 per level, N=50 cap, `+M more` overflow) with skeleton-then-repaint refresh.
+
 ## [v0.10.2] — 2026-07-13
 
 Fleet audit after v0.10.1 exposed two mopping-up gaps that survived every `xt update --apply` on consumer repos.
