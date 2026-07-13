@@ -144,6 +144,9 @@ cli/.gemini/
 !.xtrm/specialists-source.json
 !.xtrm/cache/
 !.xtrm/cache/**
+.xtrm/cache/beads-status.json
+.xtrm/cache/beads-status.lock
+.xtrm/cache/beads-status.json.*.tmp
 !.xtrm/ext-src/
 !.xtrm/ext-src/**
 !.xtrm/packages/
