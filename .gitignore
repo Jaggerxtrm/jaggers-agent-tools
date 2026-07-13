@@ -172,3 +172,6 @@ cli/.gemini/
 .xtrm/skills/default/**/evals/
 .xtrm/skills/default/**/workspace/iteration-*/
 .xtrm/skills/default/*-workspace/
+
+# gitnexus analyze runtime output (regenerated on demand)
+.xtrm/skills/default/gitnexus/
