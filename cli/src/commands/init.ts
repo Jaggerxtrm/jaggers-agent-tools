@@ -643,6 +643,15 @@ async function confirmInitPlan(yes: boolean): Promise<boolean> {
 async function runProjectBootstrap(projectRoot: string, isGitRepo: boolean): Promise<void> {
     if (isGitRepo) {
         await runBdInitForProject(projectRoot);
+        // xtrm-utdq1: seed .gitignore with the runtime-state block so fresh
+        // repos never accidentally track state.json, worktree gitlinks, .pi/skills,
+        // .xtrm/cache, or the statusline claim file. Idempotent — no-op if the
+        // marker is already present.
+        const { ensureRuntimeGitignoreBlock } = await import('../utils/git-staging.js');
+        const { written } = await ensureRuntimeGitignoreBlock(projectRoot);
+        if (written) {
+            console.log(kleur.dim('  gitignore: seeded xtrm runtime-state block'));
+        }
     }
     await injectProjectInstructionHeaders(projectRoot);
     if (isGitRepo) {
