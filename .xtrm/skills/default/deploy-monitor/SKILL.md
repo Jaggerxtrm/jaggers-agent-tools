@@ -30,7 +30,7 @@ Send a one-line ready signal after loading context:
 _[xtmux-3xs]_ For pure FYI status pings ("deploy monitor ready", "T+15m sample OK") add `--expects-reply=false` so a pi orchestrator does not register a reply obligation it never needs to satisfy. Reserve the default (expects-reply auto-true on `--bead`) for verdicts and HOLD/BLOCKED escalations that genuinely need a response. See `/multiplexing` § V2 SQLite runtime.
 
 ```bash
-tmux-session-picker message-send --to <orchestrator> --bead <bead> --text "deploy monitor ready — awaiting deploy signal"
+xtmux message-send --to <orchestrator> --bead <bead> --text "deploy monitor ready — awaiting deploy signal"
 ```
 
 ## Verdict vocabulary
@@ -203,8 +203,8 @@ Special case — **edge-wide 4xx blackout** (from the check #6 public probes): t
 
 ```bash
 bd update <bead> --notes "DEPLOY SAMPLE T+25m HOLD: <symptom>; evidence: <query-or-log-path>"
-tmux-session-picker message-send --to <orchestrator> --bead <bead> --text "HOLD at T+25m: <symptom>"
-tmux-session-picker message-send --to <judge> --bead <bead> --text "deploy HOLD at T+25m: <symptom>"
+xtmux message-send --to <orchestrator> --bead <bead> --text "HOLD at T+25m: <symptom>"
+xtmux message-send --to <judge> --bead <bead> --text "deploy HOLD at T+25m: <symptom>"
 ```
 
 A single flap can still end in `PASS`, but the final report must say it happened, when it cleared, and why it is acceptable.
@@ -229,7 +229,7 @@ Bead notes get compact status, not raw logs:
 ```bash
 bd update <bead> --notes "DEPLOY SAMPLE T+15m OK: alerts=0 p95=<value> evidence=<path-or-url>"
 bd update <bead> --notes "DEPLOY VERDICT: PASS — 12 scheduled samples through T+60, artifact StartedAt > mergedAt, no sustained alerts; log <path>"
-tmux-session-picker message-send --to <orchestrator> --bead <bead> --text "deploy verdict PR <N>: PASS — see bead/log"
+xtmux message-send --to <orchestrator> --bead <bead> --text "deploy verdict PR <N>: PASS — see bead/log"
 ```
 
 Do not close the anchor bead unless the orchestrator explicitly assigned closure authority. Usually the orchestrator closes after Judge + Deploy Monitor evidence are both present.
@@ -240,7 +240,7 @@ Observability tools can return kilobytes per query. Protect the pane's context w
 
 - Store raw query output in files; paste only summaries into bead notes.
 - Use scripts or `ctx_execute`-style summarizers when output may exceed a screenful.
-- Prefer a background sampler (`process` / `tmux-session-picker monitor-agent` / a repo script) over hand-polling in chat.
+- Prefer a background sampler (`process` / `xtmux monitor-agent` / a repo script) over hand-polling in chat.
 - If context usage climbs during a long window, run `/compact` between samples after writing the current state to the log and bead notes.
 - For high-risk 60-minute windows, prefer a larger-context model or split roles: a thin sampler writes logs, a verdict pane reads summaries.
 

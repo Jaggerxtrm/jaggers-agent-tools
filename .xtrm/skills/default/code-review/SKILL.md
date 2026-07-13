@@ -165,7 +165,7 @@ One of exactly four:
 
 ### 10. Persist and report
 
-If you're the Judge in a sprint, follow `/judge-with-codex` — verdict goes into bead notes (JUDGE VERDICT format) and upward via `tmux-session-picker message-send`.
+If you're the Judge in a sprint, follow `/judge-with-codex` — verdict goes into bead notes (JUDGE VERDICT format) and upward via `xtmux message-send`.
 
 _[xtmux-3xs]_ Since 2026-07-13, `message-send --bead` implicitly sets `--expects-reply=true`. A pi orchestrator surfaces your JUDGE VERDICT as a reply obligation until they respond — see `/multiplexing` § V2 SQLite runtime for the mechanism.
 

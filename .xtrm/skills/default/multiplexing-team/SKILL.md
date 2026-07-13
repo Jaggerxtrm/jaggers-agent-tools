@@ -55,7 +55,7 @@ parent="$(tmux show-options -p -qv @agent_parent_session 2>/dev/null || true)"
 
 [ -n "$bead" ] && bd show "$bead"
 [ -n "$prompt_file" ] && sed -n '1,220p' "$prompt_file"
-[ -n "$parent" ] && tmux-session-picker message-send --to "$parent" --bead "$bead" --text "started; reading contract"
+[ -n "$parent" ] && xtmux message-send --to "$parent" --bead "$bead" --text "started; reading contract"
 ```
 
 Then summarize to yourself:
@@ -76,7 +76,7 @@ Use the log-backed message channel. This is cheaper and more reliable than forci
 ```bash
 parent="$(tmux show-options -p -qv @agent_parent_session 2>/dev/null || true)"
 bead="$(tmux show-options -p -qv @agent_bead 2>/dev/null || true)"
-tmux-session-picker message-send --to "$parent" --bead "$bead" --text "status: tests running"
+xtmux message-send --to "$parent" --bead "$bead" --text "status: tests running"
 ```
 
 Good message texts:
@@ -113,16 +113,16 @@ bd close "$bead" --reason "Done: <summary>. Validation: <commands/results>."
 
 ```bash
 me="$(tmux display-message -p '#S' 2>/dev/null || true)"
-tmux-session-picker message-list --for "$me" --unacked
+xtmux message-list --for "$me" --unacked
 # after acting on a message:
-tmux-session-picker message-ack <message-id> --by "$me"
+xtmux message-ack <message-id> --by "$me"
 ```
 
 If the parent targets your pane id instead of session name:
 
 ```bash
 pane="$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)"
-tmux-session-picker message-list --for "$pane" --unacked
+xtmux message-list --for "$pane" --unacked
 ```
 
 ### Poll BOTH your inbox AND your gh-CI-status timer
@@ -137,7 +137,7 @@ bead="$(tmux show-options -p -qv @agent_bead 2>/dev/null || true)"
 
 while true; do
   # 1. Parent messages take priority — new instructions may supersede your wait.
-  msgs="$(tmux-session-picker message-list --for "$me" --unacked 2>/dev/null || true)"
+  msgs="$(xtmux message-list --for "$me" --unacked 2>/dev/null || true)"
   if [ -n "$msgs" ]; then
     echo "INBOX has unacked messages — process them before continuing to wait"
     break
@@ -153,7 +153,7 @@ while true; do
 done
 ```
 
-Prefer `tmux-session-picker wait-agent`/`monitor-agent` for pane-state waits (they know how to fire on `@agent_state` transitions). Compose them with an inbox poll if your wait is longer than a couple of minutes.
+Prefer `xtmux wait-agent`/`monitor-agent` for pane-state waits (they know how to fire on `@agent_state` transitions). Compose them with an inbox poll if your wait is longer than a couple of minutes.
 
 ### Auto-wake — the extension knows when peers move (xtmux-3xs)
 
@@ -188,7 +188,7 @@ manual poll loop above solved is now handled for you.
   - `/reload` the extension after any change to
     `extensions/pi-inbox-reply.ts` or `extensions/pi-auto-monitor.ts` — the
     Node module is cached in the running runtime.
-- **Verify V2 is active**: a bare `bin/tmux-session-picker message-list
+- **Verify V2 is active**: a bare `xtmux message-list
   --for $(tmux display-message -p '#{session_id}')` should return
   identical shape to before. Under the hood it reads
   `${XDG_STATE_HOME:-$HOME/.local/state}/xtmux/observability.db`
@@ -208,13 +208,13 @@ Use this for situational awareness, not as permission to interfere:
 
 ```bash
 # compact team map
-tmux-session-picker dashboard sessions-only
+xtmux dashboard sessions-only
 
 # include pane detail
-tmux-session-picker dashboard expanded
+xtmux dashboard expanded
 
 # recent messages relevant to this bead
-tmux-session-picker log query --bead "$bead" --since 4h --limit 50
+xtmux log query --bead "$bead" --since 4h --limit 50
 ```
 
 Look for sessions sharing:
@@ -236,23 +236,23 @@ Useful commands:
 
 ```bash
 # current team state
-tmux-session-picker dashboard sessions-only
-tmux-session-picker audit
+xtmux dashboard sessions-only
+xtmux audit
 
 # message channel
-tmux-session-picker message-send --to <parent-or-pane> --bead <id> --text 'short update'
-tmux-session-picker message-list --for <me> --unacked
-tmux-session-picker message-ack <id> --by <me>
+xtmux message-send --to <parent-or-pane> --bead <id> --text 'short update'
+xtmux message-list --for <me> --unacked
+xtmux message-ack <id> --by <me>
 
 # event history
-tmux-session-picker log tail 50
-tmux-session-picker log query --bead <id> --since 2h
+xtmux log tail 50
+xtmux log query --bead <id> --since 2h
 
 # safe delegation if you have subordinates
-tmux-session-picker handoff --target <target> --bead <child-bead> --note 'constraints'
-tmux-session-picker safe-send-pointer <target> 'leggi /tmp/file.txt e seguilo'
-tmux-session-picker wait-agent <target> --timeout 30m --interval 30s
-tmux-session-picker monitor-agent <target> --timeout 30m --interval 30s
+xtmux handoff --target <target> --bead <child-bead> --note 'constraints'
+xtmux safe-send-pointer <target> 'leggi /tmp/file.txt e seguilo'
+xtmux wait-agent <target> --timeout 30m --interval 30s
+xtmux monitor-agent <target> --timeout 30m --interval 30s
 ```
 
 Safety reminders:
@@ -275,7 +275,7 @@ Use `/using-specialists` only when a smaller independent subtask benefits from a
 6. Notify your parent:
 
 ```bash
-tmux-session-picker message-send --to "$parent" --bead "$bead" --text "spawned specialists for <topic>; will aggregate results"
+xtmux message-send --to "$parent" --bead "$bead" --text "spawned specialists for <topic>; will aggregate results"
 ```
 
 Do not create untracked specialist work just because a task is large. If the operator/orchestrator said “do not spawn”, obey that.
@@ -307,7 +307,7 @@ If blocked:
 3. Send a short parent message:
 
 ```bash
-tmux-session-picker message-send --to "$parent" --bead "$bead" --text "blocked: <one-line blocker>; notes in bead"
+xtmux message-send --to "$parent" --bead "$bead" --text "blocked: <one-line blocker>; notes in bead"
 ```
 
 If you need a decision, ask for exactly one decision:
@@ -332,14 +332,14 @@ bd update "$bead" --notes "Final: <changed files>; validation: <commands>; remai
 
 # notify parent
 parent="$(tmux show-options -p -qv @agent_parent_session 2>/dev/null || true)"
-tmux-session-picker message-send --to "$parent" --bead "$bead" --text "done: validation passed; final notes in bead"
+xtmux message-send --to "$parent" --bead "$bead" --text "done: validation passed; final notes in bead"
 ```
 
 Do not commit or push unless your contract explicitly allows it.
 
 ## Minimal fallback when xtmux is unavailable
 
-If `tmux-session-picker` is missing:
+If `xtmux` is missing:
 
 - use Beads for durable reports
 - use `/tmp` files for long handoffs
