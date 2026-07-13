@@ -154,7 +154,7 @@
           "version": "0.10.2"
         },
         "code-review/SKILL.md": {
-          "hash": "46447b0a5db2bb2f0d2243a3fca4de377d2c475a3edf91b0a259d1863505f750",
+          "hash": "2bb38343f0a377c3a950cb8f11ce618e719628832ed1da276f28a7dfdb9783ed",
           "version": "0.10.2"
         },
         "deepwiki/SKILL.md": {
@@ -174,7 +174,7 @@
           "version": "0.10.2"
         },
         "deploy-monitor/SKILL.md": {
-          "hash": "fd9811df13b8df52322cc1643aa69233e51b16a56a36397fade871cb4bad61ac",
+          "hash": "05235b7db5fa2a150a4cd59964acff8fff23ad17c81e81cc628df985f7df1712",
           "version": "0.10.2"
         },
         "documenting/CHANGELOG.md": {
@@ -307,30 +307,6 @@
         },
         "gitnexus-refactoring/SKILL.md": {
           "hash": "6aab994ee0266063245245483ee3280645aca66c0c5e56730ffad3f32ecbbc5c",
-          "version": "0.10.2"
-        },
-        "gitnexus/gitnexus-cli/SKILL.md": {
-          "hash": "58f9f765306b285c661b86777e2097b3efb43dabe9e19d42f795e88faf9081a2",
-          "version": "0.10.2"
-        },
-        "gitnexus/gitnexus-debugging/SKILL.md": {
-          "hash": "d8090c85e2c8faffd4767fc2dcc52aeb3f3dab3dc7218bc96b29dacf53635d64",
-          "version": "0.10.2"
-        },
-        "gitnexus/gitnexus-exploring/SKILL.md": {
-          "hash": "21b18eee1f679efff654bf45f9dc32a495c81c014d210ac7e778c58a2a204dbd",
-          "version": "0.10.2"
-        },
-        "gitnexus/gitnexus-guide/SKILL.md": {
-          "hash": "746d057790de5b034d19d603dfa77eb9b596407918025481b4b29214efee2581",
-          "version": "0.10.2"
-        },
-        "gitnexus/gitnexus-impact-analysis/SKILL.md": {
-          "hash": "09e529505da155532059a3656557811f99bafff0f05c8f9e6e47bb96edc340d3",
-          "version": "0.10.2"
-        },
-        "gitnexus/gitnexus-refactoring/SKILL.md": {
-          "hash": "544841cf90c9ebe92a2f3018b034593c2bfd8617f968412d3599a22725e3c73e",
           "version": "0.10.2"
         },
         "hook-development/examples/load-context.sh": {
@@ -654,7 +630,7 @@
           "version": "0.10.2"
         },
         "multiplexing-team/SKILL.md": {
-          "hash": "25f3fd1a096e8955eb33dbbe5e0079d37350d6ee4659731d9eb4b5ee2dc90f79",
+          "hash": "ef13a2f6d9d15298edced8e8ba74037f43891408cf21396295d9dc2795203913",
           "version": "0.10.2"
         },
         "multiplexing/scripts/verify-deploy-applied.sh": {
@@ -662,7 +638,7 @@
           "version": "0.10.2"
         },
         "multiplexing/SKILL.md": {
-          "hash": "5dd50ad65631cc40d1a7197d6afed998c621ed0c0e2b607ae5d973bda4b2ba3a",
+          "hash": "0d2d4588259299f4749204f93f9c4d1a6519e1f7f2bfa988d43e5a761e290a79",
           "version": "0.10.2"
         },
         "planning/SKILL.md": {
@@ -670,7 +646,7 @@
           "version": "0.10.2"
         },
         "pr-reviewer/SKILL.md": {
-          "hash": "4f9f28b97077b34bc08349c7a82d489fc17b8f6a96af0052b1a827768ea6922a",
+          "hash": "858562aa02a3d9b0c754580d48016f1243113aa1e7bddbb48f3f1a70f81dab61",
           "version": "0.10.2"
         },
         "premortem/SKILL.md": {
