@@ -20,6 +20,10 @@ Reconcile project's xtrm installation against canonical state. Detect drift, app
 
 This release retires `active/`. `xt update --apply` reconciles `.claude/skills/` and `.pi/skills/` automatically.
 
+**xtrm-tools ≥ 0.10.5**: `xt migrate` and `xt update --apply` now auto-stage their tracked mods+deletions (restricted to `.xtrm/`, `.claude/`, `.pi/`, `.githooks/` — user's unrelated in-flight work is left alone) and untrack known runtime paths from the index. Never commits. Operator finalizes with a single `git commit`. Fresh `xt init` also seeds a canonical `.gitignore` block covering runtime state (state.json, worktrees, .pi/skills, .xtrm/cache, .xtrm/statusline-claim). Result: fleet events never leave the ~300-file dirty state that pre-0.10.5 migrations did.
+
+**xtrm-tools ≥ 0.10.5**: `~/.xtrm/config/hooks.json` self-heals via content-fingerprint drift detection (not version-string equality). A stale worktree source can no longer downgrade the global hook payload silently — bootstrap refreshes on any content change even if the version stamp matches.
+
 ## Canonical State (current)
 
 ### Skills wiring
@@ -162,10 +166,13 @@ After migrate: `.xtrm/skills/default` and `.xtrm/skills/optional` are removed; o
 
 ### Fix: `local-legacy` pack has legitimate overrides but many false-positives
 
-The migrator's divergence check hashes every file including `__pycache__/*.pyc` (bug xtrm-y0tdg.4). Clean those before migrating to keep `local-legacy` minimal:
+**xtrm-tools ≥ 0.10.4**: fixed. `walkDir` in the migrator now excludes `__pycache__`, `.pytest_cache`, `.serena`, `.mypy_cache`, `.ruff_cache`, `node_modules`, `.venv`, `workspace/`, `.pyc`, `.pyo`. New migrations produce minimal `local-legacy`.
+
+For repos migrated on ≤ 0.10.3 the legacy dir may still carry pyc noise. Clean before re-migrating:
 
 ```bash
 find .xtrm/skills/default -type d -name __pycache__ -exec rm -rf {} +
+find .xtrm/skills/local-legacy -type d -name __pycache__ -exec rm -rf {} +
 xt migrate skills --dry-run --repo .   # re-check divergence
 ```
 

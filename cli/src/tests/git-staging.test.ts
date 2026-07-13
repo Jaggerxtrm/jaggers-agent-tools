@@ -58,20 +58,48 @@ describe('git-staging', () => {
     expect(cached.stdout.trim()).toBe('');
   });
 
-  it('stageTrackedChanges stages modifications and deletions', async () => {
+  it('stageTrackedChanges stages modifications and deletions within pathspecs', async () => {
     const repoRoot = await mkTemp('xtrm-stage-mods-');
     gitInit(repoRoot);
-    await fs.writeFile(path.join(repoRoot, 'a.txt'), 'a');
-    await fs.writeFile(path.join(repoRoot, 'b.txt'), 'b');
+    await fs.ensureDir(path.join(repoRoot, '.xtrm'));
+    await fs.writeFile(path.join(repoRoot, '.xtrm', 'a.txt'), 'a');
+    await fs.writeFile(path.join(repoRoot, '.xtrm', 'b.txt'), 'b');
     gitCommitAll(repoRoot, 'init');
-    await fs.writeFile(path.join(repoRoot, 'a.txt'), 'A');
-    await fs.remove(path.join(repoRoot, 'b.txt'));
+    await fs.writeFile(path.join(repoRoot, '.xtrm', 'a.txt'), 'A');
+    await fs.remove(path.join(repoRoot, '.xtrm', 'b.txt'));
     const result = stageTrackedChanges(repoRoot);
     expect(result.staged).toBe(true);
     expect(result.filesStaged).toBe(2);
     const cached = spawnSync('git', ['-C', repoRoot, 'diff', '--cached', '--name-only'], { encoding: 'utf8' });
     const files = cached.stdout.trim().split('\n').sort();
-    expect(files).toEqual(['a.txt', 'b.txt']);
+    expect(files).toEqual(['.xtrm/a.txt', '.xtrm/b.txt']);
+  });
+
+  // xtrm-irzid: stageTrackedChanges must NOT stage user's unrelated in-flight
+  // work outside XTRM_MANAGED_PATHSPECS. Regression guard.
+  it('stageTrackedChanges leaves user files outside xtrm pathspecs untouched', async () => {
+    const repoRoot = await mkTemp('xtrm-stage-scope-');
+    gitInit(repoRoot);
+    await fs.ensureDir(path.join(repoRoot, 'src'));
+    await fs.ensureDir(path.join(repoRoot, '.claude'));
+    await fs.writeFile(path.join(repoRoot, 'src', 'user.ts'), 'v1');
+    await fs.writeFile(path.join(repoRoot, '.claude', 'settings.json'), 'v1');
+    gitCommitAll(repoRoot, 'init');
+    // Simulate: user mid-refactor + xt update writes to .claude/settings.json.
+    await fs.writeFile(path.join(repoRoot, 'src', 'user.ts'), 'v2-user-refactor');
+    await fs.writeFile(path.join(repoRoot, '.claude', 'settings.json'), 'v2');
+
+    const result = stageTrackedChanges(repoRoot);
+    expect(result.staged).toBe(true);
+    expect(result.filesStaged).toBe(1);
+
+    const cached = spawnSync('git', ['-C', repoRoot, 'diff', '--cached', '--name-only'], { encoding: 'utf8' });
+    const staged = cached.stdout.trim().split('\n');
+    expect(staged).toEqual(['.claude/settings.json']);
+
+    // src/user.ts remains WT-only.
+    const wt = spawnSync('git', ['-C', repoRoot, 'diff', '--name-only'], { encoding: 'utf8' });
+    expect(wt.stdout.trim()).toBe('src/user.ts');
   });
 
   it('stageTrackedChanges returns nothing-to-stage on clean tree', async () => {
@@ -145,13 +173,17 @@ describe('git-staging', () => {
     await fs.writeFile(path.join(repoRoot, '.claude', 'settings.json'), 'v1');
     gitCommitAll(repoRoot, 'init');
 
-    // Simulate xt update mutation
+    // Simulate xt update mutation + a user in-flight modification outside pathspecs.
     await fs.writeFile(path.join(repoRoot, '.claude', 'settings.json'), 'v2');
+    await fs.ensureDir(path.join(repoRoot, 'src'));
+    await fs.writeFile(path.join(repoRoot, 'src', 'user.ts'), 'user refactor');
+    spawnSync('git', ['-C', repoRoot, 'add', 'src/user.ts'], { stdio: 'pipe' });
+    spawnSync('git', ['-C', repoRoot, 'commit', '-q', '--no-verify', '-m', 'user work'], { stdio: 'pipe' });
+    await fs.writeFile(path.join(repoRoot, 'src', 'user.ts'), 'user refactor v2');
 
     const result = await stageMigrationChanges(repoRoot);
     expect(result.gitignoreWritten).toBe(true);
     expect(result.untracked).toContain('.xtrm/skills/state.json');
-    // 1 M (.claude/settings.json) + 1 D (untracked state.json shows as staged)
     expect(result.filesStaged).toBeGreaterThanOrEqual(1);
 
     // Verify staged state.
@@ -159,6 +191,8 @@ describe('git-staging', () => {
     const files = cached.stdout.trim().split('\n');
     expect(files).toContain('.claude/settings.json');
     expect(files).toContain('.gitignore');
+    // xtrm-irzid: user's src/user.ts modification stays unstaged.
+    expect(files).not.toContain('src/user.ts');
   });
 
   it('stageMigrationChanges is safe on non-git dirs', async () => {

@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'fs-extra';
+import fsSync from 'node:fs';
 import path from 'node:path';
 
 // xtrm-utdq1: prevent fleet-wide dirty-state accumulation. xt migrate/update
@@ -40,9 +41,23 @@ export interface StageResult {
   readonly skipped: 'not-a-git-repo' | 'dry-run' | 'nothing-to-stage' | undefined;
 }
 
-// Stage all tracked modifications and deletions in the repo (git add -u).
-// Safe: no-ops on non-git repos, dry-runs, or clean trees. Never commits.
-export function stageTrackedChanges(repoPath: string, opts: { dryRun?: boolean } = {}): StageResult {
+// Pathspecs xtrm owns. Staging is restricted to these so users' unrelated
+// in-flight tracked mods (e.g. src/foo.ts mid-refactor) NEVER get swept
+// into an xtrm-generated commit (xtrm-irzid).
+export const XTRM_MANAGED_PATHSPECS: readonly string[] = [
+  '.xtrm/',
+  '.claude/',
+  '.pi/',
+  '.githooks/',
+];
+
+// Stage tracked modifications and deletions restricted to the given pathspecs
+// (defaults to xtrm-managed paths). Safe: no-ops on non-git repos, dry-runs,
+// or when nothing under the pathspecs is dirty. Never commits.
+export function stageTrackedChanges(
+  repoPath: string,
+  opts: { dryRun?: boolean; pathspecs?: readonly string[] } = {},
+): StageResult {
   if (opts.dryRun) {
     return { staged: false, filesStaged: 0, skipped: 'dry-run' };
   }
@@ -50,12 +65,26 @@ export function stageTrackedChanges(repoPath: string, opts: { dryRun?: boolean }
     return { staged: false, filesStaged: 0, skipped: 'not-a-git-repo' };
   }
 
+  // Filter pathspecs to those that actually exist under repoPath — git errors
+  // on 'pathspec did not match any files' otherwise. This is common in real
+  // consumer repos (e.g. no .githooks/, no .pi/).
+  const pathspecs = (opts.pathspecs ?? XTRM_MANAGED_PATHSPECS).filter((spec) =>
+    fsSync.existsSync(path.join(repoPath, spec.replace(/\/$/, ''))),
+  );
+
+  if (pathspecs.length === 0) {
+    return { staged: false, filesStaged: 0, skipped: 'nothing-to-stage' };
+  }
+
   const before = runGit(repoPath, ['diff', '--cached', '--name-only']);
   const beforeCount = before.stdout.trim() ? before.stdout.trim().split('\n').length : 0;
 
-  const add = runGit(repoPath, ['add', '-u']);
-  if (add.status !== 0) {
-    return { staged: false, filesStaged: 0, skipped: 'nothing-to-stage' };
+  // Run per-pathspec: `git add -u -- <spec>` errors out if <spec> has no tracked
+  // files at all (common after we've just git rm --cached'd everything under
+  // .xtrm/ in a mostly-empty test / edge-case repo). Tolerating per-spec means
+  // one dry pathspec doesn't take out the others.
+  for (const spec of pathspecs) {
+    runGit(repoPath, ['add', '-u', '--', spec]);
   }
 
   const after = runGit(repoPath, ['diff', '--cached', '--name-only']);
@@ -149,8 +178,11 @@ export async function stageMigrationChanges(
     '.xtrm/cache/',
     '.xtrm/statusline-claim',
   ];
-  const { untracked } = untrackRuntimePaths(repoPath, runtimePaths, opts);
+  // Order matters: stage tracked mods FIRST, then untrack runtime paths.
+  // Doing untrack first can leave a pathspec (e.g. .xtrm/) with no tracked
+  // files, and `git add -u -- .xtrm/` then errors and skips staging the rest.
   const stage = stageTrackedChanges(repoPath, opts);
+  const { untracked } = untrackRuntimePaths(repoPath, runtimePaths, opts);
   if (gitignoreWritten) {
     stageGitignore(repoPath, opts);
   }

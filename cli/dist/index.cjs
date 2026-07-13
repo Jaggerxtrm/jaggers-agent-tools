@@ -32307,6 +32307,7 @@ var require_dist3 = __commonJS({
 // src/utils/git-staging.ts
 var git_staging_exports = {};
 __export(git_staging_exports, {
+  XTRM_MANAGED_PATHSPECS: () => XTRM_MANAGED_PATHSPECS,
   ensureRuntimeGitignoreBlock: () => ensureRuntimeGitignoreBlock,
   stageGitignore: () => stageGitignore,
   stageMigrationChanges: () => stageMigrationChanges,
@@ -32331,11 +32332,16 @@ function stageTrackedChanges(repoPath, opts = {}) {
   if (!isGitRepo(repoPath)) {
     return { staged: false, filesStaged: 0, skipped: "not-a-git-repo" };
   }
+  const pathspecs = (opts.pathspecs ?? XTRM_MANAGED_PATHSPECS).filter(
+    (spec) => import_node_fs7.default.existsSync(import_node_path25.default.join(repoPath, spec.replace(/\/$/, "")))
+  );
+  if (pathspecs.length === 0) {
+    return { staged: false, filesStaged: 0, skipped: "nothing-to-stage" };
+  }
   const before = runGit(repoPath, ["diff", "--cached", "--name-only"]);
   const beforeCount = before.stdout.trim() ? before.stdout.trim().split("\n").length : 0;
-  const add = runGit(repoPath, ["add", "-u"]);
-  if (add.status !== 0) {
-    return { staged: false, filesStaged: 0, skipped: "nothing-to-stage" };
+  for (const spec of pathspecs) {
+    runGit(repoPath, ["add", "-u", "--", spec]);
   }
   const after = runGit(repoPath, ["diff", "--cached", "--name-only"]);
   const afterCount = after.stdout.trim() ? after.stdout.trim().split("\n").length : 0;
@@ -32394,8 +32400,8 @@ async function stageMigrationChanges(repoPath, opts = {}) {
     ".xtrm/cache/",
     ".xtrm/statusline-claim"
   ];
-  const { untracked } = untrackRuntimePaths(repoPath, runtimePaths, opts);
   const stage = stageTrackedChanges(repoPath, opts);
+  const { untracked } = untrackRuntimePaths(repoPath, runtimePaths, opts);
   if (gitignoreWritten) {
     stageGitignore(repoPath, opts);
   }
@@ -32406,12 +32412,13 @@ async function stageMigrationChanges(repoPath, opts = {}) {
     skipped: stage.skipped
   };
 }
-var import_node_child_process9, import_fs_extra29, import_node_path25, RUNTIME_GITIGNORE_BLOCK, RUNTIME_GITIGNORE_MARKER;
+var import_node_child_process9, import_fs_extra29, import_node_fs7, import_node_path25, RUNTIME_GITIGNORE_BLOCK, RUNTIME_GITIGNORE_MARKER, XTRM_MANAGED_PATHSPECS;
 var init_git_staging = __esm({
   "src/utils/git-staging.ts"() {
     "use strict";
     import_node_child_process9 = require("child_process");
     import_fs_extra29 = __toESM(require_lib(), 1);
+    import_node_fs7 = __toESM(require("fs"), 1);
     import_node_path25 = __toESM(require("path"), 1);
     RUNTIME_GITIGNORE_BLOCK = [
       "",
@@ -32423,6 +32430,12 @@ var init_git_staging = __esm({
       ".pi/skills/"
     ].join("\n");
     RUNTIME_GITIGNORE_MARKER = "# xtrm runtime state (per-machine, do not track)";
+    XTRM_MANAGED_PATHSPECS = [
+      ".xtrm/",
+      ".claude/",
+      ".pi/",
+      ".githooks/"
+    ];
   }
 });
 
@@ -44592,7 +44605,7 @@ var init_handoff = __esm({
 });
 
 // src/index.ts
-var import_node_fs14 = require("fs");
+var import_node_fs15 = require("fs");
 var import_node_path51 = require("path");
 
 // ../node_modules/commander/esm.mjs
@@ -68192,7 +68205,7 @@ function createCleanCommand() {
 // src/commands/end.ts
 init_kleur();
 var import_node_child_process10 = require("child_process");
-var import_node_fs7 = require("fs");
+var import_node_fs8 = require("fs");
 var import_node_path26 = require("path");
 function git(args, cwd) {
   const r = (0, import_node_child_process10.spawnSync)("git", args, { cwd, encoding: "utf8", stdio: "pipe" });
@@ -68218,7 +68231,7 @@ function resolveMainRepoRoot(cwd) {
 function clearStatuslineClaim(repoRoot) {
   try {
     const claimFile = (0, import_node_path26.join)(repoRoot, ".xtrm", "statusline-claim");
-    if ((0, import_node_fs7.existsSync)(claimFile)) (0, import_node_fs7.unlinkSync)(claimFile);
+    if ((0, import_node_fs8.existsSync)(claimFile)) (0, import_node_fs8.unlinkSync)(claimFile);
   } catch {
   }
 }
@@ -68241,7 +68254,7 @@ function cleanupWorktreePath(worktreePath, repoRoot) {
   if (pruneResult.status !== 0 && (pruneResult.stderr ?? "").trim()) {
     warnings.push((pruneResult.stderr ?? "").trim());
   }
-  const isMissing = !(0, import_node_fs7.existsSync)(worktreePath);
+  const isMissing = !(0, import_node_fs8.existsSync)(worktreePath);
   if (isMissing) {
     return {
       removed: true,
@@ -68250,13 +68263,13 @@ function cleanupWorktreePath(worktreePath, repoRoot) {
     };
   }
   try {
-    (0, import_node_fs7.rmSync)(worktreePath, { recursive: true, force: true });
+    (0, import_node_fs8.rmSync)(worktreePath, { recursive: true, force: true });
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     warnings.push(`Could not remove directory ${worktreePath}: ${message}`);
   }
   return {
-    removed: !(0, import_node_fs7.existsSync)(worktreePath),
+    removed: !(0, import_node_fs8.existsSync)(worktreePath),
     alreadyMissing: false,
     warnings
   };
@@ -68614,7 +68627,7 @@ function createEndCommand() {
 // src/commands/worktree.ts
 init_kleur();
 var import_node_child_process11 = require("child_process");
-var import_node_fs8 = require("fs");
+var import_node_fs9 = require("fs");
 var import_node_path27 = require("path");
 function git2(args, cwd) {
   const r = (0, import_node_child_process11.spawnSync)("git", args, { cwd, encoding: "utf8", stdio: "pipe" });
@@ -68691,8 +68704,8 @@ function listXtWorktrees(repoRoot) {
   }));
   for (const wt of worktrees) {
     try {
-      const metaFile = (0, import_node_fs8.existsSync)((0, import_node_path27.join)(wt.path, ".xtrm", "session-meta.json")) ? (0, import_node_path27.join)(wt.path, ".xtrm", "session-meta.json") : (0, import_node_path27.join)(wt.path, ".session-meta.json");
-      const raw = (0, import_node_fs8.readFileSync)(metaFile, "utf8");
+      const metaFile = (0, import_node_fs9.existsSync)((0, import_node_path27.join)(wt.path, ".xtrm", "session-meta.json")) ? (0, import_node_path27.join)(wt.path, ".xtrm", "session-meta.json") : (0, import_node_path27.join)(wt.path, ".session-meta.json");
+      const raw = (0, import_node_fs9.readFileSync)(metaFile, "utf8");
       const meta3 = JSON.parse(raw);
       wt.runtime = meta3.runtime;
       wt.launchedAt = meta3.launchedAt;
@@ -68718,14 +68731,14 @@ function getManagedWorktreeRoot(repoRoot) {
 }
 function listOrphanManagedDirs(repoRoot) {
   const managedRoot = getManagedWorktreeRoot(repoRoot);
-  if (!(0, import_node_fs8.existsSync)(managedRoot)) return [];
+  if (!(0, import_node_fs9.existsSync)(managedRoot)) return [];
   const activePaths = new Set(parseGitWorktreeList(repoRoot).map((wt) => (0, import_node_path27.resolve)(wt.path)));
   const orphans = [];
-  for (const entry of (0, import_node_fs8.readdirSync)(managedRoot)) {
+  for (const entry of (0, import_node_fs9.readdirSync)(managedRoot)) {
     const fullPath = (0, import_node_path27.join)(managedRoot, entry);
     let isDirectory = false;
     try {
-      isDirectory = (0, import_node_fs8.statSync)(fullPath).isDirectory();
+      isDirectory = (0, import_node_fs9.statSync)(fullPath).isDirectory();
     } catch {
       continue;
     }
@@ -69407,7 +69420,7 @@ function createWorktreeCommand() {
     if (opts.orphans) {
       for (const orphan of orphanDirs) {
         try {
-          (0, import_node_fs8.rmSync)(orphan, { recursive: true, force: true });
+          (0, import_node_fs9.rmSync)(orphan, { recursive: true, force: true });
           removedCount += 1;
           unregisterPluginsForWorktree(orphan);
           console.log(t.success(`  \u2713 Removed orphan directory ${orphan}`));
@@ -69469,7 +69482,7 @@ function createWorktreeCommand() {
 function clearStatuslineClaim2(repoRoot) {
   try {
     const claimFile = (0, import_node_path27.join)(repoRoot, ".xtrm", "statusline-claim");
-    if ((0, import_node_fs8.existsSync)(claimFile)) (0, import_node_fs8.unlinkSync)(claimFile);
+    if ((0, import_node_fs9.existsSync)(claimFile)) (0, import_node_fs9.unlinkSync)(claimFile);
   } catch {
   }
 }
@@ -70290,7 +70303,7 @@ ${content}`;
 // src/commands/memory.ts
 init_kleur();
 var import_node_child_process15 = require("child_process");
-var import_node_fs9 = require("fs");
+var import_node_fs10 = require("fs");
 var import_node_path28 = require("path");
 function createMemoryCommand() {
   return new Command("memory").description("Manage project memory (.xtrm/memory.md)").addCommand(createMemoryUpdateCommand());
@@ -70322,7 +70335,7 @@ function createMemoryUpdateCommand() {
     const args = ["run", "memory-processor", "--prompt", prompt];
     if (!opts.beads) args.push("--no-beads");
     const memPath = (0, import_node_path28.join)(cwd, ".xtrm", "memory.md");
-    const spinnerText = opts.dryRun ? "Analyzing memories..." : `${(0, import_node_fs9.existsSync)(memPath) ? "Updating" : "Creating"} .xtrm/memory.md...`;
+    const spinnerText = opts.dryRun ? "Analyzing memories..." : `${(0, import_node_fs10.existsSync)(memPath) ? "Updating" : "Creating"} .xtrm/memory.md...`;
     console.log(kleur_default.bold(`
   xt memory update${opts.dryRun ? " (dry run)" : ""}
 `));
@@ -70342,7 +70355,7 @@ function createMemoryUpdateCommand() {
 // src/commands/merge.ts
 init_kleur();
 var import_node_child_process16 = require("child_process");
-var import_node_fs10 = require("fs");
+var import_node_fs11 = require("fs");
 var import_node_path29 = require("path");
 function createMergeCommand() {
   return new Command("merge").description("Drain the xt worktree PR merge queue via the xt-merge specialist").option("--dry-run", "List queue and CI status without merging", false).option("-y, --yes", "Skip confirmation prompt", false).option("--no-beads", "Skip creating a tracking bead for this run", false).action(async (opts) => {
@@ -70407,7 +70420,7 @@ function createMergeCommand() {
     let jobsBefore;
     try {
       jobsBefore = new Set(
-        (0, import_node_fs10.readdirSync)(jobsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
+        (0, import_node_fs11.readdirSync)(jobsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
       );
     } catch {
       jobsBefore = /* @__PURE__ */ new Set();
@@ -70418,7 +70431,7 @@ function createMergeCommand() {
       const deadline = Date.now() + 15e3;
       while (Date.now() < deadline) {
         try {
-          const entries = (0, import_node_fs10.readdirSync)(jobsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+          const entries = (0, import_node_fs11.readdirSync)(jobsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
           const newId = entries.find((id) => !jobsBefore.has(id));
           if (newId) return newId;
         } catch {
@@ -70443,7 +70456,7 @@ function createMergeCommand() {
 // src/commands/debug.ts
 init_kleur();
 var import_node_child_process17 = require("child_process");
-var import_node_fs11 = require("fs");
+var import_node_fs12 = require("fs");
 var import_node_path30 = require("path");
 var committedLabel = (outcome) => outcome === "error" ? "ACMT-" : "ACMT+";
 var committedColor = (s) => s === "ACMT-" ? kleur_default.red(s) : kleur_default.cyan(s);
@@ -70565,7 +70578,7 @@ function formatLine(event, colorMap) {
 function findDbPath(cwd) {
   let dir = cwd;
   for (let i = 0; i < 10; i++) {
-    if ((0, import_node_fs11.existsSync)((0, import_node_path30.join)(dir, ".beads"))) return (0, import_node_path30.join)(dir, ".xtrm", "debug.db");
+    if ((0, import_node_fs12.existsSync)((0, import_node_path30.join)(dir, ".beads"))) return (0, import_node_path30.join)(dir, ".xtrm", "debug.db");
     const parent = (0, import_node_path30.join)(dir, "..");
     if (parent === dir) break;
     dir = parent;
@@ -70627,7 +70640,7 @@ function createDebugCommand() {
   return new Command("debug").description("Watch xtrm events: tool calls, gate decisions, bd lifecycle").option("-f, --follow", "Follow new events (default)", false).option("--all", "Show full history and exit", false).option("--session <id>", "Filter by session ID (prefix match)").option("--type <domain>", "Filter by domain: tool | gate | bd | session").option("--json", "Output raw JSON lines", false).action((opts) => {
     const cwd = process.cwd();
     const dbPath = findDbPath(cwd);
-    if (!dbPath || !(0, import_node_fs11.existsSync)(dbPath)) return;
+    if (!dbPath || !(0, import_node_fs12.existsSync)(dbPath)) return;
     if (opts.all) {
       const events = queryEvents(dbPath, buildWhere(opts, ""), 1e3);
       const colorMap = buildColorMap(events);
@@ -72676,12 +72689,12 @@ function createUpdateCommand() {
 
 // src/commands/release.ts
 init_kleur();
-var import_node_fs13 = require("fs");
+var import_node_fs14 = require("fs");
 var import_node_child_process23 = require("child_process");
 var import_node_path41 = __toESM(require("path"), 1);
 
 // src/core/xt-reports.ts
-var import_node_fs12 = require("fs");
+var import_node_fs13 = require("fs");
 var import_node_child_process22 = require("child_process");
 var import_node_path40 = __toESM(require("path"), 1);
 var DEFAULT_CAP_BYTES = 5e4;
@@ -72693,7 +72706,7 @@ function getCommitDate(ref, cwd) {
   }).trim();
 }
 function listReportFiles(rootDir) {
-  return (0, import_node_fs12.readdirSync)(import_node_path40.default.join(rootDir, REPORT_DIR)).filter((entry) => entry.endsWith(".md")).sort().map((entry) => import_node_path40.default.join(REPORT_DIR, entry));
+  return (0, import_node_fs13.readdirSync)(import_node_path40.default.join(rootDir, REPORT_DIR)).filter((entry) => entry.endsWith(".md")).sort().map((entry) => import_node_path40.default.join(REPORT_DIR, entry));
 }
 function isDateInRange(date5, since, to) {
   return date5 >= since && date5 <= to;
@@ -72707,7 +72720,7 @@ function listXtReports(options) {
     const date5 = file2.slice(0, 10);
     return { file: relativePath, date: date5, bytes: 0, content: "" };
   }).filter((report) => isDateInRange(report.date, sinceDate, toDate)).map((report) => {
-    const content = (0, import_node_fs12.readFileSync)(import_node_path40.default.join(rootDir, report.file), "utf8");
+    const content = (0, import_node_fs13.readFileSync)(import_node_path40.default.join(rootDir, report.file), "utf8");
     return {
       ...report,
       bytes: Buffer.byteLength(content, "utf8"),
@@ -72769,7 +72782,7 @@ function getLatestTag(cwd) {
   return "HEAD~1";
 }
 function getPackageVersion(cwd) {
-  return JSON.parse((0, import_node_fs13.readFileSync)(import_node_path41.default.join(cwd, "cli", "package.json"), "utf8")).version;
+  return JSON.parse((0, import_node_fs14.readFileSync)(import_node_path41.default.join(cwd, "cli", "package.json"), "utf8")).version;
 }
 function getReleaseTag(cwd) {
   return `v${getPackageVersion(cwd)}`;
@@ -75030,7 +75043,7 @@ async function printBanner(version3) {
 // src/index.ts
 var version2 = "0.0.0";
 try {
-  version2 = JSON.parse((0, import_node_fs14.readFileSync)((0, import_node_path51.resolve)(__dirname, "../package.json"), "utf8")).version;
+  version2 = JSON.parse((0, import_node_fs15.readFileSync)((0, import_node_path51.resolve)(__dirname, "../package.json"), "utf8")).version;
 } catch {
 }
 var program2 = new Command();
