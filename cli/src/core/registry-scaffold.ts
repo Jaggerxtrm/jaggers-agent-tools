@@ -119,8 +119,9 @@ export async function scaffoldSkillsDefaultFromPackage(params: {
     const { packageRoot, userXtrmDir, dryRun } = params;
     const sourceDir = path.join(packageRoot, '.xtrm', 'skills', 'default');
     const targetDir = path.join(userXtrmDir, 'skills', 'default');
+    const repoRoot = path.dirname(userXtrmDir);
 
-    if (shouldUseGlobalSkills()) {
+    if (shouldUseGlobalSkills(repoRoot)) {
         const globalSkillsRoot = resolveGlobalSkillsRoot();
         const hasGlobalTree = await fs.pathExists(path.join(globalSkillsRoot, 'default'))
             && await fs.pathExists(path.join(globalSkillsRoot, 'optional'));
@@ -267,8 +268,8 @@ async function appendGlobalSkillsSkipLog(asset: string, count: number): Promise<
     })}\n`);
 }
 
-function createProjectRegistrySnapshot(registry: RegistryManifest): RegistryManifest {
-    if (!shouldUseGlobalSkills()) {
+function createProjectRegistrySnapshot(registry: RegistryManifest, repoRoot?: string): RegistryManifest {
+    if (!shouldUseGlobalSkills(repoRoot)) {
         return registry;
     }
 
@@ -306,6 +307,7 @@ export async function installFromRegistry(params: {
 }): Promise<InstallStats> {
     const { packageRoot, registry, userXtrmDir, dryRun, force, yes, strictRegistry = false, overrideRoots } = params;
     const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
+    const installRepoRoot = path.dirname(userXtrmDir);
 
     const drift = await checkDrift(registryPath, userXtrmDir, overrideRoots);
     const expectedHashes = buildExpectedHashes(registry);
@@ -374,7 +376,7 @@ export async function installFromRegistry(params: {
 
     for (const [assetKey, asset] of Object.entries(registry.assets)) {
         const installScope = getAssetInstallScope(asset);
-        const isGlobalManaged = shouldUseGlobalSkills() && installScope === 'global';
+        const isGlobalManaged = shouldUseGlobalSkills(installRepoRoot) && installScope === 'global';
         const assetRoot = overrideRoots?.[assetKey];
 
         if (isGlobalManaged) {
@@ -457,7 +459,7 @@ export async function installFromRegistry(params: {
         // config; 'registry.json' is a hardcoded filename. No user input here.
         // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         const targetRegistryPath = path.join(userXtrmDir, 'registry.json');
-        await fs.writeJson(targetRegistryPath, createProjectRegistrySnapshot(registry), { spaces: 2 });
+        await fs.writeJson(targetRegistryPath, createProjectRegistrySnapshot(registry, installRepoRoot), { spaces: 2 });
         await fs.appendFile(targetRegistryPath, '\n');
     }
 
