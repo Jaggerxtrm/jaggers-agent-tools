@@ -15,6 +15,7 @@ import { resolveGlobalHooksRoot } from '../core/global-hooks-bootstrap.js';
 import { isRepoMigrated, markRepoMigrated } from '../utils/known-repos.js';
 import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
+import { stageMigrationChanges } from '../utils/git-staging.js';
 
 interface MigrateOptions {
   dryRun?: boolean;
@@ -473,6 +474,18 @@ async function migrateSkills(
 
   await markRepoMigrated(repoPath, { skillsMigrated: true, backupPath });
 
+  // xtrm-utdq1: stage the retirement (D lines) + runtime-state untrack +
+  // gitignore additions so the operator doesn't inherit ~300 unstaged files.
+  // Never commits — operator retains ownership of when to persist.
+  const stageResult = await stageMigrationChanges(repoPath);
+  if (stageResult.filesStaged > 0 || stageResult.gitignoreWritten) {
+    const parts: string[] = [];
+    if (stageResult.filesStaged > 0) parts.push(`${stageResult.filesStaged} file(s) staged`);
+    if (stageResult.untracked.length > 0) parts.push(`${stageResult.untracked.length} runtime path(s) untracked`);
+    if (stageResult.gitignoreWritten) parts.push('.gitignore updated');
+    console.log(kleur.dim(`  skills: ${parts.join(', ')} — run 'git commit' to persist`));
+  }
+
   return { migrated: true, backupPath, divergedFiles };
 }
 
@@ -589,6 +602,16 @@ async function migrateHooks(
   });
 
   await markRepoMigrated(repoPath, { hooksMigrated: true, backupPath });
+
+  // xtrm-utdq1: stage removal + runtime gitignore additions.
+  const stageResult = await stageMigrationChanges(repoPath);
+  if (stageResult.filesStaged > 0 || stageResult.gitignoreWritten) {
+    const parts: string[] = [];
+    if (stageResult.filesStaged > 0) parts.push(`${stageResult.filesStaged} file(s) staged`);
+    if (stageResult.untracked.length > 0) parts.push(`${stageResult.untracked.length} runtime path(s) untracked`);
+    if (stageResult.gitignoreWritten) parts.push('.gitignore updated');
+    console.log(kleur.dim(`  hooks: ${parts.join(', ')} — run 'git commit' to persist`));
+  }
 
   return { migrated: true, backupPath, divergedFiles: [], skipped: false };
 }

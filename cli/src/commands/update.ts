@@ -22,6 +22,7 @@ import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../cor
 import { reconcileProjectClaudeHooks } from '../core/claude-runtime-sync.js';
 import { resolveMainProjectRoot } from '../utils/repo-root.js';
 import { printNudgeOnce } from '../utils/nudge.js';
+import { stageMigrationChanges } from '../utils/git-staging.js';
 
 type UpdateStatus = 'refreshed' | 'already-current' | 'failed' | 'skipped' | 'incomplete';
 
@@ -174,14 +175,22 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
         const appliedPatch = hasBeads ? await ensureBdAutoStagePatch(repoRoot, true) : bdPatch;
         const maintenance = await runDependencyMaintenance(repoRoot, true);
 
+        // xtrm-utdq1: stage tracked modifications (hook-path rewrites, retired
+        // asset removals) and drop runtime state from the index. Never commits.
+        // Empty-tree, non-git, and clean-tree cases are all no-ops.
+        const stageResult = await stageMigrationChanges(repoRoot);
+
         const serviceSkillsReason = serviceSkills.migratedPacks.length > 0
             ? `, service-skills migrated: ${serviceSkills.migratedPacks.join(',')}`
             : '';
         const hookSyncReason = hookSync.changed ? ', claude hooks rewired' : '';
+        const stageReason = stageResult.filesStaged > 0
+            ? `, ${stageResult.filesStaged} file(s) staged`
+            : '';
         return {
             repo: repoRoot,
             status: 'refreshed',
-            reason: `missing=${drift.missing.length}, drifted=${drift.drifted.length}, ${summarizeBdAutoStagePatch(appliedPatch)}${serviceSkillsReason}${hookSyncReason}`,
+            reason: `missing=${drift.missing.length}, drifted=${drift.drifted.length}, ${summarizeBdAutoStagePatch(appliedPatch)}${serviceSkillsReason}${hookSyncReason}${stageReason}`,
             maintenance,
         };
     } catch (error) {
