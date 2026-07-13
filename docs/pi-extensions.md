@@ -152,6 +152,24 @@ Shared Serena daemon pool for Pi sessions. On `session_start`, the extension:
 
 Use `DEBUG=serena-pool` to print startup, lock, reuse, and orphan-cleanup traces. Serena persists across session shutdown; the next session reuses the daemon or cleans up the recorded orphan group if the daemon died.
 
+### Serena tool ownership boundary
+
+`pi-serena-tools` is restricted at registration time to read-only semantic code navigation:
+
+- `find_symbol`, `find_referencing_symbols`, `get_symbols_overview`
+- `jet_brains_find_symbol`, `jet_brains_find_referencing_symbols`, `jet_brains_get_symbols_overview`, `jet_brains_type_hierarchy`
+
+Serena does not register shell, file read/write/edit, directory listing, filename search, ordinary text search, memory, workflow, or project-management tools. Those operations remain owned by Pi's direct `bash`/`structured_return`/`process` and `read`/`write`/`edit`/`find`/`grep`/`ls` tools, so they continue to work when Serena is unavailable.
+
+Runtime install and `xt update --apply` repair existing user package installs. Manual verification:
+
+```bash
+node scripts/patch-external-pi-tools.mjs ~/.pi/agent/npm/node_modules
+grep -n 'SERENA_CODE_NAVIGATION_TOOLS' ~/.pi/agent/npm/node_modules/pi-serena-tools/index.ts
+```
+
+Then start a fresh Pi session with Serena stopped and smoke an ordinary shell command plus file read; the tool rows must show direct `bash` and `read`, never Serena `execute_shell_command` or `read_file`.
+
 ### `pi-serena-compact`
 
 Compacts verbose output from Serena/GitNexus MCP tools, reducing CLI bloat while preserving essential information.

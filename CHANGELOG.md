@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`xt update --apply` now repairs XTRM's external Pi tool patches after package assurance (xtrm-5c1nc, P0).** Direct `pi install`/`pi update` can replace patched `pi-serena-tools` source; applied XTRM updates now rerun the existing idempotent patcher after package refresh, while dry-runs remain mutation-free.
 
+- **Serena is code-navigation-only in Pi (xtrm-x9xml, P0).** The managed `pi-serena-tools` patch now registers only seven read-only symbol/reference/type-hierarchy tools. Shell, file, filesystem, text-search, memory, workflow, and mutating Serena proxies are absent, so direct Pi tools remain available when Serena disconnects. Runtime sync also patches the real `~/.pi/agent/npm/node_modules` store and keeps native-tool blocking disabled in project settings. A regression test locks the exact allowlist and patch idempotence.
+
 #### Removed
 
 - **Retired Pi `auto-update` extension payload (xtrm-2kv7i).** Deleted the canonical extension, package shim, legacy mirrors, migration mapping, runtime inventory entry, and import smoke reference. The plugin-era cleanup tombstone remains so upgrades still remove stale consumer copies.
