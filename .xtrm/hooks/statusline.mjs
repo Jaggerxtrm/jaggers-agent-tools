@@ -129,7 +129,7 @@ function computeGit(cwd, mainRoot) {
       else if (behind > 0) gitFlags += '↓';
     }
   }
-  return { displayDir, branch, gitFlags };
+  return { displayDir, branch, gitFlags, mainRoot };
 }
 
 function refresh(cwd) {

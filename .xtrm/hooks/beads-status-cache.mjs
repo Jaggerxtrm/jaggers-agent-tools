@@ -8,7 +8,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync,
          statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 
 export const CACHE_VERSION = 1;
 export const TTL_COMPACT_MS = 5000;
@@ -36,13 +36,26 @@ export function runBd(cwd, cmd, timeout = BD_TIMEOUT_MS) {
 export function resolveMainRoot(cwd) {
   const override = process.env.XTRM_BEADS_CACHE_ROOT;
   if (override) return override;
-  const common = runFast(cwd, 'git rev-parse --git-common-dir');
-  if (common) {
-    const abs = isAbsolute(common) ? common : join(cwd, common);
-    return dirname(abs);
+  let current = resolve(cwd);
+  while (true) {
+    const dotGit = join(current, '.git');
+    try {
+      const stat = statSync(dotGit);
+      if (stat.isDirectory()) return current;
+      if (stat.isFile()) {
+        const match = readFileSync(dotGit, 'utf8').match(/^gitdir:\s*(.+)$/m);
+        if (match) {
+          const gitDir = resolve(current, match[1].trim());
+          const marker = `${sep}.git${sep}worktrees${sep}`;
+          const markerIndex = gitDir.indexOf(marker);
+          return markerIndex >= 0 ? gitDir.slice(0, markerIndex) : current;
+        }
+      }
+    } catch {}
+    const parent = dirname(current);
+    if (parent === current) return resolve(cwd);
+    current = parent;
   }
-  const top = runFast(cwd, 'git rev-parse --show-toplevel');
-  return top || cwd;
 }
 
 export function cacheDir(mainRoot) { return join(mainRoot, '.xtrm', 'cache'); }
@@ -136,15 +149,22 @@ export function fetchCompact(cwd) {
   }));
 
   let activeEpic = null;
-  const first = progressList[0];
-  const parentId = first?.parent_id ?? first?.parent ?? null;
-  if (parentId) {
-    const parent = bdJson(cwd, `bd show ${parentId} --json`)?.[0];
-    if (parent && parent.issue_type === 'epic') {
-      const children = bdJson(cwd, `bd list --parent=${parentId} --json`) ?? [];
-      const closed = children.filter(c => c.status === 'closed').length;
-      activeEpic = { id: parent.id, title: parent.title ?? null, closed, total: children.length };
+  for (const issue of progressList) {
+    let parentId = issue.parent_id ?? issue.parent ?? null;
+    const seen = new Set();
+    while (parentId && !seen.has(parentId) && seen.size < 8) {
+      seen.add(parentId);
+      const parent = bdJson(cwd, `bd show ${parentId} --json`)?.[0];
+      if (!parent) break;
+      if (parent.issue_type === 'epic') {
+        const children = bdJson(cwd, `bd children ${parentId} --json`) ?? [];
+        const closed = children.filter(c => c.status === 'closed').length;
+        activeEpic = { id: parent.id, title: parent.title ?? null, closed, total: children.length };
+        break;
+      }
+      parentId = parent.parent_id ?? parent.parent ?? null;
     }
+    if (activeEpic) break;
   }
   return { counts, activeIssues, activeEpic };
 }
@@ -167,7 +187,7 @@ export function formatCompact(data, opts = {}) {
   const { open = 0, in_progress = 0, blocked = 0 } = data.counts;
 
   if (open === 0 && in_progress === 0 && blocked === 0) {
-    return `○ no open issues${staleTail}`;
+    return `no open issues${staleTail}`;
   }
 
   const parts = [`${bold}${open}${_bold} open`];
@@ -181,7 +201,7 @@ export function formatCompact(data, opts = {}) {
     } else if (data.activeIssues?.length === 1) {
       const c = data.activeIssues[0];
       const title = truncate(c.title ?? '', Math.max(20, Math.min(40, cols - 40)));
-      parts.push(`◐ ${c.id.split('-').pop()}${title ? ` ${ital}${title}${_ital}` : ''}`);
+      parts.push(`working on ${c.id.split('-').pop()}${title ? ` ${ital}${title}${_ital}` : ''}`);
     }
   }
 

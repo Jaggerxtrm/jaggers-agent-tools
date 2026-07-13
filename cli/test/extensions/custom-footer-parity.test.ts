@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
 	isToolCallEventType: vi.fn(() => false),
@@ -6,62 +9,70 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
 }));
 vi.mock("@earendil-works/pi-tui", () => ({
 	truncateToWidth: vi.fn((s: string) => s),
-	visibleWidth: vi.fn((s: string) => s.length),
+	visibleWidth: vi.fn((s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length),
 }));
 
 import customFooterExtension from "../../../packages/pi-extensions/extensions/custom-footer/index";
-import { EventAdapter, SubprocessRunner } from "../../../packages/pi-extensions/src/core";
+import { SubprocessRunner } from "../../../packages/pi-extensions/src/core";
+import * as beadsCache from "../../../.xtrm/hooks/beads-status-cache.mjs";
 
 vi.mock("../../../packages/pi-extensions/src/core", async () => {
 	const actual = await vi.importActual<any>("../../../packages/pi-extensions/src/core");
-	return {
-		...actual,
-		SubprocessRunner: { run: vi.fn() },
-		EventAdapter: { isBeadsProject: vi.fn(() => true) },
-	};
+	return { ...actual, SubprocessRunner: { run: vi.fn() } };
 });
 
-describe("custom-footer parity", () => {
+const repoRoot = join(import.meta.dirname, "../../..");
+
+describe("custom-footer shared beads cache", () => {
 	let handlers: Record<string, Function[]>;
 	let footerRenderer: any;
 	let ctx: any;
-	let setFooterSpy: any;
-	let requestRenderSpy: any;
-	let branchChangeHandler: (() => void) | null;
+	let expanded: boolean;
+	let requestRenderSpy: ReturnType<typeof vi.fn>;
+	let cacheRoot: string;
 
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.resetAllMocks();
 		handlers = {};
 		footerRenderer = null;
+		expanded = false;
 		requestRenderSpy = vi.fn();
-		branchChangeHandler = null;
-
-		setFooterSpy = vi.fn((factory: any) => {
-			footerRenderer = factory(
-				{ requestRender: requestRenderSpy },
-				{ fg: (_c: string, text: string) => text },
-				{
-					getGitBranch: () => "xt/demo",
-					onBranchChange: (handler: () => void) => {
-						branchChangeHandler = handler;
-						return () => {
-							if (branchChangeHandler === handler) branchChangeHandler = null;
-						};
-					},
-					getAvailableProviderCount: () => 1,
-				},
-			);
-		});
-
+		cacheRoot = mkdtempSync(join(tmpdir(), "xtrm-footer-cache-"));
+		process.env.XTRM_BEADS_CACHE_ROOT = cacheRoot;
 		ctx = {
-			cwd: "/repo/.xtrm/worktrees/demo",
-			sessionManager: { getSessionId: () => "session-1" },
-			model: { id: "gpt-5" },
-			getContextUsage: () => ({ percent: 37 }),
+			cwd: repoRoot,
+			model: { id: "gpt-5", contextWindow: 200_000 },
+			getContextUsage: () => ({ percent: 37, contextWindow: 200_000 }),
 			hasUI: true,
-			ui: { setFooter: setFooterSpy },
+			mode: "tui",
+			ui: {
+				getToolsExpanded: () => expanded,
+				setFooter: vi.fn((factory: any) => {
+					footerRenderer = factory(
+						{ requestRender: requestRenderSpy },
+						{ fg: (_color: string, text: string) => text },
+						{
+							getGitBranch: () => "feature/footer",
+							onBranchChange: () => () => {},
+							getAvailableProviderCount: () => 1,
+						},
+					);
+				}),
+			},
 		};
+		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
+			if (command === "git" && args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+				return { code: 0, stdout: `${repoRoot}\n`, stderr: "" };
+			}
+			return { code: 1, stdout: "", stderr: "" };
+		});
+	});
+
+	afterEach(() => {
+		delete process.env.XTRM_BEADS_CACHE_ROOT;
+		rmSync(cacheRoot, { recursive: true, force: true });
+		vi.useRealTimers();
 	});
 
 	const createPi = () => ({
@@ -69,209 +80,108 @@ describe("custom-footer parity", () => {
 			if (!handlers[event]) handlers[event] = [];
 			handlers[event].push(fn);
 		},
+		getThinkingLevel: () => "off",
 	});
 
-	it("render does not invoke SubprocessRunner", async () => {
-		(SubprocessRunner.run as any).mockResolvedValue({ code: 1, stdout: "", stderr: "" });
-
+	async function start() {
 		customFooterExtension(createPi() as any);
 		await handlers.session_start[0]({}, ctx);
 		await vi.runOnlyPendingTimersAsync();
-		await Promise.resolve();
-		vi.clearAllMocks();
+	}
 
-		footerRenderer.render(120);
-		await vi.advanceTimersByTimeAsync(6000);
-		footerRenderer.render(120);
-
-		expect(SubprocessRunner.run).not.toHaveBeenCalled();
-	});
-
-	it("renders three lines with claim title parity", async () => {
-		(EventAdapter.isBeadsProject as any).mockReturnValue(true);
-		(SubprocessRunner.run as any).mockImplementation(async (cmd: string, args: string[]) => {
-			if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: "/repo\n", stderr: "" };
-			if (cmd === "git" && args[0] === "branch") return { code: 0, stdout: "xt/demo\n", stderr: "" };
-			if (cmd === "git" && args.includes("status")) return { code: 0, stdout: " M file.ts\nA  new.ts\n", stderr: "" };
-			if (cmd === "git" && args.includes("rev-list")) return { code: 0, stdout: "0 1\n", stderr: "" };
-			if (cmd === "bd" && args[0] === "list" && args[1] === "--status=in_progress") return { code: 0, stdout: "◐ xtrm-123 in progress\n", stderr: "" };
-			if (cmd === "bd" && args[0] === "show") {
-				return { code: 0, stdout: JSON.stringify([{ status: "in_progress", title: "Fix footer parity" }]), stderr: "" };
-			}
-			if (cmd === "bd" && args[0] === "list") return { code: 0, stdout: "(4 open, 1 in progress)", stderr: "" };
-			return { code: 1, stdout: "", stderr: "" };
+	it("cleans cache synchronization and refresh timers on shutdown", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 1, in_progress: 0, blocked: 0 }, activeIssues: [], activeEpic: null,
 		});
+		await start();
+		expect(vi.getTimerCount()).toBeGreaterThan(0);
+		await handlers.session_shutdown[0]();
+		expect(vi.getTimerCount()).toBe(0);
+	});
 
-		customFooterExtension(createPi() as any);
-		await handlers.session_start[0]({}, ctx);
-		await vi.runOnlyPendingTimersAsync();
-		await Promise.resolve();
-
+	it("renders the same compact formatter output as Claude from a fixture cache", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 12, in_progress: 2, blocked: 0 },
+			activeIssues: [],
+			activeEpic: { id: "xtrm-k2ufi", title: "Role parity", closed: 1, total: 3 },
+		});
+		await start();
 		const lines = footerRenderer.render(120);
 		expect(lines).toHaveLength(3);
-		expect(lines[0]).toContain("xt/demo");
-		expect(lines[1]).toContain("gpt-5");
-		expect(lines[2]).toContain("◐ 123");
-		expect(lines[2]).toContain("Fix footer parity");
+		expect(lines[2].replace(/\x1b\[[0-9;]*m/g, "")).toContain("12 open · 2 in progress · epic k2ufi (1/3 done)");
 	});
 
-	it("falls back to open issue count when no claim", async () => {
-		(EventAdapter.isBeadsProject as any).mockReturnValue(true);
-		(SubprocessRunner.run as any).mockImplementation(async (cmd: string, args: string[]) => {
-			if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: "/repo\n", stderr: "" };
-			if (cmd === "git" && args[0] === "branch") return { code: 0, stdout: "xt/demo\n", stderr: "" };
-			if (cmd === "git" && args.includes("status")) return { code: 0, stdout: "", stderr: "" };
-			if (cmd === "git" && args.includes("rev-list")) return { code: 0, stdout: "0 0\n", stderr: "" };
-			if (cmd === "bd" && args[0] === "list" && args[1] === "--status=in_progress") return { code: 0, stdout: "", stderr: "" };
-			if (cmd === "bd" && args[0] === "list") return { code: 0, stdout: "(5 open, 0 in progress)", stderr: "" };
-			return { code: 1, stdout: "", stderr: "" };
+	it("render performs no subprocess work", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 5, in_progress: 0, blocked: 0 }, activeIssues: [], activeEpic: null,
 		});
-
-		customFooterExtension(createPi() as any);
-		await handlers.session_start[0]({}, ctx);
-		await vi.runOnlyPendingTimersAsync();
-		await Promise.resolve();
-
-		const lines = footerRenderer.render(100);
-		expect(lines[2]).toContain("○ 5 open");
-	});
-
-	it("coalesces lifecycle refresh triggers and redraws on state update", async () => {
-		(EventAdapter.isBeadsProject as any).mockReturnValue(true);
-		let resolveRefresh: (() => void) | null = null;
-		const refreshGate = new Promise<void>((resolve) => {
-			resolveRefresh = resolve;
-		});
-		(SubprocessRunner.run as any).mockImplementation(async (cmd: string, args: string[]) => {
-			await refreshGate;
-			if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: "/repo\n", stderr: "" };
-			if (cmd === "git" && args[0] === "branch") return { code: 0, stdout: "xt/demo\n", stderr: "" };
-			if (cmd === "git" && args.includes("status")) return { code: 0, stdout: "", stderr: "" };
-			if (cmd === "git" && args.includes("rev-list")) return { code: 0, stdout: "0 0\n", stderr: "" };
-			if (cmd === "bd" && args[0] === "list" && args[1] === "--status=in_progress") return { code: 0, stdout: "", stderr: "" };
-			if (cmd === "bd" && args[0] === "list") return { code: 0, stdout: "(5 open, 0 in progress)", stderr: "" };
-			return { code: 1, stdout: "", stderr: "" };
-		});
-
-		customFooterExtension(createPi() as any);
-		await handlers.session_start[0]({}, ctx);
-		await vi.advanceTimersByTimeAsync(1);
-		expect(SubprocessRunner.run).toHaveBeenCalledTimes(2);
-
-		await handlers.tool_result[0]({ input: { command: "git status" } });
-		await handlers.tool_result[0]({ input: { command: "git commit -m test" } });
-		branchChangeHandler?.();
-		await vi.advanceTimersByTimeAsync(250);
-		expect(SubprocessRunner.run).toHaveBeenCalledTimes(2);
-
-		resolveRefresh?.();
-		await Promise.resolve();
-		await Promise.resolve();
-		await vi.runOnlyPendingTimersAsync();
-		expect(SubprocessRunner.run).toHaveBeenCalledTimes(6);
-		expect(requestRenderSpy).toHaveBeenCalled();
-	});
-
-	it("schedules beads refresh from relevant tool results", async () => {
-		(EventAdapter.isBeadsProject as any).mockReturnValue(true);
-		(SubprocessRunner.run as any).mockImplementation(async (cmd: string, args: string[]) => {
-			if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: "/repo\n", stderr: "" };
-			if (cmd === "git" && args[0] === "branch") return { code: 0, stdout: "xt/demo\n", stderr: "" };
-			if (cmd === "git" && args.includes("status")) return { code: 0, stdout: "", stderr: "" };
-			if (cmd === "git" && args.includes("rev-list")) return { code: 0, stdout: "0 0\n", stderr: "" };
-			if (cmd === "bd" && args[0] === "list" && args[1] === "--status=in_progress") return { code: 0, stdout: "", stderr: "" };
-			if (cmd === "bd" && args[0] === "list") return { code: 0, stdout: "(5 open, 0 in progress)", stderr: "" };
-			return { code: 1, stdout: "", stderr: "" };
-		});
-
-		customFooterExtension(createPi() as any);
-		await handlers.session_start[0]({}, ctx);
-		await vi.runOnlyPendingTimersAsync();
-		await Promise.resolve();
-		const settledCalls = (SubprocessRunner.run as any).mock.calls.length;
-
-		await handlers.tool_result[0]({ input: { command: "bd update xtrm-123" } });
-		await vi.advanceTimersByTimeAsync(250);
-		await Promise.resolve();
-
-		expect(SubprocessRunner.run).toHaveBeenCalledTimes(settledCalls + 2);
-		expect(requestRenderSpy).toHaveBeenCalled();
-	});
-
-	it("cleans pending footer timers on session shutdown", async () => {
-		(SubprocessRunner.run as any).mockResolvedValue({ code: 1, stdout: "", stderr: "" });
-
-		customFooterExtension(createPi() as any);
-		await handlers.session_start[0]({}, ctx);
-		await handlers.session_shutdown[0]();
-		await vi.advanceTimersByTimeAsync(500);
-
-		expect(SubprocessRunner.run).not.toHaveBeenCalled();
-		expect(setFooterSpy).toHaveBeenCalledTimes(1);
-	});
-
-	it("reapplies footer on model/session refresh events", async () => {
-		(SubprocessRunner.run as any).mockResolvedValue({ code: 1, stdout: "", stderr: "" });
-
-		customFooterExtension(createPi() as any);
-		await handlers.session_start[0]({}, ctx);
-		await vi.advanceTimersByTimeAsync(45);
-		const initialCalls = setFooterSpy.mock.calls.length;
-
-		await handlers.model_select[0]({}, ctx);
-		await vi.advanceTimersByTimeAsync(45);
-		await handlers.session_switch[0]({}, ctx);
-		await vi.advanceTimersByTimeAsync(45);
-
-		expect(setFooterSpy.mock.calls.length).toBeGreaterThan(initialCalls);
-	});
-
-	it("keeps latest branch listener and redraw after footer reapply race", async () => {
-		let activeBranchChangeHandler: (() => void) | null = null;
-		let previousRenderer: any = null;
-		const racySetFooterSpy = vi.fn((factory: any) => {
-			const renderer = factory(
-				{ requestRender: requestRenderSpy },
-				{ fg: (_c: string, text: string) => text },
-				{
-					getGitBranch: () => "xt/demo",
-					onBranchChange: (handler: () => void) => {
-						activeBranchChangeHandler = handler;
-						return () => {
-							if (activeBranchChangeHandler === handler) activeBranchChangeHandler = null;
-						};
-					},
-					getAvailableProviderCount: () => 1,
-				},
-			);
-			const staleRenderer = previousRenderer;
-			previousRenderer = renderer;
-			footerRenderer = renderer;
-			staleRenderer?.dispose();
-		});
-		ctx.ui.setFooter = racySetFooterSpy;
-		(SubprocessRunner.run as any).mockImplementation(async (cmd: string, args: string[]) => {
-			if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: "/repo\n", stderr: "" };
-			if (cmd === "git" && args[0] === "branch") return { code: 0, stdout: "xt/demo\n", stderr: "" };
-			if (cmd === "git" && args.includes("status")) return { code: 0, stdout: "", stderr: "" };
-			if (cmd === "git" && args.includes("rev-list")) return { code: 0, stdout: "0 0\n", stderr: "" };
-			return { code: 1, stdout: "", stderr: "" };
-		});
-
-		customFooterExtension(createPi() as any);
-		await handlers.session_start[0]({}, ctx);
-		await vi.runOnlyPendingTimersAsync();
-		await Promise.resolve();
-		expect(racySetFooterSpy).toHaveBeenCalledTimes(2);
+		await start();
 		vi.clearAllMocks();
+		footerRenderer.render(100);
+		footerRenderer.render(100);
+		expect(SubprocessRunner.run).not.toHaveBeenCalled();
+	});
 
-		expect(activeBranchChangeHandler).not.toBeNull();
-		activeBranchChangeHandler?.();
+	it("renders arbitrarily nested cached epic descendants when tools are expanded", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 2, in_progress: 1, blocked: 0 },
+			activeIssues: [],
+			activeEpic: { id: "xtrm-epic", title: "Compact footer", closed: 1, total: 3 },
+			descendants: {
+				epicId: "xtrm-epic", ts: Date.now(), overflow: 0,
+				items: [
+					{ id: "xtrm-epic.1", parent: "xtrm-epic", title: "First child", status: "in_progress" },
+					{ id: "xtrm-epic.1.1", parent: "xtrm-epic.1", title: "Nested child", status: "open" },
+					{ id: "xtrm-epic.1.1.1", parent: "xtrm-epic.1.1", title: "Closed leaf", status: "closed" },
+				],
+			},
+		});
+		expanded = true;
+		await start();
+		const text = footerRenderer.render(120).join("\n");
+		expect(text).toContain("epic epic (1/3 done) — Compact footer");
+		expect(text).toContain("  ◐ .1  in progress  First child");
+		expect(text).toContain("    ○ .1.1  open  Nested child");
+		expect(text).toContain("      ✓ .1.1.1  closed  Closed leaf");
+	});
+
+	it("caps expanded trees at 50 rows and reports overflow", async () => {
+		const items = Array.from({ length: 52 }, (_, index) => ({
+			id: `xtrm-epic.${index + 1}`,
+			parent: "xtrm-epic",
+			title: `Child ${index + 1}`,
+			status: "open",
+		}));
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 52, in_progress: 1, blocked: 0 }, activeIssues: [],
+			activeEpic: { id: "xtrm-epic", title: "Large epic", closed: 0, total: 52 },
+			descendants: { epicId: "xtrm-epic", ts: Date.now(), items: items.slice(0, 50), overflow: 2 },
+		});
+		expanded = true;
+		await start();
+		expect(footerRenderer.render(120).join("\n")).toContain("+2 more (bd show xtrm-epic)");
+	});
+
+	it("shows a loading skeleton, fetches descendants once, then repaints", async () => {
+		beadsCache.writeCache(cacheRoot, {
+			counts: { open: 2, in_progress: 1, blocked: 0 }, activeIssues: [],
+			activeEpic: { id: "xtrm-epic", title: "Compact footer", closed: 0, total: 1 },
+		});
+		expanded = true;
+		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
+			if (command === "bd" && args[0] === "query") {
+				return { code: 0, stdout: JSON.stringify([
+					{ id: "xtrm-epic.1", parent: "xtrm-epic", title: "Fetched child", status: "open" },
+				]), stderr: "" };
+			}
+			return { code: 1, stdout: "", stderr: "" };
+		});
+		await start();
+		expect(footerRenderer.render(120).join("\n")).toContain("loading epic tree…");
 		await vi.runOnlyPendingTimersAsync();
 		await Promise.resolve();
-		await Promise.resolve();
-
-		expect(SubprocessRunner.run).toHaveBeenCalledTimes(4);
+		expect((SubprocessRunner.run as any).mock.calls.filter((call: any[]) => call[0] === "bd")).toHaveLength(1);
+		expect(footerRenderer.render(120).join("\n")).toContain("Fetched child");
 		expect(requestRenderSpy).toHaveBeenCalled();
 	});
 });
