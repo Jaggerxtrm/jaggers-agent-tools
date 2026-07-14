@@ -2,7 +2,7 @@ import kleur from 'kleur';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, rmSync, readdirSync } from 'node:fs';
+import { chmodSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, realpathSync, rmSync, readdirSync } from 'node:fs';
 
 import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
@@ -26,6 +26,8 @@ export interface WorktreeSessionOptions {
     child?: boolean;
     /** When --new-session (or outside $TMUX) hits a session-name collision, attach to the existing session instead of auto-suffixing. */
     reuse?: boolean;
+    /** Additional skills requested explicitly with repeatable --skill flags. */
+    skills?: string[];
     /** Raw argv after `--` on the xt pi command; forwarded verbatim to pi. */
     passthrough?: string[];
 }
@@ -74,6 +76,7 @@ const ROLE_GUARDED_PI_FLAGS: readonly string[] = [
     '--name',
     '--system-prompt',
     '--append-system-prompt',
+    '--skill',
 ] as const;
 
 // Pi flags that contradict interactive coordination or invoke pi as a batch
@@ -130,13 +133,9 @@ export function guardRolePassthrough(passthrough: string[]): PiArgvGuardResult {
 //      "skill not found" error at the exact absolute location the operator
 //      can then fix
 //
-// Rationale: after xtrm-bq7yd's global-skills migration, canonical skills
-// live at ~/.xtrm/skills/active/... The repo's .xtrm/skills/active/ often has
-// only a subset (or partial symlinks from an in-flight migration). Resolving
-// exclusively against mainRepoRoot silently sends pi at a path that doesn't
-// exist. Falling back to $HOME picks up the canonical global. See xtmux-1rn.
-// Post-y0tdg the layout flattens further and resolution can simplify to
-// querying pi's own settings.json chain, but that's follow-up work.
+// Canonical global skills now live at ~/.xtrm/skills/default with runtime
+// pointers at ~/.pi/agent/skills and ~/.claude/skills. Keep a narrow fallback
+// for vendored specialist specs that still name the retired active tree.
 // Exported for unit testing.
 export function resolveSkillPath(mainRepoRoot: string, rawPath: string): string {
     if (path.isAbsolute(rawPath)) return rawPath;
@@ -146,7 +145,37 @@ export function resolveSkillPath(mainRepoRoot: string, rawPath: string): string 
     if (existsSync(repoResolved)) return repoResolved;
     const homeResolved = path.resolve(os.homedir(), rawPath);
     if (existsSync(homeResolved)) return homeResolved;
+    const migratedPath = rawPath.replace(/^\.xtrm\/skills\/active\//, '.xtrm/skills/default/');
+    const migratedResolved = path.resolve(os.homedir(), migratedPath);
+    if (migratedPath !== rawPath && existsSync(migratedResolved)) return migratedResolved;
     return repoResolved;
+}
+
+export function resolveRequestedSkills(mainRepoRoot: string, requested: string[]): string[] {
+    const resolved = requested.map((skill) => {
+        const direct = resolveSkillPath(mainRepoRoot, skill);
+        if (existsSync(direct)) {
+            const valid = lstatSync(direct).isDirectory()
+                ? existsSync(path.join(direct, 'SKILL.md'))
+                : path.basename(direct) === 'SKILL.md';
+            if (!valid) throw new Error(`skill '${skill}' is not a skill directory or SKILL.md`);
+            return direct;
+        }
+
+        const candidates = [
+            path.join(mainRepoRoot, '.pi', 'skills', skill, 'SKILL.md'),
+            path.join(mainRepoRoot, '.claude', 'skills', skill, 'SKILL.md'),
+            path.join(mainRepoRoot, '.agents', 'skills', skill, 'SKILL.md'),
+            path.join(os.homedir(), '.pi', 'agent', 'skills', skill, 'SKILL.md'),
+            path.join(os.homedir(), '.claude', 'skills', skill, 'SKILL.md'),
+            path.join(os.homedir(), '.agents', 'skills', skill, 'SKILL.md'),
+            path.join(os.homedir(), '.xtrm', 'skills', 'default', skill, 'SKILL.md'),
+        ];
+        const found = candidates.find(existsSync);
+        if (!found) throw new Error(`skill '${skill}' not found`);
+        return found;
+    });
+    return [...new Set(resolved.map((skillPath) => realpathSync(skillPath)))];
 }
 
 // Exposed for unit testing. sp view <name> --raw is the source of truth for
@@ -213,6 +242,65 @@ export function resolveRole(name: string, mainRepoRoot: string = process.cwd()):
     return parseSpecialistJson(name, r.stdout ?? '', mainRepoRoot);
 }
 
+export interface RenderedRoleTask {
+    initialPrompt: string;
+    promptHash: string;
+    components: Array<{ kind: string; name: string; tokens: number; bytes: number }>;
+}
+
+export function renderRoleTask(args: {
+    role: string;
+    bead: string;
+    cwd: string;
+    runtime: 'pi' | 'claude';
+}): RenderedRoleTask {
+    const result = spawnSync('sp', [
+        'render-task', args.role,
+        '--bead', args.bead,
+        '--cwd', args.cwd,
+        '--context-depth', '3',
+        '--surface', args.runtime,
+    ], {
+        cwd: args.cwd,
+        encoding: 'utf8',
+        stdio: 'pipe',
+        maxBuffer: 16 * 1024 * 1024,
+    });
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(result.stdout ?? '');
+    } catch {
+        throw new Error(`role '${args.role}': specialists render-task returned invalid JSON`);
+    }
+    const output = parsed as {
+        ok?: unknown;
+        initial_prompt?: unknown;
+        prompt_hash?: unknown;
+        components?: unknown;
+        error?: { code?: unknown; message?: unknown };
+    };
+    if (result.status !== 0 || output.ok !== true) {
+        const code = typeof output.error?.code === 'string' ? output.error.code : 'render_failed';
+        const message = typeof output.error?.message === 'string' ? output.error.message : 'unknown error';
+        throw new Error(`role '${args.role}': ${code}: ${message}`);
+    }
+    if (typeof output.initial_prompt !== 'string' || typeof output.prompt_hash !== 'string') {
+        throw new Error(`role '${args.role}': specialists render-task returned an invalid success payload`);
+    }
+    const components = Array.isArray(output.components)
+        ? output.components.filter((component): component is RenderedRoleTask['components'][number] => {
+            if (!component || typeof component !== 'object') return false;
+            const value = component as Record<string, unknown>;
+            return typeof value.kind === 'string'
+                && typeof value.name === 'string'
+                && typeof value.tokens === 'number'
+                && typeof value.bytes === 'number';
+        })
+        : [];
+    return { initialPrompt: output.initial_prompt, promptHash: output.prompt_hash, components };
+}
+
 function slugifyForSession(input: string): string {
     const s = input.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     return s.slice(0, 32) || 'x';
@@ -220,6 +308,32 @@ function slugifyForSession(input: string): string {
 
 function shellQuote(s: string): string {
     return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+export function prepareClaudeSkillPlugin(worktreePath: string, skillPaths: string[]): string {
+    const pluginRoot = path.join(worktreePath, '.xtrm', 'role-skills');
+    rmSync(pluginRoot, { recursive: true, force: true });
+    mkdirSync(path.join(pluginRoot, '.claude-plugin'), { recursive: true });
+    mkdirSync(path.join(pluginRoot, 'skills'), { recursive: true });
+    writeFileSync(path.join(pluginRoot, '.claude-plugin', 'plugin.json'), JSON.stringify({
+        name: 'xtrm-role-skills',
+        description: 'Ephemeral skills selected for this xt role session',
+    }));
+
+    const names = new Set<string>();
+    const roots = new Set<string>();
+    for (const skillPath of skillPaths) {
+        const skillRoot = realpathSync(lstatSync(skillPath).isDirectory() ? skillPath : path.dirname(skillPath));
+        if (roots.has(skillRoot)) continue;
+        roots.add(skillRoot);
+        const skillFile = path.join(skillRoot, 'SKILL.md');
+        if (!existsSync(skillFile)) throw new Error(`skill path has no SKILL.md: ${skillPath}`);
+        const name = path.basename(skillRoot);
+        if (names.has(name)) throw new Error(`duplicate requested skill name '${name}'`);
+        names.add(name);
+        symlinkSync(skillRoot, path.join(pluginRoot, 'skills', name), 'dir');
+    }
+    return pluginRoot;
 }
 
 export interface RoleTmuxPlan {
@@ -256,10 +370,19 @@ export function buildRoleTmuxPlan(args: {
      * for claude (no --thinking flag) — caller warns at CLI level if the user
      * explicitly passed --thinking to xt claude. */
     thinkingOverride?: string;
+    /** Secure file containing the rendered initial user task. */
+    initialPromptFile?: string;
+    /** Explicit --skill requests, already resolved to absolute paths. */
+    explicitSkillPaths?: string[];
+    /** Ephemeral Claude plugin exposing explicitly requested skills. */
+    claudeSkillPluginPath?: string;
     /** Argv after `--` on the xt command line, already guard-checked. */
     passthrough?: string[];
 }): RoleTmuxPlan {
-    const { runtime, role, bead, parentSessionId, promptFile, systemPrompt, modelOverride, thinkingOverride, passthrough } = args;
+    const {
+        runtime, role, bead, parentSessionId, promptFile, systemPrompt, modelOverride,
+        thinkingOverride, initialPromptFile, explicitSkillPaths = [], claudeSkillPluginPath, passthrough,
+    } = args;
     const roleSlug = slugifyForSession(role.name);
     // Include runtime in the session name so xt pi --role X --bead Y and
     // xt claude --role X --bead Y produce distinguishable sessions
@@ -277,7 +400,11 @@ export function buildRoleTmuxPlan(args: {
         // Pi: file-based system prompt (--append-system-prompt <file>);
         // repo-native --skill <path> for each of the role's skills.
         runtimeArgs.push('--append-system-prompt', promptFile);
-        for (const skill of role.skillPaths) {
+        const seenSkills = new Set<string>();
+        for (const skill of [...role.skillPaths, ...explicitSkillPaths]) {
+            const identity = existsSync(skill) ? realpathSync(skill) : skill;
+            if (seenSkills.has(identity)) continue;
+            seenSkills.add(identity);
             runtimeArgs.push('--skill', skill);
         }
         // Extensions: trust pi's own discovery (~/.pi/agent/settings.json plus
@@ -293,6 +420,7 @@ export function buildRoleTmuxPlan(args: {
         // permission gate — sandboxed worktrees are the trust boundary.
         runtimeArgs.push('--append-system-prompt', systemPrompt);
         runtimeArgs.push('--dangerously-skip-permissions');
+        if (claudeSkillPluginPath) runtimeArgs.push('--plugin-dir', claudeSkillPluginPath);
     }
 
     // Model: CLI override wins over specialist default. Both runtimes accept
@@ -312,6 +440,8 @@ export function buildRoleTmuxPlan(args: {
     if (passthrough && passthrough.length > 0) {
         runtimeArgs.push(...passthrough);
     }
+
+    if (initialPromptFile) runtimeArgs.push('--', `@${initialPromptFile}`);
 
     const runtimeCmdString = [runtime, ...runtimeArgs].map(shellQuote).join(' ');
 
@@ -557,16 +687,21 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // Resolve role up-front so we fail fast on an unknown role name before
     // creating a worktree (which would otherwise leak on a bad --role typo).
     let resolvedRole: ResolvedRole | null = null;
+    let renderedTask: RenderedRoleTask | undefined;
+    let explicitSkillPaths: string[] = [];
     if (roleName) {
         try {
             resolvedRole = resolveRole(roleName, cwd);
+            resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
+            explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
+            if (bead) renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error(kleur.red(`\n  ✗ ${msg}\n`));
             process.exit(1);
         }
-    } else if (model || thinking || (opts.passthrough && opts.passthrough.length > 0)) {
-        console.error(kleur.red('\n  ✗ --model / --thinking / -- passthrough require --role\n'));
+    } else if (model || thinking || (opts.skills && opts.skills.length > 0) || (opts.passthrough && opts.passthrough.length > 0)) {
+        console.error(kleur.red('\n  ✗ --model / --thinking / --skill / -- passthrough require --role\n'));
         process.exit(1);
     }
 
@@ -752,6 +887,8 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             worktreePath,
             modelOverride: model,
             thinkingOverride: thinking,
+            renderedTask,
+            explicitSkillPaths,
             passthrough: guardedPassthrough,
             newSession: opts.newSession,
             reuse: opts.reuse,
@@ -803,6 +940,16 @@ function emitAgentRoleLaunched(fields: Record<string, string>): void {
     spawnSync(picker, ['log', 'emit', 'agent.role.launched', ...kvArgs], {
         stdio: 'ignore',
     });
+
+    if (fields.task_prompt_renderer) {
+        const taskFields = [
+            'pane', 'session', 'bead', 'role',
+            'task_prompt_renderer', 'task_prompt_hash', 'task_prompt_components',
+        ].flatMap((key) => fields[key] ? [`${key}=${fields[key]}`] : []);
+        spawnSync(picker, ['log', 'emit', 'agent.role.task-rendered', ...taskFields], {
+            stdio: 'ignore',
+        });
+    }
 }
 
 async function launchRoleTmuxSession(args: {
@@ -813,6 +960,8 @@ async function launchRoleTmuxSession(args: {
     worktreePath: string;
     modelOverride?: string;
     thinkingOverride?: string;
+    renderedTask?: RenderedRoleTask;
+    explicitSkillPaths?: string[];
     passthrough?: string[];
     newSession?: boolean;
     parent?: string;
@@ -820,7 +969,7 @@ async function launchRoleTmuxSession(args: {
     reuse?: boolean;
 }): Promise<never> {
     const {
-        runtime, role, bead, attach, worktreePath, modelOverride, thinkingOverride, passthrough,
+        runtime, role, bead, attach, worktreePath, modelOverride, thinkingOverride, renderedTask, explicitSkillPaths = [], passthrough,
         newSession, parent, child, reuse,
     } = args;
 
@@ -872,6 +1021,19 @@ async function launchRoleTmuxSession(args: {
     mkdirSync(path.dirname(promptFile), { recursive: true });
     writeFileSync(promptFile, role.systemPrompt);
 
+    const initialPromptFile = renderedTask
+        ? path.join(worktreePath, '.xtrm', `role-${slugifyForSession(role.name)}-task.md`)
+        : undefined;
+    if (initialPromptFile && renderedTask) {
+        writeFileSync(initialPromptFile, renderedTask.initialPrompt, { mode: 0o600 });
+        chmodSync(initialPromptFile, 0o600);
+    }
+
+    const claudeSkillPaths = [...role.skillPaths, ...explicitSkillPaths];
+    const claudeSkillPluginPath = runtime === 'claude' && claudeSkillPaths.length > 0
+        ? prepareClaudeSkillPlugin(worktreePath, claudeSkillPaths)
+        : undefined;
+
     const plan = buildRoleTmuxPlan({
         runtime,
         role,
@@ -881,6 +1043,9 @@ async function launchRoleTmuxSession(args: {
         systemPrompt: role.systemPrompt,
         modelOverride,
         thinkingOverride,
+        initialPromptFile,
+        explicitSkillPaths,
+        claudeSkillPluginPath,
         passthrough,
     });
 
@@ -910,6 +1075,9 @@ async function launchRoleTmuxSession(args: {
             role: role.name,
             parent: parentSessionId,
             worktree: worktreePath,
+            task_prompt_renderer: renderedTask ? 'success' : 'not_requested',
+            task_prompt_hash: renderedTask?.promptHash ?? '',
+            task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : '',
         });
 
         const piResult = spawnSync(plan.runtimeCmd, plan.runtimeArgs, {
@@ -1011,6 +1179,9 @@ async function launchRoleTmuxSession(args: {
         role: role.name,
         parent: parentSessionId,
         worktree: worktreePath,
+        task_prompt_renderer: renderedTask ? 'success' : 'not_requested',
+        task_prompt_hash: renderedTask?.promptHash ?? '',
+        task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : '',
     });
 
     if (!attach) {
