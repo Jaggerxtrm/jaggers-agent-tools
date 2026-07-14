@@ -1,3 +1,13 @@
+
+## [Unreleased]
+
+### Project maintenance
+
+- **Add git-cliff config and changelog** ([1953049](https://github.com/xtrm-dev/core/commit/1953049ca5575dd21f4c40c1430a5eefad07743e))
+
+  Generic type-based parsers; repo-specific scopes to be tuned (see P0 bead).
+
+
 # Changelog
 
 All notable changes to Claude Code skills and configuration will be documented in this file.
