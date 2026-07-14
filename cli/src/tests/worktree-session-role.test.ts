@@ -367,7 +367,8 @@ describe('buildRoleTmuxPlan', () => {
         const loadedSkills = plan.runtimeArgs
             .flatMap((arg, index) => arg === '--skill' ? [plan.runtimeArgs[index + 1]] : []);
         expect(loadedSkills).toEqual([...role.skillPaths, extra]);
-        expect(plan.runtimeArgs.slice(-2)).toEqual(['--', '@/tmp/rendered-task.md']);
+        expect(plan.runtimeArgs.at(-1)).toBe('@/tmp/rendered-task.md');
+        expect(plan.runtimeArgs).not.toContain('--');
         expect(plan.runtimeCmdString).not.toContain('role-only system prompt');
     });
 
