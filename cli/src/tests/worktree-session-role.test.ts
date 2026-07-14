@@ -10,6 +10,7 @@ import {
     chooseAttachCommand,
     parseSpecialistJson,
     guardRolePassthrough,
+    injectSkillContents,
     prepareClaudeSkillPlugin,
     renderRoleTask,
     resolveRequestedSkills,
@@ -611,6 +612,29 @@ describe('guardRolePassthrough', () => {
         const r = guardRolePassthrough(['--gitnexus-cmd', 'foo bar', '--verbose']);
         expect(r.guardedError).toBeUndefined();
         expect(r.filteredArgs).toEqual(['--gitnexus-cmd', 'foo bar', '--verbose']);
+    });
+});
+
+describe('injectSkillContents', () => {
+    it('forces complete deduplicated SKILL.md bodies into the startup prompt', () => {
+        const sandbox = path.join(os.tmpdir(), `xtrm-injected-skills-${process.pid}`);
+        const skillRoot = path.join(sandbox, 'forced-context');
+        const alias = path.join(sandbox, 'alias');
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(skillRoot, { recursive: true });
+        writeFileSync(path.join(skillRoot, 'SKILL.md'), `---\nname: forced-context\ndescription: Test skill.\n---\n\nStartup proof token: FORCE_CONTEXT_7Q9\n`);
+        symlinkSync(skillRoot, alias, 'dir');
+        try {
+            const prompt = injectSkillContents('role system prompt', [
+                path.join(skillRoot, 'SKILL.md'),
+                path.join(alias, 'SKILL.md'),
+            ]);
+            expect(prompt).toContain('role system prompt');
+            expect(prompt).toContain('Startup proof token: FORCE_CONTEXT_7Q9');
+            expect(prompt.match(/Startup proof token/g)).toHaveLength(1);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
     });
 });
 

@@ -18,7 +18,7 @@ xt claude --role reviewer --bead xyz-1 --skill code-review
 
 Inside `$TMUX`, both commands **run in the current pane** by default — no nested-tmux warning, no new session in `tmux ls`. Outside `$TMUX`, both create a new tmux session and attach.
 
-With `--bead`, the launcher first calls `sp render-task <role> --bead <id> --cwd <original-cwd> --context-depth 3 --surface <runtime>`. Any renderer error stops before worktree or tmux provisioning. The role system prompt remains unchanged; the rendered task is written mode `0600` under the ignored worktree `.xtrm/` and passed as the final `@file` initial-user argument. Process arguments and telemetry therefore expose only the file path and renderer metadata, never the task body. Without `--bead`, no initial task is sent.
+With `--bead`, the launcher first calls `sp render-task <role> --bead <id> --cwd <original-cwd> --context-depth 3 --surface <runtime>`. Any renderer error stops before worktree or tmux provisioning. The rendered task is written mode `0600` under the ignored worktree `.xtrm/` and passed as the final `@file` initial-user argument; it is never mixed into the system prompt. Process arguments and telemetry therefore expose only the file path and renderer metadata, never the task body. Without `--bead`, no initial task is sent.
 
 ---
 
@@ -116,7 +116,8 @@ Query the log with `tmux-session-picker log query --type agent.role.launched --s
   2. relative + exists at repo root → repo-local override
   3. relative + exists at `$HOME` → canonical global (post-`xtrm-bq7yd` migration; see the CHANGELOG entry for xtrm-1rn)
   4. otherwise → repo-resolved path so pi produces a loud "skill not found" error at the exact absolute location the operator can fix
-- **claude.** Specialist-declared and explicit skills are exposed deliberately through an ephemeral `--plugin-dir` under the worktree's gitignored `.xtrm/`, using Claude's native `skills/<name>/SKILL.md` convention.
+- **claude.** Specialist-declared and explicit skills are exposed through an ephemeral `--plugin-dir` under the worktree's gitignored `.xtrm/`, using Claude's native `skills/<name>/SKILL.md` convention.
+- **forced startup context.** For both runtimes, complete deduplicated `SKILL.md` bodies are appended to the role system prompt before provisioning. Native Pi registration and the Claude plugin remain in place so relative skill assets and commands still resolve; they are not the injection mechanism.
 - **explicit requests.** `--skill` accepts an installed skill name, a skill directory, or a `SKILL.md` path. Requests are validated and realpath-deduplicated against specialist-declared skills before provisioning. Project runtime locations win over global pointers from the post-migration layout.
 
 **Model.**
@@ -137,7 +138,7 @@ The launcher no longer emits `--no-extensions -e <name>`. `pi -e` takes a filesy
 | Pre-script output | Deliberately omitted: executing pre-scripts is job-runtime behavior. |
 | Reviewer git-diff context | Deliberately omitted: execution-only and unavailable before the interactive session starts. |
 | Job/RPC/status creation | Not applicable: rendering is read-only; `xt` owns only its sandbox worktree/tmux session. |
-| Skills | Specialist-declared skills are loaded deliberately at startup; repeatable `xt --skill` adds deduplicated session-only skills. |
+| Skills | Complete specialist-declared `SKILL.md` bodies are injected into startup context; repeatable `xt --skill` adds deduplicated session-only bodies. Native runtime registration is retained for assets and commands. |
 
 ---
 
