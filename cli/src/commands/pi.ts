@@ -70,22 +70,24 @@ export function createPiCommand(): Command {
         .description('Launch a Pi session in a sandboxed worktree, or manage the Pi runtime')
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
         .option('--role <name>', 'Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata')
-        .option('--bead <id>', 'Attach bead id to the tmux pane via @agent_bead; also appended to the session name slug')
+        .option('--bead <id>', 'Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
         .option('--model <name>', 'With --role: forward `--model <name>` to pi (overrides specialist.execution.model)')
         .option('--thinking <level>', 'With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)')
+        .option('--skill <name-or-path>', 'With --role: load an additional skill at startup (repeatable)', (value: string, previous: string[]) => [...previous, value], [])
         .option('--new-session', 'With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)')
         .option('--ns', 'Alias for --new-session')
         .option('--parent <target>', 'With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})')
         .option('--child', 'With --role: explicit form of the auto-behavior — @agent_parent_session = current pane\'s session_id')
         .option('--reuse', 'With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one')
+        .allowExcessArguments(true)
         .allowUnknownOption(true)
         .addHelpText('after', `
 Passthrough:
   Everything after \`--\` is forwarded verbatim to the pi runtime — the
   primary escape hatch for any pi flag not first-classed here. xt-owned
-  flags (--session-dir, --name, --system-prompt, --append-system-prompt)
-  are rejected; batch-mode flags (--print, --list-models, --export,
+  flags (--session-dir, --name, --system-prompt, --append-system-prompt,
+  --skill) are rejected; batch-mode flags (--print, --list-models, --export,
   --mode) are dropped with a warning.
 
 Examples:
@@ -98,6 +100,7 @@ Examples:
             attach?: boolean;
             model?: string;
             thinking?: string;
+            skill?: string[];
             newSession?: boolean;
             ns?: boolean;
             parent?: string;
@@ -117,6 +120,7 @@ Examples:
                 attach: opts.attach,
                 model: opts.model,
                 thinking: opts.thinking,
+                skills: opts.skill,
                 newSession: Boolean(opts.newSession || opts.ns),
                 parent: opts.parent,
                 child: Boolean(opts.child),

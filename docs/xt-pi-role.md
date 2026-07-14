@@ -12,11 +12,13 @@ The same flag surface works for both runtimes; differences are called out explic
 # Launch pi as chain-coordinator, tracked to bead xyz-1
 xt pi --role chain-coordinator --bead xyz-1
 
-# Same for claude
-xt claude --role reviewer --bead xyz-1
+# Same for claude, with one deliberate extra skill
+xt claude --role reviewer --bead xyz-1 --skill code-review
 ```
 
 Inside `$TMUX`, both commands **run in the current pane** by default — no nested-tmux warning, no new session in `tmux ls`. Outside `$TMUX`, both create a new tmux session and attach.
+
+With `--bead`, the launcher first calls `sp render-task <role> --bead <id> --cwd <original-cwd> --context-depth 3 --surface <runtime>`. Any renderer error stops before worktree or tmux provisioning. The role system prompt remains unchanged; the rendered task is written mode `0600` under the ignored worktree `.xtrm/` and passed as the final `@file` initial-user argument. Process arguments and telemetry therefore expose only the file path and renderer metadata, never the task body. Without `--bead`, no initial task is sent.
 
 ---
 
@@ -29,11 +31,12 @@ Inside `$TMUX`, both commands **run in the current pane** by default — no nest
 | `--no-attach` | New-session mode only. Print `session_name:pane_id` on stdout and exit — orchestrator-capture pattern. | Inside `$TMUX` without `--new-session`, `--no-attach` **errors** with a clear hint. |
 | `--model <name>` | Forward `--model <name>` to the runtime; overrides `specialist.execution.model`. | Both pi and claude accept `--model`. |
 | `--thinking <level>` | pi only. Forward `--thinking <level>`; overrides `specialist.execution.thinking_level`. | claude has no `--thinking` flag — `xt claude --thinking X` warns loudly and drops. |
+| `--skill <name-or-path>` | Load one additional skill at startup; repeatable. | Names resolve through project/global runtime skill locations. Pi receives `--skill`; Claude receives an ephemeral plugin under the worktree's ignored `.xtrm/`. Invalid skills fail before worktree creation. |
 | `--new-session` / `--ns` | Force a fresh tmux session even when inside `$TMUX`. | Default outside `$TMUX`. Combines with `--no-attach`. |
 | `--parent <target>` | Override `@agent_parent_session` on the target pane. `<target>` = tmux session name, session id (`$3`), or `#{session_id}` string. | Bogus targets fail with a clear error before the runtime spawns. Precedence: `--parent` > `--child` > auto. |
 | `--child` | Explicit form of the auto-behavior (`@agent_parent_session` = current pane's `#{session_id}`). | Kept as a stable opt-in against a future default flip. |
 | `--reuse` | Only with `--new-session` (or outside `$TMUX`): if a session with the resolved name already exists, attach to it (or, with `--no-attach`, print its coordinates) instead of auto-suffixing. | Skips `agent.role.launched` emission — we don't own the reused pane's metadata. |
-| `--` `<passthrough>` | Everything after `--` forwarded verbatim to the runtime. | Guarded flags (`--session-dir`, `--name`, `--system-prompt`, `--append-system-prompt`) are rejected. Batch-mode flags (`--print`, `--list-models`, `--export`, `--mode`) are dropped with a warning. |
+| `--` `<passthrough>` | Everything after `--` forwarded verbatim to the runtime. | Guarded flags (`--session-dir`, `--name`, `--system-prompt`, `--append-system-prompt`, `--skill`) are rejected. Batch-mode flags (`--print`, `--list-models`, `--export`, `--mode`) are dropped with a warning. |
 
 Run `xt pi --help` or `xt claude --help` for the canonical (auto-generated) flag list plus concrete examples.
 
@@ -98,7 +101,7 @@ In `--new-session` mode these are exported via `tmux new-session -e KEY=VAL ...`
 
 ## Log emission
 
-At launch time (both modes) the launcher shells out to `tmux-session-picker` to emit an `agent.role.launched` event with `pane`, `session`, `bead`, `role`, `parent`, `worktree` fields. Non-fatal if the picker binary is missing.
+At launch time (both modes) the launcher shells out to `tmux-session-picker` to emit `agent.role.launched` plus a companion `agent.role.task-rendered` event containing renderer outcome, prompt hash, and bounded component sizes. It never logs the rendered body. Log emission is non-fatal if the picker binary is missing.
 
 Query the log with `tmux-session-picker log query --type agent.role.launched --since 2h` for a "who spawned what" audit trail.
 
@@ -113,7 +116,8 @@ Query the log with `tmux-session-picker log query --type agent.role.launched --s
   2. relative + exists at repo root → repo-local override
   3. relative + exists at `$HOME` → canonical global (post-`xtrm-bq7yd` migration; see the CHANGELOG entry for xtrm-1rn)
   4. otherwise → repo-resolved path so pi produces a loud "skill not found" error at the exact absolute location the operator can fix
-- **claude.** No `--skill` flag; claude reads `.claude/skills/` from cwd. The worktree launcher scaffolds that symlink automatically.
+- **claude.** Specialist-declared and explicit skills are exposed deliberately through an ephemeral `--plugin-dir` under the worktree's gitignored `.xtrm/`, using Claude's native `skills/<name>/SKILL.md` convention.
+- **explicit requests.** `--skill` accepts an installed skill name, a skill directory, or a `SKILL.md` path. Requests are validated and realpath-deduplicated against specialist-declared skills before provisioning. Project runtime locations win over global pointers from the post-migration layout.
 
 **Model.**
 
@@ -122,6 +126,18 @@ CLI `--model` wins over `specialist.execution.model` (from `sp view`), which win
 **Extensions (pi).**
 
 The launcher no longer emits `--no-extensions -e <name>`. `pi -e` takes a filesystem path (not a registry name), and the prior curated allow-list caused silent startup crashes (see xtmux-3rs). pi discovers its own extensions from `~/.pi/agent/settings.json` plus any per-repo settings.
+
+## `sp run` parity boundary
+
+| Component | Interactive role behavior |
+| --- | --- |
+| Effective specialist + system prompt | Same `sp view` resolution; role-only system prompt remains separate from the task. |
+| Task template, bead/dependency context, boundary rules | Same specialists-owned `renderTaskPrompt` seam through `sp render-task`. |
+| Mandatory rules | Same ordering and token limit; renderer failure is fatal for tracked interactive launch. |
+| Pre-script output | Deliberately omitted: executing pre-scripts is job-runtime behavior. |
+| Reviewer git-diff context | Deliberately omitted: execution-only and unavailable before the interactive session starts. |
+| Job/RPC/status creation | Not applicable: rendering is read-only; `xt` owns only its sandbox worktree/tmux session. |
+| Skills | Specialist-declared skills are loaded deliberately at startup; repeatable `xt --skill` adds deduplicated session-only skills. |
 
 ---
 
