@@ -61839,7 +61839,10 @@ function buildRoleTmuxPlan(args) {
   if (passthrough && passthrough.length > 0) {
     runtimeArgs.push(...passthrough);
   }
-  if (initialPromptFile) runtimeArgs.push("--", `@${initialPromptFile}`);
+  if (initialPromptFile) {
+    if (runtime === "claude") runtimeArgs.push("--");
+    runtimeArgs.push(`@${initialPromptFile}`);
+  }
   const runtimeCmdString = [runtime, ...runtimeArgs].map(shellQuote).join(" ");
   const paneOptions = [
     { key: "@agent_parent_session", value: parentSessionId },

@@ -441,7 +441,10 @@ export function buildRoleTmuxPlan(args: {
         runtimeArgs.push(...passthrough);
     }
 
-    if (initialPromptFile) runtimeArgs.push('--', `@${initialPromptFile}`);
+    if (initialPromptFile) {
+        if (runtime === 'claude') runtimeArgs.push('--');
+        runtimeArgs.push(`@${initialPromptFile}`);
+    }
 
     const runtimeCmdString = [runtime, ...runtimeArgs].map(shellQuote).join(' ');
 
