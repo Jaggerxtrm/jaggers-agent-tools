@@ -61651,6 +61651,23 @@ function resolveSkillPath(mainRepoRoot, rawPath) {
   if (migratedPath !== rawPath && (0, import_node_fs2.existsSync)(migratedResolved)) return migratedResolved;
   return repoResolved;
 }
+function injectSkillContents(systemPrompt, skillPaths) {
+  const seen = /* @__PURE__ */ new Set();
+  const blocks = skillPaths.flatMap((skillPath) => {
+    const file2 = (0, import_node_fs2.realpathSync)((0, import_node_fs2.lstatSync)(skillPath).isDirectory() ? import_node_path10.default.join(skillPath, "SKILL.md") : skillPath);
+    if (seen.has(file2)) return [];
+    seen.add(file2);
+    const name = import_node_path10.default.basename(import_node_path10.default.dirname(file2));
+    return [`<skill_content name=${JSON.stringify(name)} source=${JSON.stringify(file2)}>
+${(0, import_node_fs2.readFileSync)(file2, "utf8")}
+</skill_content>`];
+  });
+  return blocks.length === 0 ? systemPrompt : `${systemPrompt}
+
+# Required Skills (injected in full)
+
+${blocks.join("\n\n")}`;
+}
 function resolveRequestedSkills(mainRepoRoot, requested) {
   const resolved = requested.map((skill) => {
     const direct = resolveSkillPath(mainRepoRoot, skill);
@@ -61989,6 +62006,10 @@ async function launchWorktreeSession(opts) {
       resolvedRole = resolveRole(roleName, cwd);
       resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
       explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
+      resolvedRole.systemPrompt = injectSkillContents(
+        resolvedRole.systemPrompt,
+        [...resolvedRole.skillPaths, ...explicitSkillPaths]
+      );
       if (bead) renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

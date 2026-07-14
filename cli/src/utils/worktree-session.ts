@@ -151,6 +151,22 @@ export function resolveSkillPath(mainRepoRoot: string, rawPath: string): string 
     return repoResolved;
 }
 
+export function injectSkillContents(systemPrompt: string, skillPaths: string[]): string {
+    const seen = new Set<string>();
+    const blocks = skillPaths.flatMap((skillPath) => {
+        const file = realpathSync(lstatSync(skillPath).isDirectory()
+            ? path.join(skillPath, 'SKILL.md')
+            : skillPath);
+        if (seen.has(file)) return [];
+        seen.add(file);
+        const name = path.basename(path.dirname(file));
+        return [`<skill_content name=${JSON.stringify(name)} source=${JSON.stringify(file)}>\n${readFileSync(file, 'utf8')}\n</skill_content>`];
+    });
+    return blocks.length === 0
+        ? systemPrompt
+        : `${systemPrompt}\n\n# Required Skills (injected in full)\n\n${blocks.join('\n\n')}`;
+}
+
 export function resolveRequestedSkills(mainRepoRoot: string, requested: string[]): string[] {
     const resolved = requested.map((skill) => {
         const direct = resolveSkillPath(mainRepoRoot, skill);
@@ -697,6 +713,10 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             resolvedRole = resolveRole(roleName, cwd);
             resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
             explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
+            resolvedRole.systemPrompt = injectSkillContents(
+                resolvedRole.systemPrompt,
+                [...resolvedRole.skillPaths, ...explicitSkillPaths],
+            );
             if (bead) renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
