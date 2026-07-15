@@ -5,7 +5,7 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group }}
 {% for commit in commits %}
-- **{{ commit.message | upper_first }}** ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/xtrm-dev/core/commit/{{ commit.id }}))
+- **{{ commit.message | upper_first }}** ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/xtrm-dev/core/commit/{{ commit.id }})) — {{ commit.author.timestamp | date(format="%Y-%m-%d %H:%M") }}
 {% if commit.body %}
 {{ commit.body | trim | indent(prefix="  ", first=true) }}
 {% endif %}
