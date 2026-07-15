@@ -428,7 +428,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
         },
     }));
 
-    it('emits --append-system-prompt with the verbatim prompt (not a file path)', () => {
+    it('emits --append-system-prompt-file pointing at the promptFile (xtrm-osipt)', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'claude',
             role,
@@ -437,9 +437,33 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
             promptFile: '/tmp/prompt.md',
         });
         expect(plan.runtimeCmd).toBe('claude');
-        const idx = plan.runtimeArgs.indexOf('--append-system-prompt');
+        const idx = plan.runtimeArgs.indexOf('--append-system-prompt-file');
         expect(idx).toBe(0);
-        expect(plan.runtimeArgs[idx + 1]).toBe('You are chain-coordinator.');
+        expect(plan.runtimeArgs[idx + 1]).toBe('/tmp/prompt.md');
+        expect(plan.runtimeArgs).not.toContain('--append-system-prompt');
+        // xtrm-osipt: the verbatim prompt must never appear in argv or the
+        // shell string — tmux new-session refuses inputs beyond a few dozen KB.
+        expect(plan.runtimeArgs).not.toContain('You are chain-coordinator.');
+        expect(plan.runtimeCmdString).not.toContain('You are chain-coordinator.');
+    });
+
+    it('keeps runtimeCmdString bounded regardless of prompt size (xtrm-osipt regression)', () => {
+        const huge = 'X'.repeat(200_000);
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            systemPrompt: huge,
+            parentSessionId: '',
+            promptFile: '/tmp/huge-prompt.md',
+            initialPromptFile: '/tmp/task.md',
+        });
+        // Before the fix the 200KB prompt was inlined via --append-system-prompt
+        // and tmux new-session died with "command too long" — the pane never
+        // launched and the @task file never reached claude. The shell string
+        // must now stay far below any reasonable exec ceiling.
+        expect(plan.runtimeCmdString.length).toBeLessThan(4096);
+        expect(plan.runtimeCmdString).toContain("'--append-system-prompt-file' '/tmp/huge-prompt.md'");
+        expect(plan.runtimeCmdString.endsWith(" '--' '@/tmp/task.md'")).toBe(true);
     });
 
     it('emits --dangerously-skip-permissions and NO --skill flags', () => {

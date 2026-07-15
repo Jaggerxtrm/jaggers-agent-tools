@@ -377,8 +377,12 @@ export function buildRoleTmuxPlan(args: {
     bead?: string;
     parentSessionId: string;
     promptFile: string;
-    /** Verbatim system prompt content, needed for the claude runtime which
-     * takes `--append-system-prompt <prompt>` (a string), not a file path. */
+    /** Verbatim system prompt content — retained for API stability; both
+     * runtimes now read the prompt from `promptFile` (pi via
+     * `--append-system-prompt <file>`, claude via
+     * `--append-system-prompt-file <file>`). Passing the inline string via
+     * tmux new-session overflowed the shell command length once
+     * xtrm-14w28 injected SKILL.md bodies. xtrm-osipt. */
     systemPrompt: string;
     /** CLI --model override; wins over role.model. */
     modelOverride?: string;
@@ -430,11 +434,14 @@ export function buildRoleTmuxPlan(args: {
         // silently crashing pi on startup. Drop the policy; trust discovery.
         // See xtmux-3rs.
     } else {
-        // Claude: string-based system prompt (--append-system-prompt <prompt>);
-        // skills are resolved from cwd's .claude/skills/ (the worktree scaffold
-        // already symlinks that at launch), so no CLI flag needed. Skip the
-        // permission gate — sandboxed worktrees are the trust boundary.
-        runtimeArgs.push('--append-system-prompt', systemPrompt);
+        // Claude: file-based system prompt (--append-system-prompt-file <path>).
+        // Inline `--append-system-prompt <string>` overflowed tmux new-session
+        // once xtrm-14w28 started injecting SKILL.md bodies (~70KB): tmux
+        // refused with "command too long" and the pane never launched, so the
+        // rendered @task file never reached claude either. xtrm-osipt.
+        // Skills resolved via the ephemeral plugin dir; sandbox trust bypasses
+        // the permission gate.
+        runtimeArgs.push('--append-system-prompt-file', promptFile);
         runtimeArgs.push('--dangerously-skip-permissions');
         if (claudeSkillPluginPath) runtimeArgs.push('--plugin-dir', claudeSkillPluginPath);
     }

@@ -1,3 +1,50 @@
+
+## [Unreleased]
+
+### Added
+
+- **Inject rendered bead task and explicit skills (xtrm-k2ufi)** ([f1f2e71](https://github.com/xtrm-dev/core/commit/f1f2e7155e76eb176a1fe5c1f7d9ebabbb604e3c)) — 2026-07-14 11:20
+
+
+### Fixed
+
+- **Omit unsupported prompt delimiter for Pi (xtrm-josmq)** ([ff5c642](https://github.com/xtrm-dev/core/commit/ff5c6426e76697bee9e4ed2e7582fc6b607b3e15)) — 2026-07-14 11:58
+
+
+- **Force skill bodies into startup context (xtrm-14w28)** ([6722fb2](https://github.com/xtrm-dev/core/commit/6722fb29cc3546ecd9facbd9be287589c6077e24)) — 2026-07-14 12:21
+
+
+- **Use --append-system-prompt-file for claude (xtrm-osipt)** ([dc3443b](https://github.com/xtrm-dev/core/commit/dc3443b3980f4344c0a08305e441a3d18e79bee7)) — 2026-07-14 19:30
+
+  Once xtrm-14w28 started injecting SKILL.md bodies into role.systemPrompt
+  (~70KB), buildRoleTmuxPlan for the claude runtime kept passing the whole
+  string via '--append-system-prompt <prompt>'. In new-session mode the
+  launcher shell-quotes runtimeArgs into runtimeCmdString and hands that
+  to 'tmux new-session -d ... <cmd>'; tmux refused with 'command too long'
+  and the pane never launched, so the @task positional never reached
+  claude either — the reported symptom of xtrm-osipt.
+
+  Switch claude to '--append-system-prompt-file <promptFile>' (parity with
+  pi). The prompt content already lives in .xtrm/role-<slug>-prompt.md;
+  we just point at it instead of inlining. Regression test asserts
+  runtimeCmdString stays <4KB even with a 200KB systemPrompt and that
+  '@<initialPromptFile>' remains the final positional.
+
+
+### Project maintenance
+
+- **Rebuild dist after source changes** ([e838d90](https://github.com/xtrm-dev/core/commit/e838d902b58dbc05eb5cb79092c5bab559d37001)) — 2026-07-14 11:21
+
+
+- **Rebuild dist reproducibly** ([a4244cc](https://github.com/xtrm-dev/core/commit/a4244cc989ca2067238231f37f95e453f283dc27)) — 2026-07-14 11:25
+
+
+- **Add git-cliff config and changelog** ([6465cf5](https://github.com/xtrm-dev/core/commit/6465cf58631a6bb1c68ddc81fc25ab9ba94a67c1)) — 2026-07-14 00:55
+
+  Generic type-based parsers; repo-specific scopes to be tuned (see P0 bead).
+
+
+
 # Changelog
 
 All notable changes to Claude Code skills and configuration will be documented in this file.
