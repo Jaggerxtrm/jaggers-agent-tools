@@ -1,3 +1,11 @@
+# Changelog
+
+All notable changes to Claude Code skills and configuration will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
 
 ## [Unreleased]
 
@@ -6,12 +14,99 @@
 - **Inject rendered bead task and explicit skills (xtrm-k2ufi)** ([f1f2e71](https://github.com/xtrm-dev/core/commit/f1f2e7155e76eb176a1fe5c1f7d9ebabbb604e3c)) — 2026-07-14 11:20
 
 
+- **Add verified-audit for over-engineering + efficiency audits** ([dcbe88e](https://github.com/xtrm-dev/core/commit/dcbe88e6c54daf418a0f877c005d2429c764a179)) — 2026-07-15 09:38
+
+  Introduces a four-leg audit methodology (line-count reduction lens,
+  GitNexus impact verification, config/usage grep for enum branches,
+  efficiency signals hunt) with mandatory blast-radius receipts before
+  proposing any cut.
+
+  Proven on the specialists repo: 7 core files, 61 findings, ~535
+  removable lines, 38 verified efficiency wins including hot-path SQLite
+  N+1s and network syscalls in fallback branches — none surfaceable from
+  a line-count-only pass.
+
+  Registered in .xtrm/registry.json for global install. Wired into
+  reviewer.specialist.json in the specialists repo via a separate PR.
+
+
+- **Sp-owned turn-1 composition + HOME leak guard (xtrm-8zsi1)** ([152afa0](https://github.com/xtrm-dev/core/commit/152afa0ded06ee80429724994def7b3886d23995)) — 2026-07-15 07:00
+
+  Replace the xtrm-osipt file-transport stopgap with the frozen contract from
+  unitAI-qeguh Option A + Proposal 1: sp emits the /skill:name (pi) or
+  /skill-name (claude) prefix at turn 1, launcher composes it with the body
+  inline, no files touch disk.
+
+  Launcher (cli/src/utils/worktree-session.ts):
+  - Delete injectSkillContents (superseded — sp's /skill: prefix now forces
+    body load at turn 1).
+  - Delete prepareClaudeSkillPlugin + the ephemeral .xtrm/role-skills/
+    scaffold + --plugin-dir emission (claude auto-discovers from
+    ~/.claude/skills; explicit --skill on claude now warn-only).
+  - Delete .xtrm/role-*-{prompt,task}.md file writes; system prompt goes
+    inline via --append-system-prompt '<identity>' on both runtimes.
+  - Delete @agent_prompt_file pane option + XTMUX_AGENT_PROMPT_FILE env
+    (downstream skills already read absence-safely).
+  - Add renderSkillPrefix / probeSkillPrefixAvailable helpers; probe hard-
+    fails cases (ii)/(iii) with an upgrade hint when sp render-skill-prefix
+    isn't shipped yet. Case (i) --bead works pre-qeguh (consumes render-task
+    verbatim, leaky first-turn body load but launch itself succeeds).
+  - Add checkPositionZeroSlash + checkByteCeiling(~50KB) preflight guards.
+  - Add unconditional --no-skills for pi (pool isolation from day one; sp
+    side unitAI-0o3pv follows independently — no need to gate).
+  - Preflight all sp calls BEFORE worktree creation so bad specialists /
+    beads / --prompts / skills fail without leaking a directory.
+
+  CLI (cli/src/commands/{pi,claude}.ts):
+  - Add --prompt <text> flag (mutually exclusive with --bead).
+  - Update help + examples with the three cases (--bead, --prompt, neither).
+
+  Tests (cli/src/tests/worktree-session-role.test.ts, 71/71 green):
+  - Full rewrite covering the new argv shape (inline system prompt, positional
+    turn-1 body, --no-skills for pi, no --plugin-dir on claude), plus new
+    suites for probeSkillPrefixAvailable, renderSkillPrefix,
+    checkPositionZeroSlash, checkByteCeiling.
+
+
+- **Strip xtrm-loader eager Project Intelligence Context (xtrm-x12p3)** ([fc8ceae](https://github.com/xtrm-dev/core/commit/fc8ceae0b7cb44c526ae7feaa6507b978c5e4a4b)) — 2026-07-15 07:48
+
+  xtrm-loader was appending ~35 KB of Project Intelligence Context to every
+  Pi provider request:
+  - full ROADMAP / architecture body (~20 KB in core)
+  - every .claude/rules/**/*.md body concatenated
+  - a recursive .md inventory of .claude/skills/ that duplicated Pi's
+    own <available_skills> metadata (~35 KB per xtrm-x12p3 measurement)
+  - .xtrm/memory.md
+  - the full using-xtrm SKILL.md body
+
+  Only .xtrm/memory.md + using-xtrm survive: both are small essentials
+  (per-project synthesized state + session operating manual) that a live
+  Pi session genuinely needs before turn 1.
+
+  Everything else is now a one-line pointer in
+  .xtrm/config/instructions/{agents,claude}-top.md under a new
+  "Project intelligence — on demand" section:
+  - architecture/roadmap paths (READ when task needs them)
+  - .claude/rules/**/*.md paths
+  - native <available_skills> catalog + /skill:name (pi) / /skill-name (claude)
+    force-load at turn 1 (per xtrm-8zsi1 launcher redesign)
+  - bd memories / bd recall / bd remember for durable cross-session context
+    (the scope-addition the bead explicitly requested)
+
+
 ### Fixed
 
 - **Omit unsupported prompt delimiter for Pi (xtrm-josmq)** ([ff5c642](https://github.com/xtrm-dev/core/commit/ff5c6426e76697bee9e4ed2e7582fc6b607b3e15)) — 2026-07-14 11:58
 
 
 - **Force skill bodies into startup context (xtrm-14w28)** ([6722fb2](https://github.com/xtrm-dev/core/commit/6722fb29cc3546ecd9facbd9be287589c6077e24)) — 2026-07-14 12:21
+
+
+- **Role prompt-file launch fix, git-cliff config, and changelog date-time (#420)** ([3e8b284](https://github.com/xtrm-dev/core/commit/3e8b284555deb03c7037bde68a89ce99493f0604)) — 2026-07-15 00:50
+
+  * chore(changelog): add git-cliff config and changelog
+
+  Generic type-based parsers; repo-specific scopes to be tuned (see P0 bead).
 
 
 - **Use --append-system-prompt-file for claude (xtrm-osipt)** ([dc3443b](https://github.com/xtrm-dev/core/commit/dc3443b3980f4344c0a08305e441a3d18e79bee7)) — 2026-07-14 19:30
@@ -31,6 +126,49 @@
   '@<initialPromptFile>' remains the final positional.
 
 
+- **Deliver explicit --skill via /skill-<name> at turn-1 (xtrm-8zsi1 follow-up)** ([cc918bd](https://github.com/xtrm-dev/core/commit/cc918bdd6dbb8339ec773dc532c52fc340e7ae0e)) — 2026-07-15 10:02
+
+  Pre-xtrm-8zsi1 the launcher shipped `xt claude --skill <path>` requests via
+  an ephemeral --plugin-dir scaffold. The rewrite dropped --plugin-dir without
+  a replacement, so explicitSkillPaths were resolved + validated + threaded
+  through the whole pipeline and then silently dropped at the claude branch
+  of buildRoleTmuxPlan. (pi was and still is fine — it emits --skill <path>
+  natively.)
+
+
+- **Reconcile PR 422 launcher redesign** ([2a17992](https://github.com/xtrm-dev/core/commit/2a17992f243208179f64cdc7e0fb0445347356a5)) — 2026-07-15 10:59
+
+
+- **Harden trusted tmux role transport** ([1dd6b4e](https://github.com/xtrm-dev/core/commit/1dd6b4e23922e89d32e75a7aba90dcadb8fbff68)) — 2026-07-15 12:04
+
+
+- **Support declared skill prefix fallback** ([20a92bc](https://github.com/xtrm-dev/core/commit/20a92bc110ad684fbae672823f2d4a5b73f990ff)) — 2026-07-15 12:13
+
+
+- **Preserve literal prompt prefixing** ([2ef13da](https://github.com/xtrm-dev/core/commit/2ef13daeb51d49cb79ee95342feac66d39288b32)) — 2026-07-15 12:16
+
+
+- **Bound tmux consumer readiness** ([952c595](https://github.com/xtrm-dev/core/commit/952c595337a61a71d2ef0f7b53521468651c4377)) — 2026-07-15 12:56
+
+
+- **Bound tmux wrapper payload wait** ([d34fcaf](https://github.com/xtrm-dev/core/commit/d34fcaf8b59a5e0b062a0f425e4e6793f9865693)) — 2026-07-15 13:14
+
+
+### Other changes
+
+- **Merge pull request #423 from xtrm-dev/feature/verified-audit-skill
+
+feat(skills): add verified-audit skill** ([2088dab](https://github.com/xtrm-dev/core/commit/2088dabb287efd78d2ad36898f93bffa84de2e35)) — 2026-07-15 09:43
+
+
+- **Merge pull request #422 from xtrm-dev/xt/luho
+
+feat: launcher redesign (xtrm-8zsi1) + xtrm-loader strip (xtrm-x12p3) + HOME leak guard** ([8753886](https://github.com/xtrm-dev/core/commit/875388693c6b0975770c2f4c9bc88a2bc6952b29)) — 2026-07-15 14:06
+
+
+- **Merge branch 'main' into chore/xtrm-f1mg8-changelog-updater** ([bd97a09](https://github.com/xtrm-dev/core/commit/bd97a097e75cc3fb719b15e762c6e1b24ef91028)) — 2026-07-15 14:17
+
+
 ### Project maintenance
 
 - **Rebuild dist after source changes** ([e838d90](https://github.com/xtrm-dev/core/commit/e838d902b58dbc05eb5cb79092c5bab559d37001)) — 2026-07-14 11:21
@@ -39,34 +177,147 @@
 - **Rebuild dist reproducibly** ([a4244cc](https://github.com/xtrm-dev/core/commit/a4244cc989ca2067238231f37f95e453f283dc27)) — 2026-07-14 11:25
 
 
+- **Teach correlated xtmux coordination (#421)** ([612556c](https://github.com/xtrm-dev/core/commit/612556caef0a424ef6422e2ba2b9729131d5fd41)) — 2026-07-15 07:27
+
+  * docs(skills): teach correlated xtmux coordination
+
+  * docs(team): keep decision requests reply-required
+
+  ---------
+
+
+- **Port idempotent updater from specialists + refresh** ([5f8f96d](https://github.com/xtrm-dev/core/commit/5f8f96dad693aad6a07407b49d8c46bd76c6c5ff)) — 2026-07-15 14:10
+
+  Ports scripts/changelog-update.mjs from xtrm-dev/specialists — an
+  idempotent replacement for `git-cliff --prepend` that:
+
+  - Extracts the title/preamble as everything above the first `## [`
+    section, then refuses to run when that header lacks a `# ` line
+    (a stronger corruption check than "did prepend duplicate anything").
+  - Splits the rest at `## [`, drops any existing `[Unreleased]` block,
+    keeps every released section untouched, and injects a fresh
+    `[Unreleased]` from `git-cliff --unreleased`.
+  - Never uses `git-cliff -o` (which rebuilds from the git log and would
+    drop every hand-written line).
+
+  Repairs core CHANGELOG.md, which had drifted into the exact shape the
+  script is guarded against: three stacked `## [Unreleased]` blocks and
+  the `# Changelog` title buried mid-file at line 48. Now: title on
+  top, single `[Unreleased]` with 9 entries (including the merged
+  verified-audit skill from #423), every release preserved. Idempotent
+  going forward — `node scripts/changelog-update.mjs --check` returns 0.
+
+  Follow-up (not this PR): tune `changelog/cliff.toml` so merge commits
+  don't land under "Other changes" — cosmetic only.
+
+
 - **Add git-cliff config and changelog** ([6465cf5](https://github.com/xtrm-dev/core/commit/6465cf58631a6bb1c68ddc81fc25ab9ba94a67c1)) — 2026-07-14 00:55
 
   Generic type-based parsers; repo-specific scopes to be tuned (see P0 bead).
 
 
+- **Teach xtmux --help first for CLI questions** ([122ea57](https://github.com/xtrm-dev/core/commit/122ea571b131229187b8626e00241c2f72ee7615)) — 2026-07-15 07:28
 
-# Changelog
+  Add a Skill routing table row in both agents-top.md and claude-top.md
+  pointing agents at `xtmux --help` / `xtmux <cmd> --help` before reaching
+  for /multiplexing patterns. Neither top-level template mentioned xtmux
+  at all — agents were left to guess the CLI surface. Same class of
+  "CLI first, patterns second" cue we already have for bd, xt, sp.
 
-All notable changes to Claude Code skills and configuration will be documented in this file.
+  Registry hashes hand-updated for the two touched files to avoid the
+  full 0.10.4→0.10.6 version bump a `npm run gen-registry` would emit
+  (would conflict with PR #421 which touches the same files).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
----
+- **Drop using-xtrm eager inject, absorb essentials into -top** ([8da3319](https://github.com/xtrm-dev/core/commit/8da331926b0e099866d880af4426de21513d795f)) — 2026-07-15 08:01
 
-## [Unreleased]
+  Second pass on xtrm-x12p3: cut xtrm-loader further and eliminate the
+  using-xtrm ↔ -top files duplication.
 
-### `xtrm-tools`
+  ## Deduplication audit
 
-#### Fixed
+  using-xtrm SKILL.md (~8 KB) was 50% duplication of what -top templates
+  already carry:
 
-- **`xt update --apply` now repairs XTRM's external Pi tool patches after package assurance (xtrm-5c1nc, P0).** Direct `pi install`/`pi update` can replace patched `pi-serena-tools` source; applied XTRM updates now rerun the existing idempotent patcher after package refresh, while dry-runs remain mutation-free.
+  - Session start (bd prime / memories / bv --robot-triage / claim) →
+    already implicit in agents-top/claude-top bd Reference; now made
+    explicit as a "Session start reflex" bullet block.
+  - Current xt command surfaces table → redundant with -top command lists
+    + `xt --help`; dropped from eager inject (still in the skill body for
+    on-demand access).
+  - Multi-pane coordination bullet → redundant with the row PR #421 added
+    + my xtmux CLI row.
+  - Skill routing table → verbatim duplicate of the -top skill routing table.
 
-- **Serena is semantic-code-only in Pi (xtrm-x9xml, P0).** The managed `pi-serena-tools` patch registers navigation plus four symbol-aware edits (`insert_*_symbol`, `replace_symbol_body`, `rename_symbol`). Shell, raw file/filesystem, text-search, memory, workflow, and project-management proxies are absent; native Pi tools remain registered and unblocked when Serena disconnects. The patch empties Serena's built-in native-tool blocklist, including in worktrees with no `.pi/settings.json`, and repairs the real `~/.pi/agent/npm/node_modules` store. A regression test locks the allowlist, fail-open default, and patch idempotence.
+  Only unique + always-relevant content: **Session start reflex** and
+  **Trigger patterns** (when to run gitnexus impact, when to `--parent`,
+  when to promote `contract:draft` → `ready`, etc.). Both folded into
+  `agents-top.md` + `claude-top.md` under new sections.
 
-#### Removed
+  Workflow examples, prompt-shaping guidance, and other exposition stay
+  in the `using-xtrm` SKILL.md body — `/skill:using-xtrm` (pi) /
+  `/skill-using-xtrm` (claude) loads them on demand.
 
-- **Retired Pi `auto-update` extension payload (xtrm-2kv7i).** Deleted the canonical extension, package shim, legacy mirrors, migration mapping, runtime inventory entry, and import smoke reference. The plugin-era cleanup tombstone remains so upgrades still remove stale consumer copies.
+  ## Loader
+
+  xtrm-loader now injects only `.xtrm/memory.md` (small, per-project,
+  user-owned, can't live in a global -top file). using-xtrm eager inject
+  removed. Loader dropped from 76 → 42 lines.
+
+  Pi first-turn payload after this pass: `.xtrm/memory.md` (≤ 5 KB
+  populated, 1 KB bootstrap) + expanded -top files (a few KB). Down from
+  ~50 KB pre-x12p3.
+
+  ## Claude side note
+
+  `using-xtrm-reminder.mjs` (Claude SessionStart hook) still eager-loads
+  using-xtrm on Claude for now — noted in the claude-top pointer section.
+  Full symmetry is a separate follow-up if wanted.
+
+  ## Tests
+
+  Rewrote cli/test/extensions/xtrm-loader.test.ts to cover the new
+  contract (4/4 pass): injects memory.md, no-op when memory.md absent,
+  does NOT eager-load using-xtrm, does NOT eager-load ROADMAP/rules/
+  skills inventory.
+
+  Full-suite regression: 10 fail / 842 pass = baseline parity + 3 new
+  passing tests.
+
+
+- **Add bd forget / bd kv triggers + TaskCreate rule override** ([9002168](https://github.com/xtrm-dev/core/commit/900216833a740388f17de11bb3edd3ddaee9f925)) — 2026-07-15 08:24
+
+  Two audits led here.
+
+  ## bd memory command coverage
+
+  The trigger table in agents-top / claude-top mentioned bd remember / recall /
+  memories but was silent on the other two operator surfaces:
+
+  - bd forget <key> — how to REMOVE a stale/superseded memory (otherwise it
+    poisons every future bd memories search).
+  - bd kv clear "claimed:<pid>" — how to release a stale session claim that's
+    blocking the commit gate. Note bd kv delete does NOT exist (silently exits
+    0 without clearing); the correct command is bd kv clear.
+
+  Also added the memory-ack pattern to the session-end row:
+    bd kv set "memory-acked:<id>" "saved:<key>" | "nothing novel:<reason>"
+
+  ## TaskCreate / TodoWrite rule conflict
+
+  bd prime (auto-injected at SessionStart) says "Prohibited: Do NOT use
+  TodoWrite, TaskCreate, or markdown files for task tracking". CLAUDE.md +
+  agents-top + claude-top all instead teach "use alongside beads". Direct
+  contradiction, previously documented in bd-setup-claude-injects-a-marker-
+  delimited-beads memory but not fixed at the -top layer.
+
+  Added an explicit "Rule conflict — TaskCreate / TodoWrite" section to both
+  -top files that names the bd prime line by quote and states this project
+  overrides it. Keeps the bd prime rule against MEMORY.md files intact
+  (that one is still correct).
+
+  Registry hashes hand-updated for the two touched files (avoids the
+  0.10.4 → 0.10.6 full regen that would collide with PR #421).
 
 ## [v0.10.6] — 2026-07-14
 
