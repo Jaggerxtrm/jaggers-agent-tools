@@ -944,7 +944,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
                 ? (renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime })).initialPrompt
                 : (prompt ?? '');
             let untrustedBody = rawBody;
-            if (probe.ok && trustedSkillPrefix) {
+            if (bead && probe.ok && trustedSkillPrefix) {
                 if (!rawBody.startsWith(trustedSkillPrefix)) {
                     throw new Error('render-task output does not start with the exact trusted sp skill prefix.');
                 }

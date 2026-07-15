@@ -62116,7 +62116,7 @@ async function launchWorktreeSession(opts) {
       let trustedPrefix = trustedSkillPrefix;
       const rawBody = bead ? (renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime })).initialPrompt : prompt ?? "";
       let untrustedBody = rawBody;
-      if (probe2.ok && trustedSkillPrefix) {
+      if (bead && probe2.ok && trustedSkillPrefix) {
         if (!rawBody.startsWith(trustedSkillPrefix)) {
           throw new Error("render-task output does not start with the exact trusted sp skill prefix.");
         }
