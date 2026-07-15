@@ -45419,6 +45419,7 @@ init_kleur();
 var import_node_os6 = __toESM(require("os"), 1);
 var import_node_path10 = __toESM(require("path"), 1);
 var import_node_child_process = require("child_process");
+var import_node_crypto5 = require("crypto");
 var import_node_fs2 = require("fs");
 
 // src/core/global-skills-flag.ts
@@ -61791,16 +61792,24 @@ function slugifyForSession(input) {
 function shellQuote(s) {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
+function createRuntimeBufferName() {
+  return `xtrm-role-${(0, import_node_crypto5.randomBytes)(16).toString("hex")}`;
+}
+function deleteRuntimeBuffer(bufferName) {
+  (0, import_node_child_process.spawnSync)("tmux", ["delete-buffer", "-b", bufferName], { stdio: "ignore" });
+}
 function buildBufferedRuntimeCommand(bufferName) {
   const script = [
     "const { execFileSync, spawnSync } = require('node:child_process')",
     "const buffer = process.argv[1]",
-    "execFileSync('tmux', ['wait-for', `${buffer}-ready`])",
+    "const cleanup = () => spawnSync('tmux', ['delete-buffer', '-b', buffer], { stdio: 'ignore' })",
+    "for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => { cleanup(); process.exit(1) })",
     "let raw",
     "try {",
+    "  execFileSync('tmux', ['wait-for', `${buffer}-ready`])",
     "  raw = execFileSync('tmux', ['show-buffer', '-b', buffer], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 })",
     "} finally {",
-    "  spawnSync('tmux', ['delete-buffer', '-b', buffer], { stdio: 'ignore' })",
+    "  cleanup()",
     "}",
     "const payload = JSON.parse(raw)",
     "if (!['pi', 'claude'].includes(payload.runtimeCmd) || !Array.isArray(payload.runtimeArgs) || payload.runtimeArgs.some((arg) => typeof arg !== 'string')) process.exit(2)",
@@ -61819,7 +61828,7 @@ function probeSkillPrefixAvailable() {
   const stderr = (r.stderr ?? "").toString();
   return {
     ok: false,
-    error: `sp render-skill-prefix not available (needed for --prompt / empty-body launches).
+    error: `sp render-skill-prefix not available (needed for trusted role launch prefixes).
 Upgrade specialists: npm i -g @jaggerxtrm/specialists@latest
 Original error: ${stderr.trim() || "unknown"}`
   };
@@ -61852,13 +61861,18 @@ function renderSkillPrefix(args) {
   }
   return { skillPrefix: output.skill_prefix };
 }
-function checkPositionZeroSlash(body, runtime) {
-  if (body.length === 0 || body[0] !== "/") return { ok: true };
+function checkPositionZeroSlash(body, runtime, trustedPrefix) {
   const expectedPrefix = runtime === "pi" ? "/skill:" : "/skill-";
-  if (body.startsWith(expectedPrefix)) return { ok: true };
+  if (trustedPrefix && !trustedPrefix.startsWith(expectedPrefix)) {
+    return { ok: false, error: `trusted skill prefix does not match the ${runtime} '${expectedPrefix}' surface.` };
+  }
+  if (trustedPrefix) {
+    return body.startsWith(trustedPrefix) ? { ok: true } : { ok: false, error: "turn-1 body does not start with the exact trusted sp skill prefix." };
+  }
+  if (body.length === 0 || body[0] !== "/") return { ok: true };
   return {
     ok: false,
-    error: `turn-1 body starts with '/' but not '${expectedPrefix}': the runtime would parse this as a slash-command.
+    error: `turn-1 body starts with '/' but sp declared no '${expectedPrefix}' prefix: the runtime would parse untrusted text as a slash-command.
 Rename the bead title or adjust --prompt so the first character is not '/'.`
   };
 }
@@ -62084,19 +62098,23 @@ async function launchWorktreeSession(opts) {
       resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
       explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
       if (runtime === "claude") assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
+      const probe2 = probeSkillPrefixAvailable();
+      if (!probe2.ok) throw new Error(probe2.error);
+      const { skillPrefix } = renderSkillPrefix({ role: roleName, runtime, cwd });
+      let trustedPrefix = skillPrefix;
       if (bead) {
         renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
         composedTurn1Body = renderedTask.initialPrompt;
       } else {
-        const probe2 = probeSkillPrefixAvailable();
-        if (!probe2.ok) throw new Error(probe2.error);
-        const { skillPrefix } = renderSkillPrefix({ role: roleName, runtime, cwd });
         composedTurn1Body = skillPrefix + (prompt ?? "");
       }
       if (runtime === "claude" && explicitSkillPaths.length > 0) {
-        composedTurn1Body = claudeExplicitSkillLines(explicitSkillPaths) + "\n" + composedTurn1Body;
+        const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}
+`;
+        composedTurn1Body = explicitPrefix + composedTurn1Body;
+        trustedPrefix = explicitPrefix + trustedPrefix;
       }
-      const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime);
+      const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
       if (!slashCheck.ok) throw new Error(slashCheck.error);
       const byteCheck = checkByteCeiling({
         systemPrompt: resolvedRole.systemPrompt,
@@ -62431,7 +62449,14 @@ async function launchRoleTmuxSession(args) {
   for (const [k, v] of Object.entries(agentEnv)) {
     envArgs.push("-e", `${k}=${v}`);
   }
-  const runtimeBuffer = `xtrm-role-${randomSlug(12)}`;
+  const runtimeBuffer = createRuntimeBufferName();
+  const cleanupOnSignal = () => {
+    deleteRuntimeBuffer(runtimeBuffer);
+    process.exit(1);
+  };
+  process.once("SIGINT", cleanupOnSignal);
+  process.once("SIGTERM", cleanupOnSignal);
+  process.once("SIGHUP", cleanupOnSignal);
   const newSess = (0, import_node_child_process.spawnSync)("tmux", [
     "new-session",
     "-d",
@@ -62443,6 +62468,7 @@ async function launchRoleTmuxSession(args) {
     buildBufferedRuntimeCommand(runtimeBuffer)
   ], { stdio: "pipe", encoding: "utf8" });
   if (newSess.status !== 0) {
+    deleteRuntimeBuffer(runtimeBuffer);
     const stderr = (newSess.stderr ?? "").trim() || "unknown error";
     process.stderr.write(kleur_default.red(`
   \u2717 tmux new-session failed: ${stderr}
@@ -62460,6 +62486,7 @@ async function launchRoleTmuxSession(args) {
   });
   const signaled = loaded.status === 0 ? (0, import_node_child_process.spawnSync)("tmux", ["wait-for", "-S", `${runtimeBuffer}-ready`], { stdio: "pipe", encoding: "utf8" }) : null;
   if (loaded.status !== 0 || signaled?.status !== 0) {
+    deleteRuntimeBuffer(runtimeBuffer);
     (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
     const stderr = (loaded.stderr ?? signaled?.stderr)?.trim() || "unknown error";
     process.stderr.write(kleur_default.red(`
@@ -62476,9 +62503,13 @@ async function launchRoleTmuxSession(args) {
   ], { stdio: "pipe", encoding: "utf8" });
   const paneId = (paneQuery.stdout ?? "").trim().split("\n")[0] ?? "";
   if (!paneId) {
+    deleteRuntimeBuffer(runtimeBuffer);
     process.stderr.write(kleur_default.red("\n  \u2717 Could not resolve pane id for new session\n"));
     process.exit(1);
   }
+  process.off("SIGINT", cleanupOnSignal);
+  process.off("SIGTERM", cleanupOnSignal);
+  process.off("SIGHUP", cleanupOnSignal);
   for (const { key, value } of plan.paneOptions) {
     (0, import_node_child_process.spawnSync)("tmux", ["set-option", "-p", "-t", paneId, key, value], { stdio: "pipe" });
   }
@@ -63545,10 +63576,10 @@ var import_child_process6 = require("child_process");
 init_kleur();
 var import_fs_extra16 = __toESM(require_lib(), 1);
 var import_path7 = __toESM(require("path"), 1);
-var import_node_crypto6 = __toESM(require("crypto"), 1);
+var import_node_crypto7 = __toESM(require("crypto"), 1);
 
 // src/core/drift.ts
-var import_node_crypto5 = __toESM(require("crypto"), 1);
+var import_node_crypto6 = __toESM(require("crypto"), 1);
 var import_node_path13 = __toESM(require("path"), 1);
 var import_fs_extra15 = __toESM(require_lib(), 1);
 function toPosix(value) {
@@ -63562,7 +63593,7 @@ function buildUserRelativePath(sourceDir, filePath) {
 }
 async function hashFile(filePath) {
   const content = await import_fs_extra15.default.readFile(filePath);
-  return import_node_crypto5.default.createHash("sha256").update(content).digest("hex");
+  return import_node_crypto6.default.createHash("sha256").update(content).digest("hex");
 }
 async function checkDrift(registryPath, userXtrmDir, overrideRoots) {
   const registry2 = await import_fs_extra15.default.readJson(registryPath);
@@ -63645,7 +63676,7 @@ function resolveInstalledPath(userXtrmDir, relativePath, overrideRoots) {
 }
 async function hashFile2(filePath) {
   const content = await import_fs_extra16.default.readFile(filePath);
-  return import_node_crypto6.default.createHash("sha256").update(content).digest("hex");
+  return import_node_crypto7.default.createHash("sha256").update(content).digest("hex");
 }
 async function scaffoldSkillsDefaultFromPackage(params) {
   const { packageRoot, userXtrmDir, dryRun } = params;
@@ -64266,12 +64297,12 @@ async function getManagedAgentSkillNames(repoRoot) {
 }
 
 // src/core/global-skills-bootstrap.ts
-var import_node_crypto7 = __toESM(require("crypto"), 1);
+var import_node_crypto8 = __toESM(require("crypto"), 1);
 var import_fs_extra18 = __toESM(require_lib(), 1);
 var import_node_path14 = __toESM(require("path"), 1);
 var COPY_FILTER2 = (sourcePath) => !sourcePath.endsWith("__pycache__");
 function hashPath(value) {
-  return import_node_crypto7.default.createHash("sha256").update(value).digest("hex");
+  return import_node_crypto8.default.createHash("sha256").update(value).digest("hex");
 }
 function formatLogPath(filePath) {
   const normalized = import_node_path14.default.resolve(filePath);
@@ -65006,7 +65037,7 @@ var import_node_util2 = require("util");
 var import_node_process6 = __toESM(require("process"), 1);
 var import_node_fs6 = __toESM(require("fs"), 1);
 var import_node_path22 = __toESM(require("path"), 1);
-var import_node_crypto8 = __toESM(require("crypto"), 1);
+var import_node_crypto9 = __toESM(require("crypto"), 1);
 var import_node_assert = __toESM(require("assert"), 1);
 
 // ../node_modules/dot-prop/index.js
@@ -66080,8 +66111,8 @@ var Conf = class {
     }
     try {
       const initializationVector = data.slice(0, 16);
-      const password = import_node_crypto8.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
-      const decipher = import_node_crypto8.default.createDecipheriv(encryptionAlgorithm, password, initializationVector);
+      const password = import_node_crypto9.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
+      const decipher = import_node_crypto9.default.createDecipheriv(encryptionAlgorithm, password, initializationVector);
       const slice = data.slice(17);
       const dataUpdate = typeof slice === "string" ? stringToUint8Array(slice) : slice;
       return uint8ArrayToString(concatUint8Arrays([decipher.update(dataUpdate), decipher.final()]));
@@ -66124,9 +66155,9 @@ var Conf = class {
   _write(value) {
     let data = this._serialize(value);
     if (this.#encryptionKey) {
-      const initializationVector = import_node_crypto8.default.randomBytes(16);
-      const password = import_node_crypto8.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
-      const cipher = import_node_crypto8.default.createCipheriv(encryptionAlgorithm, password, initializationVector);
+      const initializationVector = import_node_crypto9.default.randomBytes(16);
+      const password = import_node_crypto9.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
+      const cipher = import_node_crypto9.default.createCipheriv(encryptionAlgorithm, password, initializationVector);
       data = concatUint8Arrays([initializationVector, stringToUint8Array(":"), cipher.update(stringToUint8Array(data)), cipher.final()]);
     }
     if (import_node_process6.default.env.SNAP) {
@@ -67195,7 +67226,7 @@ var import_fs_extra33 = __toESM(require_lib(), 1);
 init_kleur();
 
 // src/utils/atomic-config.ts
-var import_node_crypto9 = require("crypto");
+var import_node_crypto10 = require("crypto");
 var import_fs_extra31 = __toESM(require_lib(), 1);
 var import_comment_json = __toESM(require_src3(), 1);
 var PROTECTED_KEYS = [
@@ -67416,7 +67447,7 @@ async function atomicWrite(filePath, data, options = {}) {
     backupOnSuccess = false,
     backupSuffix = ".bak"
   } = options;
-  const tempFilePath = `${filePath}.tmp.${(0, import_node_crypto9.randomUUID)()}`;
+  const tempFilePath = `${filePath}.tmp.${(0, import_node_crypto10.randomUUID)()}`;
   try {
     let content;
     if (preserveComments) {
@@ -71429,7 +71460,7 @@ var import_node_path32 = __toESM(require("path"), 1);
 init_kleur();
 
 // src/core/skills-materializer.ts
-var import_node_crypto10 = require("crypto");
+var import_node_crypto11 = require("crypto");
 var import_node_path31 = __toESM(require("path"), 1);
 function sortByName(entries) {
   return [...entries].sort((a, b) => a.name.localeCompare(b.name));
@@ -74467,7 +74498,7 @@ function createSpecCommand() {
 init_kleur();
 var import_fs_extra57 = __toESM(require_lib(), 1);
 var import_node_path50 = __toESM(require("path"), 1);
-var import_node_crypto11 = __toESM(require("crypto"), 1);
+var import_node_crypto12 = __toESM(require("crypto"), 1);
 var import_node_os16 = __toESM(require("os"), 1);
 var import_child_process8 = require("child_process");
 init_git_staging();
@@ -74556,7 +74587,7 @@ async function appendMigrationLog(event) {
 }
 function hashFile4(filePath) {
   const content = import_fs_extra57.default.readFileSync(filePath);
-  return import_node_crypto11.default.createHash("sha256").update(content).digest("hex");
+  return import_node_crypto12.default.createHash("sha256").update(content).digest("hex");
 }
 async function createTarballBackup(sourceDir, backupName) {
   const backupRoot = import_node_path50.default.join(import_node_os16.default.homedir(), ".xtrm", "migration-backups");

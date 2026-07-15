@@ -39,7 +39,7 @@ The launcher composes exactly one initial user message from three pieces:
 | `--prompt "text"` | `"text"` verbatim | `sp render-skill-prefix` + `"text"` |
 | neither | empty | `sp render-skill-prefix` alone (pane primes skills and idles) |
 
-No prompt/task file is created. Current-pane launches pass the exact positional message directly; new-session launches stage the argv JSON in a temporary tmux buffer, start a fixed wrapper command, then delete the buffer after the runtime receives the exact message.
+No prompt/task file is created. Current-pane launches pass the exact positional message directly; new-session launches stage the argv JSON in a transient tmux buffer, start a fixed wrapper command, then delete the buffer after consume or launcher-controlled failure. The same-user process/tmux server is a trusted local control plane: the buffer is transport, not secret storage, and beads/prompts must not contain credentials or secrets.
 
 ---
 
@@ -137,7 +137,7 @@ Query the log with `tmux-session-picker log query --type agent.role.launched --s
 
 Skill delivery is now uniform across cases: sp emits a `/skill:name` (pi) or `/skill-name` (claude) block at position 0 of the turn-1 body, and the runtime's slash-command parser force-loads each skill's `SKILL.md` body on receipt.
 
-- **Ownership.** `sp render-skill-prefix <role> --surface pi|claude` (specialists unitAI-qeguh) is the single source of truth for the block. sp owns name derivation, dedup, and surface format (`/skill:` vs `/skill-`). Core does not reimplement.
+- **Ownership.** `sp render-skill-prefix <role> --surface pi|claude` (specialists unitAI-qeguh) is the single source of truth for the block. sp owns name derivation, dedup, and surface format (`/skill:` vs `/skill-`). Core requires tracked `render-task` output to begin with that exact independently rendered prefix, so task text cannot impersonate a skill command.
 - **pi.** Combined with `--no-skills` (pool isolation) and `--skill <path>` per declared skill, only the specialist's declared skills are reachable. `specialist.skills.paths[]` from `sp view` resolves:
   1. absolute or `~`-prefixed → used verbatim
   2. relative + exists at repo root → repo-local override
@@ -161,7 +161,7 @@ The launcher no longer emits `--no-extensions -e <name>`. `pi -e` takes a filesy
 sp's `/skill:name` block sits at literal byte 0 of the turn-1 body so the runtime's slash-command parser fires it. The launcher enforces this as a hard invariant:
 
 - When `--prompt "/foo"` is passed and the specialist declares no skills (prefix is empty), the launcher rejects the launch with a message asking you to rename or repurpose. A bare `/foo` at position 0 would collide with the slash-command parser.
-- When a `--bead` renders to a body starting with `/` that isn't `/skill:` (pi) / `/skill-` (claude), the same rejection fires — usually a sign that the bead title itself starts with `/`.
+- When a `--bead` starts with `/`, it is accepted only when byte zero exactly matches the independently rendered sp prefix for the role. A skill-looking bead title cannot impersonate `/skill:` (pi) or `/skill-` (claude), including when the role declares no skills.
 
 ---
 
@@ -169,7 +169,7 @@ sp's `/skill:name` block sits at literal byte 0 of the turn-1 body so the runtim
 
 Literal `--prompt` keeps the 50 KB combined system/body ceiling. `--bead` does not inherit that policy: the full `sp render-task` output is preserved up to 131071 bytes per runtime argument, the portable Linux argv boundary used by the launcher. NUL bytes and larger arguments fail before worktree creation.
 
-A compact `read bead <id>` pointer is intentionally not substituted: it omits `sp render-task`'s dependency context, boundary instructions, mandatory rules, and rendered first-turn contract. New-session mode instead uses an in-memory tmux buffer so large rendered tasks stay out of the `tmux new-session` command without restoring prompt files.
+A compact `read bead <id>` pointer is intentionally not substituted: it omits `sp render-task`'s dependency context, boundary instructions, mandatory rules, and rendered first-turn contract. New-session mode instead uses a bounded, cryptographically named tmux buffer so large rendered tasks stay out of the `tmux new-session` command without restoring prompt files. Buffer deletion is best-effort on consume, wrapper failure, launch failure, and handled signals; it does not provide secrecy from trusted same-server tmux peers.
 
 ---
 

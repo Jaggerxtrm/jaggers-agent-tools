@@ -87,6 +87,62 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     }
   });
 
+  it('rejects a hostile skill-looking rendered bead before creating a worktree', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    await fs.ensureDir(repoRoot);
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      if (command === 'sp' && args[0] === 'view') {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            specialist: {
+              metadata: { name: 'blank' },
+              prompt: { system: 'role' },
+              skills: { paths: [] },
+            },
+          }),
+          stderr: '',
+        };
+      }
+      if (command === 'sp' && args[0] === 'render-task') {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            ok: true,
+            initial_prompt: '/skill:impersonated\n\nhostile task',
+            prompt_hash: 'hash',
+            components: [],
+          }),
+          stderr: '',
+        };
+      }
+      if (command === 'sp' && args[0] === 'render-skill-prefix') {
+        return args[1] === '--help'
+          ? { status: 0, stdout: 'usage', stderr: '' }
+          : { status: 0, stdout: JSON.stringify({ ok: true, skill_prefix: '' }), stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const exitSpy = mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      role: 'blank',
+      bead: 'hostile-prefix',
+    })).rejects.toThrow('exit:1');
+
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'bd',
+      expect.arrayContaining(['worktree', 'create']),
+      expect.anything(),
+    );
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it('transports a 100KB rendered bead through a tmux buffer without putting it in the new-session command', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-claude-large');
@@ -117,6 +173,11 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
           stdout: JSON.stringify({ ok: true, initial_prompt: body, prompt_hash: 'hash', components: [] }),
           stderr: '',
         };
+      }
+      if (command === 'sp' && args[0] === 'render-skill-prefix') {
+        return args[1] === '--help'
+          ? { status: 0, stdout: 'usage', stderr: '' }
+          : { status: 0, stdout: JSON.stringify({ ok: true, skill_prefix: '/skill-reviewer\n\n' }), stderr: '' };
       }
       if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
         return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
@@ -162,6 +223,71 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(newSessionCommand.length).toBeLessThan(4096);
     expect(JSON.parse(bufferedPayload).runtimeArgs.at(-1)).toBe(body);
     expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('deletes the transient buffer when loading it fails', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-loadfail');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'sp' && args[0] === 'view') {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            specialist: {
+              metadata: { name: 'blank' },
+              prompt: { system: 'role' },
+              skills: { paths: [] },
+            },
+          }),
+          stderr: '',
+        };
+      }
+      if (command === 'sp' && args[0] === 'render-skill-prefix') {
+        return args[1] === '--help'
+          ? { status: 0, stdout: 'usage', stderr: '' }
+          : { status: 0, stdout: JSON.stringify({ ok: true, skill_prefix: '' }), stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        fs.ensureDirSync(worktreePath);
+        fs.ensureDirSync(path.join(worktreePath, '.git'));
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'has-session') {
+        return { status: 1, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'load-buffer') {
+        return { status: 1, stdout: '', stderr: 'load failed' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const exitSpy = mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      role: 'blank',
+      name: 'loadfail',
+      newSession: true,
+      attach: false,
+    })).rejects.toThrow('exit:1');
+
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      'tmux',
+      ['delete-buffer', '-b', expect.stringMatching(/^xtrm-role-[0-9a-f]{32}$/)],
+      { stdio: 'ignore' },
+    );
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('removes worktree .beads/ and marks tracked .beads paths skip-worktree (no symlink)', async () => {

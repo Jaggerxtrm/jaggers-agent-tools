@@ -2,6 +2,7 @@ import kleur from 'kleur';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, realpathSync, rmSync, readdirSync } from 'node:fs';
 
 import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
@@ -343,16 +344,26 @@ function shellQuote(s: string): string {
     return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+export function createRuntimeBufferName(): string {
+    return `xtrm-role-${randomBytes(16).toString('hex')}`;
+}
+
+function deleteRuntimeBuffer(bufferName: string): void {
+    spawnSync('tmux', ['delete-buffer', '-b', bufferName], { stdio: 'ignore' });
+}
+
 export function buildBufferedRuntimeCommand(bufferName: string): string {
     const script = [
         "const { execFileSync, spawnSync } = require('node:child_process')",
         'const buffer = process.argv[1]',
-        "execFileSync('tmux', ['wait-for', `${buffer}-ready`])",
+        "const cleanup = () => spawnSync('tmux', ['delete-buffer', '-b', buffer], { stdio: 'ignore' })",
+        "for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => { cleanup(); process.exit(1) })",
         'let raw',
         'try {',
+        "  execFileSync('tmux', ['wait-for', `${buffer}-ready`])",
         "  raw = execFileSync('tmux', ['show-buffer', '-b', buffer], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 })",
         '} finally {',
-        "  spawnSync('tmux', ['delete-buffer', '-b', buffer], { stdio: 'ignore' })",
+        '  cleanup()',
         '}',
         'const payload = JSON.parse(raw)',
         "if (!['pi', 'claude'].includes(payload.runtimeCmd) || !Array.isArray(payload.runtimeArgs) || payload.runtimeArgs.some((arg) => typeof arg !== 'string')) process.exit(2)",
@@ -365,11 +376,9 @@ export function buildBufferedRuntimeCommand(bufferName: string): string {
 
 /**
  * Probe `sp render-skill-prefix --help` once at launcher startup. Hard-fails
- * with an upgrade hint when the command isn't available — used by cases (ii)
- * (--prompt) and (iii) (no bead + no prompt) which require prefix delivery
- * out-of-band from render-task. Case (i) (--bead) doesn't need this probe:
- * render-task's initial_prompt already carries the /skill:name block per
- * unitAI-qeguh Option A. xtrm-8zsi1.
+ * with an upgrade hint when unavailable. Tracked launches render the prefix
+ * independently to verify render-task provenance; prompt/empty launches use
+ * it directly. xtrm-8zsi1.
  */
 export function probeSkillPrefixAvailable(): { ok: true } | { ok: false; error: string } {
     const r = spawnSync('sp', ['render-skill-prefix', '--help'], {
@@ -380,7 +389,7 @@ export function probeSkillPrefixAvailable(): { ok: true } | { ok: false; error: 
     const stderr = (r.stderr ?? '').toString();
     return {
         ok: false,
-        error: `sp render-skill-prefix not available (needed for --prompt / empty-body launches).\n`
+        error: `sp render-skill-prefix not available (needed for trusted role launch prefixes).\n`
             + `Upgrade specialists: npm i -g @jaggerxtrm/specialists@latest\n`
             + `Original error: ${stderr.trim() || 'unknown'}`,
     };
@@ -442,13 +451,24 @@ export function renderSkillPrefix(args: {
  * interpret an operator-provided prompt or a bead title starting with '/' as
  * a command. xtrm-8zsi1.
  */
-export function checkPositionZeroSlash(body: string, runtime: 'pi' | 'claude'): { ok: true } | { ok: false; error: string } {
-    if (body.length === 0 || body[0] !== '/') return { ok: true };
+export function checkPositionZeroSlash(
+    body: string,
+    runtime: 'pi' | 'claude',
+    trustedPrefix: string,
+): { ok: true } | { ok: false; error: string } {
     const expectedPrefix = runtime === 'pi' ? '/skill:' : '/skill-';
-    if (body.startsWith(expectedPrefix)) return { ok: true };
+    if (trustedPrefix && !trustedPrefix.startsWith(expectedPrefix)) {
+        return { ok: false, error: `trusted skill prefix does not match the ${runtime} '${expectedPrefix}' surface.` };
+    }
+    if (trustedPrefix) {
+        return body.startsWith(trustedPrefix)
+            ? { ok: true }
+            : { ok: false, error: 'turn-1 body does not start with the exact trusted sp skill prefix.' };
+    }
+    if (body.length === 0 || body[0] !== '/') return { ok: true };
     return {
         ok: false,
-        error: `turn-1 body starts with '/' but not '${expectedPrefix}': the runtime would parse this as a slash-command.\n`
+        error: `turn-1 body starts with '/' but sp declared no '${expectedPrefix}' prefix: the runtime would parse untrusted text as a slash-command.\n`
             + `Rename the bead title or adjust --prompt so the first character is not '/'.`,
     };
 }
@@ -881,9 +901,8 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
 
     // Resolve role up-front so we fail fast on an unknown role name before
     // creating a worktree (which would otherwise leak on a bad --role typo).
-    // Preflight cases (ii)/(iii): probe sp render-skill-prefix availability
-    // BEFORE worktree creation; hard-fail with an upgrade hint if the
-    // specialists package is too old.
+    // Probe sp render-skill-prefix before worktree creation so every launch
+    // can bind byte-zero slash commands to trusted renderer output.
     let resolvedRole: ResolvedRole | null = null;
     let renderedTask: RenderedRoleTask | undefined;
     let composedTurn1Body: string = '';
@@ -895,38 +914,33 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
             if (runtime === 'claude') assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
 
+            // Always render the declared skill prefix independently. For
+            // tracked beads this is provenance evidence: render-task output
+            // must start with this exact sp-owned block, not merely something
+            // that resembles a runtime slash command.
+            const probe = probeSkillPrefixAvailable();
+            if (!probe.ok) throw new Error(probe.error);
+            const { skillPrefix } = renderSkillPrefix({ role: roleName, runtime, cwd });
+            let trustedPrefix = skillPrefix;
+
             if (bead) {
-                // Case (i): --bead. sp render-task returns initial_prompt
-                // already prefixed with the /skill:name block per unitAI-
-                // qeguh Option A; core consumes it verbatim.
                 renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
                 composedTurn1Body = renderedTask.initialPrompt;
             } else {
-                // Cases (ii) and (iii): fetch the skill_prefix out-of-band.
-                // Probe first so an upgrade hint fires before any worktree
-                // side-effect.
-                const probe = probeSkillPrefixAvailable();
-                if (!probe.ok) throw new Error(probe.error);
-                const { skillPrefix } = renderSkillPrefix({ role: roleName, runtime, cwd });
                 composedTurn1Body = skillPrefix + (prompt ?? '');
             }
 
-            // Claude explicit --skill delivery (xtrm-8zsi1 follow-up). pi
-            // consumes explicitSkillPaths via its native --skill flag inside
-            // buildRoleTmuxPlan; claude has no such flag and no --plugin-dir
-            // scaffold anymore, so surface each explicit skill as a
-            // /skill-<name> force-load line prepended to the turn-1 body.
-            // Position-0 '/' invariant survives (prefix stays /skill-...).
+            // Claude explicit --skill delivery is launcher-owned but still
+            // derived only from validated, discoverable skill metadata.
             if (runtime === 'claude' && explicitSkillPaths.length > 0) {
-                composedTurn1Body = claudeExplicitSkillLines(explicitSkillPaths)
-                    + '\n' + composedTurn1Body;
+                const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}\n`;
+                composedTurn1Body = explicitPrefix + composedTurn1Body;
+                trustedPrefix = explicitPrefix + trustedPrefix;
             }
 
-            // Position-0 '/' safety on the composed body. Runs BEFORE worktree
-            // creation so we don't leak a directory when a bead title or a
-            // --prompt starts with a stray '/' that would collide with the
-            // slash-command parser.
-            const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime);
+            // Reject before worktree creation unless byte zero is ordinary
+            // text or the exact trusted prefix assembled above.
+            const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
             if (!slashCheck.ok) throw new Error(slashCheck.error);
 
             // Literal prompts keep the conservative 50KB policy. Rendered
@@ -1258,9 +1272,10 @@ async function launchRoleTmuxSession(args: {
         parentSessionId = currentTmuxSessionId();
     }
 
-    // xtrm-8zsi1: no file transport. Current-pane mode passes argv directly;
-    // new-session mode transfers the same argv through a temporary tmux buffer
-    // so untrusted task text never enters the tmux command string.
+    // Fileless transport within a trusted same-user control plane. Current-pane
+    // mode passes argv directly; new-session mode uses a transient tmux buffer.
+    // Prompts/beads are not credential storage, and same-server tmux peers are
+    // trusted to inspect or control the session.
 
     const plan = buildRoleTmuxPlan({
         runtime,
@@ -1371,7 +1386,15 @@ async function launchRoleTmuxSession(args: {
         envArgs.push('-e', `${k}=${v}`);
     }
 
-    const runtimeBuffer = `xtrm-role-${randomSlug(12)}`;
+    const runtimeBuffer = createRuntimeBufferName();
+    const cleanupOnSignal = (): void => {
+        deleteRuntimeBuffer(runtimeBuffer);
+        process.exit(1);
+    };
+    process.once('SIGINT', cleanupOnSignal);
+    process.once('SIGTERM', cleanupOnSignal);
+    process.once('SIGHUP', cleanupOnSignal);
+
     const newSess = spawnSync('tmux', [
         'new-session', '-d',
         '-s', plan.sessionName,
@@ -1380,6 +1403,7 @@ async function launchRoleTmuxSession(args: {
         buildBufferedRuntimeCommand(runtimeBuffer),
     ], { stdio: 'pipe', encoding: 'utf8' });
     if (newSess.status !== 0) {
+        deleteRuntimeBuffer(runtimeBuffer);
         const stderr = (newSess.stderr ?? '').trim() || 'unknown error';
         process.stderr.write(kleur.red(`\n  ✗ tmux new-session failed: ${stderr}\n`));
         process.exit(1);
@@ -1398,6 +1422,7 @@ async function launchRoleTmuxSession(args: {
         ? spawnSync('tmux', ['wait-for', '-S', `${runtimeBuffer}-ready`], { stdio: 'pipe', encoding: 'utf8' })
         : null;
     if (loaded.status !== 0 || signaled?.status !== 0) {
+        deleteRuntimeBuffer(runtimeBuffer);
         spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
         const stderr = ((loaded.stderr ?? signaled?.stderr) as string | undefined)?.trim() || 'unknown error';
         process.stderr.write(kleur.red(`\n  ✗ tmux prompt transport failed: ${stderr}\n`));
@@ -1409,9 +1434,14 @@ async function launchRoleTmuxSession(args: {
     ], { stdio: 'pipe', encoding: 'utf8' });
     const paneId = (paneQuery.stdout ?? '').trim().split('\n')[0] ?? '';
     if (!paneId) {
+        deleteRuntimeBuffer(runtimeBuffer);
         process.stderr.write(kleur.red('\n  ✗ Could not resolve pane id for new session\n'));
         process.exit(1);
     }
+
+    process.off('SIGINT', cleanupOnSignal);
+    process.off('SIGTERM', cleanupOnSignal);
+    process.off('SIGHUP', cleanupOnSignal);
 
     for (const { key, value } of plan.paneOptions) {
         spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });

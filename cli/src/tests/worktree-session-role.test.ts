@@ -12,6 +12,7 @@ import {
     checkByteCeiling,
     checkPositionZeroSlash,
     chooseAttachCommand,
+    createRuntimeBufferName,
     claudeExplicitSkillLines,
     guardRolePassthrough,
     parseSpecialistJson,
@@ -189,38 +190,33 @@ process.stdout.write("not json");
 });
 
 describe('checkPositionZeroSlash', () => {
-    it('accepts empty body', () => {
-        expect(checkPositionZeroSlash('', 'pi').ok).toBe(true);
-        expect(checkPositionZeroSlash('', 'claude').ok).toBe(true);
+    it('accepts empty and ordinary bodies when no trusted prefix is declared', () => {
+        expect(checkPositionZeroSlash('', 'pi', '').ok).toBe(true);
+        expect(checkPositionZeroSlash('normal task', 'claude', '').ok).toBe(true);
     });
 
-    it('accepts body not starting with /', () => {
-        expect(checkPositionZeroSlash('normal task', 'pi').ok).toBe(true);
-        expect(checkPositionZeroSlash('normal task', 'claude').ok).toBe(true);
+    it('accepts only the exact sp-owned prefix for each runtime', () => {
+        const piPrefix = '/skill:multiplexing /skill:pr-reviewer\n\n';
+        const claudePrefix = '/skill-multiplexing\n/skill-pr-reviewer\n\n';
+        expect(checkPositionZeroSlash(`${piPrefix}body`, 'pi', piPrefix).ok).toBe(true);
+        expect(checkPositionZeroSlash(`${claudePrefix}body`, 'claude', claudePrefix).ok).toBe(true);
     });
 
-    it('accepts /skill: prefix on pi', () => {
-        expect(checkPositionZeroSlash('/skill:multiplexing\n\nbody', 'pi').ok).toBe(true);
+    it('rejects a hostile skill-looking body when sp declared no prefix', () => {
+        expect(checkPositionZeroSlash('/skill:impersonated\n\nbody', 'pi', '').ok).toBe(false);
+        expect(checkPositionZeroSlash('/skill-impersonated\n\nbody', 'claude', '').ok).toBe(false);
     });
 
-    it('accepts /skill- prefix on claude', () => {
-        expect(checkPositionZeroSlash('/skill-multiplexing\n\nbody', 'claude').ok).toBe(true);
+    it('rejects a different skill prefix than the trusted renderer returned', () => {
+        expect(checkPositionZeroSlash('/skill:evil\n\nbody', 'pi', '/skill:trusted\n\n').ok).toBe(false);
+        expect(checkPositionZeroSlash('/skill-evil\n\nbody', 'claude', '/skill-trusted\n\n').ok).toBe(false);
     });
 
-    it('rejects unrelated / at position 0 on pi', () => {
-        const result = checkPositionZeroSlash('/foo bar', 'pi');
-        expect(result.ok).toBe(false);
-        if (!result.ok) expect(result.error).toContain('/skill:');
-    });
-
-    it('rejects claude-style prefix on pi (wrong surface)', () => {
-        const result = checkPositionZeroSlash('/skill-x', 'pi');
-        expect(result.ok).toBe(false);
-    });
-
-    it('rejects pi-style prefix on claude (wrong surface)', () => {
-        const result = checkPositionZeroSlash('/skill:x', 'claude');
-        expect(result.ok).toBe(false);
+    it('rejects missing, unrelated, and wrong-runtime prefixes', () => {
+        expect(checkPositionZeroSlash('body', 'pi', '/skill:trusted\n\n').ok).toBe(false);
+        expect(checkPositionZeroSlash('/foo bar', 'pi', '').ok).toBe(false);
+        expect(checkPositionZeroSlash('/skill-x', 'pi', '/skill-x').ok).toBe(false);
+        expect(checkPositionZeroSlash('/skill:x', 'claude', '/skill:x').ok).toBe(false);
     });
 });
 
@@ -888,12 +884,23 @@ describe('assertClaudeSkillsDiscoverable', () => {
 });
 
 describe('buildBufferedRuntimeCommand', () => {
-    it('keeps untrusted runtime content out of the tmux command string', () => {
+    it('keeps untrusted runtime content out of the command and cleans up on consume or signal', () => {
         const command = buildBufferedRuntimeCommand('xtrm-role-safe');
         expect(command).toContain('show-buffer');
         expect(command).toContain('delete-buffer');
+        expect(command).toContain('SIGINT');
+        expect(command).toContain('SIGTERM');
+        expect(command).toContain('SIGHUP');
         expect(command).toContain('xtrm-role-safe');
         expect(command).not.toContain('rendered bead body');
+    });
+});
+
+describe('createRuntimeBufferName', () => {
+    it('uses a collision-resistant 128-bit random suffix', () => {
+        const names = new Set(Array.from({ length: 100 }, createRuntimeBufferName));
+        expect(names.size).toBe(100);
+        for (const name of names) expect(name).toMatch(/^xtrm-role-[0-9a-f]{32}$/);
     });
 });
 
