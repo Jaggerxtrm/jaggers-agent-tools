@@ -39,7 +39,6 @@ mock.module("@earendil-works/pi-tui", () => ({
 
 for (const modulePath of [
   "../../src/extensions/auto-session-name.ts",
-  "../../src/extensions/auto-update.ts",
   "../../src/extensions/beads.ts",
   "../../src/extensions/compact-header.ts",
   "../../src/extensions/custom-footer.ts",

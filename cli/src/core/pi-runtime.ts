@@ -146,7 +146,7 @@ const LEGACY_PROJECT_EXTENSION_ENTRIES = new Set<string>([
     '.xtrm/extensions',
 ]);
 
-function runExternalPiToolPatch(pkgRoot: string, dryRun: boolean, log?: (message: string) => void): void {
+export function runExternalPiToolPatch(pkgRoot: string, dryRun: boolean, log?: (message: string) => void): void {
     const scriptPath = path.join(pkgRoot, 'scripts', 'patch-external-pi-tools.mjs');
     if (!fs.existsSync(scriptPath)) return;
 
@@ -180,7 +180,6 @@ export interface ManagedExtension {
 const MANAGED_EXTENSIONS: ManagedExtension[] = [
     { id: 'core', displayName: '@xtrm/pi-core', isLibrary: true, required: true },
     { id: 'auto-session-name', displayName: 'auto-session-name', required: false },
-    { id: 'auto-update', displayName: 'auto-update', required: false },
     { id: 'beads', displayName: 'beads', required: true },
     { id: 'compact-header', displayName: 'compact-header', required: false },
     { id: 'custom-footer', displayName: 'custom-footer', required: true },

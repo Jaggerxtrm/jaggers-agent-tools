@@ -60674,7 +60674,6 @@ function runExternalPiToolPatch(pkgRoot, dryRun, log) {
 var MANAGED_EXTENSIONS = [
   { id: "core", displayName: "@xtrm/pi-core", isLibrary: true, required: true },
   { id: "auto-session-name", displayName: "auto-session-name", required: false },
-  { id: "auto-update", displayName: "auto-update", required: false },
   { id: "beads", displayName: "beads", required: true },
   { id: "compact-header", displayName: "compact-header", required: false },
   { id: "custom-footer", displayName: "custom-footer", required: true },
@@ -73045,6 +73044,7 @@ function createUpdateCommand() {
       });
     }
     const packageAssurance = await assureXtManagedPiPackages(Boolean(typedOpts.apply));
+    if (typedOpts.apply) runExternalPiToolPatch(resolvePackageRoot2(), false);
     if (opts.json) {
       console.log(JSON.stringify({ repos: rows, packages: packageAssurance }, null, 2));
     } else {

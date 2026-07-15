@@ -4,6 +4,38 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
+const SERENA_CODE_NAVIGATION_TOOLS = [
+  'find_symbol',
+  'find_referencing_symbols',
+  'get_symbols_overview',
+  'insert_after_symbol',
+  'insert_before_symbol',
+  'replace_symbol_body',
+  'rename_symbol',
+  'jet_brains_get_symbols_overview',
+  'jet_brains_find_symbol',
+  'jet_brains_find_referencing_symbols',
+  'jet_brains_type_hierarchy',
+];
+
+const SERENA_REGISTER_PATCH =
+  `  const SERENA_CODE_NAVIGATION_TOOLS = new Set([${SERENA_CODE_NAVIGATION_TOOLS.map((name) => `'${name}'`).join(', ')}]);\n` +
+  '  const originalRegisterTool = pi.registerTool.bind(pi);\n' +
+  '  (pi).registerTool = (tool) => {\n' +
+  '    if (!SERENA_CODE_NAVIGATION_TOOLS.has(tool.name)) return;\n' +
+  '    originalRegisterTool({\n' +
+  '      ...tool,\n' +
+  '      renderShell: "self",\n' +
+  '      renderCall: tool.renderCall ?? ((_args, _theme) => new Text("", 0, 0)),\n' +
+  '      renderResult: tool.renderResult ?? ((result, state, theme) => {\n' +
+  '        if (state?.isPartial) return new Text(theme.fg("muted", "…"), 0, 0);\n' +
+  '        const first = (result?.content ?? []).find((c) => c?.type === "text")?.text ?? "";\n' +
+  '        const line = String(first).split("\\n")[0] || "ok";\n' +
+  '        return new Text(theme.fg("toolOutput", line), 0, 0);\n' +
+  '      }),\n' +
+  '    });\n' +
+  '  };\n\n';
+
 function patchFile(filePath, transforms) {
   if (!fs.existsSync(filePath)) return;
   let text = fs.readFileSync(filePath, 'utf8');
@@ -27,24 +59,16 @@ function patchSerena(baseDir) {
       'import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";\n',
       'import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";\nimport { Text } from "@mariozechner/pi-tui";\n',
     ),
-    (s) => injectOnce(
-      s,
-      '  registerSerenaTools({',
-      '  const originalRegisterTool = pi.registerTool.bind(pi);\n' +
-      '  (pi).registerTool = (tool) => {\n' +
-      '    originalRegisterTool({\n' +
-      '      ...tool,\n' +
-      '      renderShell: "self",\n' +
-      '      renderCall: tool.renderCall ?? ((_args, _theme) => new Text("", 0, 0)),\n' +
-      '      renderResult: tool.renderResult ?? ((result, state, theme) => {\n' +
-      '        if (state?.isPartial) return new Text(theme.fg("muted", "…"), 0, 0);\n' +
-      '        const first = (result?.content ?? []).find((c) => c?.type === "text")?.text ?? "";\n' +
-      '        const line = String(first).split("\\n")[0] || "ok";\n' +
-      '        return new Text(theme.fg("toolOutput", line), 0, 0);\n' +
-      '      }),\n' +
-      '    });\n' +
-      '  };\n\n'
+    (s) => s.replace(
+      'const defaultBlockedToolNames = ["read", "write", "edit", "ls", "find", "grep"];',
+      'const defaultBlockedToolNames = [];',
     ),
+    (s) => s.replace(
+      /(?:  const SERENA_CODE_NAVIGATION_TOOLS[^\n]*\n)?  const originalRegisterTool = pi\.registerTool\.bind\(pi\);[\s\S]*?(?=  registerSerenaTools\(\{)/,
+      SERENA_REGISTER_PATCH,
+    ),
+    (s) => injectOnce(s, '  registerSerenaTools({', SERENA_REGISTER_PATCH),
+    (s) => injectOnce(s, '  const handleToolCall', '  pi.registerTool = originalRegisterTool;\n\n'),
   ]);
 
   patchFile(responsesPath, [
@@ -115,8 +139,14 @@ function patchGitnexus(baseDir) {
   ]);
 }
 
-function collectNodeModuleRoots() {
+function collectNodeModuleRoots(explicitRoots = process.argv.slice(2)) {
+  if (explicitRoots.length > 0) {
+    return explicitRoots.map((root) => path.resolve(root));
+  }
+
   const roots = new Set();
+  const piAgentModules = path.join(homedir(), '.pi', 'agent', 'npm', 'node_modules');
+  if (fs.existsSync(piAgentModules)) roots.add(piAgentModules);
 
   // NVM layout (current primary setup)
   const nvmBase = path.join(homedir(), '.nvm', 'versions', 'node');

@@ -125,6 +125,23 @@ describe('updatePiSettings', () => {
     });
 
     it.each([
+        [undefined, []],
+        [{ blockedTools: ['read', 'write', 'edit', 'ls', 'find', 'grep'] }, []],
+        [{ blockedTools: ['execute_shell_command'] }, ['execute_shell_command']],
+    ])('repairs Serena native-tool blocking while preserving custom blocks', async (serena, blockedTools) => {
+        const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-settings-'));
+        await fs.ensureDir(path.join(projectRoot, '.pi'));
+        await fs.writeJson(path.join(projectRoot, '.pi', 'settings.json'), { serena });
+
+        try {
+            await updatePiSettings(projectRoot, false);
+            expect((await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'))).serena.blockedTools).toEqual(blockedTools);
+        } finally {
+            await fs.remove(projectRoot);
+        }
+    });
+
+    it.each([
         ['pidex-dark', 'xtrm-dark'],
         ['pidex-light', 'xtrm-light'],
         ['pidex-dark-flattools', 'xtrm-dark-flattools'],
