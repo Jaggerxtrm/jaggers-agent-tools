@@ -70,7 +70,8 @@ export function createPiCommand(): Command {
         .description('Launch a Pi session in a sandboxed worktree, or manage the Pi runtime')
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
         .option('--role <name>', 'Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata')
-        .option('--bead <id>', 'Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug')
+        .option('--bead <id>', 'Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)')
+        .option('--prompt <text>', 'Use <text> as the initial user prompt (mutually exclusive with --bead); combines with the sp-owned /skill:name prefix')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
         .option('--model <name>', 'With --role: forward `--model <name>` to pi (overrides specialist.execution.model)')
         .option('--thinking <level>', 'With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)')
@@ -93,10 +94,13 @@ Passthrough:
 Examples:
   $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
   $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
+  $ xt pi --role reviewer --prompt 'review the auth changes in cli/src/auth/'
+  $ xt pi --role planner                          # skills-only prime; pane idles
 `)
         .action(async (name: string | undefined, opts: {
             role?: string;
             bead?: string;
+            prompt?: string;
             attach?: boolean;
             model?: string;
             thinking?: string;
@@ -117,6 +121,7 @@ Examples:
                 name,
                 role: opts.role,
                 bead: opts.bead,
+                prompt: opts.prompt,
                 attach: opts.attach,
                 model: opts.model,
                 thinking: opts.thinking,

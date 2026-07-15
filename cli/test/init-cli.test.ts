@@ -8,6 +8,24 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_BIN = path.join(__dirname, '../dist/index.cjs');
 
+// xtrm-8zsi1: `xt init --yes` (spawned as a subprocess below) runs the real
+// installer which resolves os.homedir() and writes ~/.xtrm/skills/state.json
+// + ~/.xtrm/hooks/state.json. Without a per-suite sandbox HOME, that wipes
+// the operator's real global install. The subprocess inherits our env, so
+// setting HOME here propagates automatically.
+let __sandboxHome = '';
+let __prevHome: string | undefined;
+beforeAll(() => {
+    __sandboxHome = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-init-cli-home-'));
+    __prevHome = process.env.HOME;
+    process.env.HOME = __sandboxHome;
+});
+afterAll(() => {
+    try { fs.rmSync(__sandboxHome, { recursive: true, force: true }); } catch { /* ignore */ }
+    if (__prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = __prevHome;
+});
+
 function run(args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv; timeout?: number } = {}): { stdout: string; stderr: string; status: number; duration: number } {
     const start = Date.now();
     const r = spawnSync('node', [CLI_BIN, ...args], {

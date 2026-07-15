@@ -9,16 +9,37 @@ The same flag surface works for both runtimes; differences are called out explic
 ## Quick start
 
 ```bash
-# Launch pi as chain-coordinator, tracked to bead xyz-1
+# Case (i): launch pi tracked to a bead — sp render-task fills the initial prompt
 xt pi --role chain-coordinator --bead xyz-1
 
-# Same for claude, with one deliberate extra skill
-xt claude --role reviewer --bead xyz-1 --skill code-review
+# Case (ii): launch claude with a literal initial prompt, reviewer's skills auto-loaded
+xt claude --role reviewer --prompt 'review the auth changes in cli/src/auth/'
+
+# Case (iii): skills-only prime — pane loads the role's skills and idles until you type
+xt pi --role researcher
 ```
 
 Inside `$TMUX`, both commands **run in the current pane** by default — no nested-tmux warning, no new session in `tmux ls`. Outside `$TMUX`, both create a new tmux session and attach.
 
-With `--bead`, the launcher first calls `sp render-task <role> --bead <id> --cwd <original-cwd> --context-depth 3 --surface <runtime>`. Any renderer error stops before worktree or tmux provisioning. The rendered task is written mode `0600` under the ignored worktree `.xtrm/` and passed as the final `@file` initial-user argument; it is never mixed into the system prompt. Process arguments and telemetry therefore expose only the file path and renderer metadata, never the task body. Without `--bead`, no initial task is sent.
+`--bead` and `--prompt` are mutually exclusive; pass one or neither.
+
+---
+
+## Turn-1 composition (case-by-case)
+
+The launcher composes exactly one initial user message from three pieces:
+
+1. **skill prefix** — an sp-owned `/skill:name` (pi) or `/skill-name` (claude) block that force-loads the specialist's declared skills at turn 1
+2. **body** — either the rendered tracked task (`--bead`), your literal text (`--prompt`), or empty (neither)
+3. **byte guard** — the sum of system prompt + composed body must stay under ~50 KB or the launcher refuses to launch (loud, precise error naming the actual byte count)
+
+| Invocation | Body source | Composition |
+| --- | --- | --- |
+| `--bead <id>` | `sp render-task <role> --bead <id>` output (already prefixed by sp — Option A) | `<render-task output>` verbatim |
+| `--prompt "text"` | `"text"` verbatim | `sp render-skill-prefix` + `"text"` |
+| neither | empty | `sp render-skill-prefix` alone (pane primes skills and idles) |
+
+Everything is inline argv — no file-based transport. `--append-system-prompt '<identity>'` carries the specialist system prompt; the composed body is the positional user message.
 
 ---
 
@@ -27,11 +48,12 @@ With `--bead`, the launcher first calls `sp render-task <role> --bead <id> --cwd
 | Flag | Meaning | Notes |
 | --- | --- | --- |
 | `--role <name>` | Resolve `<name>` via `sp view <name> --raw` and boot the runtime with the specialist's system prompt, skills, model, and thinking level. | The role's `execution.model` / `execution.thinking_level` from `sp view` are the defaults; CLI flags override. |
-| `--bead <id>` | Attach `<id>` to the pane via `@agent_bead`; also included in the session name slug (`role-<runtime>-<slug>-<bead>`). | Optional. Enables `bv` claim discovery and hook-based gating. |
+| `--bead <id>` | Render the tracked task as the initial user prompt via `sp render-task`, and attach `<id>` to the pane via `@agent_bead`. | Mutually exclusive with `--prompt`. Included in the session name slug (`role-<runtime>-<slug>-<bead>`). |
+| `--prompt <text>` | Use `<text>` as the initial user prompt. Combines with the sp-owned skill prefix. | Mutually exclusive with `--bead`. For anything larger than a paragraph, prefer `--bead` — a beads issue is a better container than a shell argv. |
 | `--no-attach` | New-session mode only. Print `session_name:pane_id` on stdout and exit — orchestrator-capture pattern. | Inside `$TMUX` without `--new-session`, `--no-attach` **errors** with a clear hint. |
 | `--model <name>` | Forward `--model <name>` to the runtime; overrides `specialist.execution.model`. | Both pi and claude accept `--model`. |
 | `--thinking <level>` | pi only. Forward `--thinking <level>`; overrides `specialist.execution.thinking_level`. | claude has no `--thinking` flag — `xt claude --thinking X` warns loudly and drops. |
-| `--skill <name-or-path>` | Load one additional skill at startup; repeatable. | Names resolve through project/global runtime skill locations. Pi receives `--skill`; Claude receives an ephemeral plugin under the worktree's ignored `.xtrm/`. Invalid skills fail before worktree creation. |
+| `--skill <name-or-path>` | Load one additional skill at startup; repeatable. | Names resolve through project/global runtime skill locations. Pi receives `--skill`; on claude the skill must be at `~/.claude/skills/<name>` (global auto-discovery). Invalid skills fail before worktree creation. |
 | `--new-session` / `--ns` | Force a fresh tmux session even when inside `$TMUX`. | Default outside `$TMUX`. Combines with `--no-attach`. |
 | `--parent <target>` | Override `@agent_parent_session` on the target pane. `<target>` = tmux session name, session id (`$3`), or `#{session_id}` string. | Bogus targets fail with a clear error before the runtime spawns. Precedence: `--parent` > `--child` > auto. |
 | `--child` | Explicit form of the auto-behavior (`@agent_parent_session` = current pane's `#{session_id}`). | Kept as a stable opt-in against a future default flip. |
@@ -79,8 +101,9 @@ The launcher writes these on the target pane (current pane by default, new sessi
 | `@agent_task` | `role:<name>` |
 | `@agent_parent_session` | Resolved `#{session_id}` (see `--parent` precedence above) |
 | `@agent_state` | `idle` — set at spawn so the picker sees the pane immediately (before the runtime's own agent-state hook fires) |
-| `@agent_prompt_file` | Path to the transported system-prompt file — picker preview + handoff read this |
 | `@agent_bead` | Only set when `--bead <id>` was passed |
+
+`@agent_prompt_file` was retired in xtrm-8zsi1 — the launcher no longer materializes a prompt file (turn-1 is inline argv). Downstream skills already read the option absence-safely.
 
 ---
 
@@ -91,9 +114,10 @@ Redundant with pane options on purpose — env survives re-execs the way pane op
 | Variable | Source |
 | --- | --- |
 | `XTMUX_AGENT_TASK` | `role:<name>` |
-| `XTMUX_AGENT_PROMPT_FILE` | Same file as `@agent_prompt_file` |
 | `XTMUX_AGENT_PARENT_SESSION` | Same value as `@agent_parent_session` |
 | `XTMUX_AGENT_BEAD` | Only set when `--bead <id>` was passed |
+
+`XTMUX_AGENT_PROMPT_FILE` was retired in xtrm-8zsi1 alongside the prompt-file transport.
 
 In `--new-session` mode these are exported via `tmux new-session -e KEY=VAL ...` so they land in the new pane's environment. In current-pane mode they're passed to the runtime via `spawnSync`'s `env`.
 
@@ -111,14 +135,16 @@ Query the log with `tmux-session-picker log query --type agent.role.launched --s
 
 **Skills.**
 
-- **pi.** `specialist.skills.paths[]` from `sp view` are resolved:
+Skill delivery is now uniform across cases: sp emits a `/skill:name` (pi) or `/skill-name` (claude) block at position 0 of the turn-1 body, and the runtime's slash-command parser force-loads each skill's `SKILL.md` body on receipt.
+
+- **Ownership.** `sp render-skill-prefix <role> --surface pi|claude` (specialists unitAI-qeguh) is the single source of truth for the block. sp owns name derivation, dedup, and surface format (`/skill:` vs `/skill-`). Core does not reimplement.
+- **pi.** Combined with `--no-skills` (pool isolation) and `--skill <path>` per declared skill, only the specialist's declared skills are reachable. `specialist.skills.paths[]` from `sp view` resolves:
   1. absolute or `~`-prefixed → used verbatim
   2. relative + exists at repo root → repo-local override
   3. relative + exists at `$HOME` → canonical global (post-`xtrm-bq7yd` migration; see the CHANGELOG entry for xtrm-1rn)
   4. otherwise → repo-resolved path so pi produces a loud "skill not found" error at the exact absolute location the operator can fix
-- **claude.** Specialist-declared and explicit skills are exposed through an ephemeral `--plugin-dir` under the worktree's gitignored `.xtrm/`, using Claude's native `skills/<name>/SKILL.md` convention.
-- **forced startup context.** For both runtimes, complete deduplicated `SKILL.md` bodies are appended to the role system prompt before provisioning. Native Pi registration and the Claude plugin remain in place so relative skill assets and commands still resolve; they are not the injection mechanism.
-- **explicit requests.** `--skill` accepts an installed skill name, a skill directory, or a `SKILL.md` path. Requests are validated and realpath-deduplicated against specialist-declared skills before provisioning. Project runtime locations win over global pointers from the post-migration layout.
+- **claude.** No `--no-skills` equivalent exists (`--bare` is nuclear). Global `~/.claude/skills` auto-discovery remains; the `/skill-name` prefix forces body load for the specialist's declared skills. Explicit `--skill` on claude only works if the named skill is already at `~/.claude/skills/<name>`.
+- **explicit requests.** `--skill` accepts an installed skill name, a skill directory, or a `SKILL.md` path. Requests are validated and realpath-deduplicated against specialist-declared skills before provisioning. Pi receives them as `--skill <path>`; claude relies on ambient discovery.
 
 **Model.**
 
@@ -127,6 +153,25 @@ CLI `--model` wins over `specialist.execution.model` (from `sp view`), which win
 **Extensions (pi).**
 
 The launcher no longer emits `--no-extensions -e <name>`. `pi -e` takes a filesystem path (not a registry name), and the prior curated allow-list caused silent startup crashes (see xtmux-3rs). pi discovers its own extensions from `~/.pi/agent/settings.json` plus any per-repo settings.
+
+---
+
+## Position-0 `/` invariant
+
+sp's `/skill:name` block sits at literal byte 0 of the turn-1 body so the runtime's slash-command parser fires it. The launcher enforces this as a hard invariant:
+
+- When `--prompt "/foo"` is passed and the specialist declares no skills (prefix is empty), the launcher rejects the launch with a message asking you to rename or repurpose. A bare `/foo` at position 0 would collide with the slash-command parser.
+- When a `--bead` renders to a body starting with `/` that isn't `/skill:` (pi) / `/skill-` (claude), the same rejection fires — usually a sign that the bead title itself starts with `/`.
+
+---
+
+## Byte guard
+
+The launcher refuses to spawn when `systemPrompt.length + composedTurn1Body.length > ~50 KB`. tmux `new-session` refuses commands beyond a few dozen KB with `command too long`, so the guard catches the failure mode with a precise, actionable message instead of a broken pane.
+
+If you hit the ceiling, move the large content into a bead (`--bead`) — `sp render-task` renders context there, and `bd` is a better container than a shell argv anyway.
+
+---
 
 ## `sp run` parity boundary
 
@@ -138,7 +183,7 @@ The launcher no longer emits `--no-extensions -e <name>`. `pi -e` takes a filesy
 | Pre-script output | Deliberately omitted: executing pre-scripts is job-runtime behavior. |
 | Reviewer git-diff context | Deliberately omitted: execution-only and unavailable before the interactive session starts. |
 | Job/RPC/status creation | Not applicable: rendering is read-only; `xt` owns only its sandbox worktree/tmux session. |
-| Skills | Complete specialist-declared `SKILL.md` bodies are injected into startup context; repeatable `xt --skill` adds deduplicated session-only bodies. Native runtime registration is retained for assets and commands. |
+| Skills | sp-owned `/skill:name` prefix at turn 1 forces body load. Pi pool isolated via `--no-skills`; claude uses ambient `~/.claude/skills` discovery. Repeatable `--skill` deduplicates against specialist-declared skills. |
 
 ---
 
@@ -149,7 +194,7 @@ A parent Claude Code / pi orchestrator spawns a child role session, drives it vi
 ```bash
 # Parent orchestrator, from inside its own tmux session
 xt pi --role researcher --bead xyz-1 --no-attach --new-session > /tmp/child.addr
-# child.addr contains "role-researcher-xyz-1:%42"
+# child.addr contains "role-pi-researcher-xyz-1:%42"
 CHILD_TARGET=$(cat /tmp/child.addr)
 
 # Route a task to the child
@@ -172,3 +217,4 @@ The child role can escalate policy calls back to the parent by resolving its own
 - `xt pi --help` / `xt claude --help` — canonical flag list with examples.
 - [docs/worktrees.md](worktrees.md) — the sandbox worktree model that underpins the launcher.
 - `xtmux-1lb` epic in beads — surface completion history.
+- xtrm-8zsi1 (this rewrite) supersedes the xtrm-osipt file-transport stopgap.

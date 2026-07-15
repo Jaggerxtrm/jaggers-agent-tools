@@ -2,17 +2,27 @@ import kleur from 'kleur';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, realpathSync, rmSync, readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, realpathSync, rmSync, readdirSync } from 'node:fs';
 
 import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { runPiLaunchPreflight } from '../core/pi-runtime.js';
+
+/**
+ * Hard ceiling for the turn-1 shell command length. tmux new-session refuses
+ * commands beyond a few dozen KB with "command too long"; keeping the sum of
+ * systemPrompt + prefix + body under this bound guarantees a launchable pane.
+ * xtrm-osipt (stopgap was file-based; xtrm-8zsi1 goes inline).
+ */
+const TURN1_BYTE_CEILING = 50 * 1024;
 
 export interface WorktreeSessionOptions {
     runtime: 'claude' | 'pi';
     name?: string;
     role?: string;
     bead?: string;
+    /** Explicit turn-1 body text (case ii). Mutually exclusive with --bead. */
+    prompt?: string;
     attach?: boolean;
     /** Explicit --model override for pi role sessions; wins over specialist default. */
     model?: string;
@@ -149,22 +159,6 @@ export function resolveSkillPath(mainRepoRoot: string, rawPath: string): string 
     const migratedResolved = path.resolve(os.homedir(), migratedPath);
     if (migratedPath !== rawPath && existsSync(migratedResolved)) return migratedResolved;
     return repoResolved;
-}
-
-export function injectSkillContents(systemPrompt: string, skillPaths: string[]): string {
-    const seen = new Set<string>();
-    const blocks = skillPaths.flatMap((skillPath) => {
-        const file = realpathSync(lstatSync(skillPath).isDirectory()
-            ? path.join(skillPath, 'SKILL.md')
-            : skillPath);
-        if (seen.has(file)) return [];
-        seen.add(file);
-        const name = path.basename(path.dirname(file));
-        return [`<skill_content name=${JSON.stringify(name)} source=${JSON.stringify(file)}>\n${readFileSync(file, 'utf8')}\n</skill_content>`];
-    });
-    return blocks.length === 0
-        ? systemPrompt
-        : `${systemPrompt}\n\n# Required Skills (injected in full)\n\n${blocks.join('\n\n')}`;
 }
 
 export function resolveRequestedSkills(mainRepoRoot: string, requested: string[]): string[] {
@@ -326,30 +320,111 @@ function shellQuote(s: string): string {
     return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-export function prepareClaudeSkillPlugin(worktreePath: string, skillPaths: string[]): string {
-    const pluginRoot = path.join(worktreePath, '.xtrm', 'role-skills');
-    rmSync(pluginRoot, { recursive: true, force: true });
-    mkdirSync(path.join(pluginRoot, '.claude-plugin'), { recursive: true });
-    mkdirSync(path.join(pluginRoot, 'skills'), { recursive: true });
-    writeFileSync(path.join(pluginRoot, '.claude-plugin', 'plugin.json'), JSON.stringify({
-        name: 'xtrm-role-skills',
-        description: 'Ephemeral skills selected for this xt role session',
-    }));
+/**
+ * Probe `sp render-skill-prefix --help` once at launcher startup. Hard-fails
+ * with an upgrade hint when the command isn't available — used by cases (ii)
+ * (--prompt) and (iii) (no bead + no prompt) which require prefix delivery
+ * out-of-band from render-task. Case (i) (--bead) doesn't need this probe:
+ * render-task's initial_prompt already carries the /skill:name block per
+ * unitAI-qeguh Option A. xtrm-8zsi1.
+ */
+export function probeSkillPrefixAvailable(): { ok: true } | { ok: false; error: string } {
+    const r = spawnSync('sp', ['render-skill-prefix', '--help'], {
+        stdio: 'pipe',
+        encoding: 'utf8',
+    });
+    if (r.status === 0) return { ok: true };
+    const stderr = (r.stderr ?? '').toString();
+    return {
+        ok: false,
+        error: `sp render-skill-prefix not available (needed for --prompt / empty-body launches).\n`
+            + `Upgrade specialists: npm i -g @jaggerxtrm/specialists@latest\n`
+            + `Original error: ${stderr.trim() || 'unknown'}`,
+    };
+}
 
-    const names = new Set<string>();
-    const roots = new Set<string>();
-    for (const skillPath of skillPaths) {
-        const skillRoot = realpathSync(lstatSync(skillPath).isDirectory() ? skillPath : path.dirname(skillPath));
-        if (roots.has(skillRoot)) continue;
-        roots.add(skillRoot);
-        const skillFile = path.join(skillRoot, 'SKILL.md');
-        if (!existsSync(skillFile)) throw new Error(`skill path has no SKILL.md: ${skillPath}`);
-        const name = path.basename(skillRoot);
-        if (names.has(name)) throw new Error(`duplicate requested skill name '${name}'`);
-        names.add(name);
-        symlinkSync(skillRoot, path.join(pluginRoot, 'skills', name), 'dir');
+export interface RenderSkillPrefixResult {
+    /** May be the empty string when the specialist declares no skills. */
+    skillPrefix: string;
+}
+
+/**
+ * Call `sp render-skill-prefix <name> --surface pi|claude` and return the
+ * skill_prefix string. Empty string is a legitimate result (no declared
+ * skills). Throws with a specific error message when sp errors out with a
+ * structured `{ok:false, error:{code,message}}` payload. xtrm-8zsi1.
+ */
+export function renderSkillPrefix(args: {
+    role: string;
+    runtime: 'pi' | 'claude';
+    cwd?: string;
+}): RenderSkillPrefixResult {
+    const r = spawnSync(
+        'sp',
+        ['render-skill-prefix', args.role, '--surface', args.runtime],
+        {
+            cwd: args.cwd ?? process.cwd(),
+            stdio: 'pipe',
+            encoding: 'utf8',
+            maxBuffer: 4 * 1024 * 1024,
+        },
+    );
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(r.stdout ?? '');
+    } catch {
+        throw new Error(`role '${args.role}': sp render-skill-prefix returned invalid JSON`);
     }
-    return pluginRoot;
+    const output = parsed as {
+        ok?: unknown;
+        skill_prefix?: unknown;
+        error?: { code?: unknown; message?: unknown };
+    };
+    if (r.status !== 0 || output.ok !== true) {
+        const code = typeof output.error?.code === 'string' ? output.error.code : 'render_failed';
+        const message = typeof output.error?.message === 'string' ? output.error.message : 'unknown error';
+        throw new Error(`role '${args.role}': ${code}: ${message}`);
+    }
+    if (typeof output.skill_prefix !== 'string') {
+        throw new Error(`role '${args.role}': sp render-skill-prefix returned no skill_prefix string`);
+    }
+    return { skillPrefix: output.skill_prefix };
+}
+
+/**
+ * Position-0 '/' safety check on the composed turn-1 body. A '/' at literal
+ * byte 0 is only safe when it's the sp-owned /skill:name (pi) or /skill-name
+ * (claude) prefix. Otherwise the runtime's slash-command parser would try to
+ * interpret an operator-provided prompt or a bead title starting with '/' as
+ * a command. xtrm-8zsi1.
+ */
+export function checkPositionZeroSlash(body: string, runtime: 'pi' | 'claude'): { ok: true } | { ok: false; error: string } {
+    if (body.length === 0 || body[0] !== '/') return { ok: true };
+    const expectedPrefix = runtime === 'pi' ? '/skill:' : '/skill-';
+    if (body.startsWith(expectedPrefix)) return { ok: true };
+    return {
+        ok: false,
+        error: `turn-1 body starts with '/' but not '${expectedPrefix}': the runtime would parse this as a slash-command.\n`
+            + `Rename the bead title or adjust --prompt so the first character is not '/'.`,
+    };
+}
+
+/**
+ * Byte guard: refuse to launch if the sum of the pieces exceeds the hard
+ * ceiling. Prevents silently-truncated launches and gives the operator a
+ * precise, actionable error naming the actual byte count. --bead is the
+ * right container for large payloads. xtrm-8zsi1.
+ */
+export function checkByteCeiling(parts: { systemPrompt: string; body: string }): { ok: true } | { ok: false; error: string } {
+    const total = Buffer.byteLength(parts.systemPrompt, 'utf8')
+        + Buffer.byteLength(parts.body, 'utf8');
+    if (total <= TURN1_BYTE_CEILING) return { ok: true };
+    return {
+        ok: false,
+        error: `turn-1 payload is ${total} bytes (systemPrompt + body); ceiling is ${TURN1_BYTE_CEILING}.\n`
+            + `Move the large content into a --bead so specialists can render it as task context, or trim the system prompt.`,
+    };
 }
 
 export interface RoleTmuxPlan {
@@ -376,32 +451,26 @@ export function buildRoleTmuxPlan(args: {
     role: ResolvedRole;
     bead?: string;
     parentSessionId: string;
-    promptFile: string;
-    /** Verbatim system prompt content — retained for API stability; both
-     * runtimes now read the prompt from `promptFile` (pi via
-     * `--append-system-prompt <file>`, claude via
-     * `--append-system-prompt-file <file>`). Passing the inline string via
-     * tmux new-session overflowed the shell command length once
-     * xtrm-14w28 injected SKILL.md bodies. xtrm-osipt. */
-    systemPrompt: string;
+    /** Turn-1 positional body — sp-owned /skill: prefix + user body already
+     * concatenated. Empty string means no positional (skills-only prime). */
+    turn1Body: string;
     /** CLI --model override; wins over role.model. */
     modelOverride?: string;
     /** CLI --thinking override; wins over role.thinkingLevel. Silently dropped
      * for claude (no --thinking flag) — caller warns at CLI level if the user
      * explicitly passed --thinking to xt claude. */
     thinkingOverride?: string;
-    /** Secure file containing the rendered initial user task. */
-    initialPromptFile?: string;
-    /** Explicit --skill requests, already resolved to absolute paths. */
+    /** Explicit --skill requests, already resolved to absolute paths.
+     * Emitted verbatim to pi's native --skill flag. Claude has no --skill
+     * equivalent; explicit skills there rely on ~/.claude/skills global
+     * discovery + the operator invoking /skill-name themselves. */
     explicitSkillPaths?: string[];
-    /** Ephemeral Claude plugin exposing explicitly requested skills. */
-    claudeSkillPluginPath?: string;
     /** Argv after `--` on the xt command line, already guard-checked. */
     passthrough?: string[];
 }): RoleTmuxPlan {
     const {
-        runtime, role, bead, parentSessionId, promptFile, systemPrompt, modelOverride,
-        thinkingOverride, initialPromptFile, explicitSkillPaths = [], claudeSkillPluginPath, passthrough,
+        runtime, role, bead, parentSessionId, turn1Body, modelOverride,
+        thinkingOverride, explicitSkillPaths = [], passthrough,
     } = args;
     const roleSlug = slugifyForSession(role.name);
     // Include runtime in the session name so xt pi --role X --bead Y and
@@ -416,10 +485,22 @@ export function buildRoleTmuxPlan(args: {
 
     const runtimeArgs: string[] = [];
 
+    // Inline system prompt on both runtimes (xtrm-8zsi1). The xtrm-osipt
+    // stopgap's --file variants were needed only when injectSkillContents
+    // (xtrm-14w28) fattened the prompt to ~70KB; sp render-skill-prefix now
+    // forces skill body load via /skill:name at turn-1 so the identity
+    // system prompt stays small enough to inline safely under the byte
+    // guard.
+    runtimeArgs.push('--append-system-prompt', role.systemPrompt);
+
     if (runtime === 'pi') {
-        // Pi: file-based system prompt (--append-system-prompt <file>);
-        // repo-native --skill <path> for each of the role's skills.
-        runtimeArgs.push('--append-system-prompt', promptFile);
+        // Pool isolation: --no-skills unconditionally disables pi's global
+        // skill-pool auto-discovery. Combined with explicit --skill <path>
+        // per declared + operator-requested skill, only the declared set is
+        // reachable. Matches sp's forthcoming unitAI-0o3pv behavior; core
+        // ships this now regardless of sp release timing (self-diagnosing
+        // "skill not found" is a fine loud-fail surface). xtrm-8zsi1.
+        runtimeArgs.push('--no-skills');
         const seenSkills = new Set<string>();
         for (const skill of [...role.skillPaths, ...explicitSkillPaths]) {
             const identity = existsSync(skill) ? realpathSync(skill) : skill;
@@ -434,16 +515,12 @@ export function buildRoleTmuxPlan(args: {
         // silently crashing pi on startup. Drop the policy; trust discovery.
         // See xtmux-3rs.
     } else {
-        // Claude: file-based system prompt (--append-system-prompt-file <path>).
-        // Inline `--append-system-prompt <string>` overflowed tmux new-session
-        // once xtrm-14w28 started injecting SKILL.md bodies (~70KB): tmux
-        // refused with "command too long" and the pane never launched, so the
-        // rendered @task file never reached claude either. xtrm-osipt.
-        // Skills resolved via the ephemeral plugin dir; sandbox trust bypasses
-        // the permission gate.
-        runtimeArgs.push('--append-system-prompt-file', promptFile);
+        // Claude: no --no-skills equivalent exists (--bare is nuclear and
+        // disables hooks/CLAUDE.md/OAuth). Accept partial isolation — global
+        // ~/.claude/skills auto-discovery remains. Skills are force-loaded
+        // via /skill-name in the turn-1 body prefix (sp-owned) rather than
+        // an ephemeral --plugin-dir scaffold.
         runtimeArgs.push('--dangerously-skip-permissions');
-        if (claudeSkillPluginPath) runtimeArgs.push('--plugin-dir', claudeSkillPluginPath);
     }
 
     // Model: CLI override wins over specialist default. Both runtimes accept
@@ -464,9 +541,14 @@ export function buildRoleTmuxPlan(args: {
         runtimeArgs.push(...passthrough);
     }
 
-    if (initialPromptFile) {
+    // Turn-1 body: sp-owned /skill: prefix + operator/bead body, already
+    // concatenated by the caller. Claude needs `--` to protect the positional
+    // from variadic options (--model etc. can consume it otherwise); pi's
+    // positional prompt convention is delimiter-free. Empty body means "no
+    // positional" (skills-only prime — pane idles at first turn).
+    if (turn1Body.length > 0) {
         if (runtime === 'claude') runtimeArgs.push('--');
-        runtimeArgs.push(`@${initialPromptFile}`);
+        runtimeArgs.push(turn1Body);
     }
 
     const runtimeCmdString = [runtime, ...runtimeArgs].map(shellQuote).join(' ');
@@ -474,13 +556,13 @@ export function buildRoleTmuxPlan(args: {
     // Pane metadata written on the target pane at launch time. Picker + safe-
     // send-pointer + handoff read these. @agent_state=idle so the picker sees
     // the pane immediately (the runtime's own agent-state hook won't fire
-    // until the first turn). @agent_prompt_file lets the picker preview show
-    // which role is running.
+    // until the first turn). @agent_prompt_file dropped in xtrm-8zsi1 — the
+    // launcher no longer materializes a prompt file (turn-1 is inline), and
+    // downstream skills read the option absence-safely (|| true).
     const paneOptions: Array<{ key: string; value: string }> = [
         { key: '@agent_parent_session', value: parentSessionId },
         { key: '@agent_task', value: `role:${role.name}` },
         { key: '@agent_state', value: 'idle' },
-        { key: '@agent_prompt_file', value: promptFile },
     ];
     if (bead) paneOptions.push({ key: '@agent_bead', value: bead });
 
@@ -488,22 +570,24 @@ export function buildRoleTmuxPlan(args: {
 }
 
 /**
- * Environment variables exported to the pi child process so scripts/agent-
- * state.sh (and the picker's own reads) can find the metadata without an
- * extra tmux query. Redundant with paneOptions on purpose — the launcher
+ * Environment variables exported to the pi/claude child process so scripts/
+ * agent-state.sh (and the picker's own reads) can find the metadata without
+ * an extra tmux query. Redundant with paneOptions on purpose — the launcher
  * writes options once at spawn (state=idle etc.), and env vars survive re-
  * execs the way pane options do not. xtmux-1lb.5.1.
+ *
+ * XTMUX_AGENT_PROMPT_FILE dropped in xtrm-8zsi1 — turn-1 is now inline argv,
+ * there is no prompt file to point at, and downstream consumers read the
+ * variable absence-safely.
  */
 export function buildAgentEnv(args: {
     bead?: string;
     role: string;
-    promptFile: string;
     parentSessionId: string;
 }): Record<string, string> {
-    const { bead, role, promptFile, parentSessionId } = args;
+    const { bead, role, parentSessionId } = args;
     const env: Record<string, string> = {
         XTMUX_AGENT_TASK: `role:${role}`,
-        XTMUX_AGENT_PROMPT_FILE: promptFile,
         XTMUX_AGENT_PARENT_SESSION: parentSessionId,
     };
     if (bead) env.XTMUX_AGENT_BEAD = bead;
@@ -707,31 +791,72 @@ export function unregisterPluginsForWorktree(worktreePath: string): void {
 }
 
 export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promise<void> {
-    const { runtime, name, role: roleName, bead, attach = true, model, thinking } = opts;
+    const { runtime, name, role: roleName, bead, prompt, attach = true, model, thinking } = opts;
     const cwd = process.cwd();
+
+    // Mutual exclusion: --bead renders a tracked task; --prompt supplies a
+    // literal turn-1 body; the two contract different composition paths and
+    // can't stack. Rejected at the launcher rather than each CLI so both
+    // xt pi and xt claude enforce the same rule from one place.
+    if (bead && prompt) {
+        console.error(kleur.red('\n  ✗ --bead and --prompt are mutually exclusive; pick one\n'));
+        process.exit(1);
+    }
 
     // Resolve role up-front so we fail fast on an unknown role name before
     // creating a worktree (which would otherwise leak on a bad --role typo).
+    // Preflight cases (ii)/(iii): probe sp render-skill-prefix availability
+    // BEFORE worktree creation; hard-fail with an upgrade hint if the
+    // specialists package is too old.
     let resolvedRole: ResolvedRole | null = null;
     let renderedTask: RenderedRoleTask | undefined;
+    let composedTurn1Body: string = '';
     let explicitSkillPaths: string[] = [];
     if (roleName) {
         try {
             resolvedRole = resolveRole(roleName, cwd);
             resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
             explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
-            resolvedRole.systemPrompt = injectSkillContents(
-                resolvedRole.systemPrompt,
-                [...resolvedRole.skillPaths, ...explicitSkillPaths],
-            );
-            if (bead) renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
+
+            if (bead) {
+                // Case (i): --bead. sp render-task returns initial_prompt
+                // already prefixed with the /skill:name block per unitAI-
+                // qeguh Option A; core consumes it verbatim.
+                renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
+                composedTurn1Body = renderedTask.initialPrompt;
+            } else {
+                // Cases (ii) and (iii): fetch the skill_prefix out-of-band.
+                // Probe first so an upgrade hint fires before any worktree
+                // side-effect.
+                const probe = probeSkillPrefixAvailable();
+                if (!probe.ok) throw new Error(probe.error);
+                const { skillPrefix } = renderSkillPrefix({ role: roleName, runtime, cwd });
+                composedTurn1Body = skillPrefix + (prompt ?? '');
+            }
+
+            // Position-0 '/' safety on the composed body. Runs BEFORE worktree
+            // creation so we don't leak a directory when a bead title or a
+            // --prompt starts with a stray '/' that would collide with the
+            // slash-command parser.
+            const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime);
+            if (!slashCheck.ok) throw new Error(slashCheck.error);
+
+            // Byte guard on system prompt + body combined. --bead's rendered
+            // task can carry a lot of context (deps, memories, retrieval
+            // snippets); if the specialist's identity prompt is also fat,
+            // this is where it trips.
+            const byteCheck = checkByteCeiling({
+                systemPrompt: resolvedRole.systemPrompt,
+                body: composedTurn1Body,
+            });
+            if (!byteCheck.ok) throw new Error(byteCheck.error);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error(kleur.red(`\n  ✗ ${msg}\n`));
             process.exit(1);
         }
-    } else if (model || thinking || (opts.skills && opts.skills.length > 0) || (opts.passthrough && opts.passthrough.length > 0)) {
-        console.error(kleur.red('\n  ✗ --model / --thinking / --skill / -- passthrough require --role\n'));
+    } else if (model || thinking || (opts.skills && opts.skills.length > 0) || prompt || (opts.passthrough && opts.passthrough.length > 0)) {
+        console.error(kleur.red('\n  ✗ --model / --thinking / --skill / --prompt / -- passthrough require --role\n'));
         process.exit(1);
     }
 
@@ -918,6 +1043,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             modelOverride: model,
             thinkingOverride: thinking,
             renderedTask,
+            turn1Body: composedTurn1Body,
             explicitSkillPaths,
             passthrough: guardedPassthrough,
             newSession: opts.newSession,
@@ -990,7 +1116,10 @@ async function launchRoleTmuxSession(args: {
     worktreePath: string;
     modelOverride?: string;
     thinkingOverride?: string;
+    /** render-task metadata for telemetry only (composedTurn1Body owns the actual body). */
     renderedTask?: RenderedRoleTask;
+    /** Composed turn-1 positional body (sp prefix + user body). Empty = skills-only prime. */
+    turn1Body: string;
     explicitSkillPaths?: string[];
     passthrough?: string[];
     newSession?: boolean;
@@ -999,7 +1128,7 @@ async function launchRoleTmuxSession(args: {
     reuse?: boolean;
 }): Promise<never> {
     const {
-        runtime, role, bead, attach, worktreePath, modelOverride, thinkingOverride, renderedTask, explicitSkillPaths = [], passthrough,
+        runtime, role, bead, attach, worktreePath, modelOverride, thinkingOverride, renderedTask, turn1Body, explicitSkillPaths = [], passthrough,
         newSession, parent, child, reuse,
     } = args;
 
@@ -1041,45 +1170,24 @@ async function launchRoleTmuxSession(args: {
         parentSessionId = currentTmuxSessionId();
     }
 
-    // Transport file for the system prompt. `.xtrm/` is gitignored so this
-    // never rides a checkpoint commit.
-    const promptFile = path.join(
-        worktreePath,
-        '.xtrm',
-        `role-${slugifyForSession(role.name)}-prompt.md`,
-    );
-    mkdirSync(path.dirname(promptFile), { recursive: true });
-    writeFileSync(promptFile, role.systemPrompt);
-
-    const initialPromptFile = renderedTask
-        ? path.join(worktreePath, '.xtrm', `role-${slugifyForSession(role.name)}-task.md`)
-        : undefined;
-    if (initialPromptFile && renderedTask) {
-        writeFileSync(initialPromptFile, renderedTask.initialPrompt, { mode: 0o600 });
-        chmodSync(initialPromptFile, 0o600);
-    }
-
-    const claudeSkillPaths = [...role.skillPaths, ...explicitSkillPaths];
-    const claudeSkillPluginPath = runtime === 'claude' && claudeSkillPaths.length > 0
-        ? prepareClaudeSkillPlugin(worktreePath, claudeSkillPaths)
-        : undefined;
+    // xtrm-8zsi1: no file transport. system prompt is inline via
+    // --append-system-prompt <string>; turn-1 body is a shell-quoted
+    // positional. Byte guard already ran at launchWorktreeSession before we
+    // ever created the worktree.
 
     const plan = buildRoleTmuxPlan({
         runtime,
         role,
         bead,
         parentSessionId,
-        promptFile,
-        systemPrompt: role.systemPrompt,
+        turn1Body,
         modelOverride,
         thinkingOverride,
-        initialPromptFile,
         explicitSkillPaths,
-        claudeSkillPluginPath,
         passthrough,
     });
 
-    const agentEnv = buildAgentEnv({ bead, role: role.name, promptFile, parentSessionId });
+    const agentEnv = buildAgentEnv({ bead, role: role.name, parentSessionId });
 
     if (currentPaneMode) {
         // Resolve the current pane id (the pane the launcher was invoked
