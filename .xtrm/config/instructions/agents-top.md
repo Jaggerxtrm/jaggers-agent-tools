@@ -55,6 +55,30 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 | Board unclear/backlog messy | `/issue-triage`; `bv --robot-triage --format toon`; `bv --robot-plan` |
 | Release/session close | `/releasing`, `/xt-end`, `/session-close-report`, `/xt-merge` |
 
+## Session start reflex
+
+```bash
+bd prime                    # workflow context + active claims
+bd memories <topic>         # retrieve prior context before answering
+bv --robot-triage           # ranked picks (never bare `bv` — it's a TUI)
+bd update <id> --claim      # claim before any edit
+```
+
+## Trigger patterns
+
+| When | Do |
+|---|---|
+| user prompt has `?` | `bd memories <keywords>` before answering |
+| unfamiliar area of code | `gitnexus_query({query: "concept"})` before opening files |
+| about to edit a symbol | `gitnexus_impact({target, direction:"upstream"})` |
+| before `git commit` | `gitnexus_detect_changes({scope:"staged"})` |
+| about to `bd create` for a specialist dispatch | pass `--parent <bead-it-services>` + title `<role>: <task>` |
+| about to `sp run` | check `bd state <id> contract`; promote `draft` → `ready` first |
+| just capturing an idea, not working it | `bd create --labels contract:draft` with real PROBLEM + rough SCOPE |
+| tmux/xtmux coordination or reply-required msg | `/multiplexing`; preserve returned `messageKey`; use `message-reply --in-reply-to` |
+| reading code | `get_symbols_overview` → `find_symbol` (never whole files) |
+| session end | memory gate fires — evaluate `bd remember` per closed issue |
+
 ## Project intelligence — on demand (xtrm-x12p3)
 
 xtrm-loader no longer embeds project bodies in every request. Read them when the task needs them:
@@ -63,7 +87,8 @@ xtrm-loader no longer embeds project bodies in every request. Read them when the
 - Project rules: `.claude/rules/**/*.md`.
 - Project skills catalog: Pi's native `<available_skills>` metadata; force-load a skill's body at turn 1 via `/skill:<name>`.
 - Durable cross-session knowledge: `bd memories <topic>` / `bd recall <key>` / `bd remember "<insight>"`.
-- Auto-injected essentials still eager (small): `.xtrm/memory.md` synthesized project state; `using-xtrm` session operating manual.
+- Full workflow examples + prompt-shaping guidance: `/skill:using-xtrm` (on demand — no longer eager-injected on Pi).
+- Auto-injected essential (small): `.xtrm/memory.md` per-project synthesized state.
 
 ## Code intelligence and edits
 
