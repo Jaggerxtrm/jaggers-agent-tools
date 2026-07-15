@@ -137,7 +137,7 @@ Query the log with `tmux-session-picker log query --type agent.role.launched --s
 
 Skill delivery is now uniform across cases: sp emits a `/skill:name` (pi) or `/skill-name` (claude) block at position 0 of the turn-1 body, and the runtime's slash-command parser force-loads each skill's `SKILL.md` body on receipt.
 
-- **Ownership.** `sp render-skill-prefix <role> --surface pi|claude` (specialists unitAI-qeguh) is the single source of truth for the block. sp owns name derivation, dedup, and surface format (`/skill:` vs `/skill-`). Core requires tracked `render-task` output to begin with that exact independently rendered prefix, so task text cannot impersonate a skill command.
+- **Ownership.** When available, `sp render-skill-prefix <role> --surface pi|claude` (specialists unitAI-qeguh) is the canonical block. With older sp versions, core renders the same surface from the merged role's validated `skills.paths` metadata. Tracked `render-task` output is stripped only when it begins with the exact canonical block; otherwise it is treated as untrusted task text, so a skill-looking task cannot impersonate the prefix.
 - **pi.** Combined with `--no-skills` (pool isolation) and `--skill <path>` per declared skill, only the specialist's declared skills are reachable. `specialist.skills.paths[]` from `sp view` resolves:
   1. absolute or `~`-prefixed → used verbatim
   2. relative + exists at repo root → repo-local override

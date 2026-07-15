@@ -375,10 +375,9 @@ export function buildBufferedRuntimeCommand(bufferName: string): string {
 }
 
 /**
- * Probe `sp render-skill-prefix --help` once at launcher startup. Hard-fails
- * with an upgrade hint when unavailable. Tracked launches render the prefix
- * independently to verify render-task provenance; prompt/empty launches use
- * it directly. xtrm-8zsi1.
+ * Probe `sp render-skill-prefix --help` once at launcher startup. Newer sp
+ * versions provide the canonical prefix directly; older versions fall back
+ * to the merged role's declared skill paths. xtrm-8zsi1.
  */
 export function probeSkillPrefixAvailable(): { ok: true } | { ok: false; error: string } {
     const r = spawnSync('sp', ['render-skill-prefix', '--help'], {
@@ -490,6 +489,23 @@ export function claudeExplicitSkillLines(paths: string[]): string {
             return `/skill-${name}`;
         })
         .join('\n');
+}
+
+export function renderDeclaredSkillPrefix(
+    paths: string[],
+    runtime: 'pi' | 'claude',
+): string {
+    const names = [...new Set(paths.map((p) => path.basename(p) === 'SKILL.md'
+        ? path.basename(path.dirname(p))
+        : path.basename(p)))];
+    for (const name of names) {
+        if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) {
+            throw new Error(`invalid declared skill name '${name}'`);
+        }
+    }
+    if (names.length === 0) return '';
+    const commands = names.map((name) => runtime === 'pi' ? `/skill:${name}` : `/skill-${name}`);
+    return `${commands.join(runtime === 'pi' ? ' ' : '\n')}\n\n`;
 }
 
 export function checkByteCeiling(parts: {
@@ -914,21 +930,29 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
             if (runtime === 'claude') assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
 
-            // Always render the declared skill prefix independently. For
-            // tracked beads this is provenance evidence: render-task output
-            // must start with this exact sp-owned block, not merely something
-            // that resembles a runtime slash command.
+            // Prefer sp's canonical renderer. Older sp versions do not expose
+            // render-skill-prefix, so derive the same block from trusted merged
+            // role metadata instead of accepting task text that merely looks
+            // like a slash command.
             const probe = probeSkillPrefixAvailable();
-            if (!probe.ok) throw new Error(probe.error);
-            const { skillPrefix } = renderSkillPrefix({ role: roleName, runtime, cwd });
-            let trustedPrefix = skillPrefix;
+            const trustedSkillPrefix = probe.ok
+                ? renderSkillPrefix({ role: roleName, runtime, cwd }).skillPrefix
+                : renderDeclaredSkillPrefix(resolvedRole.skillPaths, runtime);
+            let trustedPrefix = trustedSkillPrefix;
 
-            if (bead) {
-                renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
-                composedTurn1Body = renderedTask.initialPrompt;
-            } else {
-                composedTurn1Body = skillPrefix + (prompt ?? '');
+            const rawBody = bead
+                ? (renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime })).initialPrompt
+                : (prompt ?? '');
+            let untrustedBody = rawBody;
+            if (probe.ok && trustedSkillPrefix) {
+                if (!rawBody.startsWith(trustedSkillPrefix)) {
+                    throw new Error('render-task output does not start with the exact trusted sp skill prefix.');
+                }
+                untrustedBody = rawBody.slice(trustedSkillPrefix.length);
             }
+            const rawSlashCheck = checkPositionZeroSlash(untrustedBody, runtime, '');
+            if (!rawSlashCheck.ok) throw new Error(rawSlashCheck.error);
+            composedTurn1Body = trustedSkillPrefix + untrustedBody;
 
             // Claude explicit --skill delivery is launcher-owned but still
             // derived only from validated, discoverable skill metadata.

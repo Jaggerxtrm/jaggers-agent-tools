@@ -17,6 +17,7 @@ import {
     guardRolePassthrough,
     parseSpecialistJson,
     probeSkillPrefixAvailable,
+    renderDeclaredSkillPrefix,
     renderRoleTask,
     renderSkillPrefix,
     resolveRequestedSkills,
@@ -186,6 +187,21 @@ process.stdout.write("not json");
             expect(() => renderSkillPrefix({ role: 'x', runtime: 'pi' }))
                 .toThrow(/invalid JSON/);
         });
+    });
+});
+
+describe('renderDeclaredSkillPrefix', () => {
+    const paths = ['/skills/a/SKILL.md', '/skills/b'];
+
+    it('renders runtime-specific prefixes from trusted declared paths', () => {
+        expect(renderDeclaredSkillPrefix(paths, 'pi')).toBe('/skill:a /skill:b\n\n');
+        expect(renderDeclaredSkillPrefix(paths, 'claude')).toBe('/skill-a\n/skill-b\n\n');
+        expect(renderDeclaredSkillPrefix([], 'pi')).toBe('');
+    });
+
+    it('rejects declared paths whose basename could inject another command', () => {
+        expect(() => renderDeclaredSkillPrefix(['/skills/safe\nevil/SKILL.md'], 'pi'))
+            .toThrow(/invalid declared skill name/);
     });
 });
 

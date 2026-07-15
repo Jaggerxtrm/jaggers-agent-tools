@@ -61882,6 +61882,19 @@ function claudeExplicitSkillLines(paths) {
     return `/skill-${name}`;
   }).join("\n");
 }
+function renderDeclaredSkillPrefix(paths, runtime) {
+  const names = [...new Set(paths.map((p) => import_node_path10.default.basename(p) === "SKILL.md" ? import_node_path10.default.basename(import_node_path10.default.dirname(p)) : import_node_path10.default.basename(p)))];
+  for (const name of names) {
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) {
+      throw new Error(`invalid declared skill name '${name}'`);
+    }
+  }
+  if (names.length === 0) return "";
+  const commands = names.map((name) => runtime === "pi" ? `/skill:${name}` : `/skill-${name}`);
+  return `${commands.join(runtime === "pi" ? " " : "\n")}
+
+`;
+}
 function checkByteCeiling(parts) {
   if (parts.systemPrompt.includes("\0") || parts.body.includes("\0")) {
     return { ok: false, error: "turn-1 payload contains a NUL byte and cannot be passed to the runtime." };
@@ -62099,15 +62112,19 @@ async function launchWorktreeSession(opts) {
       explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
       if (runtime === "claude") assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
       const probe2 = probeSkillPrefixAvailable();
-      if (!probe2.ok) throw new Error(probe2.error);
-      const { skillPrefix } = renderSkillPrefix({ role: roleName, runtime, cwd });
-      let trustedPrefix = skillPrefix;
-      if (bead) {
-        renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
-        composedTurn1Body = renderedTask.initialPrompt;
-      } else {
-        composedTurn1Body = skillPrefix + (prompt ?? "");
+      const trustedSkillPrefix = probe2.ok ? renderSkillPrefix({ role: roleName, runtime, cwd }).skillPrefix : renderDeclaredSkillPrefix(resolvedRole.skillPaths, runtime);
+      let trustedPrefix = trustedSkillPrefix;
+      const rawBody = bead ? (renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime })).initialPrompt : prompt ?? "";
+      let untrustedBody = rawBody;
+      if (probe2.ok && trustedSkillPrefix) {
+        if (!rawBody.startsWith(trustedSkillPrefix)) {
+          throw new Error("render-task output does not start with the exact trusted sp skill prefix.");
+        }
+        untrustedBody = rawBody.slice(trustedSkillPrefix.length);
       }
+      const rawSlashCheck = checkPositionZeroSlash(untrustedBody, runtime, "");
+      if (!rawSlashCheck.ok) throw new Error(rawSlashCheck.error);
+      composedTurn1Body = trustedSkillPrefix + untrustedBody;
       if (runtime === "claude" && explicitSkillPaths.length > 0) {
         const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}
 `;

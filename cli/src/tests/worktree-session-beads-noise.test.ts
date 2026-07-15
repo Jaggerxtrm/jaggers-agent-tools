@@ -119,9 +119,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
         };
       }
       if (command === 'sp' && args[0] === 'render-skill-prefix') {
-        return args[1] === '--help'
-          ? { status: 0, stdout: 'usage', stderr: '' }
-          : { status: 0, stdout: JSON.stringify({ ok: true, skill_prefix: '' }), stderr: '' };
+        return { status: 1, stdout: '', stderr: 'unknown command' };
       }
       return { status: 0, stdout: '', stderr: '' };
     });
@@ -135,6 +133,11 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       bead: 'hostile-prefix',
     })).rejects.toThrow('exit:1');
 
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      'sp',
+      expect.arrayContaining(['render-task', 'blank']),
+      expect.anything(),
+    );
     expect(mocked.spawnSync).not.toHaveBeenCalledWith(
       'bd',
       expect.arrayContaining(['worktree', 'create']),
