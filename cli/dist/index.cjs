@@ -61586,6 +61586,7 @@ async function runPiRuntimeSync(opts = {}) {
 var LITERAL_TURN1_BYTE_CEILING = 50 * 1024;
 var RUNTIME_ARG_BYTE_CEILING = 128 * 1024 - 1;
 var TMUX_CONSUMER_READY_TIMEOUT_MS = 5e3;
+var TMUX_PAYLOAD_READY_TIMEOUT_MS = 5e3;
 function worktreeHasProjectUserPacks(worktreePath) {
   const userPacksRoot = import_node_path10.default.join(worktreePath, ".xtrm", "skills", "user", "packs");
   if (!(0, import_node_fs2.existsSync)(userPacksRoot)) {
@@ -61799,7 +61800,7 @@ function createRuntimeBufferName() {
 function deleteRuntimeBuffer(bufferName) {
   (0, import_node_child_process.spawnSync)("tmux", ["delete-buffer", "-b", bufferName], { stdio: "ignore" });
 }
-function buildBufferedRuntimeCommand(bufferName) {
+function buildBufferedRuntimeCommand(bufferName, payloadWaitTimeoutMs = TMUX_PAYLOAD_READY_TIMEOUT_MS) {
   const script = [
     "const { execFileSync, spawnSync } = require('node:child_process')",
     "const buffer = process.argv[1]",
@@ -61808,7 +61809,7 @@ function buildBufferedRuntimeCommand(bufferName) {
     "let raw",
     "try {",
     "  execFileSync('tmux', ['wait-for', '-S', `${buffer}-consumer-ready`])",
-    "  execFileSync('tmux', ['wait-for', `${buffer}-ready`])",
+    `  execFileSync('tmux', ['wait-for', \`\${buffer}-ready\`], { timeout: ${payloadWaitTimeoutMs}, killSignal: 'SIGTERM', stdio: 'ignore' })`,
     "  raw = execFileSync('tmux', ['show-buffer', '-b', buffer], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 })",
     "} finally {",
     "  cleanup()",

@@ -18,6 +18,7 @@ import { runPiLaunchPreflight } from '../core/pi-runtime.js';
 const LITERAL_TURN1_BYTE_CEILING = 50 * 1024;
 const RUNTIME_ARG_BYTE_CEILING = (128 * 1024) - 1;
 const TMUX_CONSUMER_READY_TIMEOUT_MS = 5_000;
+const TMUX_PAYLOAD_READY_TIMEOUT_MS = 5_000;
 
 export interface WorktreeSessionOptions {
     runtime: 'claude' | 'pi';
@@ -353,7 +354,10 @@ function deleteRuntimeBuffer(bufferName: string): void {
     spawnSync('tmux', ['delete-buffer', '-b', bufferName], { stdio: 'ignore' });
 }
 
-export function buildBufferedRuntimeCommand(bufferName: string): string {
+export function buildBufferedRuntimeCommand(
+    bufferName: string,
+    payloadWaitTimeoutMs: number = TMUX_PAYLOAD_READY_TIMEOUT_MS,
+): string {
     const script = [
         "const { execFileSync, spawnSync } = require('node:child_process')",
         'const buffer = process.argv[1]',
@@ -362,7 +366,7 @@ export function buildBufferedRuntimeCommand(bufferName: string): string {
         'let raw',
         'try {',
         "  execFileSync('tmux', ['wait-for', '-S', `${buffer}-consumer-ready`])",
-        "  execFileSync('tmux', ['wait-for', `${buffer}-ready`])",
+        `  execFileSync('tmux', ['wait-for', \`\${buffer}-ready\`], { timeout: ${payloadWaitTimeoutMs}, killSignal: 'SIGTERM', stdio: 'ignore' })`,
         "  raw = execFileSync('tmux', ['show-buffer', '-b', buffer], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 })",
         '} finally {',
         '  cleanup()',

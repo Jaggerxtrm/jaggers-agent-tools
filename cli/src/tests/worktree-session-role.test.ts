@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
-import { chmodSync, mkdirSync, readFileSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createClaudeCommand } from '../commands/claude.js';
 import { createPiCommand } from '../commands/pi.js';
@@ -903,6 +904,7 @@ describe('buildBufferedRuntimeCommand', () => {
     it('keeps untrusted runtime content out of the command and cleans up on consume or signal', () => {
         const command = buildBufferedRuntimeCommand('xtrm-role-safe');
         expect(command).toContain('consumer-ready');
+        expect(command).toContain('timeout: 5000');
         expect(command).toContain('show-buffer');
         expect(command).toContain('delete-buffer');
         expect(command).toContain('SIGINT');
@@ -910,6 +912,54 @@ describe('buildBufferedRuntimeCommand', () => {
         expect(command).toContain('SIGHUP');
         expect(command).toContain('xtrm-role-safe');
         expect(command).not.toContain('rendered bead body');
+    });
+
+    it.each([false, true])('times out and deletes the buffer when the parent disappears (loaded=%s)', (loaded) => {
+        const sandbox = path.join(os.tmpdir(), `xtrm-wrapper-timeout-${process.pid}-${loaded}`);
+        const bin = path.join(sandbox, 'bin');
+        const log = path.join(sandbox, 'tmux.log');
+        const bufferFile = path.join(sandbox, 'buffer');
+        const buffer = 'xtrm-role-timeout-test';
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(bin, { recursive: true });
+        writeFileSync(path.join(bin, 'tmux'), `#!/usr/bin/env node
+const fs = require('node:fs');
+const [command, ...args] = process.argv.slice(2);
+fs.appendFileSync(process.env.XTRM_TMUX_LOG, [command, ...args].join(' ') + '\\n');
+if (command === 'wait-for' && args[0] === '-S') process.exit(0);
+if (command === 'wait-for') {
+  setInterval(() => {}, 1000);
+} else if (command === 'delete-buffer') {
+  fs.rmSync(process.env.XTRM_BUFFER_FILE, { force: true });
+  process.exit(0);
+} else {
+  process.exit(2);
+}
+`);
+        chmodSync(path.join(bin, 'tmux'), 0o755);
+        if (loaded) writeFileSync(bufferFile, 'payload');
+
+        const started = Date.now();
+        const result = spawnSync('sh', ['-c', buildBufferedRuntimeCommand(buffer, 250)], {
+            encoding: 'utf8',
+            timeout: 2_000,
+            env: {
+                ...process.env,
+                PATH: `${bin}:${process.env.PATH ?? ''}`,
+                XTRM_TMUX_LOG: log,
+                XTRM_BUFFER_FILE: bufferFile,
+            },
+        });
+
+        expect(result.status).not.toBe(0);
+        expect(Date.now() - started).toBeLessThan(1_500);
+        expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual([
+            `wait-for -S ${buffer}-consumer-ready`,
+            `wait-for ${buffer}-ready`,
+            `delete-buffer -b ${buffer}`,
+        ]);
+        expect(existsSync(bufferFile)).toBe(false);
+        rmSync(sandbox, { recursive: true, force: true });
     });
 });
 
