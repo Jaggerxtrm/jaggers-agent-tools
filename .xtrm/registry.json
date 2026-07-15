@@ -630,7 +630,7 @@
           "version": "0.10.4"
         },
         "multiplexing-team/SKILL.md": {
-          "hash": "dfc6af111df0e82bfc6d134309e4424d650b3ddc1332d19211f3960bf95840bd",
+          "hash": "efe2c3a9bbff08f408d9577cee3d9ae2151ac8a6c9ab4ab0bf9ea6b47c3824c5",
           "version": "0.10.4"
         },
         "multiplexing/scripts/verify-deploy-applied.sh": {
@@ -638,7 +638,7 @@
           "version": "0.10.4"
         },
         "multiplexing/SKILL.md": {
-          "hash": "e8ceb21db74b40faa3246e50bb50d4ede2110e715c3e00f02365aa4f2b6f1982",
+          "hash": "55bdcb01d3431803ef293592cc95b6f531cc9fcefc735aa761879ee1ca28fe5b",
           "version": "0.10.4"
         },
         "planning/SKILL.md": {
@@ -1074,7 +1074,7 @@
           "version": "0.10.4"
         },
         "using-xtrm/SKILL.md": {
-          "hash": "9c70a5bb517d534011c7a0f79be81809b428a30e342847160dadeecf0ef9e8ff",
+          "hash": "c8683a235a8b9bcd2e4e659feae771ff972aa696996040349994a42ed5c1999c",
           "version": "0.10.4"
         },
         "vaultctl/SKILL.md": {
@@ -1404,11 +1404,11 @@
           "version": "0.10.4"
         },
         "instructions/agents-top.md": {
-          "hash": "fbf67a96bf240cef77e63665dbc016d8c20ef8b47c2fe73dc48cd76b6c64e2a1",
+          "hash": "f9615ed4b387ba0963cf07e981996b5755eb84988ea50385c174ee2a2d909fcb",
           "version": "0.10.4"
         },
         "instructions/claude-top.md": {
-          "hash": "2a3c2054c1b9c832b31bc002bac3493a9211f6a7f29f0a56dfc3b65fefb5cbaf",
+          "hash": "54ecf94293ca1ca70021e95b38787456f80cfe4c2d3ae87df2064c7ae56f565e",
           "version": "0.10.4"
         },
         "pi.mcp.json": {
