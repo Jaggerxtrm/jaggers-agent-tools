@@ -8,6 +8,24 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_BIN = path.join(__dirname, '../dist/index.cjs');
 
+// xtrm-8zsi1: `xt init --yes` (spawned as a subprocess below) runs the real
+// installer which resolves os.homedir() and writes ~/.xtrm/skills/state.json
+// + ~/.xtrm/hooks/state.json. Without a per-suite sandbox HOME, that wipes
+// the operator's real global install. The subprocess inherits our env, so
+// setting HOME here propagates automatically.
+let __sandboxHome = '';
+let __prevHome: string | undefined;
+beforeAll(() => {
+    __sandboxHome = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-init-cli-home-'));
+    __prevHome = process.env.HOME;
+    process.env.HOME = __sandboxHome;
+});
+afterAll(() => {
+    try { fs.rmSync(__sandboxHome, { recursive: true, force: true }); } catch { /* ignore */ }
+    if (__prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = __prevHome;
+});
+
 function run(args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv; timeout?: number } = {}): { stdout: string; stderr: string; status: number; duration: number } {
     const start = Date.now();
     const r = spawnSync('node', [CLI_BIN, ...args], {
@@ -172,12 +190,17 @@ describe('xt init banner non-blocking', () => {
         // Wall-clock can reach ~30s on slow CI runners because spawnSync's
         // timeout cleanup waits for the child after SIGTERM; the assertion
         // we care about is "no interactive prompt", not "init was fast".
-        // Bump vitest test timeout to 60s so we don't flake on CI. (xtrm-qdsx)
+        // Bump vitest test timeout to 120s so we don't flake on CI. HOME is
+        // sandboxed for this suite (xtrm-8zsi1) so xt init --yes does real
+        // bootstrap work into an empty tmp HOME, which is slower than against
+        // a warm real HOME. 60s occasionally flaked; 120s covers observed
+        // ~70s worst-case runs. Assertion is still "no interactive prompt".
+        // (xtrm-qdsx / xtrm-x12p3)
         const r = run(['init', '--yes'], { cwd: repoDir, timeout: 15000 });
         // Should not hang on confirmation prompt
         const combined = r.stdout + r.stderr;
         expect(combined).not.toMatch(/press any key|continue\?/i);
-    }, 60000);
+    }, 120000);
 });
 
 describe('xt init confirmation gate', () => {

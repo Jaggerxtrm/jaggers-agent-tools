@@ -1,18 +1,26 @@
 import os from 'node:os';
 import path from 'node:path';
-import { chmodSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createClaudeCommand } from '../commands/claude.js';
 import { createPiCommand } from '../commands/pi.js';
 import {
+    assertClaudeSkillsDiscoverable,
     buildAgentEnv,
+    buildBufferedRuntimeCommand,
     buildRoleTmuxPlan,
+    checkByteCeiling,
+    checkPositionZeroSlash,
     chooseAttachCommand,
-    parseSpecialistJson,
+    createRuntimeBufferName,
+    claudeExplicitSkillLines,
     guardRolePassthrough,
-    injectSkillContents,
-    prepareClaudeSkillPlugin,
+    parseSpecialistJson,
+    probeSkillPrefixAvailable,
+    renderDeclaredSkillPrefix,
     renderRoleTask,
+    renderSkillPrefix,
     resolveRequestedSkills,
     resolveSkillPath,
 } from '../utils/worktree-session.js';
@@ -36,15 +44,29 @@ const SAMPLE_SPECIALIST = JSON.stringify({
     },
 });
 
-describe('renderRoleTask', () => {
-    const sandbox = path.join(os.tmpdir(), `xtrm-render-task-${process.pid}`);
+// Helpers to spawn a temp sandbox with a fake `sp` binary of the caller's
+// choosing. Individual tests decide how the fake responds. Keeps process env
+// clean.
+function withFakeSp(script: string, run: () => void): void {
+    const sandbox = path.join(os.tmpdir(), `xtrm-sp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
     const bin = path.join(sandbox, 'bin');
-    const capture = path.join(sandbox, 'capture.json');
-
-    function withFakeSp(fail: boolean, run: () => void): void {
+    rmSync(sandbox, { recursive: true, force: true });
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(path.join(bin, 'sp'), script);
+    chmodSync(path.join(bin, 'sp'), 0o755);
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${bin}:${previousPath ?? ''}`;
+    try { run(); } finally {
+        process.env.PATH = previousPath;
         rmSync(sandbox, { recursive: true, force: true });
-        mkdirSync(bin, { recursive: true });
-        writeFileSync(path.join(bin, 'sp'), `#!/usr/bin/env node
+    }
+}
+
+describe('renderRoleTask', () => {
+    const capture = path.join(os.tmpdir(), `xtrm-render-task-capture-${process.pid}`);
+
+    function withRenderTaskSp(fail: boolean, run: () => void): void {
+        const script = `#!/usr/bin/env node
 const fs = require('node:fs');
 fs.writeFileSync(process.env.XTRM_RENDER_CAPTURE, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }));
 if (process.env.XTRM_RENDER_FAIL === '1') {
@@ -58,49 +80,204 @@ process.stdout.write(JSON.stringify({
   components: [{ kind: 'task_template', name: 'task_template', tokens: 8, bytes: 32 }],
   skills: ['~/.xtrm/skills/default/multiplexing/SKILL.md']
 }));
-`);
-        chmodSync(path.join(bin, 'sp'), 0o755);
-        const previous = {
-            PATH: process.env.PATH,
-            capture: process.env.XTRM_RENDER_CAPTURE,
-            fail: process.env.XTRM_RENDER_FAIL,
-        };
-        process.env.PATH = `${bin}:${previous.PATH ?? ''}`;
+`;
+        const previousCapture = process.env.XTRM_RENDER_CAPTURE;
+        const previousFail = process.env.XTRM_RENDER_FAIL;
         process.env.XTRM_RENDER_CAPTURE = capture;
         process.env.XTRM_RENDER_FAIL = fail ? '1' : '0';
-        try { run(); } finally {
-            process.env.PATH = previous.PATH;
-            process.env.XTRM_RENDER_CAPTURE = previous.capture;
-            process.env.XTRM_RENDER_FAIL = previous.fail;
-            rmSync(sandbox, { recursive: true, force: true });
+        try {
+            withFakeSp(script, run);
+        } finally {
+            process.env.XTRM_RENDER_CAPTURE = previousCapture;
+            process.env.XTRM_RENDER_FAIL = previousFail;
+            rmSync(capture, { force: true });
         }
     }
 
     it('calls the specialists renderer in the original cwd and preserves prompt bytes', () => {
-        withFakeSp(false, () => {
+        withRenderTaskSp(false, () => {
             const result = renderRoleTask({
                 role: 'chain-coordinator',
                 bead: 'xtrm-k2ufi',
-                cwd: sandbox,
+                cwd: os.tmpdir(),
                 runtime: 'claude',
             });
             expect(result.initialPrompt).toBe("line one\n$vars and 'quotes' survive");
             expect(result.promptHash).toBe('0123456789abcdef');
             const invocation = JSON.parse(readFileSync(capture, 'utf8'));
-            expect(invocation.cwd).toBe(sandbox);
+            expect(invocation.cwd).toBe(os.tmpdir());
             expect(invocation.argv).toEqual([
                 'render-task', 'chain-coordinator', '--bead', 'xtrm-k2ufi',
-                '--cwd', sandbox, '--context-depth', '3', '--surface', 'claude',
+                '--cwd', os.tmpdir(), '--context-depth', '3', '--surface', 'claude',
             ]);
         });
     });
 
     it('surfaces stable renderer failures before provisioning', () => {
-        withFakeSp(true, () => {
+        withRenderTaskSp(true, () => {
             expect(() => renderRoleTask({
-                role: 'chain-coordinator', bead: 'missing', cwd: sandbox, runtime: 'pi',
+                role: 'chain-coordinator', bead: 'missing', cwd: os.tmpdir(), runtime: 'pi',
             })).toThrow(/bead_not_found.*missing bead/);
         });
+    });
+});
+
+describe('probeSkillPrefixAvailable', () => {
+    it('returns ok when sp supports render-skill-prefix', () => {
+        const script = `#!/usr/bin/env node
+process.stdout.write("Usage: sp render-skill-prefix <name> --surface pi|claude");
+process.exit(0);
+`;
+        withFakeSp(script, () => {
+            expect(probeSkillPrefixAvailable()).toEqual({ ok: true });
+        });
+    });
+
+    it('returns actionable upgrade hint when the command is missing', () => {
+        const script = `#!/usr/bin/env node
+process.stderr.write("error: unknown command 'render-skill-prefix'");
+process.exit(1);
+`;
+        withFakeSp(script, () => {
+            const result = probeSkillPrefixAvailable();
+            expect(result.ok).toBe(false);
+            if (!result.ok) {
+                expect(result.error).toContain('sp render-skill-prefix not available');
+                expect(result.error).toContain('@jaggerxtrm/specialists@latest');
+            }
+        });
+    });
+});
+
+describe('renderSkillPrefix', () => {
+    it('parses skill_prefix out of a success envelope', () => {
+        const script = `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ ok: true, skill_prefix: '/skill:multiplexing /skill:pr-reviewer\\n\\n' }));
+`;
+        withFakeSp(script, () => {
+            expect(renderSkillPrefix({ role: 'reviewer', runtime: 'pi' }).skillPrefix)
+                .toBe('/skill:multiplexing /skill:pr-reviewer\n\n');
+        });
+    });
+
+    it('returns empty string when the specialist declares no skills', () => {
+        const script = `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ ok: true, skill_prefix: '' }));
+`;
+        withFakeSp(script, () => {
+            expect(renderSkillPrefix({ role: 'blank', runtime: 'claude' }).skillPrefix).toBe('');
+        });
+    });
+
+    it('throws on structured error payload', () => {
+        const script = `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ ok: false, error: { code: 'not_found', message: 'no such specialist' } }));
+process.exit(1);
+`;
+        withFakeSp(script, () => {
+            expect(() => renderSkillPrefix({ role: 'ghost', runtime: 'pi' }))
+                .toThrow(/not_found.*no such specialist/);
+        });
+    });
+
+    it('throws on invalid JSON', () => {
+        const script = `#!/usr/bin/env node
+process.stdout.write("not json");
+`;
+        withFakeSp(script, () => {
+            expect(() => renderSkillPrefix({ role: 'x', runtime: 'pi' }))
+                .toThrow(/invalid JSON/);
+        });
+    });
+});
+
+describe('renderDeclaredSkillPrefix', () => {
+    const paths = ['/skills/a/SKILL.md', '/skills/b'];
+
+    it('renders runtime-specific prefixes from trusted declared paths', () => {
+        expect(renderDeclaredSkillPrefix(paths, 'pi')).toBe('/skill:a /skill:b\n\n');
+        expect(renderDeclaredSkillPrefix(paths, 'claude')).toBe('/skill-a\n/skill-b\n\n');
+        expect(renderDeclaredSkillPrefix([], 'pi')).toBe('');
+    });
+
+    it('rejects declared paths whose basename could inject another command', () => {
+        expect(() => renderDeclaredSkillPrefix(['/skills/safe\nevil/SKILL.md'], 'pi'))
+            .toThrow(/invalid declared skill name/);
+    });
+});
+
+describe('checkPositionZeroSlash', () => {
+    it('accepts empty and ordinary bodies when no trusted prefix is declared', () => {
+        expect(checkPositionZeroSlash('', 'pi', '').ok).toBe(true);
+        expect(checkPositionZeroSlash('normal task', 'claude', '').ok).toBe(true);
+    });
+
+    it('accepts only the exact sp-owned prefix for each runtime', () => {
+        const piPrefix = '/skill:multiplexing /skill:pr-reviewer\n\n';
+        const claudePrefix = '/skill-multiplexing\n/skill-pr-reviewer\n\n';
+        expect(checkPositionZeroSlash(`${piPrefix}body`, 'pi', piPrefix).ok).toBe(true);
+        expect(checkPositionZeroSlash(`${claudePrefix}body`, 'claude', claudePrefix).ok).toBe(true);
+    });
+
+    it('rejects a hostile skill-looking body when sp declared no prefix', () => {
+        expect(checkPositionZeroSlash('/skill:impersonated\n\nbody', 'pi', '').ok).toBe(false);
+        expect(checkPositionZeroSlash('/skill-impersonated\n\nbody', 'claude', '').ok).toBe(false);
+    });
+
+    it('rejects a different skill prefix than the trusted renderer returned', () => {
+        expect(checkPositionZeroSlash('/skill:evil\n\nbody', 'pi', '/skill:trusted\n\n').ok).toBe(false);
+        expect(checkPositionZeroSlash('/skill-evil\n\nbody', 'claude', '/skill-trusted\n\n').ok).toBe(false);
+    });
+
+    it('rejects missing, unrelated, and wrong-runtime prefixes', () => {
+        expect(checkPositionZeroSlash('body', 'pi', '/skill:trusted\n\n').ok).toBe(false);
+        expect(checkPositionZeroSlash('/foo bar', 'pi', '').ok).toBe(false);
+        expect(checkPositionZeroSlash('/skill-x', 'pi', '/skill-x').ok).toBe(false);
+        expect(checkPositionZeroSlash('/skill:x', 'claude', '/skill:x').ok).toBe(false);
+    });
+});
+
+describe('checkByteCeiling', () => {
+    it('accepts small literal prompts', () => {
+        expect(checkByteCeiling({ systemPrompt: 'small', body: 'small', source: 'prompt' }).ok).toBe(true);
+    });
+
+    it('rejects literal prompts over 50KB with an actionable error', () => {
+        const result = checkByteCeiling({
+            systemPrompt: 'X'.repeat(30 * 1024),
+            body: 'Y'.repeat(30 * 1024),
+            source: 'prompt',
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.error).toContain('61440');
+            expect(result.error).toContain('51200');
+            expect(result.error).toContain('--bead');
+        }
+    });
+
+    it('accepts a 100KB rendered bead without applying the literal-prompt ceiling', () => {
+        expect(checkByteCeiling({
+            systemPrompt: 'role',
+            body: 'B'.repeat(100 * 1024),
+            source: 'bead',
+        }).ok).toBe(true);
+    });
+
+    it('rejects a rendered bead that exceeds one safe runtime argument', () => {
+        const result = checkByteCeiling({
+            systemPrompt: 'role',
+            body: 'B'.repeat(128 * 1024),
+            source: 'bead',
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error).toContain('runtime argument ceiling');
+    });
+
+    it('rejects NUL bytes before spawning a runtime', () => {
+        const result = checkByteCeiling({ systemPrompt: 'role', body: 'a\0b', source: 'bead' });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error).toContain('NUL');
     });
 });
 
@@ -120,6 +297,19 @@ describe('role command flags', () => {
         expect(() => passthroughCommand.parse([
             'node', 'xt', 'session', '--role', 'reviewer', '--', '--no-tools',
         ])).not.toThrow();
+    });
+
+    it.each([
+        ['pi', createPiCommand],
+        ['claude', createClaudeCommand],
+    ] as const)('documents --prompt on xt %s', (_runtime, createCommand) => {
+        const command = createCommand();
+        const help = command.helpInformation();
+        expect(help).toContain('--prompt <text>');
+        // commander may wrap 'mutually\n  exclusive' — match tolerant of whitespace
+        expect(help).toMatch(/mutually\s+exclusive/);
+        command.parseOptions(['--role', 'reviewer', '--prompt', 'do the thing']);
+        expect(command.opts().prompt).toBe('do the thing');
     });
 });
 
@@ -218,21 +408,27 @@ describe('parseSpecialistJson', () => {
     });
 });
 
-describe('buildRoleTmuxPlan', () => {
+describe('buildRoleTmuxPlan (pi runtime)', () => {
     const role = parseSpecialistJson('chain-coordinator', SAMPLE_SPECIALIST);
 
-    it('builds session name and metadata for role+bead', () => {
+    it('inlines system prompt and emits --no-skills unconditionally', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
-            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             bead: 'xtmux-2i5',
             parentSessionId: '$3',
-            promptFile: '/tmp/prompt.md',
+            turn1Body: '/skill:a /skill:b\n\ntask body',
         });
         expect(plan.sessionName).toBe('role-pi-chain-coordinator-xtmux-2i5');
-        expect(plan.runtimeArgs.slice(0, 2)).toEqual(['--append-system-prompt', '/tmp/prompt.md']);
+        // Inline system prompt — first two args
+        expect(plan.runtimeArgs[0]).toBe('--append-system-prompt');
+        expect(plan.runtimeArgs[1]).toContain('chain coordinator');
+        expect(plan.runtimeArgs).toContain('--no-skills');
+        // Pool isolation combined with explicit skills from role
         expect(plan.runtimeArgs.filter((a) => a === '--skill')).toHaveLength(2);
+        // Turn-1 body is the last positional (pi convention: no `--` delimiter)
+        expect(plan.runtimeArgs.at(-1)).toBe('/skill:a /skill:b\n\ntask body');
+        expect(plan.runtimeArgs).not.toContain('--');
         const bead = plan.paneOptions.find((o) => o.key === '@agent_bead');
         expect(bead?.value).toBe('xtmux-2i5');
         const task = plan.paneOptions.find((o) => o.key === '@agent_task');
@@ -241,35 +437,44 @@ describe('buildRoleTmuxPlan', () => {
         expect(parent?.value).toBe('$3');
         const state = plan.paneOptions.find((o) => o.key === '@agent_state');
         expect(state?.value).toBe('idle');
-        const promptFile = plan.paneOptions.find((o) => o.key === '@agent_prompt_file');
-        expect(promptFile?.value).toBe('/tmp/prompt.md');
+        // xtrm-8zsi1: no more prompt-file transport
+        expect(plan.paneOptions.some((o) => o.key === '@agent_prompt_file')).toBe(false);
     });
 
     it('omits @agent_bead and bead-slug when bead is not provided', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
-            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
-            promptFile: '/tmp/prompt.md',
+            turn1Body: '',
         });
         expect(plan.sessionName).toBe('role-pi-chain-coordinator');
-        expect(plan.runtimeArgs.some((arg) => arg.startsWith('@'))).toBe(false);
         expect(plan.paneOptions.some((o) => o.key === '@agent_bead')).toBe(false);
         const parent = plan.paneOptions.find((o) => o.key === '@agent_parent_session');
-        expect(parent?.value).toBe(''); // no-tmux fallback: empty, not omitted
+        expect(parent?.value).toBe('');
     });
 
-    it('shell-quotes the pi command string', () => {
+    it('omits positional when turn1Body is empty (skills-only prime)', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
-            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
-            promptFile: "/tmp/it's-mine.md",
+            turn1Body: '',
+        });
+        // No trailing positional at all
+        expect(plan.runtimeArgs.every((a) => a.startsWith('--') || plan.runtimeArgs.indexOf(a) === plan.runtimeArgs.indexOf('--append-system-prompt') + 1 || plan.runtimeArgs.indexOf(a) > 0)).toBe(true);
+        expect(plan.runtimeArgs).not.toContain('');
+    });
+
+    it('shell-quotes the pi command string including single quotes in body', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            role,
+            parentSessionId: '',
+            turn1Body: "hello it's mine",
         });
         expect(plan.runtimeCmdString.startsWith("'pi' ")).toBe(true);
-        expect(plan.runtimeCmdString).toContain("'/tmp/it'\\''s-mine.md'");
+        expect(plan.runtimeCmdString).toContain("'hello it'\\''s mine'");
     });
 
     it('encodes runtime in the session name so pi/claude do not collide (xtmux-3h8)', () => {
@@ -278,44 +483,36 @@ describe('buildRoleTmuxPlan', () => {
             role,
             bead: 'xtmux-3h8',
             parentSessionId: '',
-            promptFile: '/tmp/p.md',
-            systemPrompt: SAMPLE_SPECIALIST,
+            turn1Body: '',
         });
         const claudePlan = buildRoleTmuxPlan({
             runtime: 'claude',
             role,
             bead: 'xtmux-3h8',
             parentSessionId: '',
-            promptFile: '/tmp/p.md',
-            systemPrompt: SAMPLE_SPECIALIST,
+            turn1Body: '',
         });
         expect(piPlan.sessionName).toBe('role-pi-chain-coordinator-xtmux-3h8');
         expect(claudePlan.sessionName).toBe('role-claude-chain-coordinator-xtmux-3h8');
-        expect(piPlan.sessionName).not.toBe(claudePlan.sessionName);
     });
 
     it('slugifies bead ids with weird characters', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
-            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             bead: 'MY BEAD/1',
             parentSessionId: '',
-            promptFile: '/tmp/prompt.md',
+            turn1Body: '',
         });
         expect(plan.sessionName).toBe('role-pi-chain-coordinator-my-bead-1');
     });
 
     it('does not emit --no-extensions or -e — pi discovers its own extensions', () => {
-        // xtmux-3rs: prior curated allow-list emitted `-e <name>` but pi -e
-        // takes a filesystem path, not a registry name. Silent crash on
-        // startup. Fix drops the policy; trust pi's own discovery.
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
-            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
-            promptFile: '/tmp/prompt.md',
+            turn1Body: '',
         });
         expect(plan.runtimeArgs).not.toContain('--no-extensions');
         expect(plan.runtimeArgs).not.toContain('-e');
@@ -324,56 +521,33 @@ describe('buildRoleTmuxPlan', () => {
     it('forwards --model / --thinking CLI overrides', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
-            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
-            promptFile: '/tmp/prompt.md',
+            turn1Body: '',
             modelOverride: 'gemini/gemini-3-pro',
             thinkingOverride: 'high',
         });
         const modelIdx = plan.runtimeArgs.indexOf('--model');
-        expect(modelIdx).toBeGreaterThan(-1);
         expect(plan.runtimeArgs[modelIdx + 1]).toBe('gemini/gemini-3-pro');
         const thinkIdx = plan.runtimeArgs.indexOf('--thinking');
-        expect(thinkIdx).toBeGreaterThan(-1);
         expect(plan.runtimeArgs[thinkIdx + 1]).toBe('high');
     });
 
     it('appends passthrough argv verbatim after all other flags', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
-            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role,
             parentSessionId: '',
-            promptFile: '/tmp/prompt.md',
+            turn1Body: 'body',
             passthrough: ['--gitnexus-cmd', 'foo bar'],
         });
         const idx = plan.runtimeArgs.indexOf('--gitnexus-cmd');
-        expect(idx).toBeGreaterThan(-1);
         expect(plan.runtimeArgs[idx + 1]).toBe('foo bar');
+        // passthrough sits before the positional body
+        expect(plan.runtimeArgs.at(-1)).toBe('body');
     });
 
-    it('loads explicit skills once and keeps the task prompt file as the final argument', () => {
-        const existing = role.skillPaths[0];
-        const extra = '/skills/deliberate/SKILL.md';
-        const plan = buildRoleTmuxPlan({
-            runtime: 'pi',
-            systemPrompt: 'role-only system prompt',
-            role,
-            parentSessionId: '',
-            promptFile: '/tmp/system.md',
-            initialPromptFile: '/tmp/rendered-task.md',
-            explicitSkillPaths: [existing, extra],
-        });
-        const loadedSkills = plan.runtimeArgs
-            .flatMap((arg, index) => arg === '--skill' ? [plan.runtimeArgs[index + 1]] : []);
-        expect(loadedSkills).toEqual([...role.skillPaths, extra]);
-        expect(plan.runtimeArgs.at(-1)).toBe('@/tmp/rendered-task.md');
-        expect(plan.runtimeArgs).not.toContain('--');
-        expect(plan.runtimeCmdString).not.toContain('role-only system prompt');
-    });
-
-    it('deduplicates a declared skill and its explicit symlink alias', () => {
+    it('deduplicates explicit skills against declared skills (symlink aware)', () => {
         const sandbox = path.join(os.tmpdir(), `xtrm-plan-skill-${process.pid}`);
         const skillRoot = path.join(sandbox, 'skill');
         const aliasRoot = path.join(sandbox, 'alias');
@@ -384,11 +558,10 @@ describe('buildRoleTmuxPlan', () => {
         try {
             const plan = buildRoleTmuxPlan({
                 runtime: 'pi',
-                systemPrompt: 'x',
                 role: { ...role, skillPaths: [path.join(aliasRoot, 'SKILL.md')] },
                 explicitSkillPaths: [path.join(skillRoot, 'SKILL.md')],
                 parentSessionId: '',
-                promptFile: '/tmp/system.md',
+                turn1Body: '',
             });
             expect(plan.runtimeArgs.filter((arg) => arg === '--skill')).toHaveLength(1);
         } finally {
@@ -405,15 +578,13 @@ describe('buildRoleTmuxPlan', () => {
         }));
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
-            systemPrompt: 'ignored — pi uses --append-system-prompt <file>',
             role: roleWithModel,
             parentSessionId: '',
-            promptFile: '/tmp/prompt.md',
+            turn1Body: '',
             modelOverride: 'override-model',
         });
         const modelIdx = plan.runtimeArgs.indexOf('--model');
         expect(plan.runtimeArgs[modelIdx + 1]).toBe('override-model');
-        // thinking still uses specialist default
         const thinkIdx = plan.runtimeArgs.indexOf('--thinking');
         expect(plan.runtimeArgs[thinkIdx + 1]).toBe('medium');
     });
@@ -428,161 +599,122 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
         },
     }));
 
-    it('emits --append-system-prompt-file pointing at the promptFile (xtrm-osipt)', () => {
+    it('inlines --append-system-prompt (xtrm-8zsi1 supersedes xtrm-osipt file transport)', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'claude',
             role,
-            systemPrompt: 'You are chain-coordinator.',
             parentSessionId: '$3',
-            promptFile: '/tmp/prompt.md',
+            turn1Body: '/skill-x\n\nbody',
         });
         expect(plan.runtimeCmd).toBe('claude');
-        const idx = plan.runtimeArgs.indexOf('--append-system-prompt-file');
-        expect(idx).toBe(0);
-        expect(plan.runtimeArgs[idx + 1]).toBe('/tmp/prompt.md');
-        expect(plan.runtimeArgs).not.toContain('--append-system-prompt');
-        // xtrm-osipt: the verbatim prompt must never appear in argv or the
-        // shell string — tmux new-session refuses inputs beyond a few dozen KB.
-        expect(plan.runtimeArgs).not.toContain('You are chain-coordinator.');
-        expect(plan.runtimeCmdString).not.toContain('You are chain-coordinator.');
-    });
-
-    it('keeps runtimeCmdString bounded regardless of prompt size (xtrm-osipt regression)', () => {
-        const huge = 'X'.repeat(200_000);
-        const plan = buildRoleTmuxPlan({
-            runtime: 'claude',
-            role,
-            systemPrompt: huge,
-            parentSessionId: '',
-            promptFile: '/tmp/huge-prompt.md',
-            initialPromptFile: '/tmp/task.md',
-        });
-        // Before the fix the 200KB prompt was inlined via --append-system-prompt
-        // and tmux new-session died with "command too long" — the pane never
-        // launched and the @task file never reached claude. The shell string
-        // must now stay far below any reasonable exec ceiling.
-        expect(plan.runtimeCmdString.length).toBeLessThan(4096);
-        expect(plan.runtimeCmdString).toContain("'--append-system-prompt-file' '/tmp/huge-prompt.md'");
-        expect(plan.runtimeCmdString.endsWith(" '--' '@/tmp/task.md'")).toBe(true);
-    });
-
-    it('emits --dangerously-skip-permissions and NO --skill flags', () => {
-        const plan = buildRoleTmuxPlan({
-            runtime: 'claude',
-            role,
-            systemPrompt: 'x',
-            parentSessionId: '',
-            promptFile: '/tmp/p',
-        });
+        expect(plan.runtimeArgs[0]).toBe('--append-system-prompt');
+        expect(plan.runtimeArgs[1]).toBe('You are chain-coordinator.');
+        expect(plan.runtimeArgs).not.toContain('--append-system-prompt-file');
         expect(plan.runtimeArgs).toContain('--dangerously-skip-permissions');
+    });
+
+    it('emits `--` before positional turn-1 body (claude variadic-flag safety)', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            parentSessionId: '',
+            turn1Body: '/skill-x\n\nbody',
+        });
+        expect(plan.runtimeArgs.slice(-2)).toEqual(['--', '/skill-x\n\nbody']);
+    });
+
+    it('omits `--` and positional when turn1Body is empty (skills-only prime)', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            parentSessionId: '',
+            turn1Body: '',
+        });
+        expect(plan.runtimeArgs).not.toContain('--');
+        expect(plan.runtimeArgs.at(-1)).not.toBe('');
+    });
+
+    it('emits NO --skill and NO --plugin-dir on claude (xtrm-8zsi1 drops ephemeral plugin)', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role,
+            parentSessionId: '',
+            turn1Body: 'x',
+            explicitSkillPaths: ['/some/skill/SKILL.md'],
+        });
         expect(plan.runtimeArgs).not.toContain('--skill');
+        expect(plan.runtimeArgs).not.toContain('--plugin-dir');
     });
 
     it('forwards --model but silently drops --thinking (claude has no --thinking flag)', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'claude',
             role,
-            systemPrompt: 'x',
             parentSessionId: '',
-            promptFile: '/tmp/p',
+            turn1Body: '',
             thinkingOverride: 'high',
         });
         const modelIdx = plan.runtimeArgs.indexOf('--model');
-        expect(modelIdx).toBeGreaterThan(-1);
         expect(plan.runtimeArgs[modelIdx + 1]).toBe('claude-opus-4-8');
         expect(plan.runtimeArgs).not.toContain('--thinking');
     });
 
-    it('shell-quotes with claude as the runtime prefix', () => {
+    it('shell-quotes with claude as the runtime prefix and inlines the system prompt safely', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'claude',
             role,
-            systemPrompt: 'x',
             parentSessionId: '',
-            promptFile: '/tmp/p',
+            turn1Body: '',
         });
         expect(plan.runtimeCmdString.startsWith("'claude' ")).toBe(true);
+        expect(plan.runtimeCmdString).toContain("'You are chain-coordinator.'");
     });
 
-    it('appends passthrough verbatim', () => {
+    it('appends passthrough verbatim (before positional body)', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'claude',
             role,
-            systemPrompt: 'x',
             parentSessionId: '',
-            promptFile: '/tmp/p',
+            turn1Body: 'body',
             passthrough: ['--add-dir', '/notes'],
         });
         const idx = plan.runtimeArgs.indexOf('--add-dir');
-        expect(idx).toBeGreaterThan(-1);
         expect(plan.runtimeArgs[idx + 1]).toBe('/notes');
+        // positional body is still last
+        expect(plan.runtimeArgs.at(-1)).toBe('body');
     });
 
-    it('uses a file reference for the initial task without exposing its body in argv', () => {
+    it('keeps runtimeCmdString bounded when body is under the byte ceiling', () => {
+        const almostFull = 'X'.repeat(40 * 1024);
         const plan = buildRoleTmuxPlan({
             runtime: 'claude',
             role,
-            systemPrompt: 'role-only system prompt',
             parentSessionId: '',
-            promptFile: '/tmp/system.md',
-            initialPromptFile: '/tmp/rendered-task.md',
+            turn1Body: almostFull,
         });
-        expect(plan.runtimeArgs.slice(-2)).toEqual(['--', '@/tmp/rendered-task.md']);
-        expect(plan.runtimeCmdString).not.toContain('rendered bead body');
-    });
-
-    it('loads explicitly requested skills through an ephemeral Claude plugin', () => {
-        const plan = buildRoleTmuxPlan({
-            runtime: 'claude',
-            role,
-            systemPrompt: 'x',
-            parentSessionId: '',
-            promptFile: '/tmp/system.md',
-            claudeSkillPluginPath: '/tmp/xtrm-role-skills',
-        });
-        const index = plan.runtimeArgs.indexOf('--plugin-dir');
-        expect(plan.runtimeArgs[index + 1]).toBe('/tmp/xtrm-role-skills');
-    });
-});
-
-describe('prepareClaudeSkillPlugin', () => {
-    it('exposes requested skill directories using Claude plugin conventions', () => {
-        const sandbox = path.join(os.tmpdir(), `xtrm-claude-skills-${process.pid}`);
-        const skillRoot = path.join(sandbox, 'source', 'multiplexing');
-        const worktree = path.join(sandbox, 'worktree');
-        rmSync(sandbox, { recursive: true, force: true });
-        mkdirSync(skillRoot, { recursive: true });
-        writeFileSync(path.join(skillRoot, 'SKILL.md'), '# skill');
-        try {
-            const plugin = prepareClaudeSkillPlugin(worktree, [skillRoot, path.join(skillRoot, 'SKILL.md')]);
-            expect(JSON.parse(readFileSync(path.join(plugin, '.claude-plugin', 'plugin.json'), 'utf8')))
-                .toMatchObject({ name: 'xtrm-role-skills' });
-            const linked = path.join(plugin, 'skills', 'multiplexing');
-            expect(lstatSync(linked).isSymbolicLink()).toBe(true);
-            expect(path.resolve(path.dirname(linked), readlinkSync(linked))).toBe(skillRoot);
-        } finally {
-            rmSync(sandbox, { recursive: true, force: true });
-        }
+        // The 40KB body IS inline now (unlike the xtrm-osipt stopgap which
+        // wrote it to a file). This is fine because launchWorktreeSession
+        // enforces the byte ceiling before we ever reach here.
+        expect(plan.runtimeCmdString.length).toBeGreaterThan(40 * 1024);
+        expect(plan.runtimeCmdString.length).toBeLessThan(50 * 1024);
     });
 });
 
 describe('buildAgentEnv', () => {
-    it('exports role + prompt file + parent session id', () => {
+    it('exports role + parent session id (no more XTMUX_AGENT_PROMPT_FILE)', () => {
         const env = buildAgentEnv({
             role: 'chain-coordinator',
-            promptFile: '/tmp/x.md',
             parentSessionId: '$5',
         });
         expect(env.XTMUX_AGENT_TASK).toBe('role:chain-coordinator');
-        expect(env.XTMUX_AGENT_PROMPT_FILE).toBe('/tmp/x.md');
         expect(env.XTMUX_AGENT_PARENT_SESSION).toBe('$5');
         expect(env.XTMUX_AGENT_BEAD).toBeUndefined();
+        expect(env.XTMUX_AGENT_PROMPT_FILE).toBeUndefined();
     });
 
     it('includes bead when provided', () => {
         const env = buildAgentEnv({
             role: 'r',
-            promptFile: '/x',
             parentSessionId: '',
             bead: 'xtmux-1lb.5',
         });
@@ -636,29 +768,6 @@ describe('guardRolePassthrough', () => {
         const r = guardRolePassthrough(['--gitnexus-cmd', 'foo bar', '--verbose']);
         expect(r.guardedError).toBeUndefined();
         expect(r.filteredArgs).toEqual(['--gitnexus-cmd', 'foo bar', '--verbose']);
-    });
-});
-
-describe('injectSkillContents', () => {
-    it('forces complete deduplicated SKILL.md bodies into the startup prompt', () => {
-        const sandbox = path.join(os.tmpdir(), `xtrm-injected-skills-${process.pid}`);
-        const skillRoot = path.join(sandbox, 'forced-context');
-        const alias = path.join(sandbox, 'alias');
-        rmSync(sandbox, { recursive: true, force: true });
-        mkdirSync(skillRoot, { recursive: true });
-        writeFileSync(path.join(skillRoot, 'SKILL.md'), `---\nname: forced-context\ndescription: Test skill.\n---\n\nStartup proof token: FORCE_CONTEXT_7Q9\n`);
-        symlinkSync(skillRoot, alias, 'dir');
-        try {
-            const prompt = injectSkillContents('role system prompt', [
-                path.join(skillRoot, 'SKILL.md'),
-                path.join(alias, 'SKILL.md'),
-            ]);
-            expect(prompt).toContain('role system prompt');
-            expect(prompt).toContain('Startup proof token: FORCE_CONTEXT_7Q9');
-            expect(prompt.match(/Startup proof token/g)).toHaveLength(1);
-        } finally {
-            rmSync(sandbox, { recursive: true, force: true });
-        }
     });
 });
 
@@ -734,10 +843,159 @@ describe('resolveRequestedSkills', () => {
     });
 });
 
+describe('assertClaudeSkillsDiscoverable', () => {
+    const sandbox = path.join(os.tmpdir(), `claude-skill-discovery-${process.pid}`);
+    const fakeHome = path.join(sandbox, 'home');
+    const fakeRepo = path.join(sandbox, 'repo');
+
+    it('accepts a requested skill only when Claude discovers the same canonical path', () => {
+        const skill = path.join(fakeHome, '.xtrm', 'skills', 'default', 'foo');
+        const pointer = path.join(fakeHome, '.claude', 'skills', 'foo');
+        mkdirSync(skill, { recursive: true });
+        mkdirSync(path.dirname(pointer), { recursive: true });
+        writeFileSync(path.join(skill, 'SKILL.md'), '# foo');
+        symlinkSync(skill, pointer, 'dir');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(() => assertClaudeSkillsDiscoverable(fakeRepo, [path.join(skill, 'SKILL.md')]))
+                .not.toThrow();
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects a discoverable path whose name could inject another slash command', () => {
+        const skill = path.join(fakeHome, '.xtrm', 'skills', 'default', 'safe\nevil');
+        const pointer = path.join(fakeHome, '.claude', 'skills', 'safe\nevil');
+        mkdirSync(skill, { recursive: true });
+        mkdirSync(path.dirname(pointer), { recursive: true });
+        writeFileSync(path.join(skill, 'SKILL.md'), '# unsafe name');
+        symlinkSync(skill, pointer, 'dir');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(() => assertClaudeSkillsDiscoverable(fakeRepo, [path.join(skill, 'SKILL.md')]))
+                .toThrow(/invalid Claude skill name/);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects an arbitrary path that Claude cannot discover', () => {
+        const skill = path.join(sandbox, 'external', 'foo');
+        mkdirSync(skill, { recursive: true });
+        writeFileSync(path.join(skill, 'SKILL.md'), '# foo');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(() => assertClaudeSkillsDiscoverable(fakeRepo, [path.join(skill, 'SKILL.md')]))
+                .toThrow(/not discoverable by Claude/);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('buildBufferedRuntimeCommand', () => {
+    it('keeps untrusted runtime content out of the command and cleans up on consume or signal', () => {
+        const command = buildBufferedRuntimeCommand('xtrm-role-safe');
+        expect(command).toContain('consumer-ready');
+        expect(command).toContain('timeout: 5000');
+        expect(command).toContain('show-buffer');
+        expect(command).toContain('delete-buffer');
+        expect(command).toContain('SIGINT');
+        expect(command).toContain('SIGTERM');
+        expect(command).toContain('SIGHUP');
+        expect(command).toContain('xtrm-role-safe');
+        expect(command).not.toContain('rendered bead body');
+    });
+
+    it.each([false, true])('times out and deletes the buffer when the parent disappears (loaded=%s)', (loaded) => {
+        const sandbox = path.join(os.tmpdir(), `xtrm-wrapper-timeout-${process.pid}-${loaded}`);
+        const bin = path.join(sandbox, 'bin');
+        const log = path.join(sandbox, 'tmux.log');
+        const bufferFile = path.join(sandbox, 'buffer');
+        const buffer = 'xtrm-role-timeout-test';
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(bin, { recursive: true });
+        writeFileSync(path.join(bin, 'tmux'), `#!/usr/bin/env node
+const fs = require('node:fs');
+const [command, ...args] = process.argv.slice(2);
+fs.appendFileSync(process.env.XTRM_TMUX_LOG, [command, ...args].join(' ') + '\\n');
+if (command === 'wait-for' && args[0] === '-S') process.exit(0);
+if (command === 'wait-for') {
+  setInterval(() => {}, 1000);
+} else if (command === 'delete-buffer') {
+  fs.rmSync(process.env.XTRM_BUFFER_FILE, { force: true });
+  process.exit(0);
+} else {
+  process.exit(2);
+}
+`);
+        chmodSync(path.join(bin, 'tmux'), 0o755);
+        if (loaded) writeFileSync(bufferFile, 'payload');
+
+        const started = Date.now();
+        const result = spawnSync('sh', ['-c', buildBufferedRuntimeCommand(buffer, 250)], {
+            encoding: 'utf8',
+            timeout: 2_000,
+            env: {
+                ...process.env,
+                PATH: `${bin}:${process.env.PATH ?? ''}`,
+                XTRM_TMUX_LOG: log,
+                XTRM_BUFFER_FILE: bufferFile,
+            },
+        });
+
+        expect(result.status).not.toBe(0);
+        expect(Date.now() - started).toBeLessThan(1_500);
+        expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual([
+            `wait-for -S ${buffer}-consumer-ready`,
+            `wait-for ${buffer}-ready`,
+            `delete-buffer -b ${buffer}`,
+        ]);
+        expect(existsSync(bufferFile)).toBe(false);
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+});
+
+describe('createRuntimeBufferName', () => {
+    it('uses a collision-resistant 128-bit random suffix', () => {
+        const names = new Set(Array.from({ length: 100 }, createRuntimeBufferName));
+        expect(names.size).toBe(100);
+        for (const name of names) expect(name).toMatch(/^xtrm-role-[0-9a-f]{32}$/);
+    });
+});
+
+describe('claudeExplicitSkillLines', () => {
+    it('derives skill name from SKILL.md path via parent dir', () => {
+        expect(claudeExplicitSkillLines(['/home/u/.claude/skills/foo/SKILL.md']))
+            .toBe('/skill-foo');
+    });
+
+    it('derives skill name from directory path via basename', () => {
+        expect(claudeExplicitSkillLines(['/home/u/.claude/skills/bar']))
+            .toBe('/skill-bar');
+    });
+
+    it('joins multiple skills with newlines in input order', () => {
+        expect(claudeExplicitSkillLines([
+            '/home/u/.claude/skills/a/SKILL.md',
+            '/home/u/.claude/skills/b',
+            '/home/u/.claude/skills/c/SKILL.md',
+        ])).toBe('/skill-a\n/skill-b\n/skill-c');
+    });
+
+    it('returns empty string when no paths given', () => {
+        expect(claudeExplicitSkillLines([])).toBe('');
+    });
+});
+
 describe('resolveSkillPath', () => {
-    // xtmux-1rn: relative skill paths must fall back to $HOME when the
-    // per-repo file doesn't exist, so global-migrated skills resolve.
-    // Use a tmpdir sandbox so we don't touch the real home / repo.
     const sandbox = path.join(os.tmpdir(), `xtmux-1rn-test-${process.pid}`);
     const fakeHome = path.join(sandbox, 'home');
     const fakeRepo = path.join(sandbox, 'repo');
