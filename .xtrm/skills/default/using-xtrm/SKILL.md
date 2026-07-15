@@ -44,6 +44,14 @@ Use these command surfaces when the task is operational rather than code-editing
 
 `xt claude` / `xt pi` sessions use clean git worktrees. Git does not copy ignored dependency artifacts such as `node_modules/`, `.venv/`, build caches, or generated outputs. If a repo's lint/tests need those files, run the repo's normal bootstrap inside the worktree (`make bootstrap`, `just setup`, `npm ci`, `uv sync`, etc.). Do not track dependency directories to make worktrees pass.
 
+## Multi-pane coordination
+
+Route orchestrators to `/multiplexing` and delegated panes to `/multiplexing-team`. A beaded `xtmux message-send` requires a reply unless it explicitly says `--expects-reply=false`.
+
+For reply-required inbound work, preserve the SQLite `messageKey`, acknowledge receipt, then use `message-reply --in-reply-to <messageKey>`; ack or a target/bead-matched send does not fulfil it. If the reply must also wake a pane, use confirmed `safe-send-pointer --reply-to <messageKey>` so fulfilment happens only after injection succeeds.
+
+SQLite owns obligations and waits across restarts. Recover with `obligations list`, `monitor-list`, and `message-status`; never create or delete runtime marker files. Runtime identities and ownership come from the invoking live tmux session/pane, not message text or caller-supplied metadata.
+
 ---
 
 ## Trigger Patterns
@@ -59,6 +67,7 @@ Use these command surfaces when the task is operational rather than code-editing
 | About to `bd create` a bead for a specialist dispatch | Add `--parent <bead-it-services>` (nests `.1`, recursive `.1.1`) + title `<role>: <task>` — never a loose top-level bead |
 | About to dispatch a specialist (`sp run`) | `bd state <id> contract` — if `draft` or unset, promote first (explore + rewrite full contract + `bd set-state <id> contract=ready`); never dispatch against a draft |
 | Just capturing an idea for later, not working it now | `bd create --labels contract:draft` with a real PROBLEM + rough SCOPE, everything else `TBD` — never a one-liner |
+| Coordinating tmux panes or handling a reply-required xtmux message | `/multiplexing` (or `/multiplexing-team` when delegated); preserve and correlate the returned `messageKey` |
 | Reading code | `get_symbols_overview` → `find_symbol` — never read whole files |
 | Task is tests | use /test-planning
 | Task is docs updates | use /sync-docs
@@ -147,3 +156,4 @@ Vague prompt (under 8 words, no specifics)? Ask one clarifying question before p
 | Docs maintenance | `sync-docs` |
 | Docker service project | `using-service-skills` |
 | Build / improve a skill | `skill-creator` |
+| Orchestrate tmux panes / answer correlated requests | `multiplexing` / `multiplexing-team` |

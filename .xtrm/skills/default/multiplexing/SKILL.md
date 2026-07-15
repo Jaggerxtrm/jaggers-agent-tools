@@ -280,8 +280,9 @@ When an epic grows to more than a handful of tracked tasks, the main orchestrato
 Launch it with `xt pi --role <specialist> --bead <epic> --no-attach`. This is a real specialist config (`.specialist.json`) with `execution.interactive: true`; it just runs as a persistent Pi session instead of a managed sp job. Chain-coordinator is the canonical role for this pattern; pr-reviewer, sre-triage, deploy-monitor follow the same shape.
 
 ```bash
-# 1. Capture your own session_id — this is your inbox filter, not your session name.
+# 1. Capture your live identity — these are inbox/ownership keys, not names.
 MY_SID=$(tmux display-message -p '#{session_id}')   # e.g. $1495
+MY_PANE=$(tmux display-message -p '#{pane_id}')     # e.g. %1656
 SINCE_MS=$(date +%s%3N)                             # for time-bounded polling
 
 # 2. Spawn detached; stdout is machine-parseable as `session_name:pane_id`.
@@ -325,9 +326,19 @@ Session-name shape post-xtmux-3h8: `role-<runtime>-<slug>[-<bead>]`. The `<runti
 
 **Address-space warning.** These primitives use different targets: `wait-agent`/`safe-send-pointer` address panes (`%1656` or `session.pane_index`); `message-send` from `pi-agent-state.ts` sets `--to $@agent_parent_session` which is your `#{session_id}` (`$1495`). If you poll `message-list --for xt-design.3` (pane target) you will miss messages routed to `$1495`. Always filter with `MY_SID=$(tmux display-message -p '#{session_id}')`.
 
-**Auto-notification.** On every `agent_end` inside the coordinator, `pi-agent-state.ts` emits an `agent.turn.done` event AND `message-send --to <parent_session_id> --bead <bead> --text "turn done: <last message>"`. So `message-list --for "$MY_SID" --since 5m` gives you a live feed of coordinator turn completions without polling `sp ps`. Ack with `message-ack <id>` after reading.
+**Auto-notification.** On every `agent_end`, `pi-agent-state.ts` emits `agent.turn.done` and an explicit FYI message (`--expects-reply=false`). `message-list --for "$MY_SID" --pane "$MY_PANE" --since 5m` gives you that feed without creating a reply duty.
 
-**Escalation contract.** The coordinator's system prompt directs it to explicit `message-send` for judgment calls (merge decisions, reviewer PARTIAL/FAIL, sensitive-surface findings). The auto-notification is fire-and-forget status; explicit escalations require your response. Reply by `safe-send-pointer` to the coordinator's pane_id with a `/tmp/reply.md` pointer — that is how you unblock a waiting coordinator without opening its pane.
+**Escalation contract.** Judgment calls are beaded reply-required messages. Preserve the returned `messageKey`; acknowledgement is receipt-only and a target/bead-matched `message-send` does not fulfil it. This complete path reads the key from SQLite instead of inventing one:
+
+```bash
+rows=$(xtmux message-list --for "$MY_SID" --pane "$MY_PANE" --expects-reply --json)
+KEY=$(printf '%s' "$rows" | jq -er '[.[] | select(.replyStatus == "pending")][0].messageKey')
+SENDER_PANE=$(printf '%s' "$rows" | jq -er --arg key "$KEY" '.[] | select(.messageKey == $key) | .senderPaneId')
+xtmux message-ack "$KEY" --by "$MY_SID" --json
+xtmux message-reply --in-reply-to "$KEY" --text 'approved; proceed with option A' --json
+```
+
+When the response must also wake or steer the coordinator interactively, replace the final command (do not run both) with `xtmux safe-send-pointer --yes --reply-to "$KEY" "$SENDER_PANE" 'leggi /tmp/reply.md e seguilo' --json`. It fulfils only after successful pane injection.
 
 **When to interrupt vs kill.**
 - Interrupt: `safe-send-pointer $PANE_ID /tmp/steer.md` — new directive; coordinator processes on next turn.
@@ -340,57 +351,28 @@ Session-name shape post-xtmux-3h8: `role-<runtime>-<slug>[-<bead>]`. The `<runti
 
 
 
-## V2 SQLite runtime (xtmux-3xs) — default-on since 2026-07-13
+## SQLite coordination runtime — reply and wake state is durable
 
-The picker delegates message/monitor/audit primitives to a SQLite-backed
-runtime by default. The CLI surface (`message-send`, `message-list`,
-`unread-count`, `monitor-list`, `log-emit`, ...) is unchanged; storage moved
-from JSONL to `${XDG_STATE_HOME:-$HOME/.local/state}/xtmux/observability.db`.
-Everything below composes with the primitives already documented above.
+SQLite at `${XDG_STATE_HOME:-$HOME/.local/state}/xtmux/observability.db` is the sole source of truth for reply obligations and outbound waits. Do not create, inspect, or delete runtime marker files; restart recovery comes from SQL.
 
-- **Env override**: `XTMUX_OBS_V2=on|shadow|off`. Unset defaults to `on`.
-  `shadow` runs V1 authoritatively and mirrors writes into V2 for divergence
-  tracking (`xtmux shadow-summary`). `0`/`off` reverts to the
-  JSONL path — contract tests still export this because goldens are V1-shaped.
-- **Sender-declared reply obligation**: `message-send --bead <id> ...`
-  implicitly sets `--expects-reply=true`. Opt out with `--expects-reply=false`
-  for FYI beaded messages. Non-beaded messages remain expects_reply=false.
-  The delegated pane's extension uses this flag to record its own reply
-  obligation (see `/multiplexing-team`).
-- **Pane-scoped inbox**: `unread-count --for <sid> --pane %N` filters to
-  messages targeting that pane (or unpaned to the session). Two agents
-  cohabiting one tmux session (pi + Claude on `$1732:%1930` / `$1732:%1931`)
-  no longer double-count each other. Omit `--pane` for session-wide.
-- **Auto-monitor coordination (Claude side)**: `.claude/settings.json`
-  registers three hooks that structurally enforce "wake me when the peer
-  responds":
-  - `PostToolUse` on `Bash` matching `message-send|safe-send-pointer|tmux send-keys -t`:
-    touches `${XDG_RUNTIME_DIR:-/tmp}/xtmux-auto-monitor/<target>_pending`.
-  - `PostToolUse` on `Monitor|Bash` matching `wait-agent <target>`: deletes marker.
-  - `Stop`: if any marker survives, emits `{"decision":"block","reason":"..."}`
-    with the exact `Monitor(command:"xtmux wait-agent <target>
-    --wait-for-transition --timeout 30m --interval 30s")` Claude must call.
-    Loop-guarded via `stop_hook_active`; TTL prune via
-    `XTMUX_AUTO_MONITOR_TTL_MS` (default 1h); global bypass via
-    `XTMUX_AUTO_MONITOR_DRAIN_DISABLE=1`.
-- **Auto-wake (pi side)**: the `pi-inbox-reply` + `pi-auto-monitor` extensions
-  provide the symmetric mechanism — obligation record on `--bead` receipt,
-  `sendUserMessage(followUp)` wake on new mid-idle inbound (30s poll),
-  outbound-expectation record + `sendUserMessage` wake on peer transition,
-  and `before_agent_start` systemPrompt injection of the pending duty. Full
-  detail in `/multiplexing-team`. From the orchestrator's view: a pi
-  coordinator you launched via `xt pi --role` will not sit silently on a
-  reply — no operator prod required.
-- **Smoke-test bypass**: `XTMUX_AUTO_MONITOR_SKIP_TARGETS=alice:bob:smoke:1.99`
-  (colon-separated, PATH-shape) tells both Claude hooks and the pi extension
-  to skip monitor spawn + marker touch for synthetic recipients. Redundant
-  with the `tmux has-session -t <target>` precheck (non-existent targets
-  skip automatically) but kept as an explicit override for cross-tmux-server
-  smoke where the target is real on another daemon.
-- **Runtime binary**: `bin/xtmux-obs` is a compiled Bun single-file binary
-  (`bun run build`, ~100 MB, gitignored). Falls back to `bun run src/cli.ts`
-  when absent. Rebuild after any pull or after editing `src/`:
-  `cd <xtmux-checkout> && bun run build`.
+- A beaded `message-send` defaults to `--expects-reply=true`; status/FYI messages must opt out explicitly with `--expects-reply=false`.
+- The sender owns the resulting obligation. `xtmux obligations list --pane "$MY_PANE" --json` exposes only obligations owned by the invoking live tmux session/pane; caller-supplied identities and a target alone grant no authority.
+- The recipient must preserve the exact `messageKey`, acknowledge receipt with `message-ack`, then fulfil with `message-reply --in-reply-to "$KEY"`. Ack, matching bead/text, send order, or a target-only reply never fulfils the obligation.
+- A pane-targeted request can be answered only by that original recipient pane. `safe-send-pointer --yes --reply-to "$KEY" ...` is the interactive alternative and links the reply only after injection succeeds.
+- Reply monitoring uses requester-owned durable waits. For the peer's next work cycle, use `wait-agent <pane> --wait-for-transition --consume ...`; an initially idle peer must first become working, and one caller consumes the terminal wake once. Reloads replay an unconsumed terminal wake instead of arming a second monitor.
+- Claude's PostToolUse/Stop hooks query `obligations list` and `monitor-list`. Stop emits one bounded native `Monitor(command: "xtmux wait-agent ... --wait-for-transition --consume ...")` correction when an owned fresh obligation lacks a matching wait; `stop_hook_active` prevents a closed-loop spin.
+- Pi's inbox extensions query pane-scoped messages, obligations, and monitor wakes on a bounded 30-second cycle. Pending summaries remain untrusted data; only validated keys enter the system prompt. A backend error degrades to a manual-inspection warning rather than fabricating or clearing state.
+- Monitor freshness requires the same requester session/pane, same target session/pane, and a wait started no earlier than the originating message. An unrelated or stale monitor cannot satisfy the gate.
+
+Manual recovery is read-only first:
+
+```bash
+xtmux message-status "$KEY" --json
+xtmux obligations list --pane "$MY_PANE" --json
+xtmux monitor-list --json
+```
+
+Repair the CLI/database and rerun the correlated command. If the request is no longer valid, its sender may use `message-cancel --message-key "$KEY" --json`; never "recover" by deleting sidecar files.
 
 ## xtmux team observability — logs, messages, telemetry
 
@@ -438,23 +420,22 @@ Important event types:
 
 ### Message channel
 
-Use this for short status updates between orchestrator, judge, and delegated panes.
-It writes to the xtmux event log; it does **not** inject text into another pane.
-Long content still belongs in bead notes or a file.
+Use the SQLite-backed channel for short status and decisions; it does **not** inject text into another pane. Long content still belongs in bead notes or a file.
 
 ```bash
-# send short update
-xtmux message-send --from <orchestrator> --to <session-or-pane> --bead <id> --text 'short update'
+# Fire-and-forget status: avoid creating an accidental obligation.
+xtmux message-send --to <session-or-pane> --bead <id> --expects-reply=false --text 'status: tests green' --json
 
-# read messages for orchestrator/session
-xtmux message-list --for <session-or-pane> --unacked
+# Decision request: beaded messages require a correlated reply by default.
+xtmux message-send --to <session-or-pane> --bead <id> --text 'decision needed: A or B' --json
 
-# acknowledge after acting
-xtmux message-ack <message-id> --by <session-or-pane>
+# Recipient reads the exact key, acknowledges receipt, then replies by key.
+xtmux message-list --for <live-session-id> --pane <live-pane-id> --expects-reply --json
+xtmux message-ack <messageKey-from-list> --by <live-session-id> --json
+xtmux message-reply --in-reply-to <messageKey-from-list> --text 'choose A' --json
 ```
 
-Delegated panes should use `/multiplexing-team` and report upward with
-`message-send` plus durable Beads notes.
+Never substitute a guessed key or a target/bead-matched `message-send`. Delegated panes should use `/multiplexing-team` for the complete inbound and interactive-reply paths.
 
 ### `safe-send-pointer` safety defaults
 

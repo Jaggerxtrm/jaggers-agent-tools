@@ -21,6 +21,7 @@
 - Close beads and satisfy memory ack before commit: `bd remember` when useful, then `bd kv set memory-acked:<id> saved:<key>` or `nothing novel:<reason>`, then `bd close <id> --reason="..."`.
 - Ask before destructive, irreversible, production-impacting, or history-rewriting actions.
 - Do not ask repetitive “Proceed?” confirmations for normal implementation once scope is clear.
+- For reply-required xtmux messages, preserve `messageKey` and use a correlated reply (`message-reply` or successful `safe-send-pointer --reply-to`); ack and target-only sends do not fulfil the request.
 
 ## Code restraint (when implementing directly)
 
@@ -49,6 +50,7 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 |---|---|
 | xtrm/beads workflow | `/using-xtrm`; `bd --help`; `xt --help` |
 | Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists`; check `sp --help` + `sp list` first |
+| Multi-pane coordination | `/multiplexing`; delegated panes use `/multiplexing-team` |
 | Service/docs/project context | canonical service-skills skill set: `/scope`, `/using-service-skills` |
 | Planning/tests/docs | `/planning`, `/test-planning`, `/sync-docs` |
 | Board unclear/backlog messy | `/issue-triage`; `bv --robot-triage --format toon`; `bv --robot-plan` |
