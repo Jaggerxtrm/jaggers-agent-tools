@@ -78,7 +78,13 @@ bd update <id> --claim      # claim before any edit
 | just capturing an idea, not working it | `bd create --labels contract:draft` with real PROBLEM + rough SCOPE |
 | tmux/xtmux coordination or reply-required msg | `/multiplexing`; preserve returned `messageKey`; use `message-reply --in-reply-to` |
 | reading code | `find_symbol` / `get_symbols_overview` (Serena) — never whole files |
-| session end | memory gate fires — evaluate `bd remember` per closed issue |
+| memory is wrong / superseded | `bd forget <key>` — beats leaving stale entries to poison future `bd memories` searches |
+| stale session claim blocking commit gate | `bd kv clear "claimed:<pid>"` (note: `bd kv clear`, NOT `bd kv delete`) |
+| session end | memory gate fires — evaluate `bd remember` per closed issue; ack with `bd kv set "memory-acked:<id>" "saved:<key>"` or `"nothing novel:<reason>"` |
+
+## Rule conflict — TaskCreate / TodoWrite
+
+`bd prime` (auto-injected at SessionStart) says *"Prohibited: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking"*. **This project overrides that line.** Claude Code's TaskCreate / TodoWrite features are used *alongside* beads for non-trivial work — beads remains authoritative for ownership, dependencies, memory gates, and closure; TaskCreate plans are ephemeral execution tracking scoped to the active bead. Do not create MEMORY.md files (the bd prime rule against those still holds).
 
 ## Project intelligence — on demand (xtrm-x12p3)
 

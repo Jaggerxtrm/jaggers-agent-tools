@@ -1404,11 +1404,11 @@
           "version": "0.10.4"
         },
         "instructions/agents-top.md": {
-          "hash": "5d8cc57b9a8bdc131860a3a6df1df117aca67d7c167e2aad3d6ea3d29ca1f5ca",
+          "hash": "f4081c462747a97a6041a986a0ca9ef14c5a3eb57918cfbd48d874877d5f14df",
           "version": "0.10.4"
         },
         "instructions/claude-top.md": {
-          "hash": "5cbafcab4773b82ac0e5268c6ec8e68d0c298b676a77574384ed4c964743cef9",
+          "hash": "42ea2ff780e293eb831314039a52711e89e53566c656e57b9b0da212f427f7d1",
           "version": "0.10.4"
         },
         "pi.mcp.json": {
