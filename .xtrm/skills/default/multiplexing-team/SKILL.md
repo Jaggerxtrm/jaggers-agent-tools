@@ -69,9 +69,9 @@ Then summarize to yourself:
 
 ## Reporting protocol
 
-### Short status update
+### Short status update or decision request
 
-Use the log-backed message channel. This is cheaper and more reliable than forcing the orchestrator to capture your pane.
+Use the message channel instead of forcing the orchestrator to capture your pane. Status/FYI updates opt out explicitly:
 
 ```bash
 parent="$(tmux show-options -p -qv @agent_parent_session 2>/dev/null || true)"
@@ -79,13 +79,22 @@ bead="$(tmux show-options -p -qv @agent_bead 2>/dev/null || true)"
 xtmux message-send --to "$parent" --bead "$bead" --expects-reply=false --text "status: tests running"
 ```
 
-Good message texts:
+A decision request must remain reply-required; omit the FYI opt-out and preserve the returned `messageKey`:
+
+```bash
+xtmux message-send --to "$parent" --bead "$bead" --text "decision needed: choose A vs B" --json
+```
+
+Good FYI texts:
 
 - `started; reading contract`
-- `blocked: missing env FOO`
-- `decision needed: choose A vs B`
 - `done: tests pass; notes in bead`
 - `handoff: spawned specialists; monitoring %42 %43`
+
+Good reply-required texts:
+
+- `blocked: missing env FOO`
+- `decision needed: choose A vs B`
 
 Bad message texts:
 
