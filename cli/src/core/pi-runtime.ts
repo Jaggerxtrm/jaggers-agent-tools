@@ -180,7 +180,6 @@ export interface ManagedExtension {
 const MANAGED_EXTENSIONS: ManagedExtension[] = [
     { id: 'core', displayName: '@xtrm/pi-core', isLibrary: true, required: true },
     { id: 'auto-session-name', displayName: 'auto-session-name', required: false },
-    { id: 'auto-update', displayName: 'auto-update', required: false },
     { id: 'beads', displayName: 'beads', required: true },
     { id: 'compact-header', displayName: 'compact-header', required: false },
     { id: 'custom-footer', displayName: 'custom-footer', required: true },
