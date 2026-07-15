@@ -902,6 +902,7 @@ describe('assertClaudeSkillsDiscoverable', () => {
 describe('buildBufferedRuntimeCommand', () => {
     it('keeps untrusted runtime content out of the command and cleans up on consume or signal', () => {
         const command = buildBufferedRuntimeCommand('xtrm-role-safe');
+        expect(command).toContain('consumer-ready');
         expect(command).toContain('show-buffer');
         expect(command).toContain('delete-buffer');
         expect(command).toContain('SIGINT');

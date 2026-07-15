@@ -61585,6 +61585,7 @@ async function runPiRuntimeSync(opts = {}) {
 // src/utils/worktree-session.ts
 var LITERAL_TURN1_BYTE_CEILING = 50 * 1024;
 var RUNTIME_ARG_BYTE_CEILING = 128 * 1024 - 1;
+var TMUX_CONSUMER_READY_TIMEOUT_MS = 5e3;
 function worktreeHasProjectUserPacks(worktreePath) {
   const userPacksRoot = import_node_path10.default.join(worktreePath, ".xtrm", "skills", "user", "packs");
   if (!(0, import_node_fs2.existsSync)(userPacksRoot)) {
@@ -61806,6 +61807,7 @@ function buildBufferedRuntimeCommand(bufferName) {
     "for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => { cleanup(); process.exit(1) })",
     "let raw",
     "try {",
+    "  execFileSync('tmux', ['wait-for', '-S', `${buffer}-consumer-ready`])",
     "  execFileSync('tmux', ['wait-for', `${buffer}-ready`])",
     "  raw = execFileSync('tmux', ['show-buffer', '-b', buffer], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 })",
     "} finally {",
@@ -62469,6 +62471,7 @@ async function launchRoleTmuxSession(args) {
   const runtimeBuffer = createRuntimeBufferName();
   const cleanupOnSignal = () => {
     deleteRuntimeBuffer(runtimeBuffer);
+    (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
     process.exit(1);
   };
   process.once("SIGINT", cleanupOnSignal);
@@ -62489,6 +62492,21 @@ async function launchRoleTmuxSession(args) {
     const stderr = (newSess.stderr ?? "").trim() || "unknown error";
     process.stderr.write(kleur_default.red(`
   \u2717 tmux new-session failed: ${stderr}
+`));
+    process.exit(1);
+  }
+  const consumerReady = (0, import_node_child_process.spawnSync)("tmux", ["wait-for", `${runtimeBuffer}-consumer-ready`], {
+    stdio: "pipe",
+    encoding: "utf8",
+    timeout: TMUX_CONSUMER_READY_TIMEOUT_MS,
+    killSignal: "SIGTERM"
+  });
+  if (consumerReady.status !== 0) {
+    deleteRuntimeBuffer(runtimeBuffer);
+    (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
+    const stderr = (consumerReady.stderr ?? consumerReady.error?.message ?? "").trim() || "consumer readiness timed out";
+    process.stderr.write(kleur_default.red(`
+  \u2717 tmux prompt consumer failed to become ready: ${stderr}
 `));
     process.exit(1);
   }
@@ -62521,6 +62539,7 @@ async function launchRoleTmuxSession(args) {
   const paneId = (paneQuery.stdout ?? "").trim().split("\n")[0] ?? "";
   if (!paneId) {
     deleteRuntimeBuffer(runtimeBuffer);
+    (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
     process.stderr.write(kleur_default.red("\n  \u2717 Could not resolve pane id for new session\n"));
     process.exit(1);
   }

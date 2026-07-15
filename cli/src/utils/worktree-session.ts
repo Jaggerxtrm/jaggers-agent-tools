@@ -17,6 +17,7 @@ import { runPiLaunchPreflight } from '../core/pi-runtime.js';
  */
 const LITERAL_TURN1_BYTE_CEILING = 50 * 1024;
 const RUNTIME_ARG_BYTE_CEILING = (128 * 1024) - 1;
+const TMUX_CONSUMER_READY_TIMEOUT_MS = 5_000;
 
 export interface WorktreeSessionOptions {
     runtime: 'claude' | 'pi';
@@ -360,6 +361,7 @@ export function buildBufferedRuntimeCommand(bufferName: string): string {
         "for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => { cleanup(); process.exit(1) })",
         'let raw',
         'try {',
+        "  execFileSync('tmux', ['wait-for', '-S', `${buffer}-consumer-ready`])",
         "  execFileSync('tmux', ['wait-for', `${buffer}-ready`])",
         "  raw = execFileSync('tmux', ['show-buffer', '-b', buffer], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 })",
         '} finally {',
@@ -1413,6 +1415,7 @@ async function launchRoleTmuxSession(args: {
     const runtimeBuffer = createRuntimeBufferName();
     const cleanupOnSignal = (): void => {
         deleteRuntimeBuffer(runtimeBuffer);
+        spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
         process.exit(1);
     };
     process.once('SIGINT', cleanupOnSignal);
@@ -1430,6 +1433,20 @@ async function launchRoleTmuxSession(args: {
         deleteRuntimeBuffer(runtimeBuffer);
         const stderr = (newSess.stderr ?? '').trim() || 'unknown error';
         process.stderr.write(kleur.red(`\n  ✗ tmux new-session failed: ${stderr}\n`));
+        process.exit(1);
+    }
+
+    const consumerReady = spawnSync('tmux', ['wait-for', `${runtimeBuffer}-consumer-ready`], {
+        stdio: 'pipe',
+        encoding: 'utf8',
+        timeout: TMUX_CONSUMER_READY_TIMEOUT_MS,
+        killSignal: 'SIGTERM',
+    });
+    if (consumerReady.status !== 0) {
+        deleteRuntimeBuffer(runtimeBuffer);
+        spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
+        const stderr = (consumerReady.stderr ?? consumerReady.error?.message ?? '').trim() || 'consumer readiness timed out';
+        process.stderr.write(kleur.red(`\n  ✗ tmux prompt consumer failed to become ready: ${stderr}\n`));
         process.exit(1);
     }
 
@@ -1459,6 +1476,7 @@ async function launchRoleTmuxSession(args: {
     const paneId = (paneQuery.stdout ?? '').trim().split('\n')[0] ?? '';
     if (!paneId) {
         deleteRuntimeBuffer(runtimeBuffer);
+        spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
         process.stderr.write(kleur.red('\n  ✗ Could not resolve pane id for new session\n'));
         process.exit(1);
     }

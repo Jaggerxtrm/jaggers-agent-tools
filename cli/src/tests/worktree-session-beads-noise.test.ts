@@ -225,12 +225,24 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(newSessionCommand).not.toContain(body);
     expect(newSessionCommand.length).toBeLessThan(4096);
     expect(JSON.parse(bufferedPayload).runtimeArgs.at(-1)).toBe(body);
+
+    const tmuxCalls = mocked.spawnSync.mock.calls.filter(([command]) => command === 'tmux');
+    const loadIndex = tmuxCalls.findIndex(([, args]) => args[0] === 'load-buffer');
+    const runtimeBuffer = tmuxCalls[loadIndex][1][2];
+    const readyIndex = tmuxCalls.findIndex(([, args]) =>
+      args[0] === 'wait-for' && args[1] === `${runtimeBuffer}-consumer-ready`);
+    const signalIndex = tmuxCalls.findIndex(([, args]) =>
+      args[0] === 'wait-for' && args[1] === '-S' && args[2] === `${runtimeBuffer}-ready`);
+    expect(readyIndex).toBeGreaterThan(-1);
+    expect(readyIndex).toBeLessThan(loadIndex);
+    expect(loadIndex).toBeLessThan(signalIndex);
+    expect(tmuxCalls[readyIndex][2]).toEqual(expect.objectContaining({ timeout: 5000 }));
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
-  it('deletes the transient buffer when loading it fails', async () => {
+  it('bounds consumer readiness and cleans up the blocked session on timeout', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
-    const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-loadfail');
+    const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-readytimeout');
     await fs.ensureDir(path.join(repoRoot, '.beads'));
     process.chdir(repoRoot);
 
@@ -268,8 +280,8 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       if (command === 'tmux' && args[0] === 'has-session') {
         return { status: 1, stdout: '', stderr: '' };
       }
-      if (command === 'tmux' && args[0] === 'load-buffer') {
-        return { status: 1, stdout: '', stderr: 'load failed' };
+      if (command === 'tmux' && args[0] === 'wait-for' && args[1]?.endsWith('-consumer-ready')) {
+        return { status: null, stdout: '', stderr: '', error: Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }) };
       }
       return { status: 0, stdout: '', stderr: '' };
     });
@@ -280,7 +292,91 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     await expect(launchWorktreeSession({
       runtime: 'pi',
       role: 'blank',
-      name: 'loadfail',
+      name: 'readytimeout',
+      newSession: true,
+      attach: false,
+    })).rejects.toThrow('exit:1');
+
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'tmux',
+      expect.arrayContaining(['load-buffer']),
+      expect.anything(),
+    );
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      'tmux',
+      ['delete-buffer', '-b', expect.stringMatching(/^xtrm-role-[0-9a-f]{32}$/)],
+      { stdio: 'ignore' },
+    );
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      'tmux',
+      ['kill-session', '-t', 'role-pi-blank'],
+      { stdio: 'ignore' },
+    );
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it.each(['launch', 'load', 'signal'] as const)(
+    'deletes the transient buffer when %s fails',
+    async (failure) => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    const name = `${failure}fail`;
+    const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', `repo-xt-pi-${name}`);
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'sp' && args[0] === 'view') {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            specialist: {
+              metadata: { name: 'blank' },
+              prompt: { system: 'role' },
+              skills: { paths: [] },
+            },
+          }),
+          stderr: '',
+        };
+      }
+      if (command === 'sp' && args[0] === 'render-skill-prefix') {
+        return args[1] === '--help'
+          ? { status: 0, stdout: 'usage', stderr: '' }
+          : { status: 0, stdout: JSON.stringify({ ok: true, skill_prefix: '' }), stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        fs.ensureDirSync(worktreePath);
+        fs.ensureDirSync(path.join(worktreePath, '.git'));
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'has-session') {
+        return { status: 1, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'new-session' && failure === 'launch') {
+        return { status: 1, stdout: '', stderr: 'launch failed' };
+      }
+      if (command === 'tmux' && args[0] === 'load-buffer' && failure === 'load') {
+        return { status: 1, stdout: '', stderr: 'load failed' };
+      }
+      if (command === 'tmux' && args[0] === 'wait-for' && args[1] === '-S' && failure === 'signal') {
+        return { status: 1, stdout: '', stderr: 'signal failed' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const exitSpy = mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      role: 'blank',
+      name,
       newSession: true,
       attach: false,
     })).rejects.toThrow('exit:1');
@@ -290,6 +386,13 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       ['delete-buffer', '-b', expect.stringMatching(/^xtrm-role-[0-9a-f]{32}$/)],
       { stdio: 'ignore' },
     );
+    if (failure !== 'launch') {
+      expect(mocked.spawnSync).toHaveBeenCalledWith(
+        'tmux',
+        ['kill-session', '-t', 'role-pi-blank'],
+        { stdio: 'ignore' },
+      );
+    }
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 

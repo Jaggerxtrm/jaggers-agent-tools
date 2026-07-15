@@ -39,7 +39,7 @@ The launcher composes exactly one initial user message from three pieces:
 | `--prompt "text"` | `"text"` verbatim | `sp render-skill-prefix` + `"text"` |
 | neither | empty | `sp render-skill-prefix` alone (pane primes skills and idles) |
 
-No prompt/task file is created. Current-pane launches pass the exact positional message directly; new-session launches stage the argv JSON in a transient tmux buffer, start a fixed wrapper command, then delete the buffer after consume or launcher-controlled failure. The same-user process/tmux server is a trusted local control plane: the buffer is transport, not secret storage, and beads/prompts must not contain credentials or secrets.
+No prompt/task file is created. Current-pane launches pass the exact positional message directly; new-session launches start a fixed wrapper, wait up to five seconds for its consumer-ready signal, then load and signal the transient tmux buffer. The buffer is deleted after consume or launcher-controlled failure, and failed handshakes kill the blocked session. The same-user process/tmux server is a trusted local control plane: the buffer is transport, not secret storage, and beads/prompts must not contain credentials or secrets.
 
 ---
 
