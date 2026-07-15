@@ -55,6 +55,16 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 | Board unclear/backlog messy | `/issue-triage`; `bv --robot-triage --format toon`; `bv --robot-plan` |
 | Release/session close | `/releasing`, `/xt-end`, `/session-close-report`, `/xt-merge` |
 
+## Project intelligence — on demand (xtrm-x12p3)
+
+xtrm-loader no longer embeds project bodies in every request. Read them when the task needs them:
+
+- Architecture / roadmap: first of `architecture/project_roadmap.md`, `ROADMAP.md`, `architecture/index.md`.
+- Project rules: `.claude/rules/**/*.md`.
+- Project skills catalog: Pi's native `<available_skills>` metadata; force-load a skill's body at turn 1 via `/skill:<name>`.
+- Durable cross-session knowledge: `bd memories <topic>` / `bd recall <key>` / `bd remember "<insight>"`.
+- Auto-injected essentials still eager (small): `.xtrm/memory.md` synthesized project state; `using-xtrm` session operating manual.
+
 ## Code intelligence and edits
 
 - Before editing an existing function/class/method, run GitNexus impact analysis when GitNexus is available.

@@ -190,12 +190,17 @@ describe('xt init banner non-blocking', () => {
         // Wall-clock can reach ~30s on slow CI runners because spawnSync's
         // timeout cleanup waits for the child after SIGTERM; the assertion
         // we care about is "no interactive prompt", not "init was fast".
-        // Bump vitest test timeout to 60s so we don't flake on CI. (xtrm-qdsx)
+        // Bump vitest test timeout to 120s so we don't flake on CI. HOME is
+        // sandboxed for this suite (xtrm-8zsi1) so xt init --yes does real
+        // bootstrap work into an empty tmp HOME, which is slower than against
+        // a warm real HOME. 60s occasionally flaked; 120s covers observed
+        // ~70s worst-case runs. Assertion is still "no interactive prompt".
+        // (xtrm-qdsx / xtrm-x12p3)
         const r = run(['init', '--yes'], { cwd: repoDir, timeout: 15000 });
         // Should not hang on confirmation prompt
         const combined = r.stdout + r.stderr;
         expect(combined).not.toMatch(/press any key|continue\?/i);
-    }, 60000);
+    }, 120000);
 });
 
 describe('xt init confirmation gate', () => {
