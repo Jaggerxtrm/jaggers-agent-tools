@@ -41,6 +41,129 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     });
   }
 
+  it('rejects a non-discoverable Claude skill before creating a worktree', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    const externalSkill = path.join(tempRoot, 'external', 'hidden-skill');
+    const previousHome = process.env.HOME;
+    process.env.HOME = path.join(tempRoot, 'home');
+    await fs.ensureDir(repoRoot);
+    await fs.ensureDir(externalSkill);
+    await fs.writeFile(path.join(externalSkill, 'SKILL.md'), '# hidden');
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      if (command === 'sp' && args[0] === 'view') {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            specialist: {
+              prompt: { system: 'role' },
+              skills: { paths: [] },
+            },
+          }),
+          stderr: '',
+        };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const exitSpy = mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    try {
+      await expect(launchWorktreeSession({
+        runtime: 'claude',
+        role: 'reviewer',
+        skills: [externalSkill],
+      })).rejects.toThrow('exit:1');
+      expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+        'bd',
+        expect.arrayContaining(['worktree', 'create']),
+        expect.anything(),
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      process.env.HOME = previousHome;
+    }
+  });
+
+  it('transports a 100KB rendered bead through a tmux buffer without putting it in the new-session command', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-claude-large');
+    const body = `/skill-reviewer\n\n${'B'.repeat(100 * 1024)}`;
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    let bufferedPayload = '';
+    let newSessionCommand = '';
+    mocked.spawnSync.mockImplementation((command: string, args: string[], options?: { input?: string }) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'sp' && args[0] === 'view') {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            specialist: {
+              metadata: { name: 'reviewer' },
+              prompt: { system: 'role' },
+              skills: { paths: [] },
+            },
+          }),
+          stderr: '',
+        };
+      }
+      if (command === 'sp' && args[0] === 'render-task') {
+        return {
+          status: 0,
+          stdout: JSON.stringify({ ok: true, initial_prompt: body, prompt_hash: 'hash', components: [] }),
+          stderr: '',
+        };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        fs.ensureDirSync(worktreePath);
+        fs.ensureDirSync(path.join(worktreePath, '.git'));
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'has-session') {
+        return { status: 1, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'new-session') {
+        newSessionCommand = args.at(-1) ?? '';
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'load-buffer') {
+        bufferedPayload = options?.input ?? '';
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'list-panes') {
+        return { status: 0, stdout: '%42\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const exitSpy = mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'claude',
+      role: 'reviewer',
+      bead: 'large-bead',
+      name: 'large',
+      newSession: true,
+      attach: false,
+    })).rejects.toThrow('exit:0');
+
+    expect(newSessionCommand).not.toContain(body);
+    expect(newSessionCommand.length).toBeLessThan(4096);
+    expect(JSON.parse(bufferedPayload).runtimeArgs.at(-1)).toBe(body);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
   it('removes worktree .beads/ and marks tracked .beads paths skip-worktree (no symlink)', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-noise1');

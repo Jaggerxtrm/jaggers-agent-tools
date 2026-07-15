@@ -55,7 +55,7 @@ Read the target. For every candidate, stop at the first rule that holds:
 For every function/method/class candidate:
 
 ```
-mcp__gitnexus__impact({target: "<symbolName>", direction: "upstream", repo: "<repo>"})
+gitnexus_impact({target: "<symbolName>", direction: "upstream", repo: "<repo>"})
 ```
 
 Record: `risk` (LOW/MEDIUM/HIGH/CRITICAL), `direct_callers`, `processes_affected`, `modules_affected`. Batch calls in parallel — one message with N tool uses.
