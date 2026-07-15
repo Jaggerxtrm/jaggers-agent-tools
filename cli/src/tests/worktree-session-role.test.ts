@@ -10,6 +10,7 @@ import {
     checkByteCeiling,
     checkPositionZeroSlash,
     chooseAttachCommand,
+    claudeExplicitSkillLines,
     guardRolePassthrough,
     parseSpecialistJson,
     probeSkillPrefixAvailable,
@@ -800,6 +801,30 @@ describe('resolveRequestedSkills', () => {
         } finally {
             rmSync(sandbox, { recursive: true, force: true });
         }
+    });
+});
+
+describe('claudeExplicitSkillLines', () => {
+    it('derives skill name from SKILL.md path via parent dir', () => {
+        expect(claudeExplicitSkillLines(['/home/u/.claude/skills/foo/SKILL.md']))
+            .toBe('/skill-foo');
+    });
+
+    it('derives skill name from directory path via basename', () => {
+        expect(claudeExplicitSkillLines(['/home/u/.claude/skills/bar']))
+            .toBe('/skill-bar');
+    });
+
+    it('joins multiple skills with newlines in input order', () => {
+        expect(claudeExplicitSkillLines([
+            '/home/u/.claude/skills/a/SKILL.md',
+            '/home/u/.claude/skills/b',
+            '/home/u/.claude/skills/c/SKILL.md',
+        ])).toBe('/skill-a\n/skill-b\n/skill-c');
+    });
+
+    it('returns empty string when no paths given', () => {
+        expect(claudeExplicitSkillLines([])).toBe('');
     });
 });
 

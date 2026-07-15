@@ -411,6 +411,25 @@ export function checkPositionZeroSlash(body: string, runtime: 'pi' | 'claude'): 
 }
 
 /**
+ * Derive the skill name from an absolute path produced by
+ * `resolveRequestedSkills`. That resolver returns either the directory
+ * `.../skill-name` or the SKILL.md file `.../skill-name/SKILL.md` depending
+ * on which form matched, so normalize both. Used to render `/skill-<name>`
+ * force-load lines for claude explicit --skill delivery (xtrm-8zsi1
+ * follow-up: --plugin-dir scaffold is gone, this is the replacement).
+ */
+export function claudeExplicitSkillLines(paths: string[]): string {
+    return paths
+        .map((p) => {
+            const name = path.basename(p) === 'SKILL.md'
+                ? path.basename(path.dirname(p))
+                : path.basename(p);
+            return `/skill-${name}`;
+        })
+        .join('\n');
+}
+
+/**
  * Byte guard: refuse to launch if the sum of the pieces exceeds the hard
  * ceiling. Prevents silently-truncated launches and gives the operator a
  * precise, actionable error naming the actual byte count. --bead is the
@@ -462,8 +481,12 @@ export function buildRoleTmuxPlan(args: {
     thinkingOverride?: string;
     /** Explicit --skill requests, already resolved to absolute paths.
      * Emitted verbatim to pi's native --skill flag. Claude has no --skill
-     * equivalent; explicit skills there rely on ~/.claude/skills global
-     * discovery + the operator invoking /skill-name themselves. */
+     * equivalent; the launcher surfaces each as a `/skill-<name>` force-load
+     * line prepended to the turn-1 body (composed in launchWorktreeSession
+     * before the position-0 / byte-ceiling checks). Discovery of the actual
+     * skill body remains claude's problem — if the skill isn't under
+     * ~/.claude/skills or the project's .claude/skills, claude's own
+     * unknown-skill surface is the loud fail. */
     explicitSkillPaths?: string[];
     /** Argv after `--` on the xt command line, already guard-checked. */
     passthrough?: string[];
@@ -517,9 +540,11 @@ export function buildRoleTmuxPlan(args: {
     } else {
         // Claude: no --no-skills equivalent exists (--bare is nuclear and
         // disables hooks/CLAUDE.md/OAuth). Accept partial isolation — global
-        // ~/.claude/skills auto-discovery remains. Skills are force-loaded
-        // via /skill-name in the turn-1 body prefix (sp-owned) rather than
-        // an ephemeral --plugin-dir scaffold.
+        // ~/.claude/skills auto-discovery remains. Declared skills force-load
+        // via sp-owned /skill-name lines in the turn-1 body prefix; operator
+        // --skill additions (explicitSkillPaths) are prepended as
+        // /skill-<name> in launchWorktreeSession composition before turn1Body
+        // reaches this function. No --plugin-dir scaffold anymore.
         runtimeArgs.push('--dangerously-skip-permissions');
     }
 
@@ -832,6 +857,17 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
                 if (!probe.ok) throw new Error(probe.error);
                 const { skillPrefix } = renderSkillPrefix({ role: roleName, runtime, cwd });
                 composedTurn1Body = skillPrefix + (prompt ?? '');
+            }
+
+            // Claude explicit --skill delivery (xtrm-8zsi1 follow-up). pi
+            // consumes explicitSkillPaths via its native --skill flag inside
+            // buildRoleTmuxPlan; claude has no such flag and no --plugin-dir
+            // scaffold anymore, so surface each explicit skill as a
+            // /skill-<name> force-load line prepended to the turn-1 body.
+            // Position-0 '/' invariant survives (prefix stays /skill-...).
+            if (runtime === 'claude' && explicitSkillPaths.length > 0) {
+                composedTurn1Body = claudeExplicitSkillLines(explicitSkillPaths)
+                    + '\n' + composedTurn1Body;
             }
 
             // Position-0 '/' safety on the composed body. Runs BEFORE worktree
