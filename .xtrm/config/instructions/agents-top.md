@@ -51,10 +51,52 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 | xtrm/beads workflow | `/using-xtrm`; `bd --help`; `xt --help` |
 | Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists`; check `sp --help` + `sp list` first |
 | Multi-pane coordination | `/multiplexing`; delegated panes use `/multiplexing-team` |
+| xtmux CLI (messaging, handoff, agent-state) | `xtmux --help`, `xtmux <cmd> --help` first |
 | Service/docs/project context | canonical service-skills skill set: `/scope`, `/using-service-skills` |
 | Planning/tests/docs | `/planning`, `/test-planning`, `/sync-docs` |
 | Board unclear/backlog messy | `/issue-triage`; `bv --robot-triage --format toon`; `bv --robot-plan` |
 | Release/session close | `/releasing`, `/xt-end`, `/session-close-report`, `/xt-merge` |
+
+## Session start reflex
+
+```bash
+bd prime                    # workflow context + active claims
+bd memories <topic>         # retrieve prior context before answering
+bv --robot-triage           # ranked picks (never bare `bv` — it's a TUI)
+bd update <id> --claim      # claim before any edit
+```
+
+## Trigger patterns
+
+| When | Do |
+|---|---|
+| user prompt has `?` | `bd memories <keywords>` before answering |
+| unfamiliar area of code | `gitnexus_query({query: "concept"})` before opening files |
+| about to edit a symbol | `gitnexus_impact({target, direction:"upstream"})` |
+| before `git commit` | `gitnexus_detect_changes({scope:"staged"})` |
+| about to `bd create` for a specialist dispatch | pass `--parent <bead-it-services>` + title `<role>: <task>` |
+| about to `sp run` | check `bd state <id> contract`; promote `draft` → `ready` first |
+| just capturing an idea, not working it | `bd create --labels contract:draft` with real PROBLEM + rough SCOPE |
+| tmux/xtmux coordination or reply-required msg | `/multiplexing`; preserve returned `messageKey`; use `message-reply --in-reply-to` |
+| reading code | `get_symbols_overview` → `find_symbol` (never whole files) |
+| memory is wrong / superseded | `bd forget <key>` — beats leaving stale entries to poison future `bd memories` searches |
+| stale session claim blocking commit gate | `bd kv clear "claimed:<pid>"` (note: `bd kv clear`, NOT `bd kv delete`) |
+| session end | memory gate fires — evaluate `bd remember` per closed issue; ack with `bd kv set "memory-acked:<id>" "saved:<key>"` or `"nothing novel:<reason>"` |
+
+## Rule conflict — TaskCreate / TodoWrite
+
+`bd prime` (auto-injected at SessionStart) says *"Prohibited: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking"*. **This project overrides that line.** Runtime-local task planning (TaskCreate / TodoWrite-style features when the runtime provides them) is used *alongside* beads for non-trivial work — beads remains authoritative for ownership, dependencies, memory gates, and closure; local task plans are ephemeral execution tracking scoped to the active bead. Do not create MEMORY.md files (the bd prime rule against those still holds).
+
+## Project intelligence — on demand (xtrm-x12p3)
+
+xtrm-loader no longer embeds project bodies in every request. Read them when the task needs them:
+
+- Architecture / roadmap: first of `architecture/project_roadmap.md`, `ROADMAP.md`, `architecture/index.md`.
+- Project rules: `.claude/rules/**/*.md`.
+- Project skills catalog: Pi's native `<available_skills>` metadata; force-load a skill's body at turn 1 via `/skill:<name>`.
+- Durable cross-session knowledge: `bd memories <topic>` / `bd recall <key>` / `bd remember "<insight>"`.
+- Full workflow examples + prompt-shaping guidance: `/skill:using-xtrm` (on demand — no longer eager-injected on Pi).
+- Auto-injected essential (small): `.xtrm/memory.md` per-project synthesized state.
 
 ## Code intelligence and edits
 

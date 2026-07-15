@@ -58,10 +58,18 @@ import { runInstall } from '../commands/install.js';
 describe('runInstall — retired managed-skill prune (xtrm-1o63w.1)', () => {
   let tmpDir = '';
   let previousCwd = '';
+  let previousHome: string | undefined;
+  let sandboxHome = '';
 
   beforeEach(() => {
     previousCwd = process.cwd();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-prune-smoke-'));
+    // xtrm-8zsi1: XTRM_GLOBAL_SKILLS mode reroutes the install target to
+    // ~/.xtrm/skills/default. Without HOME sandboxing this test would prune
+    // the operator's real global skills tree.
+    sandboxHome = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-prune-home-'));
+    previousHome = process.env.HOME;
+    process.env.HOME = sandboxHome;
     process.chdir(tmpDir);
     mocked.getContext.mockResolvedValue({ targets: [path.join(tmpDir, '.xtrm')] });
   });
@@ -69,6 +77,9 @@ describe('runInstall — retired managed-skill prune (xtrm-1o63w.1)', () => {
   afterEach(() => {
     process.chdir(previousCwd);
     fs.removeSync(tmpDir);
+    fs.removeSync(sandboxHome);
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
     vi.clearAllMocks();
   });
 

@@ -45419,6 +45419,7 @@ init_kleur();
 var import_node_os6 = __toESM(require("os"), 1);
 var import_node_path10 = __toESM(require("path"), 1);
 var import_node_child_process = require("child_process");
+var import_node_crypto5 = require("crypto");
 var import_node_fs2 = require("fs");
 
 // src/core/global-skills-flag.ts
@@ -61582,6 +61583,10 @@ async function runPiRuntimeSync(opts = {}) {
 }
 
 // src/utils/worktree-session.ts
+var LITERAL_TURN1_BYTE_CEILING = 50 * 1024;
+var RUNTIME_ARG_BYTE_CEILING = 128 * 1024 - 1;
+var TMUX_CONSUMER_READY_TIMEOUT_MS = 5e3;
+var TMUX_PAYLOAD_READY_TIMEOUT_MS = 5e3;
 function worktreeHasProjectUserPacks(worktreePath) {
   const userPacksRoot = import_node_path10.default.join(worktreePath, ".xtrm", "skills", "user", "packs");
   if (!(0, import_node_fs2.existsSync)(userPacksRoot)) {
@@ -61651,23 +61656,6 @@ function resolveSkillPath(mainRepoRoot, rawPath) {
   if (migratedPath !== rawPath && (0, import_node_fs2.existsSync)(migratedResolved)) return migratedResolved;
   return repoResolved;
 }
-function injectSkillContents(systemPrompt, skillPaths) {
-  const seen = /* @__PURE__ */ new Set();
-  const blocks = skillPaths.flatMap((skillPath) => {
-    const file2 = (0, import_node_fs2.realpathSync)((0, import_node_fs2.lstatSync)(skillPath).isDirectory() ? import_node_path10.default.join(skillPath, "SKILL.md") : skillPath);
-    if (seen.has(file2)) return [];
-    seen.add(file2);
-    const name = import_node_path10.default.basename(import_node_path10.default.dirname(file2));
-    return [`<skill_content name=${JSON.stringify(name)} source=${JSON.stringify(file2)}>
-${(0, import_node_fs2.readFileSync)(file2, "utf8")}
-</skill_content>`];
-  });
-  return blocks.length === 0 ? systemPrompt : `${systemPrompt}
-
-# Required Skills (injected in full)
-
-${blocks.join("\n\n")}`;
-}
 function resolveRequestedSkills(mainRepoRoot, requested) {
   const resolved = requested.map((skill) => {
     const direct = resolveSkillPath(mainRepoRoot, skill);
@@ -61690,6 +61678,24 @@ function resolveRequestedSkills(mainRepoRoot, requested) {
     return found;
   });
   return [...new Set(resolved.map((skillPath) => (0, import_node_fs2.realpathSync)(skillPath)))];
+}
+function assertClaudeSkillsDiscoverable(mainRepoRoot, requestedPaths) {
+  for (const requestedPath of requestedPaths) {
+    const requestedFile = import_node_path10.default.basename(requestedPath) === "SKILL.md" ? requestedPath : import_node_path10.default.join(requestedPath, "SKILL.md");
+    const name = import_node_path10.default.basename(import_node_path10.default.dirname(requestedFile));
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) {
+      throw new Error(`invalid Claude skill name '${name}' from '${requestedPath}'`);
+    }
+    const candidates = [
+      import_node_path10.default.join(mainRepoRoot, ".claude", "skills", name, "SKILL.md"),
+      import_node_path10.default.join(import_node_os6.default.homedir(), ".claude", "skills", name, "SKILL.md")
+    ];
+    const requestedRealPath = (0, import_node_fs2.realpathSync)(requestedFile);
+    if (candidates.some((candidate) => (0, import_node_fs2.existsSync)(candidate) && (0, import_node_fs2.realpathSync)(candidate) === requestedRealPath)) continue;
+    throw new Error(
+      `skill '${requestedPath}' is not discoverable by Claude as '/skill-${name}'. Install or enable the same skill under .claude/skills/${name} before launching.`
+    );
+  }
 }
 function parseSpecialistJson(name, raw, mainRepoRoot = process.cwd()) {
   let parsed;
@@ -61788,29 +61794,131 @@ function slugifyForSession(input) {
 function shellQuote(s) {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
-function prepareClaudeSkillPlugin(worktreePath, skillPaths) {
-  const pluginRoot = import_node_path10.default.join(worktreePath, ".xtrm", "role-skills");
-  (0, import_node_fs2.rmSync)(pluginRoot, { recursive: true, force: true });
-  (0, import_node_fs2.mkdirSync)(import_node_path10.default.join(pluginRoot, ".claude-plugin"), { recursive: true });
-  (0, import_node_fs2.mkdirSync)(import_node_path10.default.join(pluginRoot, "skills"), { recursive: true });
-  (0, import_node_fs2.writeFileSync)(import_node_path10.default.join(pluginRoot, ".claude-plugin", "plugin.json"), JSON.stringify({
-    name: "xtrm-role-skills",
-    description: "Ephemeral skills selected for this xt role session"
-  }));
-  const names = /* @__PURE__ */ new Set();
-  const roots = /* @__PURE__ */ new Set();
-  for (const skillPath of skillPaths) {
-    const skillRoot = (0, import_node_fs2.realpathSync)((0, import_node_fs2.lstatSync)(skillPath).isDirectory() ? skillPath : import_node_path10.default.dirname(skillPath));
-    if (roots.has(skillRoot)) continue;
-    roots.add(skillRoot);
-    const skillFile = import_node_path10.default.join(skillRoot, "SKILL.md");
-    if (!(0, import_node_fs2.existsSync)(skillFile)) throw new Error(`skill path has no SKILL.md: ${skillPath}`);
-    const name = import_node_path10.default.basename(skillRoot);
-    if (names.has(name)) throw new Error(`duplicate requested skill name '${name}'`);
-    names.add(name);
-    (0, import_node_fs2.symlinkSync)(skillRoot, import_node_path10.default.join(pluginRoot, "skills", name), "dir");
+function createRuntimeBufferName() {
+  return `xtrm-role-${(0, import_node_crypto5.randomBytes)(16).toString("hex")}`;
+}
+function deleteRuntimeBuffer(bufferName) {
+  (0, import_node_child_process.spawnSync)("tmux", ["delete-buffer", "-b", bufferName], { stdio: "ignore" });
+}
+function buildBufferedRuntimeCommand(bufferName, payloadWaitTimeoutMs = TMUX_PAYLOAD_READY_TIMEOUT_MS) {
+  const script = [
+    "const { execFileSync, spawnSync } = require('node:child_process')",
+    "const buffer = process.argv[1]",
+    "const cleanup = () => spawnSync('tmux', ['delete-buffer', '-b', buffer], { stdio: 'ignore' })",
+    "for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => { cleanup(); process.exit(1) })",
+    "let raw",
+    "try {",
+    "  execFileSync('tmux', ['wait-for', '-S', `${buffer}-consumer-ready`])",
+    `  execFileSync('tmux', ['wait-for', \`\${buffer}-ready\`], { timeout: ${payloadWaitTimeoutMs}, killSignal: 'SIGTERM', stdio: 'ignore' })`,
+    "  raw = execFileSync('tmux', ['show-buffer', '-b', buffer], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 })",
+    "} finally {",
+    "  cleanup()",
+    "}",
+    "const payload = JSON.parse(raw)",
+    "if (!['pi', 'claude'].includes(payload.runtimeCmd) || !Array.isArray(payload.runtimeArgs) || payload.runtimeArgs.some((arg) => typeof arg !== 'string')) process.exit(2)",
+    "const result = spawnSync(payload.runtimeCmd, payload.runtimeArgs, { stdio: 'inherit' })",
+    "if (result.error) throw result.error",
+    "process.exit(result.status ?? 1)"
+  ].join(";");
+  return [process.execPath, "-e", script, bufferName].map(shellQuote).join(" ");
+}
+function probeSkillPrefixAvailable() {
+  const r = (0, import_node_child_process.spawnSync)("sp", ["render-skill-prefix", "--help"], {
+    stdio: "pipe",
+    encoding: "utf8"
+  });
+  if (r.status === 0) return { ok: true };
+  const stderr = (r.stderr ?? "").toString();
+  return {
+    ok: false,
+    error: `sp render-skill-prefix not available (needed for trusted role launch prefixes).
+Upgrade specialists: npm i -g @jaggerxtrm/specialists@latest
+Original error: ${stderr.trim() || "unknown"}`
+  };
+}
+function renderSkillPrefix(args) {
+  const r = (0, import_node_child_process.spawnSync)(
+    "sp",
+    ["render-skill-prefix", args.role, "--surface", args.runtime],
+    {
+      cwd: args.cwd ?? process.cwd(),
+      stdio: "pipe",
+      encoding: "utf8",
+      maxBuffer: 4 * 1024 * 1024
+    }
+  );
+  let parsed;
+  try {
+    parsed = JSON.parse(r.stdout ?? "");
+  } catch {
+    throw new Error(`role '${args.role}': sp render-skill-prefix returned invalid JSON`);
   }
-  return pluginRoot;
+  const output = parsed;
+  if (r.status !== 0 || output.ok !== true) {
+    const code = typeof output.error?.code === "string" ? output.error.code : "render_failed";
+    const message = typeof output.error?.message === "string" ? output.error.message : "unknown error";
+    throw new Error(`role '${args.role}': ${code}: ${message}`);
+  }
+  if (typeof output.skill_prefix !== "string") {
+    throw new Error(`role '${args.role}': sp render-skill-prefix returned no skill_prefix string`);
+  }
+  return { skillPrefix: output.skill_prefix };
+}
+function checkPositionZeroSlash(body, runtime, trustedPrefix) {
+  const expectedPrefix = runtime === "pi" ? "/skill:" : "/skill-";
+  if (trustedPrefix && !trustedPrefix.startsWith(expectedPrefix)) {
+    return { ok: false, error: `trusted skill prefix does not match the ${runtime} '${expectedPrefix}' surface.` };
+  }
+  if (trustedPrefix) {
+    return body.startsWith(trustedPrefix) ? { ok: true } : { ok: false, error: "turn-1 body does not start with the exact trusted sp skill prefix." };
+  }
+  if (body.length === 0 || body[0] !== "/") return { ok: true };
+  return {
+    ok: false,
+    error: `turn-1 body starts with '/' but sp declared no '${expectedPrefix}' prefix: the runtime would parse untrusted text as a slash-command.
+Rename the bead title or adjust --prompt so the first character is not '/'.`
+  };
+}
+function claudeExplicitSkillLines(paths) {
+  return paths.map((p) => {
+    const name = import_node_path10.default.basename(p) === "SKILL.md" ? import_node_path10.default.basename(import_node_path10.default.dirname(p)) : import_node_path10.default.basename(p);
+    return `/skill-${name}`;
+  }).join("\n");
+}
+function renderDeclaredSkillPrefix(paths, runtime) {
+  const names = [...new Set(paths.map((p) => import_node_path10.default.basename(p) === "SKILL.md" ? import_node_path10.default.basename(import_node_path10.default.dirname(p)) : import_node_path10.default.basename(p)))];
+  for (const name of names) {
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) {
+      throw new Error(`invalid declared skill name '${name}'`);
+    }
+  }
+  if (names.length === 0) return "";
+  const commands = names.map((name) => runtime === "pi" ? `/skill:${name}` : `/skill-${name}`);
+  return `${commands.join(runtime === "pi" ? " " : "\n")}
+
+`;
+}
+function checkByteCeiling(parts) {
+  if (parts.systemPrompt.includes("\0") || parts.body.includes("\0")) {
+    return { ok: false, error: "turn-1 payload contains a NUL byte and cannot be passed to the runtime." };
+  }
+  const systemBytes = Buffer.byteLength(parts.systemPrompt, "utf8");
+  const bodyBytes = Buffer.byteLength(parts.body, "utf8");
+  const total = systemBytes + bodyBytes;
+  if (parts.source === "prompt" && total > LITERAL_TURN1_BYTE_CEILING) {
+    return {
+      ok: false,
+      error: `literal turn-1 payload is ${total} bytes (systemPrompt + body); ceiling is ${LITERAL_TURN1_BYTE_CEILING}.
+Move large task context into a --bead or trim the literal prompt.`
+    };
+  }
+  if (systemBytes > RUNTIME_ARG_BYTE_CEILING || bodyBytes > RUNTIME_ARG_BYTE_CEILING) {
+    return {
+      ok: false,
+      error: `turn-1 runtime argument ceiling is ${RUNTIME_ARG_BYTE_CEILING} bytes; systemPrompt=${systemBytes}, body=${bodyBytes}.`
+    };
+  }
+  return { ok: true };
 }
 function chooseAttachCommand(sessionName, insideTmux) {
   return insideTmux ? ["switch-client", "-t", sessionName] : ["attach-session", "-t", sessionName];
@@ -61821,20 +61929,18 @@ function buildRoleTmuxPlan(args) {
     role,
     bead,
     parentSessionId,
-    promptFile,
-    systemPrompt,
+    turn1Body,
     modelOverride,
     thinkingOverride,
-    initialPromptFile,
     explicitSkillPaths = [],
-    claudeSkillPluginPath,
     passthrough
   } = args;
   const roleSlug = slugifyForSession(role.name);
   const sessionName = bead ? `role-${runtime}-${roleSlug}-${slugifyForSession(bead)}` : `role-${runtime}-${roleSlug}`;
   const runtimeArgs = [];
+  runtimeArgs.push("--append-system-prompt", role.systemPrompt);
   if (runtime === "pi") {
-    runtimeArgs.push("--append-system-prompt", promptFile);
+    runtimeArgs.push("--no-skills");
     const seenSkills = /* @__PURE__ */ new Set();
     for (const skill of [...role.skillPaths, ...explicitSkillPaths]) {
       const identity = (0, import_node_fs2.existsSync)(skill) ? (0, import_node_fs2.realpathSync)(skill) : skill;
@@ -61843,9 +61949,7 @@ function buildRoleTmuxPlan(args) {
       runtimeArgs.push("--skill", skill);
     }
   } else {
-    runtimeArgs.push("--append-system-prompt-file", promptFile);
     runtimeArgs.push("--dangerously-skip-permissions");
-    if (claudeSkillPluginPath) runtimeArgs.push("--plugin-dir", claudeSkillPluginPath);
   }
   const model = modelOverride ?? role.model;
   if (model) runtimeArgs.push("--model", model);
@@ -61856,25 +61960,23 @@ function buildRoleTmuxPlan(args) {
   if (passthrough && passthrough.length > 0) {
     runtimeArgs.push(...passthrough);
   }
-  if (initialPromptFile) {
+  if (turn1Body.length > 0) {
     if (runtime === "claude") runtimeArgs.push("--");
-    runtimeArgs.push(`@${initialPromptFile}`);
+    runtimeArgs.push(turn1Body);
   }
   const runtimeCmdString = [runtime, ...runtimeArgs].map(shellQuote).join(" ");
   const paneOptions = [
     { key: "@agent_parent_session", value: parentSessionId },
     { key: "@agent_task", value: `role:${role.name}` },
-    { key: "@agent_state", value: "idle" },
-    { key: "@agent_prompt_file", value: promptFile }
+    { key: "@agent_state", value: "idle" }
   ];
   if (bead) paneOptions.push({ key: "@agent_bead", value: bead });
   return { sessionName, runtimeCmd: runtime, runtimeArgs, runtimeCmdString, paneOptions };
 }
 function buildAgentEnv(args) {
-  const { bead, role, promptFile, parentSessionId } = args;
+  const { bead, role, parentSessionId } = args;
   const env3 = {
     XTMUX_AGENT_TASK: `role:${role}`,
-    XTMUX_AGENT_PROMPT_FILE: promptFile,
     XTMUX_AGENT_PARENT_SESSION: parentSessionId
   };
   if (bead) env3.XTMUX_AGENT_BEAD = bead;
@@ -61996,21 +62098,50 @@ function unregisterPluginsForWorktree(worktreePath) {
   }
 }
 async function launchWorktreeSession(opts) {
-  const { runtime, name, role: roleName, bead, attach = true, model, thinking } = opts;
+  const { runtime, name, role: roleName, bead, prompt, attach = true, model, thinking } = opts;
   const cwd = process.cwd();
+  if (bead && prompt) {
+    console.error(kleur_default.red("\n  \u2717 --bead and --prompt are mutually exclusive; pick one\n"));
+    process.exit(1);
+  }
   let resolvedRole = null;
   let renderedTask;
+  let composedTurn1Body = "";
   let explicitSkillPaths = [];
   if (roleName) {
     try {
       resolvedRole = resolveRole(roleName, cwd);
       resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
       explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
-      resolvedRole.systemPrompt = injectSkillContents(
-        resolvedRole.systemPrompt,
-        [...resolvedRole.skillPaths, ...explicitSkillPaths]
-      );
-      if (bead) renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime });
+      if (runtime === "claude") assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
+      const probe2 = probeSkillPrefixAvailable();
+      const trustedSkillPrefix = probe2.ok ? renderSkillPrefix({ role: roleName, runtime, cwd }).skillPrefix : renderDeclaredSkillPrefix(resolvedRole.skillPaths, runtime);
+      let trustedPrefix = trustedSkillPrefix;
+      const rawBody = bead ? (renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime })).initialPrompt : prompt ?? "";
+      let untrustedBody = rawBody;
+      if (bead && probe2.ok && trustedSkillPrefix) {
+        if (!rawBody.startsWith(trustedSkillPrefix)) {
+          throw new Error("render-task output does not start with the exact trusted sp skill prefix.");
+        }
+        untrustedBody = rawBody.slice(trustedSkillPrefix.length);
+      }
+      const rawSlashCheck = checkPositionZeroSlash(untrustedBody, runtime, "");
+      if (!rawSlashCheck.ok) throw new Error(rawSlashCheck.error);
+      composedTurn1Body = trustedSkillPrefix + untrustedBody;
+      if (runtime === "claude" && explicitSkillPaths.length > 0) {
+        const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}
+`;
+        composedTurn1Body = explicitPrefix + composedTurn1Body;
+        trustedPrefix = explicitPrefix + trustedPrefix;
+      }
+      const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
+      if (!slashCheck.ok) throw new Error(slashCheck.error);
+      const byteCheck = checkByteCeiling({
+        systemPrompt: resolvedRole.systemPrompt,
+        body: composedTurn1Body,
+        source: bead ? "bead" : "prompt"
+      });
+      if (!byteCheck.ok) throw new Error(byteCheck.error);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(kleur_default.red(`
@@ -62018,8 +62149,8 @@ async function launchWorktreeSession(opts) {
 `));
       process.exit(1);
     }
-  } else if (model || thinking || opts.skills && opts.skills.length > 0 || opts.passthrough && opts.passthrough.length > 0) {
-    console.error(kleur_default.red("\n  \u2717 --model / --thinking / --skill / -- passthrough require --role\n"));
+  } else if (model || thinking || opts.skills && opts.skills.length > 0 || prompt || opts.passthrough && opts.passthrough.length > 0) {
+    console.error(kleur_default.red("\n  \u2717 --model / --thinking / --skill / --prompt / -- passthrough require --role\n"));
     process.exit(1);
   }
   let guardedPassthrough = [];
@@ -62153,6 +62284,7 @@ async function launchWorktreeSession(opts) {
       modelOverride: model,
       thinkingOverride: thinking,
       renderedTask,
+      turn1Body: composedTurn1Body,
       explicitSkillPaths,
       passthrough: guardedPassthrough,
       newSession: opts.newSession,
@@ -62212,6 +62344,7 @@ async function launchRoleTmuxSession(args) {
     modelOverride,
     thinkingOverride,
     renderedTask,
+    turn1Body,
     explicitSkillPaths = [],
     passthrough,
     newSession,
@@ -62246,35 +62379,18 @@ async function launchRoleTmuxSession(args) {
   } else {
     parentSessionId = currentTmuxSessionId();
   }
-  const promptFile = import_node_path10.default.join(
-    worktreePath,
-    ".xtrm",
-    `role-${slugifyForSession(role.name)}-prompt.md`
-  );
-  (0, import_node_fs2.mkdirSync)(import_node_path10.default.dirname(promptFile), { recursive: true });
-  (0, import_node_fs2.writeFileSync)(promptFile, role.systemPrompt);
-  const initialPromptFile = renderedTask ? import_node_path10.default.join(worktreePath, ".xtrm", `role-${slugifyForSession(role.name)}-task.md`) : void 0;
-  if (initialPromptFile && renderedTask) {
-    (0, import_node_fs2.writeFileSync)(initialPromptFile, renderedTask.initialPrompt, { mode: 384 });
-    (0, import_node_fs2.chmodSync)(initialPromptFile, 384);
-  }
-  const claudeSkillPaths = [...role.skillPaths, ...explicitSkillPaths];
-  const claudeSkillPluginPath = runtime === "claude" && claudeSkillPaths.length > 0 ? prepareClaudeSkillPlugin(worktreePath, claudeSkillPaths) : void 0;
   const plan = buildRoleTmuxPlan({
     runtime,
     role,
     bead,
     parentSessionId,
-    promptFile,
-    systemPrompt: role.systemPrompt,
+    turn1Body,
     modelOverride,
     thinkingOverride,
-    initialPromptFile,
     explicitSkillPaths,
-    claudeSkillPluginPath,
     passthrough
   });
-  const agentEnv = buildAgentEnv({ bead, role: role.name, promptFile, parentSessionId });
+  const agentEnv = buildAgentEnv({ bead, role: role.name, parentSessionId });
   if (currentPaneMode) {
     const paneQuery2 = (0, import_node_child_process.spawnSync)("tmux", ["display-message", "-p", "#{pane_id}"], {
       stdio: "pipe",
@@ -62353,6 +62469,15 @@ async function launchRoleTmuxSession(args) {
   for (const [k, v] of Object.entries(agentEnv)) {
     envArgs.push("-e", `${k}=${v}`);
   }
+  const runtimeBuffer = createRuntimeBufferName();
+  const cleanupOnSignal = () => {
+    deleteRuntimeBuffer(runtimeBuffer);
+    (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
+    process.exit(1);
+  };
+  process.once("SIGINT", cleanupOnSignal);
+  process.once("SIGTERM", cleanupOnSignal);
+  process.once("SIGHUP", cleanupOnSignal);
   const newSess = (0, import_node_child_process.spawnSync)("tmux", [
     "new-session",
     "-d",
@@ -62361,12 +62486,47 @@ async function launchRoleTmuxSession(args) {
     "-c",
     worktreePath,
     ...envArgs,
-    plan.runtimeCmdString
+    buildBufferedRuntimeCommand(runtimeBuffer)
   ], { stdio: "pipe", encoding: "utf8" });
   if (newSess.status !== 0) {
+    deleteRuntimeBuffer(runtimeBuffer);
     const stderr = (newSess.stderr ?? "").trim() || "unknown error";
     process.stderr.write(kleur_default.red(`
   \u2717 tmux new-session failed: ${stderr}
+`));
+    process.exit(1);
+  }
+  const consumerReady = (0, import_node_child_process.spawnSync)("tmux", ["wait-for", `${runtimeBuffer}-consumer-ready`], {
+    stdio: "pipe",
+    encoding: "utf8",
+    timeout: TMUX_CONSUMER_READY_TIMEOUT_MS,
+    killSignal: "SIGTERM"
+  });
+  if (consumerReady.status !== 0) {
+    deleteRuntimeBuffer(runtimeBuffer);
+    (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
+    const stderr = (consumerReady.stderr ?? consumerReady.error?.message ?? "").trim() || "consumer readiness timed out";
+    process.stderr.write(kleur_default.red(`
+  \u2717 tmux prompt consumer failed to become ready: ${stderr}
+`));
+    process.exit(1);
+  }
+  const bufferedPayload = JSON.stringify({
+    runtimeCmd: plan.runtimeCmd,
+    runtimeArgs: plan.runtimeArgs
+  });
+  const loaded = (0, import_node_child_process.spawnSync)("tmux", ["load-buffer", "-b", runtimeBuffer, "-"], {
+    input: bufferedPayload,
+    stdio: ["pipe", "pipe", "pipe"],
+    encoding: "utf8"
+  });
+  const signaled = loaded.status === 0 ? (0, import_node_child_process.spawnSync)("tmux", ["wait-for", "-S", `${runtimeBuffer}-ready`], { stdio: "pipe", encoding: "utf8" }) : null;
+  if (loaded.status !== 0 || signaled?.status !== 0) {
+    deleteRuntimeBuffer(runtimeBuffer);
+    (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
+    const stderr = (loaded.stderr ?? signaled?.stderr)?.trim() || "unknown error";
+    process.stderr.write(kleur_default.red(`
+  \u2717 tmux prompt transport failed: ${stderr}
 `));
     process.exit(1);
   }
@@ -62379,9 +62539,14 @@ async function launchRoleTmuxSession(args) {
   ], { stdio: "pipe", encoding: "utf8" });
   const paneId = (paneQuery.stdout ?? "").trim().split("\n")[0] ?? "";
   if (!paneId) {
+    deleteRuntimeBuffer(runtimeBuffer);
+    (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
     process.stderr.write(kleur_default.red("\n  \u2717 Could not resolve pane id for new session\n"));
     process.exit(1);
   }
+  process.off("SIGINT", cleanupOnSignal);
+  process.off("SIGTERM", cleanupOnSignal);
+  process.off("SIGHUP", cleanupOnSignal);
   for (const { key, value } of plan.paneOptions) {
     (0, import_node_child_process.spawnSync)("tmux", ["set-option", "-p", "-t", paneId, key, value], { stdio: "pipe" });
   }
@@ -62820,7 +62985,7 @@ function hasXtrmHookWiring(settingsPath) {
   }
 }
 function createClaudeCommand() {
-  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role \u2014 creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to claude (overrides specialist.execution.model)").option("--thinking <level>", "With --role: warn-and-drop \u2014 claude has no --thinking flag; set thinking on the underlying model config instead").option("--skill <name-or-path>", "With --role: load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
+  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role \u2014 creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)").option("--prompt <text>", "Use <text> as the initial user prompt (mutually exclusive with --bead); combines with the sp-owned /skill-name prefix").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to claude (overrides specialist.execution.model)").option("--thinking <level>", "With --role: warn-and-drop \u2014 claude has no --thinking flag; set thinking on the underlying model config instead").option("--skill <name-or-path>", "With --role: load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
 Passthrough:
   Everything after \`--\` is forwarded verbatim to the claude runtime \u2014 the
   primary escape hatch for any claude flag not first-classed here. xt-owned
@@ -62831,6 +62996,8 @@ Passthrough:
 Examples:
   $ xt claude --role reviewer --bead xyz -- --add-dir ~/notes
   $ xt claude --role chain-coordinator --model claude-opus-4-8
+  $ xt claude --role reviewer --prompt 'review the auth changes in cli/src/auth/'
+  $ xt claude --role planner                          # skills-only prime; pane idles
 `).action(async (name, opts) => {
     if (opts.thinking) {
       console.error(kleur_default.yellow(
@@ -62844,6 +63011,7 @@ Examples:
       name,
       role: opts.role,
       bead: opts.bead,
+      prompt: opts.prompt,
       attach: opts.attach,
       model: opts.model,
       thinking: opts.thinking,
@@ -63223,7 +63391,7 @@ async function getPiProjectPointer(projectRoot) {
   }
 }
 function createPiCommand() {
-  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to pi (overrides specialist.execution.model)").option("--thinking <level>", "With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)").option("--skill <name-or-path>", "With --role: load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
+  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)").option("--prompt <text>", "Use <text> as the initial user prompt (mutually exclusive with --bead); combines with the sp-owned /skill:name prefix").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to pi (overrides specialist.execution.model)").option("--thinking <level>", "With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)").option("--skill <name-or-path>", "With --role: load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
 Passthrough:
   Everything after \`--\` is forwarded verbatim to the pi runtime \u2014 the
   primary escape hatch for any pi flag not first-classed here. xt-owned
@@ -63234,6 +63402,8 @@ Passthrough:
 Examples:
   $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
   $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
+  $ xt pi --role reviewer --prompt 'review the auth changes in cli/src/auth/'
+  $ xt pi --role planner                          # skills-only prime; pane idles
 `).action(async (name, opts) => {
     const dashIdx = process.argv.indexOf("--");
     const passthrough = dashIdx >= 0 ? process.argv.slice(dashIdx + 1) : [];
@@ -63242,6 +63412,7 @@ Examples:
       name,
       role: opts.role,
       bead: opts.bead,
+      prompt: opts.prompt,
       attach: opts.attach,
       model: opts.model,
       thinking: opts.thinking,
@@ -63442,10 +63613,10 @@ var import_child_process6 = require("child_process");
 init_kleur();
 var import_fs_extra16 = __toESM(require_lib(), 1);
 var import_path7 = __toESM(require("path"), 1);
-var import_node_crypto6 = __toESM(require("crypto"), 1);
+var import_node_crypto7 = __toESM(require("crypto"), 1);
 
 // src/core/drift.ts
-var import_node_crypto5 = __toESM(require("crypto"), 1);
+var import_node_crypto6 = __toESM(require("crypto"), 1);
 var import_node_path13 = __toESM(require("path"), 1);
 var import_fs_extra15 = __toESM(require_lib(), 1);
 function toPosix(value) {
@@ -63459,7 +63630,7 @@ function buildUserRelativePath(sourceDir, filePath) {
 }
 async function hashFile(filePath) {
   const content = await import_fs_extra15.default.readFile(filePath);
-  return import_node_crypto5.default.createHash("sha256").update(content).digest("hex");
+  return import_node_crypto6.default.createHash("sha256").update(content).digest("hex");
 }
 async function checkDrift(registryPath, userXtrmDir, overrideRoots) {
   const registry2 = await import_fs_extra15.default.readJson(registryPath);
@@ -63542,7 +63713,7 @@ function resolveInstalledPath(userXtrmDir, relativePath, overrideRoots) {
 }
 async function hashFile2(filePath) {
   const content = await import_fs_extra16.default.readFile(filePath);
-  return import_node_crypto6.default.createHash("sha256").update(content).digest("hex");
+  return import_node_crypto7.default.createHash("sha256").update(content).digest("hex");
 }
 async function scaffoldSkillsDefaultFromPackage(params) {
   const { packageRoot, userXtrmDir, dryRun } = params;
@@ -64163,12 +64334,12 @@ async function getManagedAgentSkillNames(repoRoot) {
 }
 
 // src/core/global-skills-bootstrap.ts
-var import_node_crypto7 = __toESM(require("crypto"), 1);
+var import_node_crypto8 = __toESM(require("crypto"), 1);
 var import_fs_extra18 = __toESM(require_lib(), 1);
 var import_node_path14 = __toESM(require("path"), 1);
 var COPY_FILTER2 = (sourcePath) => !sourcePath.endsWith("__pycache__");
 function hashPath(value) {
-  return import_node_crypto7.default.createHash("sha256").update(value).digest("hex");
+  return import_node_crypto8.default.createHash("sha256").update(value).digest("hex");
 }
 function formatLogPath(filePath) {
   const normalized = import_node_path14.default.resolve(filePath);
@@ -64903,7 +65074,7 @@ var import_node_util2 = require("util");
 var import_node_process6 = __toESM(require("process"), 1);
 var import_node_fs6 = __toESM(require("fs"), 1);
 var import_node_path22 = __toESM(require("path"), 1);
-var import_node_crypto8 = __toESM(require("crypto"), 1);
+var import_node_crypto9 = __toESM(require("crypto"), 1);
 var import_node_assert = __toESM(require("assert"), 1);
 
 // ../node_modules/dot-prop/index.js
@@ -65977,8 +66148,8 @@ var Conf = class {
     }
     try {
       const initializationVector = data.slice(0, 16);
-      const password = import_node_crypto8.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
-      const decipher = import_node_crypto8.default.createDecipheriv(encryptionAlgorithm, password, initializationVector);
+      const password = import_node_crypto9.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
+      const decipher = import_node_crypto9.default.createDecipheriv(encryptionAlgorithm, password, initializationVector);
       const slice = data.slice(17);
       const dataUpdate = typeof slice === "string" ? stringToUint8Array(slice) : slice;
       return uint8ArrayToString(concatUint8Arrays([decipher.update(dataUpdate), decipher.final()]));
@@ -66021,9 +66192,9 @@ var Conf = class {
   _write(value) {
     let data = this._serialize(value);
     if (this.#encryptionKey) {
-      const initializationVector = import_node_crypto8.default.randomBytes(16);
-      const password = import_node_crypto8.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
-      const cipher = import_node_crypto8.default.createCipheriv(encryptionAlgorithm, password, initializationVector);
+      const initializationVector = import_node_crypto9.default.randomBytes(16);
+      const password = import_node_crypto9.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
+      const cipher = import_node_crypto9.default.createCipheriv(encryptionAlgorithm, password, initializationVector);
       data = concatUint8Arrays([initializationVector, stringToUint8Array(":"), cipher.update(stringToUint8Array(data)), cipher.final()]);
     }
     if (import_node_process6.default.env.SNAP) {
@@ -67092,7 +67263,7 @@ var import_fs_extra33 = __toESM(require_lib(), 1);
 init_kleur();
 
 // src/utils/atomic-config.ts
-var import_node_crypto9 = require("crypto");
+var import_node_crypto10 = require("crypto");
 var import_fs_extra31 = __toESM(require_lib(), 1);
 var import_comment_json = __toESM(require_src3(), 1);
 var PROTECTED_KEYS = [
@@ -67313,7 +67484,7 @@ async function atomicWrite(filePath, data, options = {}) {
     backupOnSuccess = false,
     backupSuffix = ".bak"
   } = options;
-  const tempFilePath = `${filePath}.tmp.${(0, import_node_crypto9.randomUUID)()}`;
+  const tempFilePath = `${filePath}.tmp.${(0, import_node_crypto10.randomUUID)()}`;
   try {
     let content;
     if (preserveComments) {
@@ -71326,7 +71497,7 @@ var import_node_path32 = __toESM(require("path"), 1);
 init_kleur();
 
 // src/core/skills-materializer.ts
-var import_node_crypto10 = require("crypto");
+var import_node_crypto11 = require("crypto");
 var import_node_path31 = __toESM(require("path"), 1);
 function sortByName(entries) {
   return [...entries].sort((a, b) => a.name.localeCompare(b.name));
@@ -74364,7 +74535,7 @@ function createSpecCommand() {
 init_kleur();
 var import_fs_extra57 = __toESM(require_lib(), 1);
 var import_node_path50 = __toESM(require("path"), 1);
-var import_node_crypto11 = __toESM(require("crypto"), 1);
+var import_node_crypto12 = __toESM(require("crypto"), 1);
 var import_node_os16 = __toESM(require("os"), 1);
 var import_child_process8 = require("child_process");
 init_git_staging();
@@ -74453,7 +74624,7 @@ async function appendMigrationLog(event) {
 }
 function hashFile4(filePath) {
   const content = import_fs_extra57.default.readFileSync(filePath);
-  return import_node_crypto11.default.createHash("sha256").update(content).digest("hex");
+  return import_node_crypto12.default.createHash("sha256").update(content).digest("hex");
 }
 async function createTarballBackup(sourceDir, backupName) {
   const backupRoot = import_node_path50.default.join(import_node_os16.default.homedir(), ".xtrm", "migration-backups");

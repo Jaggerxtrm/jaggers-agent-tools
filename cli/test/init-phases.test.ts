@@ -205,6 +205,8 @@ function setupSpawnSync(projectRoot: string, calls: string[]): void {
 
 describe('xtrm init phased orchestrator', () => {
     let projectRoot: string;
+    let sandboxHome: string;
+    let previousHome: string | undefined;
     let consoleLogSpy: ReturnType<typeof vi.spyOn>;
     let stdoutWriteSpy: ReturnType<typeof vi.spyOn>;
     let stderrWriteSpy: ReturnType<typeof vi.spyOn>;
@@ -217,6 +219,16 @@ describe('xtrm init phased orchestrator', () => {
         logs = [];
         projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-init-project-'));
         await fs.writeFile(path.join(projectRoot, 'tsconfig.json'), '{}');
+
+        // xtrm-8zsi1: init.ts triggers ensureGlobalHooksBootstrapped and
+        // ensureGlobalSkillsBootstrapped, both of which resolve os.homedir().
+        // Without sandboxing HOME here, those functions write to the real
+        // user's ~/.xtrm/{hooks,skills}/state.json and wipe the operator's
+        // global install. Sandbox HOME to a per-test tmp dir; the test-setup
+        // guard also throws if this ever regresses.
+        sandboxHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-init-home-'));
+        previousHome = process.env.HOME;
+        process.env.HOME = sandboxHome;
 
         const packageRoot = '/tmp/xtrm-pkg-root';
         await fs.ensureDir(path.join(packageRoot, '.xtrm'));
@@ -247,6 +259,9 @@ describe('xtrm init phased orchestrator', () => {
         cwdSpy.mockRestore();
         await fs.remove(projectRoot);
         await fs.remove('/tmp/xtrm-pkg-root');
+        await fs.remove(sandboxHome);
+        if (previousHome === undefined) delete process.env.HOME;
+        else process.env.HOME = previousHome;
     });
 
     it('renders the plan and stops before mutation in dry-run mode', async () => {
