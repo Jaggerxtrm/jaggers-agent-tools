@@ -56,6 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### `xtrm-tools`
+
+#### Fixed
+
+- **`xt update --apply` now repairs XTRM's external Pi tool patches after package assurance (xtrm-5c1nc, P0).** Direct `pi install`/`pi update` can replace patched `pi-serena-tools` source; applied XTRM updates now rerun the existing idempotent patcher after package refresh, while dry-runs remain mutation-free.
+
 ## [v0.10.6] — 2026-07-14
 
 Merge-not-rewrite on project settings.json hooks — the wholesale-replace was eating third-party integrations.

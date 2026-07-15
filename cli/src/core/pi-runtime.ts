@@ -146,7 +146,7 @@ const LEGACY_PROJECT_EXTENSION_ENTRIES = new Set<string>([
     '.xtrm/extensions',
 ]);
 
-function runExternalPiToolPatch(pkgRoot: string, dryRun: boolean, log?: (message: string) => void): void {
+export function runExternalPiToolPatch(pkgRoot: string, dryRun: boolean, log?: (message: string) => void): void {
     const scriptPath = path.join(pkgRoot, 'scripts', 'patch-external-pi-tools.mjs');
     if (!fs.existsSync(scriptPath)) return;
 
