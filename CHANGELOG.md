@@ -1,50 +1,3 @@
-
-## [Unreleased]
-
-### Added
-
-- **Inject rendered bead task and explicit skills (xtrm-k2ufi)** ([f1f2e71](https://github.com/xtrm-dev/core/commit/f1f2e7155e76eb176a1fe5c1f7d9ebabbb604e3c)) — 2026-07-14 11:20
-
-
-### Fixed
-
-- **Omit unsupported prompt delimiter for Pi (xtrm-josmq)** ([ff5c642](https://github.com/xtrm-dev/core/commit/ff5c6426e76697bee9e4ed2e7582fc6b607b3e15)) — 2026-07-14 11:58
-
-
-- **Force skill bodies into startup context (xtrm-14w28)** ([6722fb2](https://github.com/xtrm-dev/core/commit/6722fb29cc3546ecd9facbd9be287589c6077e24)) — 2026-07-14 12:21
-
-
-- **Use --append-system-prompt-file for claude (xtrm-osipt)** ([dc3443b](https://github.com/xtrm-dev/core/commit/dc3443b3980f4344c0a08305e441a3d18e79bee7)) — 2026-07-14 19:30
-
-  Once xtrm-14w28 started injecting SKILL.md bodies into role.systemPrompt
-  (~70KB), buildRoleTmuxPlan for the claude runtime kept passing the whole
-  string via '--append-system-prompt <prompt>'. In new-session mode the
-  launcher shell-quotes runtimeArgs into runtimeCmdString and hands that
-  to 'tmux new-session -d ... <cmd>'; tmux refused with 'command too long'
-  and the pane never launched, so the @task positional never reached
-  claude either — the reported symptom of xtrm-osipt.
-
-  Switch claude to '--append-system-prompt-file <promptFile>' (parity with
-  pi). The prompt content already lives in .xtrm/role-<slug>-prompt.md;
-  we just point at it instead of inlining. Regression test asserts
-  runtimeCmdString stays <4KB even with a 200KB systemPrompt and that
-  '@<initialPromptFile>' remains the final positional.
-
-
-### Project maintenance
-
-- **Rebuild dist after source changes** ([e838d90](https://github.com/xtrm-dev/core/commit/e838d902b58dbc05eb5cb79092c5bab559d37001)) — 2026-07-14 11:21
-
-
-- **Rebuild dist reproducibly** ([a4244cc](https://github.com/xtrm-dev/core/commit/a4244cc989ca2067238231f37f95e453f283dc27)) — 2026-07-14 11:25
-
-
-- **Add git-cliff config and changelog** ([6465cf5](https://github.com/xtrm-dev/core/commit/6465cf58631a6bb1c68ddc81fc25ab9ba94a67c1)) — 2026-07-14 00:55
-
-  Generic type-based parsers; repo-specific scopes to be tuned (see P0 bead).
-
-
-
 # Changelog
 
 All notable changes to Claude Code skills and configuration will be documented in this file.
@@ -55,6 +8,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+
+### Added
+
+- **Inject rendered bead task and explicit skills (xtrm-k2ufi)** ([f1f2e71](https://github.com/xtrm-dev/core/commit/f1f2e7155e76eb176a1fe5c1f7d9ebabbb604e3c)) — 2026-07-14 11:20
+
+
+- **Add verified-audit for over-engineering + efficiency audits** ([dcbe88e](https://github.com/xtrm-dev/core/commit/dcbe88e6c54daf418a0f877c005d2429c764a179)) — 2026-07-15 09:38
+
+  Introduces a four-leg audit methodology (line-count reduction lens,
+  GitNexus impact verification, config/usage grep for enum branches,
+  efficiency signals hunt) with mandatory blast-radius receipts before
+  proposing any cut.
+
+  Proven on the specialists repo: 7 core files, 61 findings, ~535
+  removable lines, 38 verified efficiency wins including hot-path SQLite
+  N+1s and network syscalls in fallback branches — none surfaceable from
+  a line-count-only pass.
+
+  Registered in .xtrm/registry.json for global install. Wired into
+  reviewer.specialist.json in the specialists repo via a separate PR.
+
+
+### Fixed
+
+- **Omit unsupported prompt delimiter for Pi (xtrm-josmq)** ([ff5c642](https://github.com/xtrm-dev/core/commit/ff5c6426e76697bee9e4ed2e7582fc6b607b3e15)) — 2026-07-14 11:58
+
+
+- **Force skill bodies into startup context (xtrm-14w28)** ([6722fb2](https://github.com/xtrm-dev/core/commit/6722fb29cc3546ecd9facbd9be287589c6077e24)) — 2026-07-14 12:21
+
+
+- **Role prompt-file launch fix, git-cliff config, and changelog date-time (#420)** ([3e8b284](https://github.com/xtrm-dev/core/commit/3e8b284555deb03c7037bde68a89ce99493f0604)) — 2026-07-15 00:50
+
+  * chore(changelog): add git-cliff config and changelog
+
+  Generic type-based parsers; repo-specific scopes to be tuned (see P0 bead).
+
+
+### Other changes
+
+- **Merge pull request #423 from xtrm-dev/feature/verified-audit-skill
+
+feat(skills): add verified-audit skill** ([2088dab](https://github.com/xtrm-dev/core/commit/2088dabb287efd78d2ad36898f93bffa84de2e35)) — 2026-07-15 09:43
+
+
+### Project maintenance
+
+- **Rebuild dist after source changes** ([e838d90](https://github.com/xtrm-dev/core/commit/e838d902b58dbc05eb5cb79092c5bab559d37001)) — 2026-07-14 11:21
+
+
+- **Rebuild dist reproducibly** ([a4244cc](https://github.com/xtrm-dev/core/commit/a4244cc989ca2067238231f37f95e453f283dc27)) — 2026-07-14 11:25
+
+
+- **Teach correlated xtmux coordination (#421)** ([612556c](https://github.com/xtrm-dev/core/commit/612556caef0a424ef6422e2ba2b9729131d5fd41)) — 2026-07-15 07:27
+
+  * docs(skills): teach correlated xtmux coordination
+
+  * docs(team): keep decision requests reply-required
+
+  ---------
 
 ## [v0.10.6] — 2026-07-14
 
