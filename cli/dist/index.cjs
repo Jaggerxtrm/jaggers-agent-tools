@@ -61843,7 +61843,7 @@ function buildRoleTmuxPlan(args) {
       runtimeArgs.push("--skill", skill);
     }
   } else {
-    runtimeArgs.push("--append-system-prompt", systemPrompt);
+    runtimeArgs.push("--append-system-prompt-file", promptFile);
     runtimeArgs.push("--dangerously-skip-permissions");
     if (claudeSkillPluginPath) runtimeArgs.push("--plugin-dir", claudeSkillPluginPath);
   }
