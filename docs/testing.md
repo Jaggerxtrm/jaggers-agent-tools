@@ -2,12 +2,12 @@
 title: Production Live Testing Checklist
 scope: testing
 category: guide
-version: 1.1.0
-updated: 2026-05-14
+version: 1.2.0
+updated: 2026-07-16
 synced_at: 95a1430
 description: "Checklist for validating all project skills, hooks, CI gates, and release-contract invariants in a real project environment"
 domain: [testing, hooks, skills, ci, security]
-updated_at: 2026-05-14
+updated_at: 2026-07-16
 source_of_truth_for:
   - .github/workflows/ci.yml
   - .github/workflows/specialists-validation.yml
@@ -64,22 +64,20 @@ Serena edit-tool matchers covered:
 ## Global Preflight
 
 - [ ] `xtrm --version` returns expected release.
-- [ ] `claude --version` is available.
-- [ ] `xtrm install` completed successfully for `~/.claude`.
-- [ ] Inside target repo: `xtrm install project list` shows available skills.
+- [ ] `claude --version` and `pi --version` are available.
+- [ ] `xtrm init -y` completes successfully in the target repo.
+- [ ] `xtrm skills list --global --json` includes `using-quality-gates`, `using-tdd`, and `service-skills`.
 
 ---
 
 ## Project Setup
 
-- [ ] In target repo, run:
-  - [ ] `xtrm install project quality-gates`
-  - [ ] `xtrm install project tdd-guard`
-  - [ ] `xtrm install project service-skills`
-- [ ] Confirm installed docs exist:
-  - [ ] `.claude/docs/quality-gates-readme.md`
-  - [ ] `.claude/docs/tdd-guard-readme.md`
-  - [ ] `.claude/docs/service-skills-readme.md`
+- [ ] In the target repo, run `xtrm init -y`.
+- [ ] Run `xtrm doctor` and resolve any reported hook, skill, or package drift.
+- [ ] Confirm runtime skill pointers exist:
+  - [ ] `.claude/skills/using-quality-gates`
+  - [ ] `.claude/skills/using-tdd`
+  - [ ] `.claude/skills/service-skills`
 
 ---
 

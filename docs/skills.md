@@ -3,7 +3,7 @@ title: Skills Catalog
 scope: skills
 category: overview
 version: 3.0.0
-updated: 2026-07-08
+updated: 2026-07-16
 synced_at: xtrm-bq7yd.8
 description: "Skills global + project layered model: global SSOT at ~/.xtrm/skills/, residual per-repo state, and xt skills CLI"
 source_of_truth_for:
@@ -11,7 +11,7 @@ source_of_truth_for:
   - ".xtrm/skills/**"
   - "skills/**/SKILL.md"
 domain: [skills, claude, pi]
-updated_at: 2026-07-08
+updated_at: 2026-07-16
 ---
 
 <!-- INDEX: auto-generated -->
@@ -56,7 +56,7 @@ The `default/` and `optional/` tiers are **no longer materialized per-repo** aft
 
 ### Optional Pack Catalog
 
-Current optional packs: `research-methods`, `code-quality`, `security-ops`, `data-engineering`, `architecture-design`. Populated at global scope on `xt bootstrap` or first `xt install`/`xt init`.
+Current optional packs: `research-methods`, `code-quality`, `security-ops`, `data-engineering`, `architecture-design`. Populated at global scope on `xt bootstrap` or first `xt init`.
 
 ## Runtime Active View
 
@@ -83,7 +83,7 @@ Views rebuilt on `xt skills enable/disable` via `rebuildGlobalActiveView()` and 
 ~/.claude/skills → ~/.xtrm/skills/active   # Absolute symlink (global)
 ```
 
-Created by `xt bootstrap`, self-healed by `xt install`/`xt init`/`xt update --apply`. Refuses to replace non-symlink existing dir without `XTRM_FORCE_SKILLS_MIGRATION=1`.
+Created by `xt bootstrap`, self-healed by `xt init`/`xt update --apply`. Refuses to replace non-symlink existing dir without `XTRM_FORCE_SKILLS_MIGRATION=1`.
 
 ### Pi
 
@@ -325,4 +325,4 @@ xt status            # Check plugin/runtime health
 - [skills-registry-exploration.md](skills-registry-exploration.md) — Historical design spec (superseded, kept for context)
 - [cli-architecture.md](cli-architecture.md) — CLI module reference
 - [project-skills.md](project-skills.md) — Residual per-repo state documentation
-- [XTRM-GUIDE.md](XTRM-GUIDE.md) — User guide
+- [XTRM-GUIDE.md](../XTRM-GUIDE.md) — User guide

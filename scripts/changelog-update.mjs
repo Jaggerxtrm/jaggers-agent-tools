@@ -13,8 +13,9 @@
 // It never uses `git-cliff -o` / plain generate — those rebuild CHANGELOG.md from the
 // git log and would drop every hand-written line (measured: 362 lines in this repo).
 //
-//   node scripts/changelog-update.mjs [--check]
-//     --check  exit 1 if the file would change (CI guard), write nothing
+//   node scripts/changelog-update.mjs [--check] [--tag vX.Y.Z]
+//     --check       exit 1 if the file would change (CI guard), write nothing
+//     --tag vX.Y.Z  promote unreleased commits into a versioned section
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -22,6 +23,9 @@ const CHANGELOG = 'CHANGELOG.md';
 const CONFIG = 'changelog/cliff.toml';
 const UNRELEASED = '## [Unreleased]';
 const check = process.argv.includes('--check');
+const tagIndex = process.argv.indexOf('--tag');
+const tag = tagIndex === -1 ? undefined : process.argv[tagIndex + 1];
+if (tagIndex !== -1 && !tag) throw new Error('--tag requires a version');
 
 const current = readFileSync(CHANGELOG, 'utf8');
 
@@ -40,28 +44,34 @@ if (!/^# /m.test(header)) {
   );
 }
 
-const generated = execFileSync('git-cliff', ['--config', CONFIG, '--unreleased'], {
+const cliffArgs = ['--config', CONFIG, '--unreleased'];
+if (tag) cliffArgs.push('--tag', tag);
+const generated = execFileSync('git-cliff', cliffArgs, {
   encoding: 'utf8',
   maxBuffer: 32 * 1024 * 1024,
 }).trim();
 
 // Released sections = everything from the first "## [" that is NOT [Unreleased].
-// Dropping any existing [Unreleased] block is what makes this idempotent.
+// Dropping the target version too keeps tagged runs idempotent.
 const sections = current.slice(firstSection).split(/^(?=## \[)/m);
-const released = sections.filter((s) => !s.startsWith(UNRELEASED)).join('').trimEnd();
+const targetHeading = tag ? `## [${tag.replace(/^v/, '')}]` : undefined;
+const released = sections
+  .filter((section) => !section.startsWith(UNRELEASED) && (!targetHeading || !section.startsWith(targetHeading)))
+  .join('')
+  .trimEnd();
 
-// git-cliff emits its own "## [Unreleased]" heading; keep exactly one.
-const body = generated.startsWith(UNRELEASED) ? generated : `${UNRELEASED}\n\n${generated}`;
 const hasEntries = /^- /m.test(generated);
-
-const next = `${header}\n\n${hasEntries ? body : UNRELEASED}\n\n${released}\n`;
+const refreshed = tag
+  ? `${UNRELEASED}\n\n${generated}`
+  : generated.startsWith(UNRELEASED) ? generated : `${UNRELEASED}\n\n${generated}`;
+const next = `${header}\n\n${hasEntries ? refreshed : UNRELEASED}\n\n${released}\n`;
 
 if (next === current) {
   console.log(`${CHANGELOG}: already up to date`);
   process.exit(0);
 }
 if (check) {
-  console.error(`${CHANGELOG}: out of date — run: node scripts/changelog-update.mjs`);
+  console.error(`${CHANGELOG}: out of date — run: node scripts/changelog-update.mjs${tag ? ` --tag ${tag}` : ''}`);
   process.exit(1);
 }
 
@@ -71,4 +81,4 @@ for (const heading of current.match(/^## \[v[^\]]+\].*$/gm) ?? []) {
 }
 
 writeFileSync(CHANGELOG, next);
-console.log(`${CHANGELOG}: [Unreleased] refreshed (${(generated.match(/^- /gm) ?? []).length} entries)`);
+console.log(`${CHANGELOG}: ${tag ?? '[Unreleased]'} refreshed (${(generated.match(/^- /gm) ?? []).length} entries)`);

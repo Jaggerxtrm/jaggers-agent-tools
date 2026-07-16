@@ -1,6 +1,6 @@
 {
   "name": "xtrm-tools",
-  "version": "0.10.6",
+  "version": "0.11.0",
   "description": "Claude Code tools installer (skills, hooks, MCP servers)",
   "license": "MIT",
   "type": "module",
@@ -45,9 +45,9 @@
     "type": "git",
     "url": "git+https://github.com/xtrm-dev/core.git"
   },
-  "homepage": "https://github.com/Jaggerxtrm/xtrm-tools#readme",
+  "homepage": "https://github.com/xtrm-dev/core#readme",
   "bugs": {
-    "url": "https://github.com/Jaggerxtrm/xtrm-tools/issues"
+    "url": "https://github.com/xtrm-dev/core/issues"
   },
   "scripts": {
     "sync:cli-version": "node scripts/sync-cli-version.mjs",
@@ -61,7 +61,9 @@
     "lint": "echo 'No linting configured'",
     "test": "npm test --workspace cli",
     "check:package": "node scripts/assert-no-self-dependency.mjs",
-    "version": "npm run sync:cli-version && git add cli/package.json packages/pi-extensions/package.json",
+    "changelog:update": "node scripts/changelog-update.mjs",
+    "changelog:check": "node scripts/changelog-update.mjs --check",
+    "version": "npm run changelog:update -- --tag v$npm_package_version && npm run sync:cli-version && git add CHANGELOG.md cli/package.json packages/pi-extensions/package.json",
     "check:skills-ownership": "node scripts/check-skills-ownership.mjs",
     "check:specialists-vendor": "node scripts/verify-specialists-vendor.mjs",
     "check:asset-contract": "node scripts/verify-asset-contract.mjs",

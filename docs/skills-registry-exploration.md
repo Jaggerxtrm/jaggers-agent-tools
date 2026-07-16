@@ -8,7 +8,7 @@ synced_at: f0cca6f1
 description: "[ARCHIVED] Historical skills registry design spec — superseded by global skills migration (xtrm-bq7yd)"
 source_of_truth_for: []
 domain: [skills, cli, registry]
-updated_at: 2026-07-08
+updated_at: 2026-07-16
 status: archived
 ---
 
@@ -155,7 +155,7 @@ Validation rules:
 
 #### `extra` (optional packs)
 
-- Populated automatically by `xt install`; runtime activation is explicit via `xt skills enable <pack>`.
+- Populated automatically by `xt init`; runtime activation is explicit via `xt skills enable <pack>`.
 - Contains optional packs that can add new skills or provide managed replacements of default definitions.
 - Current installed domain bundles: `research-methods`, `code-quality`, `security-ops`, `data-engineering`, `architecture-design`.
 - Pack records must include pack id, version, provenance, and compatibility constraints.

@@ -28,7 +28,7 @@ Specialists are first-class in v0.7.19. `xtrm-tools` vendors specialist skills i
 
 ---
 
-**Version 0.7.21** | [Complete Guide](XTRM-GUIDE.md) | [Changelog](CHANGELOG.md)
+**Version 0.11.0** | [Complete Guide](XTRM-GUIDE.md) | [Changelog](CHANGELOG.md)
 
 ---
 
@@ -72,13 +72,13 @@ xt bootstrap
 xtrm init
 
 # Verify
-claude plugin list
-# → xtrm-tools@xtrm-tools  Version: 0.7.21  Status: enabled
+xt --version
+xt doctor
 ```
 
 **One-line run:**
 ```bash
-npx -y github:Jaggerxtrm/xtrm-tools init
+npx -y github:xtrm-dev/core init
 ```
 
 **Typical workflow after install:**
@@ -184,7 +184,7 @@ sp prune-stale-defaults --root <repo-or-root>
 
 ### Skills
 
-Skills are resolved through a three-tier registry in `.xtrm/skills/` (`default` + `optional` + `user`). Optional packs are installed by default during `xt install`; activate any pack with `xt skills enable <pack>`. Current optional pack catalog: `research-methods`, `code-quality`, `security-ops`, `data-engineering`, and `architecture-design`.
+Skills are resolved through a three-tier registry in `.xtrm/skills/` (`default` + `optional` + `user`). `xt init` populates the global catalog; activate optional packs with `xt skills enable <pack>`. Current optional pack catalog: `research-methods`, `code-quality`, `security-ops`, `data-engineering`, and `architecture-design`.
 
 Skills are organized into two categories: **xtrm workflow** skills built specifically for the xtrm stack, and **general-purpose** expert skills that work in any project.
 
@@ -335,8 +335,8 @@ See [docs/mcp-servers.md](docs/mcp-servers.md) for configuration details.
 | Tool | Purpose | Install source |
 |------|---------|----------------|
 | `ghgrep` | GitHub code search CLI wrapper over `mcp.grep.app` | Ships as `bin` in `xtrm-tools` |
-| `ctx7` | Context7 docs + skills CLI | Installed by machine-bootstrap (`xt install` / `xt init`) |
-| `deepwiki` | Repo documentation Q&A CLI | Installed by machine-bootstrap (`xt install` / `xt init`) |
+| `ctx7` | Context7 docs + skills CLI | Installed by machine bootstrap (`xt init`) |
+| `deepwiki` | Repo documentation Q&A CLI | Installed by machine bootstrap (`xt init`) |
 
 See [docs/bash-tools.md](docs/bash-tools.md) for usage examples and when to use CLIs vs MCP equivalents.
 
@@ -358,6 +358,7 @@ See [XTRM-GUIDE.md](XTRM-GUIDE.md) for the full `bd` command reference.
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 0.11.0 | 2026-07-17 | Launcher, role-model isolation, verified audits, release metadata, and concise changelogs |
 | 0.7.21 | 2026-05-16 | Pi extension polish and current package line; update flow verified for xtrm-managed skills and specialists runtime |
 | 0.7.20 | 2026-05-15 | Worktree bootstrap guidance and Pi external tool overlay/chrome release |
 | 0.7.19 | 2026-05-14 | README, CLI, and docs synced to shipped npm package; release-contract and specialists workflow fully documented |
