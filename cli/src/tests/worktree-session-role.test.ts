@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createClaudeCommand } from '../commands/claude.js';
 import { createPiCommand } from '../commands/pi.js';
 import {
@@ -22,6 +22,7 @@ import {
     renderRoleTask,
     renderSkillPrefix,
     resolveRequestedSkills,
+    resolveRole,
     resolveSkillPath,
 } from '../utils/worktree-session.js';
 
@@ -318,6 +319,72 @@ describe('role command flags', () => {
     });
 });
 
+describe('resolveRole surface model contract', () => {
+    const capture = path.join(os.tmpdir(), `xtrm-role-view-capture-${process.pid}`);
+
+    afterEach(() => rmSync(capture, { force: true }));
+
+    it('requests Claude surface resolution and leaves a null role model unset', () => {
+        const script = `#!/usr/bin/env node
+const fs = require('node:fs');
+fs.writeFileSync(process.env.XTRM_ROLE_VIEW_CAPTURE, JSON.stringify(process.argv.slice(2)));
+process.stdout.write(JSON.stringify({ specialist: { prompt: { system: 'role' }, execution: { model: null } } }));
+`;
+        const previousCapture = process.env.XTRM_ROLE_VIEW_CAPTURE;
+        process.env.XTRM_ROLE_VIEW_CAPTURE = capture;
+        try {
+            withFakeSp(script, () => {
+                const role = resolveRole('chain-coordinator', '/repo/root', 'claude');
+                expect(role.model).toBeUndefined();
+            });
+            expect(JSON.parse(readFileSync(capture, 'utf8'))).toEqual([
+                'view', 'chain-coordinator', '--raw', '--surface', 'claude',
+            ]);
+        } finally {
+            process.env.XTRM_ROLE_VIEW_CAPTURE = previousCapture;
+        }
+    });
+
+    it('keeps Pi legacy resolution when an older Specialists lacks --surface', () => {
+        const script = `#!/usr/bin/env node
+if (process.argv.includes('--surface')) {
+  process.stderr.write("unknown option '--surface'");
+  process.exit(1);
+}
+process.stdout.write(JSON.stringify({ specialist: { prompt: { system: 'role' }, execution: { model: 'openai-codex/gpt-5.6-luna' } } }));
+`;
+        withFakeSp(script, () => {
+            const role = resolveRole('chain-coordinator', '/repo/root', 'pi');
+            expect(role.model).toBe('openai-codex/gpt-5.6-luna');
+        });
+    });
+
+    it('fails clearly instead of falling back for old Claude Specialists', () => {
+        const script = `#!/usr/bin/env node
+process.stderr.write("unknown option '--surface'");
+process.exit(1);
+`;
+        withFakeSp(script, () => {
+            expect(() => resolveRole('chain-coordinator', '/repo/root', 'claude'))
+                .toThrow(/surface-aware Claude model resolution.*upgrade/);
+        });
+    });
+
+    it('allows an explicit Claude model to use legacy Specialists resolution', () => {
+        const script = `#!/usr/bin/env node
+if (process.argv.includes('--surface')) {
+  process.stderr.write("unknown option '--surface'");
+  process.exit(1);
+}
+process.stdout.write(JSON.stringify({ specialist: { prompt: { system: 'role' }, execution: { model: 'openai-codex/gpt-5.6-luna' } } }));
+`;
+        withFakeSp(script, () => {
+            const role = resolveRole('chain-coordinator', '/repo/root', 'claude', true);
+            expect(role.model).toBe('openai-codex/gpt-5.6-luna');
+        });
+    });
+});
+
 describe('parseSpecialistJson', () => {
     const mainRepoRoot = '/repo/root';
 
@@ -523,6 +590,17 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
         expect(plan.runtimeArgs).not.toContain('-e');
     });
 
+    it('keeps the Pi surface-resolved provider model unchanged', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'pi',
+            role: { ...role, model: 'openai-codex/gpt-5.6-luna' },
+            parentSessionId: '',
+            turn1Body: '',
+        });
+        const modelIdx = plan.runtimeArgs.indexOf('--model');
+        expect(plan.runtimeArgs[modelIdx + 1]).toBe('openai-codex/gpt-5.6-luna');
+    });
+
     it('forwards --model / --thinking CLI overrides', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'pi',
@@ -651,17 +729,29 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
         expect(plan.runtimeArgs).not.toContain('--plugin-dir');
     });
 
-    it('forwards --model but silently drops --thinking (claude has no --thinking flag)', () => {
+    it('preserves an explicit Claude model override over a cross-provider role default', () => {
         const plan = buildRoleTmuxPlan({
             runtime: 'claude',
-            role,
+            role: { ...role, model: 'openai-codex/gpt-5.6-luna' },
             parentSessionId: '',
             turn1Body: '',
+            modelOverride: 'opus',
             thinkingOverride: 'high',
         });
         const modelIdx = plan.runtimeArgs.indexOf('--model');
-        expect(plan.runtimeArgs[modelIdx + 1]).toBe('claude-opus-4-8');
+        expect(plan.runtimeArgs[modelIdx + 1]).toBe('opus');
+        expect(plan.runtimeArgs).not.toContain('openai-codex/gpt-5.6-luna');
         expect(plan.runtimeArgs).not.toContain('--thinking');
+    });
+
+    it('omits --model for a surface-resolved Claude default', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            role: { ...role, model: undefined },
+            parentSessionId: '',
+            turn1Body: '',
+        });
+        expect(plan.runtimeArgs).not.toContain('--model');
     });
 
     it('shell-quotes with claude as the runtime prefix and inlines the system prompt safely', () => {

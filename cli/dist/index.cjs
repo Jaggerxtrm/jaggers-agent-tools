@@ -61735,16 +61735,31 @@ function parseSpecialistJson(name, raw, mainRepoRoot = process.cwd()) {
   }
   return { name, systemPrompt, skillPaths, model, thinkingLevel, extensions };
 }
-function resolveRole(name, mainRepoRoot = process.cwd()) {
-  const r = (0, import_node_child_process.spawnSync)("sp", ["view", name, "--raw"], {
+function isUnsupportedSurfaceOption(stderr) {
+  return /unknown (?:option|flag)|unrecognized option|unexpected argument|invalid option/i.test(stderr);
+}
+function resolveRole(name, mainRepoRoot = process.cwd(), runtime = "pi", allowLegacyFallback = false) {
+  let result = (0, import_node_child_process.spawnSync)("sp", ["view", name, "--raw", "--surface", runtime], {
     encoding: "utf8",
     stdio: "pipe"
   });
-  if (r.status !== 0) {
-    const stderr = (r.stderr ?? "").trim() || "unknown error";
-    throw new Error(`role '${name}' not found via sp view (${stderr})`);
+  const stderr = (result.stderr ?? "").trim();
+  if (result.status !== 0 && (runtime === "pi" || allowLegacyFallback) && isUnsupportedSurfaceOption(stderr)) {
+    result = (0, import_node_child_process.spawnSync)("sp", ["view", name, "--raw"], {
+      encoding: "utf8",
+      stdio: "pipe"
+    });
   }
-  return parseSpecialistJson(name, r.stdout ?? "", mainRepoRoot);
+  if (result.status !== 0) {
+    const error51 = (result.stderr ?? "").trim() || "unknown error";
+    if (runtime === "claude" && isUnsupportedSurfaceOption(error51)) {
+      throw new Error(
+        `role '${name}': Specialists does not support surface-aware Claude model resolution; upgrade @jaggerxtrm/specialists before launching xt claude --role`
+      );
+    }
+    throw new Error(`role '${name}' not found via sp view (${error51})`);
+  }
+  return parseSpecialistJson(name, result.stdout ?? "", mainRepoRoot);
 }
 function renderRoleTask(args) {
   const result = (0, import_node_child_process.spawnSync)("sp", [
@@ -62110,7 +62125,7 @@ async function launchWorktreeSession(opts) {
   let explicitSkillPaths = [];
   if (roleName) {
     try {
-      resolvedRole = resolveRole(roleName, cwd);
+      resolvedRole = resolveRole(roleName, cwd, runtime, Boolean(model));
       resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
       explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
       if (runtime === "claude") assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);

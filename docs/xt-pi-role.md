@@ -47,7 +47,7 @@ No prompt/task file is created. Current-pane launches pass the exact positional 
 
 | Flag | Meaning | Notes |
 | --- | --- | --- |
-| `--role <name>` | Resolve `<name>` via `sp view <name> --raw` and boot the runtime with the specialist's system prompt, skills, model, and thinking level. | The role's `execution.model` / `execution.thinking_level` from `sp view` are the defaults; CLI flags override. |
+| `--role <name>` | Resolve `<name>` via `sp view <name> --raw --surface <runtime>` and boot the runtime with the specialist's system prompt, skills, model, and thinking level. | The Specialists resolver selects model defaults for the target surface; CLI flags override. Pi falls back to legacy `sp view` only for older Specialists releases. Claude fails clearly instead of accepting an unscoped provider default. |
 | `--bead <id>` | Render the tracked task as the initial user prompt via `sp render-task`, and attach `<id>` to the pane via `@agent_bead`. | Mutually exclusive with `--prompt`. Included in the session name slug (`role-<runtime>-<slug>-<bead>`). |
 | `--prompt <text>` | Use `<text>` as the initial user prompt. Combines with the sp-owned skill prefix. | Mutually exclusive with `--bead`. For anything larger than a paragraph, prefer `--bead` — a beads issue is a better container than a shell argv. |
 | `--no-attach` | New-session mode only. Print `session_name:pane_id` on stdout and exit — orchestrator-capture pattern. | Inside `$TMUX` without `--new-session`, `--no-attach` **errors** with a clear hint. |
@@ -148,7 +148,7 @@ Skill delivery is now uniform across cases: sp emits a `/skill:name` (pi) or new
 
 **Model.**
 
-CLI `--model` wins over `specialist.execution.model` (from `sp view`), which wins over the runtime's own default. `sp view <name> --raw` returns the **merged effective spec** (package canonical + user overrides via `sp edit --global`) — the launcher does not need to re-apply overrides.
+The launcher requests a surface-resolved effective spec with `sp view <name> --raw --surface pi|claude`. Specialists may apply the generic default for Pi, but must not substitute that provider-only default for a role whose declared model is `null` on the Claude surface. Claude receives the configured Claude-surface model when one exists; otherwise it omits `--model` and lets Claude Code select its own default. Explicit `xt ... --model <name>` always wins, including valid Claude and custom-provider model identifiers. A Specialists release without the Claude surface contract is rejected before worktree creation with an upgrade hint.
 
 **Extensions (pi).**
 

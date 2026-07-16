@@ -73,7 +73,7 @@ export interface ResolvedRole {
     name: string;
     systemPrompt: string;
     skillPaths: string[];
-    /** specialist.execution.model — default pi --model for role. */
+    /** Surface-resolved specialist.execution.model default for this runtime. */
     model?: string;
     /** specialist.execution.thinking_level — default pi --thinking for role. */
     thinkingLevel?: string;
@@ -266,16 +266,45 @@ export function parseSpecialistJson(name: string, raw: string, mainRepoRoot: str
     return { name, systemPrompt, skillPaths, model, thinkingLevel, extensions };
 }
 
-export function resolveRole(name: string, mainRepoRoot: string = process.cwd()): ResolvedRole {
-    const r = spawnSync('sp', ['view', name, '--raw'], {
+function isUnsupportedSurfaceOption(stderr: string): boolean {
+    return /unknown (?:option|flag)|unrecognized option|unexpected argument|invalid option/i.test(stderr);
+}
+
+export function resolveRole(
+    name: string,
+    mainRepoRoot: string = process.cwd(),
+    runtime: 'pi' | 'claude' = 'pi',
+    allowLegacyFallback = false,
+): ResolvedRole {
+    let result = spawnSync('sp', ['view', name, '--raw', '--surface', runtime], {
         encoding: 'utf8',
         stdio: 'pipe',
     });
-    if (r.status !== 0) {
-        const stderr = (r.stderr ?? '').trim() || 'unknown error';
-        throw new Error(`role '${name}' not found via sp view (${stderr})`);
+    const stderr = (result.stderr ?? '').trim();
+
+    // Older Specialists releases predate surface-aware model resolution. Pi
+    // can safely retain its historical merged-default behavior. Claude may do
+    // so only when an explicit CLI model makes the role default irrelevant;
+    // normal launches must fail rather than reintroduce provider leakage.
+    if (result.status !== 0
+        && (runtime === 'pi' || allowLegacyFallback)
+        && isUnsupportedSurfaceOption(stderr)) {
+        result = spawnSync('sp', ['view', name, '--raw'], {
+            encoding: 'utf8',
+            stdio: 'pipe',
+        });
     }
-    return parseSpecialistJson(name, r.stdout ?? '', mainRepoRoot);
+    if (result.status !== 0) {
+        const error = (result.stderr ?? '').trim() || 'unknown error';
+        if (runtime === 'claude' && isUnsupportedSurfaceOption(error)) {
+            throw new Error(
+                `role '${name}': Specialists does not support surface-aware Claude model resolution; `
+                + `upgrade @jaggerxtrm/specialists before launching xt claude --role`,
+            );
+        }
+        throw new Error(`role '${name}' not found via sp view (${error})`);
+    }
+    return parseSpecialistJson(name, result.stdout ?? '', mainRepoRoot);
 }
 
 export interface RenderedRoleTask {
@@ -934,7 +963,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     let explicitSkillPaths: string[] = [];
     if (roleName) {
         try {
-            resolvedRole = resolveRole(roleName, cwd);
+            resolvedRole = resolveRole(roleName, cwd, runtime, Boolean(model));
             resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
             explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
             if (runtime === 'claude') assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
