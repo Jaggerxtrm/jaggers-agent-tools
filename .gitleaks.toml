@@ -6,6 +6,10 @@ useDefault = true
 
 [allowlist]
 description = "xtrm-tools allowlist"
+# Historical Qwen OAuth credentials were revoked; keep this commit out of full-history scans.
+commits = [
+    '''dc019b8848a03ceedc3d388c9316110acb2c4b1d''',
+]
 stopwords = []
 regexes = [
     # Test fixture placeholders in cli/test/install-pi.test.ts.
