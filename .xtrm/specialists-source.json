@@ -2,8 +2,8 @@
   "version": 1,
   "source": {
     "kind": "ref",
-    "ref": "v3.18.3",
-    "resolved_sha": "bbb30401bbb7caa6833828241a8722777bf28fcc",
+    "ref": "master",
+    "resolved_sha": "50d715b2a773e2650f8526755f4e588363973c98",
     "repo_path": "../specialists",
     "source_path": "config/skills"
   },
@@ -21,7 +21,7 @@
       "scripts/audit-spec-uniformity.mjs": "0ada06784cfd5c3adfa9c9908a9cd23380e8278fb57329fc616a83140a47fb33",
       "scripts/scaffold-specialist.ts": "c1bfa3693d644072e6d387d2519e131624d99c5b85521ae638680d7485267403",
       "scripts/validate-specialist.ts": "3a5f5a3a77c50e98ecf9188634ff2882f8143b19d0f28a53aff5c42e1bd09dfa",
-      "SKILL.md": "223ab14dbd1c2443f147600691819408faed9f13524d485c0b99394fa84e0981"
+      "SKILL.md": "f825f500e531e3a04b252c0f9a22b8acaa396f9d093368338d13e21ac43c30d4"
     },
     "update-specialists": {
       "SKILL.md": "fdf8c680cf3e5dce80c9426f52b56c953f4f7f663c23a33a3378b2b6e4bab5a9"
@@ -36,16 +36,23 @@
       "SKILL.md": "e87511d685eb7bc95c374641056194931a9da79434b624fdfb2805bd9dbac7b6"
     },
     "using-specialists": {
-      "evals/evals.json": "6c5fb21fec152a42978fee6ad8ea617b8513f3b28ce9b6599f6a47788ff52022",
+      "evals/evals.json": "1a995301b27b35bef5e59bf8cf6a290c6c289639d6ce21a5aa8931fff1f80d18",
       "evals/fixtures/qa-routing/bad-test-result.json": "20e0d3698809c87f9445ea533545998143ffc151a0c2774ea37415b5a984a011",
       "evals/fixtures/qa-routing/reviewer-input.json": "8c3bea5b93a55944aef036c498a090c3e2a6ae4a86c378d66cddfe7cda2aa093",
       "evals/fixtures/qa-routing/source-regression-result.json": "0f566ca2ad84458ce183a1ca4a925ef0b308c8d8cc61fa75b90dc14685d9e3bf",
       "evals/fixtures/qa-routing/source-regression.diff": "7fc1868c75cae4ec9ecd87eeead1b4f0b82d9e1f41d1edf1697d7ab4d40598d0",
       "evals/README.md": "c6c871a9e2a5ca8d9cea7b23f89033018791fd1fcdb8fec775b888fe88d4dfa9",
-      "SKILL.md": "9f4a1b124f6178d62d76b9e417e8233ecbae166d4e15b6ecd58fdb0b6a21b6a1"
+      "references/bead-contracts.md": "b2c3f08758e5a998d52b37c8b5239db81f496a5ea63d93b680a5f49dd0446db4",
+      "references/chain-recipes.md": "c92e6447f8ec443db30a28b369d59bdec1f8438115803b9f4661437e97f88f75",
+      "references/content-migration-map.json": "32ec8787652b925b5c7dde04adff81baf129a5154decc5ffcd1034655da0bd5f",
+      "references/dispatch-preconditions.md": "66c7f52379fe546e79fe3eac0c0d52c47df1fc8d1491f805531f48cf83a89dd8",
+      "references/merge-and-integration.md": "7884a445b5ee7031fd0cf2b548a6f6bf4df8daa2ab1db5ec28f32c47cbc4d6dd",
+      "references/monitoring.md": "7b1aa2cec42756fb752467da14552d1e7233c892232abbc24d563abeb19cd537",
+      "references/registry-and-locations.md": "d02cb1c2e68f59e14f57d8fda7e80e109fe5666bbd33cae4c0ab8f9b10814460",
+      "SKILL.md": "af5725c1e034dd9181452704abdaf5eaa0e0476e2f1c54d9734e3a50e49fbdb7"
     },
     "using-specialists-auto": {
-      "SKILL.md": "932f4248cd4a8bcece747bcc08c6e0dc775126cbb83aab5318e1ea82dde09686"
+      "SKILL.md": "0668f03dc701d3895defc1e3f3973fa41976355db5a1c38278b6272c95f145c4"
     }
   }
 }
