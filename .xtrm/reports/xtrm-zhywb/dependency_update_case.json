@@ -1,0 +1,65 @@
+{
+  "schema": "xtrm.dependency_update_case.v0",
+  "case_id": "dep-618b7a71418a",
+  "trigger": {
+    "kind": "advisory",
+    "repo": "xtrm-dev/core",
+    "pr": null,
+    "branch": "xt/2x1m"
+  },
+  "package": {
+    "name": "vite",
+    "ecosystem": "npm",
+    "from_version": "8.0.12",
+    "to_version": "8.0.16",
+    "update_kind": "patch",
+    "dependency_kind": "transitive",
+    "scope": "unknown"
+  },
+  "supply_chain": {
+    "release_age_hours": 1087,
+    "cooldown_status": "cleared",
+    "registry_status": "normal",
+    "maintainer_change_detected": false,
+    "install_script_changed": false,
+    "artifact_repo_mismatch": "unknown"
+  },
+  "security": {
+    "advisories": [],
+    "known_exploited": false,
+    "public_exploit_available": false,
+    "epss_bucket": "unknown",
+    "malicious_package_signal": "none"
+  },
+  "usage": {
+    "affected_services": [],
+    "affected_files": [
+      "package.json",
+      "cli/package.json",
+      "package-lock.json",
+      "cli/package-lock.json",
+      "cli/pnpm-lock.yaml"
+    ],
+    "runtime_reachable": "no",
+    "publicly_exposed_path": "no",
+    "github_actions_blast_radius": "n/a"
+  },
+  "tests": {
+    "existing_tests_relevant": [
+      "scripts/dep-inspect.test.mjs",
+      "cli/test/config-schema.test.ts",
+      "cli/test/docs-scanner.unit.test.ts"
+    ],
+    "missing_tests": [],
+    "recommended_commands": [
+      "npm audit --package-lock-only",
+      "cd cli && npm run typecheck",
+      "cd cli && npx tsup --out-dir .xtrm/cache/dependency-build-check",
+      "cd cli && npx vitest run test/config-schema.test.ts test/docs-scanner.unit.test.ts"
+    ]
+  },
+  "preliminary_verdict": {
+    "status": "safe_candidate",
+    "reason": "cooldown cleared, no advisories"
+  }
+}
