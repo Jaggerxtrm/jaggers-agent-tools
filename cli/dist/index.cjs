@@ -56978,7 +56978,7 @@ function renderSkillPrefix(args) {
 function checkPositionZeroSlash(body, runtime, trustedPrefix) {
   const expectedPrefix = runtime === "pi" ? "/skill:" : "/<name>";
   if (trustedPrefix) {
-    const hasValidPrefix = runtime === "pi" ? trustedPrefix.startsWith("/skill:") : /^\/(?!skill-)(?:[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:\n\/(?!skill-)[a-zA-Z0-9][a-zA-Z0-9._-]*)*\n\n$/.test(trustedPrefix);
+    const hasValidPrefix = runtime === "pi" ? trustedPrefix.startsWith("/skill:") : /^\/(?:[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:\n\/[a-zA-Z0-9][a-zA-Z0-9._-]*)*\n\n$/.test(trustedPrefix);
     if (!hasValidPrefix) {
       return { ok: false, error: `trusted skill prefix does not match the ${runtime} '${expectedPrefix}' surface.` };
     }

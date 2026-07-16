@@ -36,7 +36,7 @@ description: "Reference documentation"
 # Extend Claude with skills
 
 > Create, manage, and share skills to extend Claude's capabilities in Claude Code. Includes custom slash commands.
-Skills extend what Claude can do. Create a `SKILL.md` file with instructions, and Claude adds it to its toolkit. Claude uses skills when relevant, or you can invoke one directly with `/<name>`.
+Skills extend what Claude can do. Create a `SKILL.md` file with instructions, and Claude adds it to its toolkit. Claude uses skills when relevant, or you can invoke one directly with `/skill-name`.
 <Note>
   For built-in commands like `/help` and `/compact`, see [interactive mode](/en/interactive-mode#built-in-commands).
   **Custom slash commands have been merged into skills.** A file at `.claude/commands/review.md` and a skill at `.claude/skills/review/SKILL.md` both create `/review` and work the same way. Your existing `.claude/commands/` files keep working. Skills add optional features: a directory for supporting files, frontmatter to [control whether you or Claude invokes them](#control-who-invokes-a-skill), and the ability for Claude to load them automatically when relevant.
@@ -139,7 +139,7 @@ When writing API endpoints:
 - Return consistent error formats
 - Include request validation
 ```
-**Task content** gives Claude step-by-step instructions for a specific action, like deployments, commits, or code generation. These are often actions you want to invoke directly with `/<name>` rather than letting Claude decide when to run them. Add `disable-model-invocation: true` to prevent Claude from triggering it automatically.
+**Task content** gives Claude step-by-step instructions for a specific action, like deployments, commits, or code generation. These are often actions you want to invoke directly with `/skill-name` rather than letting Claude decide when to run them. Add `disable-model-invocation: true` to prevent Claude from triggering it automatically.
 ```yaml  theme={null}
 ---
 scope: reference
@@ -244,7 +244,7 @@ Reference supporting files from `SKILL.md` so Claude knows what each file contai
 ```
 <Tip>Keep `SKILL.md` under 500 lines. Move detailed reference material to separate files.</Tip>
 ### Control who invokes a skill
-By default, both you and Claude can invoke any skill. You can type `/<name>` to invoke it directly, and Claude can load it automatically when relevant to your conversation. Two frontmatter fields let you restrict this:
+By default, both you and Claude can invoke any skill. You can type `/skill-name` to invoke it directly, and Claude can load it automatically when relevant to your conversation. Two frontmatter fields let you restrict this:
 * **`disable-model-invocation: true`**: Only you can invoke the skill. Use this for workflows with side effects or that you want to control timing, like `/commit`, `/deploy`, or `/send-slack-message`. You don't want Claude deciding to deploy because your code looks ready.
 * **`user-invocable: false`**: Only Claude can invoke the skill. Use this for background knowledge that isn't actionable as a command. A `legacy-system-context` skill explains how an old system works. Claude should know this when relevant, but `/legacy-system-context` isn't a meaningful action for users to take.
 This example creates a deploy skill that only you can trigger. The `disable-model-invocation: true` field prevents Claude from running it automatically:
@@ -666,7 +666,7 @@ If Claude doesn't use your skill when expected:
 1. Check the description includes keywords users would naturally say
 2. Verify the skill appears in `What skills are available?`
 3. Try rephrasing your request to match the description more closely
-4. Invoke it directly with `/<name>` if the skill is user-invocable
+4. Invoke it directly with `/skill-name` if the skill is user-invocable
 ### Skill triggers too often
 If Claude uses your skill when you don't want it:
 1. Make the description more specific

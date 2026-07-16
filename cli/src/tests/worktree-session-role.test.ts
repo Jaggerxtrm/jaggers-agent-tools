@@ -234,7 +234,11 @@ describe('checkPositionZeroSlash', () => {
         expect(checkPositionZeroSlash('/foo bar', 'pi', '').ok).toBe(false);
         expect(checkPositionZeroSlash('/skill-x', 'pi', '/skill-x').ok).toBe(false);
         expect(checkPositionZeroSlash('/skill:x', 'claude', '/skill:x').ok).toBe(false);
-        expect(checkPositionZeroSlash('/skill-x\n\nbody', 'claude', '/skill-x\n\n').ok).toBe(false);
+    });
+
+    it('accepts a trusted Claude skill whose name starts with skill-', () => {
+        const prefix = '/skill-creator\n\n';
+        expect(checkPositionZeroSlash(`${prefix}body`, 'claude', prefix).ok).toBe(true);
     });
 });
 
