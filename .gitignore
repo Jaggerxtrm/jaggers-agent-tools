@@ -97,6 +97,10 @@ hooks/tsconfig-cache.json
 # Beads / Dolt files (added by bd init)
 .beads/proxieddb/
 
+# Local provider OAuth credentials (never track account snapshots).
+accounts/oauth_creds_*.json
+accounts/
+
 # Local agent/runtime dotfile artifacts (generated per checkout, not source)
 .claude/settings.json
 .claude/service-registry.json
