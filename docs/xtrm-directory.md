@@ -3,7 +3,7 @@ title: .xtrm Directory Reference
 scope: xtrm-directory
 category: reference
 version: 2.0.0
-updated: 2026-07-08
+updated: 2026-07-16
 synced_at: xtrm-bq7yd.8
 description: "Centralized xtrm configuration and runtime data directory with global skills SSOT"
 source_of_truth_for:
@@ -15,7 +15,7 @@ source_of_truth_for:
   - "cli/src/commands/doctor.ts"
   - "cli/src/commands/bootstrap.ts"
 domain: [config, xtrm]
-updated_at: 2026-07-08
+updated_at: 2026-07-16
 ---
 
 <!-- INDEX: auto-generated -->
@@ -112,7 +112,7 @@ See [docs/plans/global-skills-migration.md](plans/global-skills-migration.md) fo
 | Subdirectory | Purpose | Managed by |
 |---|---|---|
 | `skills/` | Project residual state: user packs + service-skills + composed active view | `xt init`, `xt skills`, `xt migrate` |
-| `hooks/` | Hook scripts + compiled config | Policy compile, `xt install` |
+| `hooks/` | Hook scripts + compiled config | Policy compile, `xt init` / `xt update --apply` |
 | `ext-src/` | [DEPRECATED] Legacy extension source | Do not use — migrated to `packages/pi-extensions/` |
 | `worktrees/` | Session worktrees | `xt worktree`, `xt claude`, `xt pi` |
 | `reports/` | Session handoff reports | `xt report generate` |

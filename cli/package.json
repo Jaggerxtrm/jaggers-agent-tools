@@ -1,8 +1,16 @@
 {
   "name": "xtrm-cli",
   "private": true,
-  "version": "0.10.6",
+  "version": "0.11.0",
   "description": "Claude Code tools installer (skills, hooks, MCP servers)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xtrm-dev/core.git"
+  },
+  "homepage": "https://github.com/xtrm-dev/core#readme",
+  "bugs": {
+    "url": "https://github.com/xtrm-dev/core/issues"
+  },
   "main": "./dist/index.js",
   "type": "module",
   "bin": {

@@ -2,11 +2,11 @@
 title: Release Playbook
 scope: release-contract
 category: guide
-version: 1.0.0
-updated: 2026-05-13
+version: 1.1.0
+updated: 2026-07-16
 description: How operators cut releases and how agents must touch release plumbing without breaking the contract.
 domain: [release, ci, specialists, vendor]
-updated_at: 2026-05-13
+updated_at: 2026-07-16
 ---
 
 # Release Playbook
@@ -110,13 +110,16 @@ None of the above gate the release. They're confidence checks.
 gh pr list --base main --state open
 git checkout main && git pull
 
-# 2. Bump version. Pick patch / minor / major.
-npm version patch -m "release: %s"
+# 2. Generate concise notes before creating the tag.
+git-cliff --config changelog/cliff.toml --unreleased --tag vX.Y.Z > /tmp/xtrm-vX.Y.Z.md
+
+# 3. Bump version. The npm version lifecycle promotes [Unreleased] to
+#    [X.Y.Z] through scripts/changelog-update.mjs, then syncs workspace versions.
+npm version minor -m "release: %s"  # use patch for fix-only batches
 git push --follow-tags
 
-# 3. Create a GitHub Release on that tag — this fires publish.yml.
-#    Either via UI or CLI:
-gh release create vX.Y.Z --generate-notes
+# 4. Create a matching GitHub Release — this fires publish.yml.
+gh release create vX.Y.Z --title "vX.Y.Z — <summary>" --notes-file /tmp/xtrm-vX.Y.Z.md
 ```
 
 That last step triggers `publish.yml`. The workflow:
