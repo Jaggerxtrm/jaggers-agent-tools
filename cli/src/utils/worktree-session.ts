@@ -208,7 +208,7 @@ export function assertClaudeSkillsDiscoverable(mainRepoRoot: string, requestedPa
         const requestedRealPath = realpathSync(requestedFile);
         if (candidates.some((candidate) => existsSync(candidate) && realpathSync(candidate) === requestedRealPath)) continue;
         throw new Error(
-            `skill '${requestedPath}' is not discoverable by Claude as '/skill-${name}'. `
+            `skill '${requestedPath}' is not discoverable by Claude as '/${name}'. `
             + `Install or enable the same skill under .claude/skills/${name} before launching.`,
         );
     }
@@ -451,7 +451,7 @@ export function renderSkillPrefix(args: {
 
 /**
  * Position-0 '/' safety check on the composed turn-1 body. A '/' at literal
- * byte 0 is only safe when it's the sp-owned /skill:name (pi) or /skill-name
+ * byte 0 is only safe when it's the sp-owned /skill:name (pi) or /<name>
  * (claude) prefix. Otherwise the runtime's slash-command parser would try to
  * interpret an operator-provided prompt or a bead title starting with '/' as
  * a command. xtrm-8zsi1.
@@ -461,11 +461,14 @@ export function checkPositionZeroSlash(
     runtime: 'pi' | 'claude',
     trustedPrefix: string,
 ): { ok: true } | { ok: false; error: string } {
-    const expectedPrefix = runtime === 'pi' ? '/skill:' : '/skill-';
-    if (trustedPrefix && !trustedPrefix.startsWith(expectedPrefix)) {
-        return { ok: false, error: `trusted skill prefix does not match the ${runtime} '${expectedPrefix}' surface.` };
-    }
+    const expectedPrefix = runtime === 'pi' ? '/skill:' : '/<name>';
     if (trustedPrefix) {
+        const hasValidPrefix = runtime === 'pi'
+            ? trustedPrefix.startsWith('/skill:')
+            : /^\/(?!skill-)(?:[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:\n\/(?!skill-)[a-zA-Z0-9][a-zA-Z0-9._-]*)*\n\n$/.test(trustedPrefix);
+        if (!hasValidPrefix) {
+            return { ok: false, error: `trusted skill prefix does not match the ${runtime} '${expectedPrefix}' surface.` };
+        }
         return body.startsWith(trustedPrefix)
             ? { ok: true }
             : { ok: false, error: 'turn-1 body does not start with the exact trusted sp skill prefix.' };
@@ -482,7 +485,7 @@ export function checkPositionZeroSlash(
  * Derive the skill name from an absolute path produced by
  * `resolveRequestedSkills`. That resolver returns either the directory
  * `.../skill-name` or the SKILL.md file `.../skill-name/SKILL.md` depending
- * on which form matched, so normalize both. Used to render `/skill-<name>`
+ * on which form matched, so normalize both. Used to render `/<name>`
  * force-load lines for claude explicit --skill delivery (xtrm-8zsi1
  * follow-up: --plugin-dir scaffold is gone, this is the replacement).
  */
@@ -492,7 +495,7 @@ export function claudeExplicitSkillLines(paths: string[]): string {
             const name = path.basename(p) === 'SKILL.md'
                 ? path.basename(path.dirname(p))
                 : path.basename(p);
-            return `/skill-${name}`;
+            return `/${name}`;
         })
         .join('\n');
 }
@@ -510,7 +513,7 @@ export function renderDeclaredSkillPrefix(
         }
     }
     if (names.length === 0) return '';
-    const commands = names.map((name) => runtime === 'pi' ? `/skill:${name}` : `/skill-${name}`);
+    const commands = names.map((name) => runtime === 'pi' ? `/skill:${name}` : `/${name}`);
     return `${commands.join(runtime === 'pi' ? ' ' : '\n')}\n\n`;
 }
 
@@ -567,8 +570,8 @@ export function buildRoleTmuxPlan(args: {
     role: ResolvedRole;
     bead?: string;
     parentSessionId: string;
-    /** Turn-1 positional body — sp-owned /skill: prefix + user body already
-     * concatenated. Empty string means no positional (skills-only prime). */
+    /** Turn-1 positional body — runtime-specific trusted skill prefix + user
+     * body already concatenated. Empty string means no positional (skills-only prime). */
     turn1Body: string;
     /** CLI --model override; wins over role.model. */
     modelOverride?: string;
@@ -579,7 +582,7 @@ export function buildRoleTmuxPlan(args: {
     /** Explicit --skill requests, already resolved to absolute paths.
      * Emitted verbatim to pi's native --skill flag. Claude has no --skill
      * equivalent; preflight verifies the exact path is discoverable, then the
-     * launcher prepends a `/skill-<name>` force-load line to turn 1. */
+     * launcher prepends a `/<name>` force-load line to turn 1. */
     explicitSkillPaths?: string[];
     /** Argv after `--` on the xt command line, already guard-checked. */
     passthrough?: string[];
@@ -634,9 +637,9 @@ export function buildRoleTmuxPlan(args: {
         // Claude: no --no-skills equivalent exists (--bare is nuclear and
         // disables hooks/CLAUDE.md/OAuth). Accept partial isolation — global
         // ~/.claude/skills auto-discovery remains. Declared skills force-load
-        // via sp-owned /skill-name lines in the turn-1 body prefix; operator
+        // via sp-owned /<name> lines in the turn-1 body prefix; operator
         // --skill additions (explicitSkillPaths) are prepended as
-        // /skill-<name> in launchWorktreeSession composition before turn1Body
+        // /<name> in launchWorktreeSession composition before turn1Body
         // reaches this function. No --plugin-dir scaffold anymore.
         runtimeArgs.push('--dangerously-skip-permissions');
     }
@@ -659,7 +662,7 @@ export function buildRoleTmuxPlan(args: {
         runtimeArgs.push(...passthrough);
     }
 
-    // Turn-1 body: sp-owned /skill: prefix + operator/bead body, already
+    // Turn-1 body: trusted skill prefix + operator/bead body, already
     // concatenated by the caller. Claude needs `--` to protect the positional
     // from variadic options (--model etc. can consume it otherwise); pi's
     // positional prompt convention is delimiter-free. Empty body means "no
@@ -963,7 +966,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             // Claude explicit --skill delivery is launcher-owned but still
             // derived only from validated, discoverable skill metadata.
             if (runtime === 'claude' && explicitSkillPaths.length > 0) {
-                const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}\n`;
+                const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}${trustedPrefix ? '\n' : '\n\n'}`;
                 composedTurn1Body = explicitPrefix + composedTurn1Body;
                 trustedPrefix = explicitPrefix + trustedPrefix;
             }

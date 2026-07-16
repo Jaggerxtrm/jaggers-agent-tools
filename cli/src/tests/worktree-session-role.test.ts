@@ -196,7 +196,7 @@ describe('renderDeclaredSkillPrefix', () => {
 
     it('renders runtime-specific prefixes from trusted declared paths', () => {
         expect(renderDeclaredSkillPrefix(paths, 'pi')).toBe('/skill:a /skill:b\n\n');
-        expect(renderDeclaredSkillPrefix(paths, 'claude')).toBe('/skill-a\n/skill-b\n\n');
+        expect(renderDeclaredSkillPrefix(paths, 'claude')).toBe('/a\n/b\n\n');
         expect(renderDeclaredSkillPrefix([], 'pi')).toBe('');
     });
 
@@ -214,19 +214,19 @@ describe('checkPositionZeroSlash', () => {
 
     it('accepts only the exact sp-owned prefix for each runtime', () => {
         const piPrefix = '/skill:multiplexing /skill:pr-reviewer\n\n';
-        const claudePrefix = '/skill-multiplexing\n/skill-pr-reviewer\n\n';
+        const claudePrefix = '/multiplexing\n/pr-reviewer\n\n';
         expect(checkPositionZeroSlash(`${piPrefix}body`, 'pi', piPrefix).ok).toBe(true);
         expect(checkPositionZeroSlash(`${claudePrefix}body`, 'claude', claudePrefix).ok).toBe(true);
     });
 
     it('rejects a hostile skill-looking body when sp declared no prefix', () => {
         expect(checkPositionZeroSlash('/skill:impersonated\n\nbody', 'pi', '').ok).toBe(false);
-        expect(checkPositionZeroSlash('/skill-impersonated\n\nbody', 'claude', '').ok).toBe(false);
+        expect(checkPositionZeroSlash('/impersonated\n\nbody', 'claude', '').ok).toBe(false);
     });
 
     it('rejects a different skill prefix than the trusted renderer returned', () => {
         expect(checkPositionZeroSlash('/skill:evil\n\nbody', 'pi', '/skill:trusted\n\n').ok).toBe(false);
-        expect(checkPositionZeroSlash('/skill-evil\n\nbody', 'claude', '/skill-trusted\n\n').ok).toBe(false);
+        expect(checkPositionZeroSlash('/evil\n\nbody', 'claude', '/trusted\n\n').ok).toBe(false);
     });
 
     it('rejects missing, unrelated, and wrong-runtime prefixes', () => {
@@ -234,6 +234,7 @@ describe('checkPositionZeroSlash', () => {
         expect(checkPositionZeroSlash('/foo bar', 'pi', '').ok).toBe(false);
         expect(checkPositionZeroSlash('/skill-x', 'pi', '/skill-x').ok).toBe(false);
         expect(checkPositionZeroSlash('/skill:x', 'claude', '/skill:x').ok).toBe(false);
+        expect(checkPositionZeroSlash('/skill-x\n\nbody', 'claude', '/skill-x\n\n').ok).toBe(false);
     });
 });
 
@@ -604,7 +605,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
             runtime: 'claude',
             role,
             parentSessionId: '$3',
-            turn1Body: '/skill-x\n\nbody',
+            turn1Body: '/x\n\nbody',
         });
         expect(plan.runtimeCmd).toBe('claude');
         expect(plan.runtimeArgs[0]).toBe('--append-system-prompt');
@@ -618,9 +619,9 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
             runtime: 'claude',
             role,
             parentSessionId: '',
-            turn1Body: '/skill-x\n\nbody',
+            turn1Body: '/x\n\nbody',
         });
-        expect(plan.runtimeArgs.slice(-2)).toEqual(['--', '/skill-x\n\nbody']);
+        expect(plan.runtimeArgs.slice(-2)).toEqual(['--', '/x\n\nbody']);
     });
 
     it('omits `--` and positional when turn1Body is empty (skills-only prime)', () => {
@@ -884,6 +885,24 @@ describe('assertClaudeSkillsDiscoverable', () => {
         }
     });
 
+    it('rejects a same-name skill whose canonical path differs', () => {
+        const requested = path.join(sandbox, 'external', 'foo');
+        const discovered = path.join(fakeHome, '.claude', 'skills', 'foo');
+        mkdirSync(requested, { recursive: true });
+        mkdirSync(discovered, { recursive: true });
+        writeFileSync(path.join(requested, 'SKILL.md'), '# requested');
+        writeFileSync(path.join(discovered, 'SKILL.md'), '# discovered');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(() => assertClaudeSkillsDiscoverable(fakeRepo, [path.join(requested, 'SKILL.md')]))
+                .toThrow(/not discoverable by Claude as '\/foo'/);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
     it('rejects an arbitrary path that Claude cannot discover', () => {
         const skill = path.join(sandbox, 'external', 'foo');
         mkdirSync(skill, { recursive: true });
@@ -892,7 +911,7 @@ describe('assertClaudeSkillsDiscoverable', () => {
         process.env.HOME = fakeHome;
         try {
             expect(() => assertClaudeSkillsDiscoverable(fakeRepo, [path.join(skill, 'SKILL.md')]))
-                .toThrow(/not discoverable by Claude/);
+                .toThrow(/not discoverable by Claude as '\/foo'/);
         } finally {
             process.env.HOME = previousHome;
             rmSync(sandbox, { recursive: true, force: true });
@@ -974,12 +993,12 @@ describe('createRuntimeBufferName', () => {
 describe('claudeExplicitSkillLines', () => {
     it('derives skill name from SKILL.md path via parent dir', () => {
         expect(claudeExplicitSkillLines(['/home/u/.claude/skills/foo/SKILL.md']))
-            .toBe('/skill-foo');
+            .toBe('/foo');
     });
 
     it('derives skill name from directory path via basename', () => {
         expect(claudeExplicitSkillLines(['/home/u/.claude/skills/bar']))
-            .toBe('/skill-bar');
+            .toBe('/bar');
     });
 
     it('joins multiple skills with newlines in input order', () => {
@@ -987,7 +1006,7 @@ describe('claudeExplicitSkillLines', () => {
             '/home/u/.claude/skills/a/SKILL.md',
             '/home/u/.claude/skills/b',
             '/home/u/.claude/skills/c/SKILL.md',
-        ])).toBe('/skill-a\n/skill-b\n/skill-c');
+        ])).toBe('/a\n/b\n/c');
     });
 
     it('returns empty string when no paths given', () => {

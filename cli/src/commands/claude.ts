@@ -44,7 +44,7 @@ export function createClaudeCommand(): Command {
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
         .option('--role <name>', 'Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role — creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata')
         .option('--bead <id>', 'Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)')
-        .option('--prompt <text>', 'Use <text> as the initial user prompt (mutually exclusive with --bead); combines with the sp-owned /skill-name prefix')
+        .option('--prompt <text>', 'Use <text> as the initial user prompt (mutually exclusive with --bead); combines with the sp-owned /<name> prefix')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
         .option('--model <name>', 'With --role: forward `--model <name>` to claude (overrides specialist.execution.model)')
         .option('--thinking <level>', 'With --role: warn-and-drop — claude has no --thinking flag; set thinking on the underlying model config instead')

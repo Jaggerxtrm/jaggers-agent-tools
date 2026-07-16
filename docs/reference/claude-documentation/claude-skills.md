@@ -332,7 +332,7 @@ See [Hooks](/en/hooks) for the complete hook configuration format.
 
 Skills can be invoked in three ways:
 
-1. **Manual invocation**: You type `/skill-name` in the prompt
+1. **Manual invocation**: You type `/<name>` in the prompt
 2. **Programmatic invocation**: Claude calls it via the [`Skill` tool](/en/slash-commands#skill-tool)
 3. **Automatic discovery**: Claude reads the Skill's description and loads it when relevant to the conversation
 
