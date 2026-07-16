@@ -29,7 +29,7 @@ Inside `$TMUX`, both commands **run in the current pane** by default — no nest
 
 The launcher composes exactly one initial user message from three pieces:
 
-1. **skill prefix** — an sp-owned `/skill:name` (pi) or `/skill-name` (claude) block that force-loads the specialist's declared skills at turn 1
+1. **skill prefix** — an sp-owned `/skill:name` (pi) or newline-separated `/<name>` commands (claude) that force-load the specialist's declared skills at turn 1
 2. **body** — either the rendered tracked task (`--bead`), your literal text (`--prompt`), or empty (neither)
 3. **byte guard** — literal `--prompt` payloads stay under 50 KB; rendered beads may use the runtime's safe per-argument limit (131071 bytes)
 
@@ -135,7 +135,7 @@ Query the log with `tmux-session-picker log query --type agent.role.launched --s
 
 **Skills.**
 
-Skill delivery is now uniform across cases: sp emits a `/skill:name` (pi) or `/skill-name` (claude) block at position 0 of the turn-1 body, and the runtime's slash-command parser force-loads each skill's `SKILL.md` body on receipt.
+Skill delivery is now uniform across cases: sp emits a `/skill:name` (pi) or newline-separated `/<name>` commands (claude) block at position 0 of the turn-1 body, and the runtime's slash-command parser force-loads each skill's `SKILL.md` body on receipt.
 
 - **Ownership.** When available, `sp render-skill-prefix <role> --surface pi|claude` (specialists unitAI-qeguh) is the canonical block. With older sp versions, core renders the same surface from the merged role's validated `skills.paths` metadata. Tracked `render-task` output is stripped only when it begins with the exact canonical block; otherwise it is treated as untrusted task text, so a skill-looking task cannot impersonate the prefix.
 - **pi.** Combined with `--no-skills` (pool isolation) and `--skill <path>` per declared skill, only the specialist's declared skills are reachable. `specialist.skills.paths[]` from `sp view` resolves:
@@ -143,7 +143,7 @@ Skill delivery is now uniform across cases: sp emits a `/skill:name` (pi) or `/s
   2. relative + exists at repo root → repo-local override
   3. relative + exists at `$HOME` → canonical global (post-`xtrm-bq7yd` migration; see the CHANGELOG entry for xtrm-1rn)
   4. otherwise → repo-resolved path so pi produces a loud "skill not found" error at the exact absolute location the operator can fix
-- **claude.** No `--no-skills` equivalent exists (`--bare` is nuclear). Project/global `.claude/skills` auto-discovery remains; the `/skill-name` prefix forces body load. Explicit requests are accepted only when the discovered `SKILL.md` realpath matches the requested path, preventing same-name substitution or silent path loss.
+- **claude.** No `--no-skills` equivalent exists (`--bare` is nuclear). Project/global `.claude/skills` auto-discovery remains; newline-separated `/<name>` commands force body load. Explicit requests are accepted only when the discovered `SKILL.md` realpath matches the requested path, preventing same-name substitution or silent path loss.
 - **explicit requests.** `--skill` accepts an installed skill name, a skill directory, or a `SKILL.md` path. Requests are validated and realpath-deduplicated before provisioning. Pi receives them as `--skill <path>`; non-discoverable Claude requests fail before worktree creation.
 
 **Model.**
@@ -161,7 +161,7 @@ The launcher no longer emits `--no-extensions -e <name>`. `pi -e` takes a filesy
 sp's `/skill:name` block sits at literal byte 0 of the turn-1 body so the runtime's slash-command parser fires it. The launcher enforces this as a hard invariant:
 
 - When `--prompt "/foo"` is passed and the specialist declares no skills (prefix is empty), the launcher rejects the launch with a message asking you to rename or repurpose. A bare `/foo` at position 0 would collide with the slash-command parser.
-- When a `--bead` starts with `/`, it is accepted only when byte zero exactly matches the independently rendered sp prefix for the role. A skill-looking bead title cannot impersonate `/skill:` (pi) or `/skill-` (claude), including when the role declares no skills.
+- When a `--bead` starts with `/`, it is accepted only when byte zero exactly matches the independently rendered sp prefix for the role. A skill-looking bead title cannot impersonate `/skill:` (pi) or a Claude `/<name>` command, including when the role declares no skills.
 
 ---
 

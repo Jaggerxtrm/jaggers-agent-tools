@@ -61692,7 +61692,7 @@ function assertClaudeSkillsDiscoverable(mainRepoRoot, requestedPaths) {
     const requestedRealPath = (0, import_node_fs2.realpathSync)(requestedFile);
     if (candidates.some((candidate) => (0, import_node_fs2.existsSync)(candidate) && (0, import_node_fs2.realpathSync)(candidate) === requestedRealPath)) continue;
     throw new Error(
-      `skill '${requestedPath}' is not discoverable by Claude as '/skill-${name}'. Install or enable the same skill under .claude/skills/${name} before launching.`
+      `skill '${requestedPath}' is not discoverable by Claude as '/${name}'. Install or enable the same skill under .claude/skills/${name} before launching.`
     );
   }
 }
@@ -61864,11 +61864,12 @@ function renderSkillPrefix(args) {
   return { skillPrefix: output.skill_prefix };
 }
 function checkPositionZeroSlash(body, runtime, trustedPrefix) {
-  const expectedPrefix = runtime === "pi" ? "/skill:" : "/skill-";
-  if (trustedPrefix && !trustedPrefix.startsWith(expectedPrefix)) {
-    return { ok: false, error: `trusted skill prefix does not match the ${runtime} '${expectedPrefix}' surface.` };
-  }
+  const expectedPrefix = runtime === "pi" ? "/skill:" : "/<name>";
   if (trustedPrefix) {
+    const hasValidPrefix = runtime === "pi" ? trustedPrefix.startsWith("/skill:") : /^\/(?:[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:\n\/[a-zA-Z0-9][a-zA-Z0-9._-]*)*\n\n$/.test(trustedPrefix);
+    if (!hasValidPrefix) {
+      return { ok: false, error: `trusted skill prefix does not match the ${runtime} '${expectedPrefix}' surface.` };
+    }
     return body.startsWith(trustedPrefix) ? { ok: true } : { ok: false, error: "turn-1 body does not start with the exact trusted sp skill prefix." };
   }
   if (body.length === 0 || body[0] !== "/") return { ok: true };
@@ -61881,7 +61882,7 @@ Rename the bead title or adjust --prompt so the first character is not '/'.`
 function claudeExplicitSkillLines(paths) {
   return paths.map((p) => {
     const name = import_node_path10.default.basename(p) === "SKILL.md" ? import_node_path10.default.basename(import_node_path10.default.dirname(p)) : import_node_path10.default.basename(p);
-    return `/skill-${name}`;
+    return `/${name}`;
   }).join("\n");
 }
 function renderDeclaredSkillPrefix(paths, runtime) {
@@ -61892,7 +61893,7 @@ function renderDeclaredSkillPrefix(paths, runtime) {
     }
   }
   if (names.length === 0) return "";
-  const commands = names.map((name) => runtime === "pi" ? `/skill:${name}` : `/skill-${name}`);
+  const commands = names.map((name) => runtime === "pi" ? `/skill:${name}` : `/${name}`);
   return `${commands.join(runtime === "pi" ? " " : "\n")}
 
 `;
@@ -62128,8 +62129,7 @@ async function launchWorktreeSession(opts) {
       if (!rawSlashCheck.ok) throw new Error(rawSlashCheck.error);
       composedTurn1Body = trustedSkillPrefix + untrustedBody;
       if (runtime === "claude" && explicitSkillPaths.length > 0) {
-        const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}
-`;
+        const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}${trustedPrefix ? "\n" : "\n\n"}`;
         composedTurn1Body = explicitPrefix + composedTurn1Body;
         trustedPrefix = explicitPrefix + trustedPrefix;
       }
@@ -62984,7 +62984,7 @@ function hasXtrmHookWiring(settingsPath) {
   }
 }
 function createClaudeCommand() {
-  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role \u2014 creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)").option("--prompt <text>", "Use <text> as the initial user prompt (mutually exclusive with --bead); combines with the sp-owned /skill-name prefix").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to claude (overrides specialist.execution.model)").option("--thinking <level>", "With --role: warn-and-drop \u2014 claude has no --thinking flag; set thinking on the underlying model config instead").option("--skill <name-or-path>", "With --role: load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
+  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role \u2014 creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)").option("--prompt <text>", "Use <text> as the initial user prompt (mutually exclusive with --bead); combines with the sp-owned /<name> prefix").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "With --role: forward `--model <name>` to claude (overrides specialist.execution.model)").option("--thinking <level>", "With --role: warn-and-drop \u2014 claude has no --thinking flag; set thinking on the underlying model config instead").option("--skill <name-or-path>", "With --role: load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
 Passthrough:
   Everything after \`--\` is forwarded verbatim to the claude runtime \u2014 the
   primary escape hatch for any claude flag not first-classed here. xt-owned

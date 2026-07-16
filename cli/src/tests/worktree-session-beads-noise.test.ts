@@ -149,7 +149,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
   it('transports a 100KB rendered bead through a tmux buffer without putting it in the new-session command', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-claude-large');
-    const body = `/skill-reviewer\n\n${'B'.repeat(100 * 1024)}`;
+    const body = `/reviewer\n\n${'B'.repeat(100 * 1024)}`;
     await fs.ensureDir(path.join(repoRoot, '.beads'));
     process.chdir(repoRoot);
 
@@ -180,7 +180,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       if (command === 'sp' && args[0] === 'render-skill-prefix') {
         return args[1] === '--help'
           ? { status: 0, stdout: 'usage', stderr: '' }
-          : { status: 0, stdout: JSON.stringify({ ok: true, skill_prefix: '/skill-reviewer\n\n' }), stderr: '' };
+          : { status: 0, stdout: JSON.stringify({ ok: true, skill_prefix: '/reviewer\n\n' }), stderr: '' };
       }
       if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
         return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
