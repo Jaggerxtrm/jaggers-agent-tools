@@ -28,11 +28,11 @@ export interface WorktreeSessionOptions {
     /** Explicit turn-1 body text (case ii). Mutually exclusive with --bead. */
     prompt?: string;
     attach?: boolean;
-    /** Explicit --model override for pi role sessions; wins over specialist default. */
+    /** Explicit runtime --model override; with --role, wins over the specialist default. */
     model?: string;
-    /** Explicit --thinking level override for pi role sessions; wins over specialist default. */
+    /** Explicit Pi --thinking override; with --role, wins over the specialist default. */
     thinking?: string;
-    /** With --role: force a new tmux session even when inside $TMUX. Outside $TMUX this is the (unchanged) default. */
+    /** Force a new tmux session even when inside $TMUX. Outside $TMUX this is the default. */
     newSession?: boolean;
     /** With --role: override @agent_parent_session on the target pane (tmux session name, id, or #{session_id}). */
     parent?: string;
@@ -596,7 +596,9 @@ export function chooseAttachCommand(sessionName: string, insideTmux: boolean): s
 export function buildRoleTmuxPlan(args: {
     /** Which runtime binary this plan targets. */
     runtime: 'pi' | 'claude';
-    role: ResolvedRole;
+    role?: ResolvedRole;
+    /** Worktree/session slug for a general launch without --role. */
+    sessionSlug?: string;
     bead?: string;
     parentSessionId: string;
     /** Turn-1 positional body — runtime-specific trusted skill prefix + user
@@ -617,19 +619,23 @@ export function buildRoleTmuxPlan(args: {
     passthrough?: string[];
 }): RoleTmuxPlan {
     const {
-        runtime, role, bead, parentSessionId, turn1Body, modelOverride,
+        runtime, role, sessionSlug, bead, parentSessionId, turn1Body, modelOverride,
         thinkingOverride, explicitSkillPaths = [], passthrough,
     } = args;
-    const roleSlug = slugifyForSession(role.name);
+    if (!role && !sessionSlug) throw new Error('role or sessionSlug is required');
+
+    const roleSlug = role ? slugifyForSession(role.name) : '';
     // Include runtime in the session name so xt pi --role X --bead Y and
     // xt claude --role X --bead Y produce distinguishable sessions
     // (role-pi-X-Y vs role-claude-X-Y) instead of colliding on role-X-Y and
     // relying on xtmux-1lb.6's auto-suffix. Operator's mental model is one
     // pi + one claude flavor of the same specialist, not "the second one
     // gets a random hex". See xtmux-3h8.
-    const sessionName = bead
-        ? `role-${runtime}-${roleSlug}-${slugifyForSession(bead)}`
-        : `role-${runtime}-${roleSlug}`;
+    const sessionName = role
+        ? bead
+            ? `role-${runtime}-${roleSlug}-${slugifyForSession(bead)}`
+            : `role-${runtime}-${roleSlug}`
+        : `${runtime}-${slugifyForSession(sessionSlug!)}`;
 
     const runtimeArgs: string[] = [];
 
@@ -639,18 +645,18 @@ export function buildRoleTmuxPlan(args: {
     // forces skill body load via /skill:name at turn-1 so the identity
     // system prompt stays small enough to inline safely under the byte
     // guard.
-    runtimeArgs.push('--append-system-prompt', role.systemPrompt);
+    if (role) runtimeArgs.push('--append-system-prompt', role.systemPrompt);
 
     if (runtime === 'pi') {
-        // Pool isolation: --no-skills unconditionally disables pi's global
-        // skill-pool auto-discovery. Combined with explicit --skill <path>
-        // per declared + operator-requested skill, only the declared set is
+        // Role pool isolation: --no-skills disables pi's global skill-pool
+        // auto-discovery. Combined with explicit --skill <path> per declared
+        // + operator-requested skill, only the declared set is
         // reachable. Matches sp's forthcoming unitAI-0o3pv behavior; core
         // ships this now regardless of sp release timing (self-diagnosing
         // "skill not found" is a fine loud-fail surface). xtrm-8zsi1.
-        runtimeArgs.push('--no-skills');
+        if (role) runtimeArgs.push('--no-skills');
         const seenSkills = new Set<string>();
-        for (const skill of [...role.skillPaths, ...explicitSkillPaths]) {
+        for (const skill of [...(role?.skillPaths ?? []), ...explicitSkillPaths]) {
             const identity = existsSync(skill) ? realpathSync(skill) : skill;
             if (seenSkills.has(identity)) continue;
             seenSkills.add(identity);
@@ -675,13 +681,13 @@ export function buildRoleTmuxPlan(args: {
 
     // Model: CLI override wins over specialist default. Both runtimes accept
     // --model <name>; pi and claude resolve their own defaults when unset.
-    const model = modelOverride ?? role.model;
+    const model = modelOverride ?? role?.model;
     if (model) runtimeArgs.push('--model', model);
 
     // Thinking: pi-only. Claude has no --thinking flag; silently drop when
     // the target is claude (caller warns at CLI-level if user was explicit).
     if (runtime === 'pi') {
-        const thinking = thinkingOverride ?? role.thinkingLevel;
+        const thinking = thinkingOverride ?? role?.thinkingLevel;
         if (thinking) runtimeArgs.push('--thinking', thinking);
     }
 
@@ -711,7 +717,7 @@ export function buildRoleTmuxPlan(args: {
     // downstream skills read the option absence-safely (|| true).
     const paneOptions: Array<{ key: string; value: string }> = [
         { key: '@agent_parent_session', value: parentSessionId },
-        { key: '@agent_task', value: `role:${role.name}` },
+        { key: '@agent_task', value: role ? `role:${role.name}` : `session:${sessionSlug}` },
         { key: '@agent_state', value: 'idle' },
     ];
     if (bead) paneOptions.push({ key: '@agent_bead', value: bead });
@@ -1019,9 +1025,36 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             console.error(kleur.red(`\n  ✗ ${msg}\n`));
             process.exit(1);
         }
-    } else if (model || thinking || (opts.skills && opts.skills.length > 0) || prompt || (opts.passthrough && opts.passthrough.length > 0)) {
-        console.error(kleur.red('\n  ✗ --model / --thinking / --skill / --prompt / -- passthrough require --role\n'));
-        process.exit(1);
+    } else {
+        if (bead || (opts.passthrough && opts.passthrough.length > 0)) {
+            console.error(kleur.red('\n  ✗ --bead / -- passthrough require --role\n'));
+            process.exit(1);
+        }
+
+        try {
+            explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
+            composedTurn1Body = prompt ?? '';
+            let trustedPrefix = '';
+
+            if (runtime === 'claude' && explicitSkillPaths.length > 0) {
+                assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
+                trustedPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}\n\n`;
+                composedTurn1Body = trustedPrefix + composedTurn1Body;
+            }
+
+            const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
+            if (!slashCheck.ok) throw new Error(slashCheck.error);
+            const byteCheck = checkByteCeiling({
+                systemPrompt: '',
+                body: composedTurn1Body,
+                source: 'prompt',
+            });
+            if (!byteCheck.ok) throw new Error(byteCheck.error);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(kleur.red(`\n  ✗ ${msg}\n`));
+            process.exit(1);
+        }
     }
 
     // Guard passthrough up-front — refuse xt-owned flags before we build any
@@ -1193,14 +1226,13 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         await runPiLaunchPreflight(worktreePath, false);
     }
 
-    // Role mode: launch pi inside a named tmux session with agent metadata
-    // set on the pane. --no-attach → print `session:pane` to stdout for
-    // orchestrator capture. All chatter above went to console.log — headless
-    // callers should capture stdout only after seeing that final line.
-    if (resolvedRole) {
+    // Explicit launch options use the same tmux transport as role sessions.
+    // --no-attach also opts in so a plain detached runtime has a real TTY.
+    if (resolvedRole || prompt || model || thinking || explicitSkillPaths.length > 0 || !attach || opts.newSession) {
         await launchRoleTmuxSession({
             runtime,
-            role: resolvedRole,
+            role: resolvedRole ?? undefined,
+            sessionSlug: slug,
             bead,
             attach,
             worktreePath,
@@ -1274,7 +1306,8 @@ function emitAgentRoleLaunched(fields: Record<string, string>): void {
 
 async function launchRoleTmuxSession(args: {
     runtime: 'pi' | 'claude';
-    role: ResolvedRole;
+    role?: ResolvedRole;
+    sessionSlug: string;
     bead?: string;
     attach: boolean;
     worktreePath: string;
@@ -1292,7 +1325,7 @@ async function launchRoleTmuxSession(args: {
     reuse?: boolean;
 }): Promise<never> {
     const {
-        runtime, role, bead, attach, worktreePath, modelOverride, thinkingOverride, renderedTask, turn1Body, explicitSkillPaths = [], passthrough,
+        runtime, role, sessionSlug, bead, attach, worktreePath, modelOverride, thinkingOverride, renderedTask, turn1Body, explicitSkillPaths = [], passthrough,
         newSession, parent, child, reuse,
     } = args;
 
@@ -1302,7 +1335,7 @@ async function launchRoleTmuxSession(args: {
     // role, launch it in this pane and that's that." Outside $TMUX the only
     // sensible thing is still `tmux new-session`, so mode collapses to
     // new-session there regardless of --new-session. xtmux-1lb.5.1.
-    const currentPaneMode = insideTmux && !newSession;
+    const currentPaneMode = insideTmux && !newSession && (Boolean(role) || attach);
 
     // Guard: --no-attach only makes sense when we're actually creating a
     // session that could be attached-to later. In current-pane mode there IS
@@ -1342,6 +1375,7 @@ async function launchRoleTmuxSession(args: {
     const plan = buildRoleTmuxPlan({
         runtime,
         role,
+        sessionSlug,
         bead,
         parentSessionId,
         turn1Body,
@@ -1351,7 +1385,12 @@ async function launchRoleTmuxSession(args: {
         passthrough,
     });
 
-    const agentEnv = buildAgentEnv({ bead, role: role.name, parentSessionId });
+    const agentEnv = role
+        ? buildAgentEnv({ bead, role: role.name, parentSessionId })
+        : {
+            XTMUX_AGENT_TASK: `session:${sessionSlug}`,
+            XTMUX_AGENT_PARENT_SESSION: parentSessionId,
+        };
 
     if (currentPaneMode) {
         // Resolve the current pane id (the pane the launcher was invoked
@@ -1370,17 +1409,19 @@ async function launchRoleTmuxSession(args: {
             spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
         }
 
-        emitAgentRoleLaunched({
-            pane: paneId,
-            session: currentTmuxSessionId(),
-            bead: bead ?? '',
-            role: role.name,
-            parent: parentSessionId,
-            worktree: worktreePath,
-            task_prompt_renderer: renderedTask ? 'success' : 'not_requested',
-            task_prompt_hash: renderedTask?.promptHash ?? '',
-            task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : '',
-        });
+        if (role) {
+            emitAgentRoleLaunched({
+                pane: paneId,
+                session: currentTmuxSessionId(),
+                bead: bead ?? '',
+                role: role.name,
+                parent: parentSessionId,
+                worktree: worktreePath,
+                task_prompt_renderer: renderedTask ? 'success' : 'not_requested',
+                task_prompt_hash: renderedTask?.promptHash ?? '',
+                task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : '',
+            });
+        }
 
         const piResult = spawnSync(plan.runtimeCmd, plan.runtimeArgs, {
             cwd: worktreePath,
@@ -1525,17 +1566,19 @@ async function launchRoleTmuxSession(args: {
         spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
     }
 
-    emitAgentRoleLaunched({
-        pane: paneId,
-        session: plan.sessionName,
-        bead: bead ?? '',
-        role: role.name,
-        parent: parentSessionId,
-        worktree: worktreePath,
-        task_prompt_renderer: renderedTask ? 'success' : 'not_requested',
-        task_prompt_hash: renderedTask?.promptHash ?? '',
-        task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : '',
-    });
+    if (role) {
+        emitAgentRoleLaunched({
+            pane: paneId,
+            session: plan.sessionName,
+            bead: bead ?? '',
+            role: role.name,
+            parent: parentSessionId,
+            worktree: worktreePath,
+            task_prompt_renderer: renderedTask ? 'success' : 'not_requested',
+            task_prompt_hash: renderedTask?.promptHash ?? '',
+            task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : '',
+        });
+    }
 
     if (!attach) {
         // Contract: exactly one line on stdout, session_name:pane_id

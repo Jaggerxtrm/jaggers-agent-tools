@@ -146,6 +146,68 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('launches a detached general Pi session with prompt and overrides', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-general');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    let bufferedPayload = '';
+    mocked.spawnSync.mockImplementation((command: string, args: string[], options?: { input?: string }) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        fs.ensureDirSync(worktreePath);
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'has-session') {
+        return { status: 1, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'load-buffer') {
+        bufferedPayload = options?.input ?? '';
+      }
+      if (command === 'tmux' && args[0] === 'list-panes') {
+        return { status: 0, stdout: '%42\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const exitSpy = mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      name: 'general',
+      prompt: 'echo hi',
+      model: 'openai-codex/gpt-5.6-luna',
+      thinking: 'high',
+      attach: false,
+    })).rejects.toThrow('exit:0');
+
+    expect(JSON.parse(bufferedPayload).runtimeArgs).toEqual([
+      '--model', 'openai-codex/gpt-5.6-luna',
+      '--thinking', 'high',
+      'echo hi',
+    ]);
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith('sp', expect.anything(), expect.anything());
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      'tmux',
+      expect.arrayContaining(['new-session', '-s', 'pi-general']),
+      expect.anything(),
+    );
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      'tmux',
+      ['set-option', '-p', '-t', '%42', '@agent_task', 'session:general'],
+      expect.anything(),
+    );
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
   it('transports a 100KB rendered bead through a tmux buffer without putting it in the new-session command', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-claude-large');
