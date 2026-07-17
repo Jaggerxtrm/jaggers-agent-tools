@@ -246,7 +246,12 @@ export async function reconcileGlobalClaudeHooks(opts: { dryRun?: boolean } = {}
 
     const currentSettings = await readSettings(settingsPath);
     const mergeResult = await safeMergeOwnedHookSettings(currentSettings, generatedHooks, { dryRun });
-    if (!mergeResult.changed) {
+    const nextSettings = mergePermissionsDefaults(
+        mergeResult.settings as ClaudeSettings,
+        hooksConfig.permissionsDefaults ?? [],
+    );
+    const changed = JSON.stringify(currentSettings) !== JSON.stringify(nextSettings);
+    if (!changed) {
         await ensureGlobalStatusLine();
         await appendHookLog({
             timestamp: new Date().toISOString(),
@@ -261,7 +266,7 @@ export async function reconcileGlobalClaudeHooks(opts: { dryRun?: boolean } = {}
     }
 
     if (!dryRun) {
-        await writeJsonAtomic(settingsPath, mergeResult.settings);
+        await writeJsonAtomic(settingsPath, nextSettings);
     }
 
     await ensureGlobalStatusLine();
