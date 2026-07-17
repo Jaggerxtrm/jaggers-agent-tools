@@ -45025,7 +45025,10 @@ async function runClaudeRuntimeSyncPhase(opts) {
   const baseSettings = await readBaseSettings(settingsTemplatePath);
   const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
   const filteredHooks = mergeProjectOwnedHooks(existingSettings.hooks ?? {}, generatedHooks, projectHooksDir);
-  const mergedSettings = hasExistingSettings ? { ...existingSettings, hooks: filteredHooks } : { ...baseSettings, hooks: filteredHooks };
+  const mergedSettings = mergePermissionsDefaults(
+    hasExistingSettings ? { ...existingSettings, hooks: filteredHooks } : { ...baseSettings, hooks: filteredHooks },
+    hooksConfig.permissionsDefaults ?? []
+  );
   if (generatedStatusLine) {
     mergedSettings.statusLine = generatedStatusLine;
   }
@@ -45063,7 +45066,10 @@ async function reconcileProjectClaudeHooks(repoRoot, opts = {}) {
   const hasExistingSettings = await import_fs_extra4.default.pathExists(settingsPath);
   const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
   const baseSettings = hasExistingSettings ? existingSettings : await readBaseSettings(settingsTemplatePath);
-  const nextSettings = { ...baseSettings, hooks: hooksToWrite };
+  const nextSettings = mergePermissionsDefaults(
+    { ...baseSettings, hooks: hooksToWrite },
+    hooksConfig.permissionsDefaults ?? []
+  );
   if (generatedStatusLine && !nextSettings.statusLine) {
     nextSettings.statusLine = generatedStatusLine;
   }
@@ -45093,7 +45099,12 @@ async function reconcileGlobalClaudeHooks(opts = {}) {
   });
   const currentSettings = await readSettings(settingsPath);
   const mergeResult = await safeMergeOwnedHookSettings(currentSettings, generatedHooks, { dryRun });
-  if (!mergeResult.changed) {
+  const nextSettings = mergePermissionsDefaults(
+    mergeResult.settings,
+    hooksConfig.permissionsDefaults ?? []
+  );
+  const changed = JSON.stringify(currentSettings) !== JSON.stringify(nextSettings);
+  if (!changed) {
     await ensureGlobalStatusLine();
     await appendHookLog({
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -45107,7 +45118,7 @@ async function reconcileGlobalClaudeHooks(opts = {}) {
     return { settingsPath, changed: false, hooksEntries: mergeResult.hooksEntries };
   }
   if (!dryRun) {
-    await writeJsonAtomic(settingsPath, mergeResult.settings);
+    await writeJsonAtomic(settingsPath, nextSettings);
   }
   await ensureGlobalStatusLine();
   await appendHookLog({
@@ -45388,11 +45399,22 @@ async function readSettings(settingsPath) {
     return {};
   }
 }
+function mergePermissionsDefaults(settings, defaults) {
+  const existing = settings.permissions?.allow ?? [];
+  return {
+    ...settings,
+    permissions: {
+      ...settings.permissions,
+      allow: [.../* @__PURE__ */ new Set([...existing, ...defaults])],
+      defaultMode: settings.permissions?.defaultMode ?? "default"
+    }
+  };
+}
 async function readBaseSettings(settingsTemplatePath) {
   try {
     return await import_fs_extra4.default.readJson(settingsTemplatePath);
   } catch {
-    return { permissions: { allow: [], defaultMode: "default" }, skillSuggestions: { enabled: true } };
+    return { permissions: { defaultMode: "default" }, skillSuggestions: { enabled: true } };
   }
 }
 async function resolvePackageRoot() {

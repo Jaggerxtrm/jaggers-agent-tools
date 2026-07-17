@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { mergeProjectOwnedHooks, reconcileProjectClaudeHooks } from '../core/claude-runtime-sync.js';
 
+const PERMISSION_DEFAULTS = (fs.readJsonSync(
+  path.resolve(__dirname, '..', '..', '..', '.xtrm', 'config', 'hooks.json'),
+) as { permissionsDefaults: string[] }).permissionsDefaults;
+
 // reconcileProjectClaudeHooks resolves the canonical hooks.json from the package root
 // (the xtrm-tools repo root in tests, via __dirname walk), then rewrites the project's
 // .claude/settings.json hooks section. These tests exercise the xtrm-0p7bp guarantee:
@@ -36,8 +40,8 @@ describe('reconcileProjectClaudeHooks', () => {
 
     expect(result.changed).toBe(true);
     const written = fs.readJsonSync(settingsPath);
-    // Non-hook keys preserved
-    expect(written.permissions.allow).toEqual(['Bash(ls:*)']);
+    // Non-hook keys preserved while canonical permission defaults are added.
+    expect(written.permissions.allow).toEqual(['Bash(ls:*)', ...PERMISSION_DEFAULTS]);
     expect(written.model).toBe('claude-opus-4-8');
     // Hooks section now populated from canonical
     expect(Object.keys(written.hooks).length).toBeGreaterThan(0);

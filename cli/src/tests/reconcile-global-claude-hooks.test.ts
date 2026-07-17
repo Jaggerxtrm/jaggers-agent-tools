@@ -30,6 +30,7 @@ describe('reconcileGlobalClaudeHooks', () => {
     fs.ensureDirSync(path.dirname(settingsPath));
     fs.ensureDirSync(path.dirname(hooksConfigPath));
     fs.writeJsonSync(hooksConfigPath, {
+      permissionsDefaults: ['Bash(git status:*)'],
       hooks: {
         PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: 'node ${CLAUDE_PLUGIN_ROOT}/hooks/worktree-boundary.mjs' }] }],
       },
@@ -46,6 +47,7 @@ describe('reconcileGlobalClaudeHooks', () => {
     const written = fs.readJsonSync(settingsPath) as { hooks: Record<string, Array<{ _source?: string; _xtrm?: { hash?: string }; hooks: Array<{ command: string }> }>> };
 
     expect(result.changed).toBe(true);
+    expect(fs.readJsonSync(settingsPath).permissions.allow).toEqual(['Bash(ls:*)', 'Bash(git status:*)']);
     expect(written.hooks.PreToolUse).toHaveLength(2);
     expect(written.hooks.PreToolUse[0]._source).toBe('xtrm-global');
     expect(written.hooks.PreToolUse[0]._xtrm?.hash).toBeTruthy();

@@ -26,6 +26,56 @@ const WRITE_TOOLS = [
   'mcp__serena__insert_before_symbol',
 ];
 
+const PERMISSIONS_DEFAULTS = [
+  'Bash(grep:*)',
+  'Bash(rg:*)',
+  'Bash(find:*)',
+  'Bash(head:*)',
+  'Bash(tail:*)',
+  'Bash(awk:*)',
+  'Bash(sed:*)',
+  'Bash(wc:*)',
+  'Bash(jq:*)',
+  'Bash(python3:*)',
+  'Bash(bun:*)',
+  'Bash(tmux:*)',
+  'Bash(xtmux:*)',
+  'Bash(xt:*)',
+  'Bash(sp:*)',
+  'Bash(pi:*)',
+  'Bash(diff:*)',
+  'Bash(sort:*)',
+  'Bash(uniq:*)',
+  'Bash(tr:*)',
+  'Bash(cut:*)',
+  'Bash(xargs:*)',
+  'Bash(pwd)',
+  'Bash(env)',
+  'Bash(which:*)',
+  'Bash(test:*)',
+  'Bash([:*)',
+  'Bash(free:*)',
+  'Bash(uptime)',
+  'Bash(uname:*)',
+  'Bash(date:*)',
+  'Bash(ps:*)',
+  'Bash(chmod:*)',
+  'Bash(mv:*)',
+  'Bash(touch:*)',
+  'Bash(ln:*)',
+  'Bash(sleep:*)',
+  'Grep',
+  'Glob',
+  'Skill',
+  'TodoWrite',
+  'WebFetch',
+  'WebSearch',
+  'Agent',
+  'Read',
+  'Edit',
+  'Write',
+];
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const POLICIES_DIR = join(ROOT, 'policies');
@@ -103,7 +153,7 @@ for (const [key, hookEntries] of eventGroups) {
   hooksOutput[event].push(group);
 }
 
-const output = JSON.stringify({ hooks: hooksOutput }, null, 2) + '\n';
+const output = JSON.stringify({ permissionsDefaults: PERMISSIONS_DEFAULTS, hooks: hooksOutput }, null, 2) + '\n';
 
 function listPiExtensionDirs(dir) {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) return [];
