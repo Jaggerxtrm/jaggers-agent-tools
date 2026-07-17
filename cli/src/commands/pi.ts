@@ -71,12 +71,12 @@ export function createPiCommand(): Command {
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
         .option('--role <name>', 'Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata')
         .option('--bead <id>', 'Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)')
-        .option('--prompt <text>', 'Use <text> as the initial user prompt (mutually exclusive with --bead); combines with the sp-owned /skill:name prefix')
+        .option('--prompt <text>', 'Use <text> as the initial user prompt (mutually exclusive with --bead)')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
-        .option('--model <name>', 'With --role: forward `--model <name>` to pi (overrides specialist.execution.model)')
-        .option('--thinking <level>', 'With --role: forward `--thinking <level>` to pi (overrides specialist.execution.thinking_level)')
-        .option('--skill <name-or-path>', 'With --role: load an additional skill at startup (repeatable)', (value: string, previous: string[]) => [...previous, value], [])
-        .option('--new-session', 'With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)')
+        .option('--model <name>', 'Forward `--model <name>` to pi; with --role, overrides specialist.execution.model')
+        .option('--thinking <level>', 'Forward `--thinking <level>` to pi; with --role, overrides specialist.execution.thinking_level')
+        .option('--skill <name-or-path>', 'Load an additional skill at startup (repeatable)', (value: string, previous: string[]) => [...previous, value], [])
+        .option('--new-session', 'Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)')
         .option('--ns', 'Alias for --new-session')
         .option('--parent <target>', 'With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})')
         .option('--child', 'With --role: explicit form of the auto-behavior — @agent_parent_session = current pane\'s session_id')
@@ -84,14 +84,14 @@ export function createPiCommand(): Command {
         .allowExcessArguments(true)
         .allowUnknownOption(true)
         .addHelpText('after', `
-Passthrough:
-  Everything after \`--\` is forwarded verbatim to the pi runtime — the
-  primary escape hatch for any pi flag not first-classed here. xt-owned
+Passthrough (requires --role):
+  Everything after \`--\` is forwarded verbatim to the pi runtime. xt-owned
   flags (--session-dir, --name, --system-prompt, --append-system-prompt,
   --skill) are rejected; batch-mode flags (--print, --list-models, --export,
   --mode) are dropped with a warning.
 
 Examples:
+  $ xt pi demo --no-attach --prompt 'inspect the failing build' --model openai-codex/gpt-5.6-luna
   $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
   $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
   $ xt pi --role reviewer --prompt 'review the auth changes in cli/src/auth/'

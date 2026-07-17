@@ -480,6 +480,26 @@ describe('parseSpecialistJson', () => {
     });
 });
 
+describe('buildRoleTmuxPlan (general session)', () => {
+    it('forwards prompt and model to Claude without role metadata', () => {
+        const plan = buildRoleTmuxPlan({
+            runtime: 'claude',
+            sessionSlug: 'demo',
+            parentSessionId: '',
+            turn1Body: 'echo hi',
+            modelOverride: 'claude-opus-4-8',
+            thinkingOverride: 'high',
+        });
+
+        expect(plan.sessionName).toBe('claude-demo');
+        expect(plan.runtimeArgs).toEqual([
+            '--dangerously-skip-permissions',
+            '--model', 'claude-opus-4-8',
+            '--', 'echo hi',
+        ]);
+    });
+});
+
 describe('buildRoleTmuxPlan (pi runtime)', () => {
     const role = parseSpecialistJson('chain-coordinator', SAMPLE_SPECIALIST);
 

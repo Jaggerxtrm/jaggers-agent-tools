@@ -44,12 +44,12 @@ export function createClaudeCommand(): Command {
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
         .option('--role <name>', 'Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role — creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata')
         .option('--bead <id>', 'Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)')
-        .option('--prompt <text>', 'Use <text> as the initial user prompt (mutually exclusive with --bead); combines with the sp-owned /<name> prefix')
+        .option('--prompt <text>', 'Use <text> as the initial user prompt (mutually exclusive with --bead)')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
-        .option('--model <name>', 'With --role: forward `--model <name>` to claude (overrides specialist.execution.model)')
-        .option('--thinking <level>', 'With --role: warn-and-drop — claude has no --thinking flag; set thinking on the underlying model config instead')
-        .option('--skill <name-or-path>', 'With --role: load an additional skill at startup (repeatable)', (value: string, previous: string[]) => [...previous, value], [])
-        .option('--new-session', 'With --role inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)')
+        .option('--model <name>', 'Forward `--model <name>` to claude; with --role, overrides specialist.execution.model')
+        .option('--thinking <level>', 'Warn-and-drop — claude has no --thinking flag; set thinking on the underlying model config instead')
+        .option('--skill <name-or-path>', 'Load an additional skill at startup (repeatable)', (value: string, previous: string[]) => [...previous, value], [])
+        .option('--new-session', 'Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)')
         .option('--ns', 'Alias for --new-session')
         .option('--parent <target>', 'With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})')
         .option('--child', 'With --role: explicit form of the auto-behavior — @agent_parent_session = current pane\'s session_id')
@@ -57,14 +57,14 @@ export function createClaudeCommand(): Command {
         .allowExcessArguments(true)
         .allowUnknownOption(true)
         .addHelpText('after', `
-Passthrough:
-  Everything after \`--\` is forwarded verbatim to the claude runtime — the
-  primary escape hatch for any claude flag not first-classed here. xt-owned
+Passthrough (requires --role):
+  Everything after \`--\` is forwarded verbatim to the claude runtime. xt-owned
   flags (--session-dir, --name, --system-prompt, --append-system-prompt,
   --skill) are rejected; batch-mode flags (--print, --list-models, --export,
   --mode) are dropped with a warning.
 
 Examples:
+  $ xt claude demo --no-attach --prompt 'inspect the failing build' --model claude-opus-4-8
   $ xt claude --role reviewer --bead xyz -- --add-dir ~/notes
   $ xt claude --role chain-coordinator --model claude-opus-4-8
   $ xt claude --role reviewer --prompt 'review the auth changes in cli/src/auth/'
