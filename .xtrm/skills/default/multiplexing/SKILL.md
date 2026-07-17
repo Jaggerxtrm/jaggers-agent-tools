@@ -163,6 +163,49 @@ Steps:
 5. On confirmation: use `xtmux safe-send-pointer --yes ...` when available; otherwise `tmux send-keys -t Y '<single-line pointer>' Enter`. **Claude Code panes consume the first Enter deterministically as paste-detection**; send a second Enter after 1-2s for Claude Code targets. Codex/pi panes submit on the first Enter.
 6. If polling is appropriate, set up a registered monitor or background polling loop (see Monitoring).
 
+### Pattern 2b — Bare launch of a general-purpose worker (post PR #433 / xtmux-r6g.6)
+
+When the delegate is a general-purpose worker rather than a specialist config, launch it in **bare mode** — no `--role` required. `xt claude` bare mode still emits `--dangerously-skip-permissions` automatically (`worktree-session.ts:679`); do **not** reach for `tmux new-session -d claude`, which drops that flag and burns the operator with hundreds of approval prompts.
+
+```bash
+# Claude Code worker.
+xt claude <session-name> --no-attach --prompt 'leggi /tmp/<session>-<topic>.txt e seguilo'
+
+# Pi worker — same shape.
+xt pi <session-name> --no-attach --prompt 'leggi /tmp/<session>-<topic>.txt e seguilo'
+```
+
+Both print `session_name:pane_id` on stdout, name the session `<runtime>-<slug>`, and export `XTMUX_AGENT_TASK` / `XTMUX_AGENT_PROMPT_FILE` into the child.
+
+**Bare-mode flag matrix.** Only these flags are legal without `--role` (`worktree-session.ts:1029-1046`):
+
+| Flag | Bare + `xt claude` | Bare + `xt pi` |
+|---|---|---|
+| `--prompt <text>` | ✓ | ✓ |
+| `--model <name>` | ✓ | ✓ |
+| `--skill <name-or-path>` | ✓ — prepends `/<name>` line to turn-1 body | ✗ **read but silently ignored** (tracked by `xtrm-mgp47`) |
+| `--no-attach` / `--new-session` / `--ns` / `--reuse` | ✓ | ✓ |
+| `--bead <id>` | ✗ requires `--role` | ✗ requires `--role` |
+| `--` passthrough | ✗ requires `--role` | ✗ requires `--role` |
+| `--parent` / `--child` | ✗ requires `--role` | ✗ requires `--role` |
+
+**Slash syntax differs across runtimes — do not paste one into the wrong pane:**
+
+| Runtime | Slash form | Example |
+|---|---|---|
+| Claude Code | `/<name>` | `/multiplexing`, `/using-specialists` |
+| Pi          | `/skill:<name>` | `/skill:multiplexing`, `/skill:using-specialists` |
+
+The most common mistake is sending `/skill:multiplexing` to a Claude worker; Claude treats it as literal user text and the skill never loads.
+
+**Architecture note — where skill content actually ends up (xtrm-8zsi1).**
+
+`--role` mode emits only `role.systemPrompt` (small identity payload, byte-guarded) via `--append-system-prompt` (`worktree-session.ts:641-648`). Skill bodies load via `/skill:<name>` (pi) or `/<name>` (claude) lines prepended to turn-1 body. Bare mode emits no `--append-system-prompt` at all; turn-1 body is the operator prompt, plus (claude only) any `/<name>` lines from explicit `--skill` args.
+
+**On Claude Code, the `/<name>` slash STILL results in the skill body being injected into the model's system prompt at slash-resolution time.** The xtrm-8zsi1 migration reduced the CLI-emitted system prompt, not Claude's final one — Claude Code resolves the `/<name>` reference on turn 1 and loads the skill body into its own system prompt build. To actually keep skill content out of Claude's system prompt, the turn-1 body would need to contain the raw skill text (not a `/<name>` reference), which is not what any current launch mode does. Pi's `--skill` flag likewise ends up in pi's own system-prompt build. Bare-mode users who assumed "no `--append-system-prompt` = no skill body in system prompt" are wrong for both runtimes.
+
+**Open follow-ups:** `xtrm-mgp47` — bare `xt pi --skill` silently ignored; needs a symmetric `piExplicitSkillLines` path at `worktree-session.ts:1039`.
+
 ### Pattern 3 — Cleanup hygiene
 
 Trigger: operator says "clean orphans", "kill dead sessions", "what's leaking RAM"
