@@ -163,6 +163,29 @@ Steps:
 5. On confirmation: use `xtmux safe-send-pointer --yes ...` when available; otherwise `tmux send-keys -t Y '<single-line pointer>' Enter`. **Claude Code panes consume the first Enter deterministically as paste-detection**; send a second Enter after 1-2s for Claude Code targets. Codex/pi panes submit on the first Enter.
 6. If polling is appropriate, set up a registered monitor or background polling loop (see Monitoring).
 
+### Pattern 2b — Bare launch of a general-purpose worker (post PR #433 / xtmux-r6g.6)
+
+When the delegate is a general-purpose worker rather than a specialist config, launch it in bare mode. **Do not reach for `tmux new-session -d claude`** — that skips the `--dangerously-skip-permissions` flag the `xt` wrapper adds automatically, and burns the operator with hundreds of approval prompts.
+
+```bash
+# Claude Code worker — adds --dangerously-skip-permissions automatically.
+xt claude <session-name> --no-attach --prompt 'leggi /tmp/<session>-<topic>.txt e seguilo'
+
+# Pi worker — same shape, no permission-bypass concept.
+xt pi <session-name> --no-attach --prompt 'leggi /tmp/<session>-<topic>.txt e seguilo'
+```
+
+Both print `session_name:pane_id` on stdout, honour the standard session-naming convention as `<runtime>-<slug>`, and export `XTMUX_AGENT_TASK` / `XTMUX_AGENT_PROMPT_FILE` into the child. `--prompt` and `--bead` are mutually exclusive — pick one. For trackable work, prefer `--bead <id>` so the worker reads the durable contract via `bd show <id>` and appends notes back to it; `--prompt` is right for one-shots and pointer-style handoffs.
+
+Slash-command syntax differs across runtimes — do not paste one into the wrong pane:
+
+| Runtime | Slash form | Example |
+|---|---|---|
+| Claude Code | `/<name>` | `/multiplexing`, `/using-specialists` |
+| Pi          | `/skill:<name>` | `/skill:multiplexing`, `/skill:using-specialists` |
+
+`--` passthrough and `--parent` / `--child` / `--reuse` require `--role`; they are rejected in bare mode. When you need those (or a persistent coordinator with specialist state), use Pattern 7 instead — bare and role modes are complementary, not competitors.
+
 ### Pattern 3 — Cleanup hygiene
 
 Trigger: operator says "clean orphans", "kill dead sessions", "what's leaking RAM"
