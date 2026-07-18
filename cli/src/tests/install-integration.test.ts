@@ -23,7 +23,6 @@ import { createInstallCommand } from '../commands/install.js';
 
 interface HooksConfig {
   hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> }>>;
-  permissionsDefaults?: string[];
 }
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -96,13 +95,8 @@ describe('xtrm install integration', () => {
 
     const settings = fs.readJsonSync(settingsPath) as {
       hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> }>>;
-      permissions?: { allow?: string[] };
     };
     const hooksConfig = readHooksConfig();
-    const permissionsDefaults = hooksConfig.permissionsDefaults ?? [];
-
-    expect(permissionsDefaults.length).toBeGreaterThan(0);
-    expect(settings.permissions?.allow).toEqual(expect.arrayContaining(permissionsDefaults));
 
     const hooksRoot = path.join(tmpDir, '.xtrm', 'hooks');
     for (const [eventName, definitions] of Object.entries(hooksConfig.hooks)) {
@@ -221,14 +215,8 @@ describe('xtrm install integration', () => {
     };
 
     const hooksConfig = readHooksConfig();
-    const permissionsDefaults = hooksConfig.permissionsDefaults ?? [];
 
-    expect(settings.permissions?.allow).toEqual([
-      'Bash(git status)',
-      'Read(README.md)',
-      ...permissionsDefaults.filter(pattern => pattern !== 'Bash(git status)' && pattern !== 'Read(README.md)'),
-    ]);
-    expect(new Set(settings.permissions?.allow).size).toBe(settings.permissions?.allow?.length);
+    expect(settings.permissions?.allow).toEqual(['Bash(git status)', 'Read(README.md)']);
     expect(settings.model).toBe('claude-sonnet-4-5');
     expect(settings.skillSuggestions?.enabled).toBe(false);
     expect(Object.keys(settings.hooks ?? {}).sort()).toEqual(Object.keys(hooksConfig.hooks).sort());
@@ -270,10 +258,7 @@ describe('xtrm install integration', () => {
 
     expect(settings.enabledPlugins).toBeUndefined();
     expect(settings.extraKnownMarketplaces).toBeUndefined();
-    expect(settings.permissions?.allow).toEqual([
-      'Bash(git status)',
-      ...(readHooksConfig().permissionsDefaults ?? []).filter(pattern => pattern !== 'Bash(git status)'),
-    ]);
+    expect(settings.permissions?.allow).toEqual(['Bash(git status)']);
     expect(settings.model).toBe('claude-sonnet-4-5');
     expect(settings.skillSuggestions?.enabled).toBe(false);
     expect(settings.statusLine).toBeTruthy();
