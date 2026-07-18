@@ -168,11 +168,16 @@ Steps:
 When the delegate is a general-purpose worker rather than a specialist config, launch it in **bare mode** — no `--role` required. `xt claude` bare mode still emits `--dangerously-skip-permissions` automatically (`worktree-session.ts:679`); do **not** reach for `tmux new-session -d claude`, which drops that flag and burns the operator with hundreds of approval prompts.
 
 ```bash
-# Claude Code worker.
+# Claude Code worker — pointer only.
 xt claude <session-name> --no-attach --prompt 'leggi /tmp/<session>-<topic>.txt e seguilo'
 
-# Pi worker — same shape.
-xt pi <session-name> --no-attach --prompt 'leggi /tmp/<session>-<topic>.txt e seguilo'
+# Claude Code worker — canonical way to also load a skill on turn 1.
+# Claude Code resolves the leading /<name> and expands the skill body into
+# system prompt as designed. No --skill flag needed for this shape.
+xt claude <session-name> --no-attach --prompt '/multiplexing leggi /tmp/<session>-<topic>.txt e seguilo'
+
+# Pi worker — same shape; use /skill:<name> instead of /<name>.
+xt pi <session-name> --no-attach --prompt '/skill:multiplexing leggi /tmp/<session>-<topic>.txt e seguilo'
 ```
 
 Both print `session_name:pane_id` on stdout, name the session `<runtime>-<slug>`, and export `XTMUX_AGENT_TASK` / `XTMUX_AGENT_PROMPT_FILE` into the child.
@@ -202,7 +207,7 @@ The most common mistake is sending `/skill:multiplexing` to a Claude worker; Cla
 
 `--role` mode emits only `role.systemPrompt` (small identity payload, byte-guarded) via `--append-system-prompt` (`worktree-session.ts:641-648`). Skill bodies load via `/skill:<name>` (pi) or `/<name>` (claude) lines prepended to turn-1 body. Bare mode emits no `--append-system-prompt` at all; turn-1 body is the operator prompt, plus (claude only) any `/<name>` lines from explicit `--skill` args.
 
-**On Claude Code, the `/<name>` slash STILL results in the skill body being injected into the model's system prompt at slash-resolution time.** The xtrm-8zsi1 migration reduced the CLI-emitted system prompt, not Claude's final one — Claude Code resolves the `/<name>` reference on turn 1 and loads the skill body into its own system prompt build. To actually keep skill content out of Claude's system prompt, the turn-1 body would need to contain the raw skill text (not a `/<name>` reference), which is not what any current launch mode does. Pi's `--skill` flag likewise ends up in pi's own system-prompt build. Bare-mode users who assumed "no `--append-system-prompt` = no skill body in system prompt" are wrong for both runtimes.
+**On Claude Code, the `/<name>` slash resolves at turn 1 and Claude Code expands the skill body into its own system prompt — this is by design and the sanctioned mechanism.** The xtrm-8zsi1 migration kept only `role.systemPrompt` (identity) small in what the CLI emits; skill bodies always land in the runtime's system prompt through the slash-resolution path. Pi's `--skill` flag likewise lands in pi's own system prompt at boot. Don't design around trying to "keep skill content out of system prompt" — the runtime is supposed to load it there. What xtrm-8zsi1 fixed is a different problem: the CLI no longer bundles a 70KB `injectSkillContents` blob into `--append-system-prompt`.
 
 **Open follow-ups:** `xtrm-mgp47` — bare `xt pi --skill` silently ignored; needs a symmetric `piExplicitSkillLines` path at `worktree-session.ts:1039`.
 
