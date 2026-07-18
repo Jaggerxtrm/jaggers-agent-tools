@@ -14,7 +14,6 @@ declare const __dirname: string;
 
 interface NativeHooksConfig {
     hooks: Record<string, HookWrapper[]>;
-    permissionsDefaults?: string[];
     statusLine?: {
         script?: string;
     };
@@ -149,12 +148,9 @@ export async function runClaudeRuntimeSyncPhase(opts: ClaudeRuntimeSyncOptions):
     // get rewritten, not whether we clobber user hooks.
     const filteredHooks = mergeProjectOwnedHooks(existingSettings.hooks ?? {}, generatedHooks, projectHooksDir);
 
-    const mergedSettings = mergePermissionsDefaults(
-        hasExistingSettings
-            ? { ...existingSettings, hooks: filteredHooks }
-            : { ...baseSettings, hooks: filteredHooks },
-        hooksConfig.permissionsDefaults ?? [],
-    );
+    const mergedSettings: ClaudeSettings = hasExistingSettings
+        ? { ...existingSettings, hooks: filteredHooks }
+        : { ...baseSettings, hooks: filteredHooks };
 
     if (generatedStatusLine) {
         mergedSettings.statusLine = generatedStatusLine;
@@ -207,10 +203,7 @@ export async function reconcileProjectClaudeHooks(
     const hasExistingSettings = await fs.pathExists(settingsPath);
     const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
     const baseSettings = hasExistingSettings ? existingSettings : await readBaseSettings(settingsTemplatePath);
-    const nextSettings = mergePermissionsDefaults(
-        { ...baseSettings, hooks: hooksToWrite },
-        hooksConfig.permissionsDefaults ?? [],
-    );
+    const nextSettings: ClaudeSettings = { ...baseSettings, hooks: hooksToWrite };
     if (generatedStatusLine && !nextSettings.statusLine) {
         nextSettings.statusLine = generatedStatusLine;
     }
@@ -246,12 +239,7 @@ export async function reconcileGlobalClaudeHooks(opts: { dryRun?: boolean } = {}
 
     const currentSettings = await readSettings(settingsPath);
     const mergeResult = await safeMergeOwnedHookSettings(currentSettings, generatedHooks, { dryRun });
-    const nextSettings = mergePermissionsDefaults(
-        mergeResult.settings as ClaudeSettings,
-        hooksConfig.permissionsDefaults ?? [],
-    );
-    const changed = JSON.stringify(currentSettings) !== JSON.stringify(nextSettings);
-    if (!changed) {
+    if (!mergeResult.changed) {
         await ensureGlobalStatusLine();
         await appendHookLog({
             timestamp: new Date().toISOString(),
@@ -266,7 +254,7 @@ export async function reconcileGlobalClaudeHooks(opts: { dryRun?: boolean } = {}
     }
 
     if (!dryRun) {
-        await writeJsonAtomic(settingsPath, nextSettings);
+        await writeJsonAtomic(settingsPath, mergeResult.settings);
     }
 
     await ensureGlobalStatusLine();
@@ -641,23 +629,11 @@ async function readSettings(settingsPath: string): Promise<ClaudeSettings> {
     }
 }
 
-function mergePermissionsDefaults(settings: ClaudeSettings, defaults: string[]): ClaudeSettings {
-    const existing = settings.permissions?.allow ?? [];
-    return {
-        ...settings,
-        permissions: {
-            ...settings.permissions,
-            allow: [...new Set([...existing, ...defaults])],
-            defaultMode: settings.permissions?.defaultMode ?? 'default',
-        },
-    };
-}
-
 async function readBaseSettings(settingsTemplatePath: string): Promise<ClaudeSettings> {
     try {
         return await fs.readJson(settingsTemplatePath) as ClaudeSettings;
     } catch {
-        return { permissions: { defaultMode: 'default' }, skillSuggestions: { enabled: true } };
+        return { permissions: { allow: [], defaultMode: 'default' }, skillSuggestions: { enabled: true } };
     }
 }
 
