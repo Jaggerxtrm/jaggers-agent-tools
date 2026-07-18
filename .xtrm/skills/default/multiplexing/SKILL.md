@@ -180,19 +180,22 @@ xt claude <session-name> --no-attach --prompt '/multiplexing leggi /tmp/<session
 xt pi <session-name> --no-attach --prompt '/skill:multiplexing leggi /tmp/<session>-<topic>.txt e seguilo'
 ```
 
-Both print `session_name:pane_id` on stdout, name the session `<runtime>-<slug>`, and export `XTMUX_AGENT_TASK` / `XTMUX_AGENT_PROMPT_FILE` into the child.
+Both print `session_name:pane_id` on stdout, name the session `<runtime>-<slug>`, and export `XTMUX_AGENT_TASK` and `XTMUX_AGENT_PARENT_SESSION` into the child (`XTMUX_AGENT_BEAD` is added only in `--role --bead` mode; the older `XTMUX_AGENT_PROMPT_FILE` transport was dropped in xtrm-8zsi1 and no longer exists). `--no-attach` = the launcher doesn't switch your current tmux client to the new session; the worker starts detached and its pointer is what you get on stdout.
 
-**Bare-mode flag matrix.** Only these flags are legal without `--role` (`worktree-session.ts:1029-1046`):
+**Bare-mode flag matrix.** Only these flags are legal without `--role` (bare gate at `worktree-session.ts:1029-1032` rejects `--bead` and `--` passthrough; everything else falls through):
 
 | Flag | Bare + `xt claude` | Bare + `xt pi` |
 |---|---|---|
 | `--prompt <text>` | ✓ | ✓ |
 | `--model <name>` | ✓ | ✓ |
-| `--skill <name-or-path>` | ✓ — prepends `/<name>` line to turn-1 body | ✗ **read but silently ignored** (tracked by `xtrm-mgp47`) |
-| `--no-attach` / `--new-session` / `--ns` / `--reuse` | ✓ | ✓ |
+| `--skill <name-or-path>` | ✓ — prepends `/<name>` line to turn-1 body | ✓ — passes through as pi's native `--skill <path>` (`buildRoleTmuxPlan` pi branch, `:659-664`) |
+| `--thinking <level>` | ✗ (Claude has no `--thinking` flag) | ✓ — forwarded to pi |
+| `--no-attach` / `--new-session` / `--ns` | ✓ | ✓ |
+| `--parent` / `--child` | ✓ | ✓ |
 | `--bead <id>` | ✗ requires `--role` | ✗ requires `--role` |
 | `--` passthrough | ✗ requires `--role` | ✗ requires `--role` |
-| `--parent` / `--child` | ✗ requires `--role` | ✗ requires `--role` |
+
+In practice `--parent` / `--child` are almost always paired with `--role` (coordinator lineage), but the bare gate does not require it.
 
 **Slash syntax differs across runtimes — do not paste one into the wrong pane:**
 
@@ -203,13 +206,17 @@ Both print `session_name:pane_id` on stdout, name the session `<runtime>-<slug>`
 
 The most common mistake is sending `/skill:multiplexing` to a Claude worker; Claude treats it as literal user text and the skill never loads.
 
+**Prefer ONE skill channel — either `--skill <name>` OR a leading `/<name>` in `--prompt`.** Both together will resolve twice on Claude Code (the launcher prepends its own `/<name>` line ahead of the operator prompt at `:1041-1046`).
+
+**Isolation caveat.** `~/.claude/skills` global auto-discovery still loads in bare Claude; there is no `--no-skills` in bare mode (role mode drops it at `:657`). If you need a lean worker, don't rely on bare mode for skill isolation — use `--role` with a specialist config that declares its skill set.
+
 **Architecture note — where skill content actually ends up (xtrm-8zsi1).**
 
-`--role` mode emits only `role.systemPrompt` (small identity payload, byte-guarded) via `--append-system-prompt` (`worktree-session.ts:641-648`). Skill bodies load via `/skill:<name>` (pi) or `/<name>` (claude) lines prepended to turn-1 body. Bare mode emits no `--append-system-prompt` at all; turn-1 body is the operator prompt, plus (claude only) any `/<name>` lines from explicit `--skill` args.
+`--role` mode emits only `role.systemPrompt` (small identity payload, byte-guarded) via `--append-system-prompt` (`worktree-session.ts:641-648`). Skill bodies load via `/skill:<name>` (pi) or `/<name>` (claude) lines prepended to turn-1 body. Bare mode emits no `--append-system-prompt` at all; turn-1 body is the operator prompt plus (claude only) any `/<name>` lines from explicit `--skill` args. Pi's bare `--skill` goes through as pi's native flag rather than as a turn-1 slash line.
 
 **On Claude Code, the `/<name>` slash resolves at turn 1 and Claude Code expands the skill body into its own system prompt — this is by design and the sanctioned mechanism.** The xtrm-8zsi1 migration kept only `role.systemPrompt` (identity) small in what the CLI emits; skill bodies always land in the runtime's system prompt through the slash-resolution path. Pi's `--skill` flag likewise lands in pi's own system prompt at boot. Don't design around trying to "keep skill content out of system prompt" — the runtime is supposed to load it there. What xtrm-8zsi1 fixed is a different problem: the CLI no longer bundles a 70KB `injectSkillContents` blob into `--append-system-prompt`.
 
-**Open follow-ups:** `xtrm-mgp47` — bare `xt pi --skill` silently ignored; needs a symmetric `piExplicitSkillLines` path at `worktree-session.ts:1039`.
+When you need `--bead` / `--` passthrough / persistent coordinator state, use Pattern 7 (role-mode coordinator) instead — bare and role modes are complementary, not competitors.
 
 ### Pattern 3 — Cleanup hygiene
 
