@@ -1042,8 +1042,14 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
                 composedTurn1Body = trustedPrefix + composedTurn1Body;
             }
 
-            const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
-            if (!slashCheck.ok) throw new Error(slashCheck.error);
+            // Bare-mode turn-1 body is entirely trusted at composition:
+            // opts.prompt is operator-typed argv on their own terminal, and
+            // trustedPrefix is launcher-generated from validated, discoverable
+            // --skill args. No untrusted composition source exists here, so a
+            // leading '/' in --prompt (e.g. '/multiplexing ...') is the sanctioned
+            // way to load a skill on turn 1 and must not trip checkPositionZeroSlash.
+            // The role/bead path (:997, :1011) keeps the guard against untrusted
+            // bead-title impersonation. xtrm-8zsi1 follow-up.
             const byteCheck = checkByteCeiling({
                 systemPrompt: '',
                 body: composedTurn1Body,
