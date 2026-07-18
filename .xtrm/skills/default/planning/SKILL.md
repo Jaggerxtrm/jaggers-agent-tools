@@ -68,7 +68,8 @@ SUCCESS: TBD — needs exploration
 NON_GOALS: TBD — needs exploration
 CONSTRAINTS: TBD — needs exploration
 VALIDATION: TBD — needs exploration
-OUTPUT: TBD — needs exploration"
+OUTPUT: TBD — needs exploration
+LIBRARIES: TBD — needs exploration"
 ```
 
 **No one-liners, ever — draft mode included.** PROBLEM must be real prose, SCOPE must be a real guess, and every other section must explicitly say `TBD — needs exploration` rather than being silently absent. Draft state lowers the bar on completeness, never on honesty about what's still unknown.
@@ -80,6 +81,30 @@ OUTPUT: TBD — needs exploration"
 ## Phase 2 — Explore Codebase (Read-Only)
 
 Use GitNexus and Serena to understand the landscape. No file edits.
+
+### Recent-work check (mandatory)
+
+Before ANY exploration, orient to where the project actually stands right now.
+Stale mental models are the largest single source of over-scoping: planning
+against a codebase that shipped three PRs since your last session produces
+plans that duplicate work or fight main.
+
+```bash
+# For each repo in scope:
+gh pr list -R <owner/repo> --state merged --limit 20 --json number,title,mergedAt \
+  -q '.[] | [.number, .mergedAt[0:10], .title] | @tsv'
+gh release list -R <owner/repo> --limit 5
+bd list --status=closed --limit 20 2>/dev/null | head -20   # per-repo bd DB
+```
+
+Read the results — 30 seconds of scanning — and write a one-liner into your
+planning notes: *"Recent state: <what shipped in the last 7–14 days that
+touches this SCOPE>"*. If a recent PR already did what the request is asking
+for, STOP and confirm with the operator before continuing. If a recent PR
+changed the surface you were about to plan against, adjust SCOPE first.
+
+Skip only for draft-capture mode (Phase 1 → straight-to-draft) — a draft bead
+doesn't need a project-standing survey to be filed.
 
 ### GitNexus-first protocol (mandatory when available)
 
@@ -114,6 +139,49 @@ get_symbols_overview("path/to/relevant/file.ts")
 # Read just the relevant function
 find_symbol("SymbolName", include_body=true)
 ```
+
+### Library-first survey (mandatory before Phase 3)
+
+Before proposing a new component, module, or non-trivial function, run four
+cheap searches to see what already exists. Ponytail teaches: the helper you
+would have written is often already there under a different name.
+
+1. **In-repo reuse** — grep for the concept-noun across the repo's src/lib/
+   trees. For non-trivial in-repo reuse work, delegate to the existing
+   `explorer` specialist (READ_ONLY codebase mapper) rather than doing it
+   inline:
+
+   ```bash
+   # Inline: quick check
+   grep -RnE '<concept-noun>' src/ lib/ 2>/dev/null | head
+
+   # Non-trivial: dispatch to the existing READ_ONLY explorer
+   sp chat explorer --bead <id> \
+     --prompt 'Library-reuse survey for bead SCOPE. Return: (1) in-repo helpers/utils that could replace what this bead proposes as new work, (2) file:line citations, (3) one-line reasoning per hit. No design opinions — evidence only.'
+   ```
+
+2. **Installed dependencies** — read `package.json` / `pyproject.toml` /
+   `Cargo.toml` / `go.mod`. Every dep already paid for is fair game; no new
+   dep tax.
+
+3. **Language stdlib** — what does the standard library ship for this problem?
+   (`datetime.timedelta` before installing a "duration" package,
+   `crypto.subtle` before adding a hash library, `URL` before pulling
+   `url-parse`.)
+
+4. **Well-known ecosystem** (only if 1–3 don't cover it) — name at most 2
+   candidates with one-line trade-offs. Do not survey the whole npm/PyPI
+   world. If you need broader ecosystem context, use `mcp__deepwiki__ask_question`
+   or the `find-docs` skill for a targeted lookup.
+
+Record the outcome in the bead's `LIBRARIES` section (see Phase 4 template)
+so the executor doesn't re-derive this from scratch. If none of the four
+tiers apply (e.g., pure algorithm implementation), the section says so
+explicitly — an empty section is honest, a missing section isn't.
+
+Skip only when the change is a pure edit to an existing symbol (bug fix,
+one-line addition to a helper, rename). The rule fires whenever a new file
+or new function is on the table.
 
 ### Fallback when GitNexus MCP tools are unavailable
 
@@ -314,6 +382,20 @@ bd create \
 - [ ] <Smoke check that exercises the integrated user/agent/workflow path>
 - [ ] <E2E or live-contract check for critical boundary paths, or documented fallback + follow-up bead>
 - [ ] <Log/telemetry evidence is emitted in the required format and can be found by the named command/query>
+
+## LIBRARIES
+
+Result of the Phase 2 library-first survey. Mandatory for tasks that add
+new files/functions; write "N/A — pure edit to <existing symbol>" for
+one-line/rename tasks.
+
+- **Reuse in repo:** <path/name — 1-line rationale, or "none found — searched with `grep -RnE <pattern>` and `sp chat explorer`">
+- **Installed deps:** <package@version — 1-line rationale, or "none applicable">
+- **Stdlib:** <module.Class — 1-line rationale, or "none applicable">
+- **New dep candidate:** <name — 1-line trade-off + specific gap that forced it, or "none — tiers 1-3 covered it">
+- **Roll it:** <yes/no + 1-line reason>
+
+Empty sections say so explicitly. Missing sections fail the reviewer gate.
 
 ## OUTPUT
 
