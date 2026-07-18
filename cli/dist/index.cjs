@@ -62190,8 +62190,6 @@ async function launchWorktreeSession(opts) {
 `;
         composedTurn1Body = trustedPrefix + composedTurn1Body;
       }
-      const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
-      if (!slashCheck.ok) throw new Error(slashCheck.error);
       const byteCheck = checkByteCeiling({
         systemPrompt: "",
         body: composedTurn1Body,
