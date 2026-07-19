@@ -117,7 +117,7 @@ export async function findProjectRoot(): Promise<string> {
 }
 
 /**
- * Resolves the MAIN checkout root for `xt install` / `xt update` / `xt claude`
+ * Resolves the MAIN checkout root for `xt init` / `xt update` / `xt claude`
  * defaults — never the worktree dir, even when invoked from one (xtrm-6ofgm).
  *
  * `git rev-parse --git-common-dir` returns the path to the shared `.git`

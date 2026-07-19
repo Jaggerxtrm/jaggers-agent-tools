@@ -68,17 +68,23 @@ describe('xt pi runtime subcommands (bjvn)', () => {
         const r = run(['pi', '--help']);
         expect(r.status).toBe(0);
         const out = r.stdout;
-        expect(out).toMatch(/install/);
+        expect(out).not.toMatch(/^\s+install\b/im);
         expect(out).toMatch(/setup/);
         expect(out).toMatch(/status/);
         expect(out).toMatch(/doctor/);
         expect(out).toMatch(/reload/);
     });
 
-    it('xt pi install --help exits 0', () => {
+    it('xt pi install fails with the current maintenance redirect', () => {
+        const r = run(['pi', 'install']);
+        expect(r.status).toBe(1);
+        expect(r.stdout + r.stderr).toBe('xt pi install is retired — run: xt pi reload\n');
+    });
+
+    it('xt pi install --help stays on the retired-token tombstone', () => {
         const r = run(['pi', 'install', '--help']);
-        expect(r.status).toBe(0);
-        expect(r.stdout).toMatch(/install|extension|package/i);
+        expect(r.status).toBe(1);
+        expect(r.stdout + r.stderr).toBe('xt pi install is retired — run: xt pi reload\n');
     });
 
     it('xt pi setup --help exits 0', () => {
@@ -108,9 +114,4 @@ describe('xt pi runtime subcommands (bjvn)', () => {
         expect(r.stdout).toMatch(/session|worktree/i);
     });
 
-    it('xt pi install is under the pi namespace', () => {
-        const r = run(['pi', 'install', '--help']);
-        expect(r.status).toBe(0);
-        expect(r.stdout).toMatch(/extension|package|install/i);
-    });
 });
