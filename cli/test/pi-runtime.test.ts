@@ -203,12 +203,13 @@ describe('inventoryPiRuntime', () => {
         expect(plan.staleExtensions.some(s => s.ext.id === 'beads')).toBe(true);
     });
 
-    it('detects orphaned extensions', async () => {
-        await makeExtension(targetDir, 'old-deprecated-extension');
+    it('detects retired managed extensions without treating user extensions as orphans', async () => {
+        await makeExtension(targetDir, 'pi-serena-compact');
+        await makeExtension(targetDir, 'user-extension');
 
         const plan = await inventoryPiRuntime(sourceDir, targetDir);
 
-        expect(plan.orphanedExtensions).toContain('old-deprecated-extension');
+        expect(plan.orphanedExtensions).toEqual(['pi-serena-compact']);
     });
 
     it('reports allPresent when everything is synced', async () => {
@@ -312,33 +313,46 @@ describe('executePiSync', () => {
         expect(await fs.pathExists(path.join(targetDir, 'beads', 'extra.ts'))).toBe(true);
     });
 
-    it('removes orphaned extensions when removeOrphaned is true', async () => {
-        await makeExtension(targetDir, 'old-extension');
+    it('removes retired managed extensions without touching user extensions', async () => {
+        await makeExtension(targetDir, 'pi-serena-compact');
+        await makeExtension(targetDir, 'user-extension');
 
         const plan = await inventoryPiRuntime(sourceDir, targetDir);
         const result = await executePiSync(plan, sourceDir, targetDir, { removeOrphaned: true });
 
-        expect(result.extensionsRemoved).toContain('old-extension');
-        expect(await fs.pathExists(path.join(targetDir, 'old-extension'))).toBe(false);
+        expect(result.extensionsRemoved).toContain('pi-serena-compact');
+        expect(await fs.pathExists(path.join(targetDir, 'pi-serena-compact'))).toBe(false);
+        expect(await fs.pathExists(path.join(targetDir, 'user-extension'))).toBe(true);
     });
 
-    it('preserves orphaned extensions when removeOrphaned is false', async () => {
-        await makeExtension(targetDir, 'old-extension');
+    it('preserves retired managed extensions when removeOrphaned is false', async () => {
+        await makeExtension(targetDir, 'quality-gates');
 
         const plan = await inventoryPiRuntime(sourceDir, targetDir);
         const result = await executePiSync(plan, sourceDir, targetDir, { removeOrphaned: false });
 
-        expect(result.extensionsRemoved).not.toContain('old-extension');
-        expect(await fs.pathExists(path.join(targetDir, 'old-extension'))).toBe(true);
+        expect(result.extensionsRemoved).not.toContain('quality-gates');
+        expect(await fs.pathExists(path.join(targetDir, 'quality-gates'))).toBe(true);
     });
 
-    it('dry run does not modify files', async () => {
-        await makeExtension(sourceDir, 'beads');
+    it('dry run enrolls current extensions and skips disabled or library IDs', async () => {
+        await makeExtension(sourceDir, 'serena-pool');
+        await makeExtension(sourceDir, 'sp-terminal-overlay');
+        await makeExtension(sourceDir, 'xtprompt');
 
         const plan = await inventoryPiRuntime(sourceDir, targetDir);
-        const result = await executePiSync(plan, sourceDir, targetDir, { dryRun: true });
+        const logs: string[] = [];
+        const result = await executePiSync(plan, sourceDir, targetDir, { dryRun: true, log: (message) => logs.push(message) });
 
         expect(result.extensionsAdded).toHaveLength(0);
-        expect(await fs.pathExists(path.join(targetDir, 'beads'))).toBe(false);
+        expect(logs).toEqual(expect.arrayContaining([
+            '[DRY RUN] + serena-pool',
+            '[DRY RUN] + sp-terminal-overlay',
+            '[DRY RUN] + xtprompt',
+        ]));
+        expect(logs.join('\n')).not.toContain('core');
+        expect(logs.join('\n')).not.toContain('pi-serena-compact');
+        expect(logs.join('\n')).not.toContain('quality-gates');
+        expect(await fs.pathExists(path.join(targetDir, 'serena-pool'))).toBe(false);
     });
 });

@@ -32,6 +32,14 @@ describe('pi runtime safeguards', () => {
     expect(resolveManagedPiCoreSourceDir()).toBe(path.join(repoRoot, 'packages/pi-extensions/src/core'));
   });
 
+  it('does not treat legacy extensions/core as the managed core library', async () => {
+    const { resolveManagedPiCoreSourceDir } = await import('../core/pi-runtime.js');
+    const legacyRoot = path.join(tempRoot, 'legacy-layout');
+    await fs.ensureDir(path.join(legacyRoot, '.xtrm', 'extensions', 'core'));
+
+    expect(resolveManagedPiCoreSourceDir(legacyRoot)).toBeNull();
+  });
+
   it('detects npmmirror 404s and emits the scoped npmjs hint for pi extensions', async () => {
     const { getPiPackageInstallFailureHint, shouldRetryPiInstallViaNpmjs } = await import('../core/pi-runtime.js');
     const output = 'npm error 404 Not Found - GET https://cdn.npmmirror.com/packages/%40jaggerxtrm/pi-extensions/0.7.8/pi-extensions-0.7.8.tgz';
