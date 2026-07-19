@@ -1,4 +1,3 @@
-import { Command } from 'commander';
 import kleur from 'kleur';
 import fs from 'fs-extra';
 import path from 'path';
@@ -77,7 +76,7 @@ async function renderSummaryCard(stats: InstallStats, isDryRun: boolean): Promis
     const boxen = (await import('boxen')).default;
 
     const lines = [
-        kleur.bold('  ✓ Install complete'),
+        kleur.bold('  ✓ Runtime maintenance complete'),
         '',
         `  ${t.label('Expected installs')} ${stats.expectedInstalls}`,
         `  ${t.label('Installed')} ${stats.installed}`,
@@ -96,30 +95,6 @@ async function renderSummaryCard(stats: InstallStats, isDryRun: boolean): Promis
 }
 
 export { isBeadsInstalled, isDoltInstalled, isDeepwikiInstalled, isBvInstalled } from '../core/machine-bootstrap.js';
-
-export function createInstallAllCommand(): Command {
-    return new Command('all')
-        .description('[deprecated] Use xtrm install')
-        .option('--dry-run', 'Preview changes without making any modifications', false)
-        .option('-y, --yes', 'Skip confirmation prompts', false)
-        .option('--no-mcp', 'Skip MCP server registration', false)
-        .option('--force', 'Overwrite locally drifted files', false)
-        .action(async (_opts) => {
-            console.log('xtrm install all is deprecated — use: xtrm install');
-        });
-}
-
-export function createInstallBasicCommand(): Command {
-    return new Command('basic')
-        .description('[deprecated] Use xtrm install')
-        .option('--dry-run', 'Preview changes without making any modifications', false)
-        .option('-y, --yes', 'Skip confirmation prompts', false)
-        .option('--no-mcp', 'Skip MCP server registration', false)
-        .option('--force', 'Overwrite locally drifted files', false)
-        .action(async (_opts) => {
-            console.log('xtrm install basic is deprecated — use: xtrm install');
-        });
-}
 
 export async function runMachineBootstrap(opts: { yes?: boolean } = {}): Promise<void> {
     await runMachineBootstrapPhase({ dryRun: false });
@@ -149,7 +124,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     const strictRegistry = isStrictRegistryMode(opts);
 
     if (backport) {
-        console.log(kleur.yellow('  ⚠ xtrm install --backport is no longer supported in registry mode.'));
+        console.log(kleur.yellow('  ⚠ Backport mode is no longer supported in registry mode.'));
         return;
     }
 
@@ -188,7 +163,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     const registryPath = path.join(packageRoot, '.xtrm', 'registry.json');
     const registry = await fs.readJson(registryPath) as RegistryManifest;
 
-    console.log(kleur.bold('\n  ⚙  xtrm install (.xtrm registry scaffold)'));
+    console.log(kleur.bold('\n  ⚙  xtrm runtime maintenance (.xtrm registry scaffold)'));
     console.log(kleur.dim(`  • registry: ${registryPath}`));
     console.log(kleur.dim(`  • target: ${userXtrmDir}`));
 
@@ -287,25 +262,4 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     if (!dryRun) {
         printNextSteps();
     }
-}
-
-export function createInstallCommand(): Command {
-    const installCmd = new Command('install')
-        .description('[deprecated] Use xtrm init — project-scoped setup in one command')
-        .option('--dry-run', 'Preview changes without making any modifications', false)
-        .option('-y, --yes', 'Skip confirmation prompts', false)
-        .option('--prune', 'Remove items not in the canonical repository', false)
-        .option('--backport', 'Backport drifted local changes back to the repository', false)
-        .option('--force', 'Overwrite locally drifted files', false)
-        .option('--global', 'Install to user-global scope (~/.xtrm) instead of project-local', false)
-        .option('--strict-registry', 'Fail on registry/source mismatch or missing registry source files', false)
-        .action(async (opts) => {
-            console.log(kleur.yellow('  ⚠  xtrm install is deprecated — use xtrm init\n'));
-            await runInstall(opts);
-        });
-
-    installCmd.addCommand(createInstallAllCommand());
-    installCmd.addCommand(createInstallBasicCommand());
-
-    return installCmd;
 }

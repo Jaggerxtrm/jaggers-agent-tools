@@ -19,6 +19,8 @@ import { launchWorktreeSession } from '../utils/worktree-session.js';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
 
 const PI_AGENT_DIR = process.env.PI_AGENT_DIR || path.join(homedir(), '.pi', 'agent');
+const RETIRED_PI_COMMANDS = new Set(['install']);
+const RETIRED_PI_INSTALL_REDIRECT = 'xt pi install is retired — run: xt pi reload';
 
 interface PiProjectPointer {
     hasProjectSettings: boolean;
@@ -133,6 +135,19 @@ Examples:
                 passthrough,
             });
         });
+
+    for (const commandName of RETIRED_PI_COMMANDS) {
+        const tombstone = new Command(commandName)
+            .description('Retired maintenance token; use xt pi reload')
+            .helpOption(false)
+            .allowUnknownOption(true)
+            .allowExcessArguments(true)
+            .action(() => {
+                console.error(RETIRED_PI_INSTALL_REDIRECT);
+                process.exitCode = 1;
+            });
+        cmd.addCommand(tombstone, { hidden: true });
+    }
 
     // 'setup' = interactive first-time API key + OAuth config
     const piSetup = createInstallPiCommand();
