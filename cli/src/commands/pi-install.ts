@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { t } from '../utils/theme.js';
-import { runPiRuntimeSync } from '../core/pi-runtime.js';
+import { runPiRuntimeSync, type PiSyncResult } from '../core/pi-runtime.js';
 import { isPiInstalled, isPnpmInstalled } from '../core/machine-bootstrap.js';
 
 const PI_AGENT_DIR = process.env.PI_AGENT_DIR || path.join(homedir(), '.pi', 'agent');
@@ -44,7 +44,17 @@ function ensurePnpm(dryRun: boolean): void {
  * @param isGlobal - When true, installs to global Pi dirs (~/.pi/agent/). Default false = project-scoped.
  * @param projectRoot - Project root for project-scoped installs. Defaults to git root.
  */
-export async function runPiInstall(dryRun: boolean = false, isGlobal: boolean = false, projectRoot?: string): Promise<void> {
+export interface PiInstallOptions {
+    skipGlobalPackageAssurance?: boolean;
+    skipExternalToolPatch?: boolean;
+}
+
+export async function runPiInstall(
+    dryRun: boolean = false,
+    isGlobal: boolean = false,
+    projectRoot?: string,
+    options: PiInstallOptions = {},
+): Promise<PiSyncResult> {
     if (!projectRoot) {
         const r = spawnSync('git', ['rev-parse', '--show-toplevel'], {
             cwd: process.cwd(), encoding: 'utf8', stdio: 'pipe',
@@ -61,7 +71,14 @@ export async function runPiInstall(dryRun: boolean = false, isGlobal: boolean = 
             const r = spawnSync('npm', ['install', '-g', 'oh-pi'], { stdio: 'inherit' });
             if (r.status !== 0) {
                 console.error(kleur.red('  ✗ Failed to install oh-pi. Run: npm install -g oh-pi\n'));
-                return;
+                return {
+                    extensionsAdded: [],
+                    extensionsUpdated: [],
+                    extensionsRemoved: [],
+                    packagesInstalled: [],
+                    failed: ['oh-pi'],
+                    changed: false,
+                };
             }
         } else {
             console.log(kleur.dim('  [DRY RUN] npm install -g oh-pi'));
@@ -75,7 +92,13 @@ export async function runPiInstall(dryRun: boolean = false, isGlobal: boolean = 
     ensurePnpm(dryRun);
 
     // Run unified sync
-    await runPiRuntimeSync({ dryRun, isGlobal, projectRoot });
+    const runtimeResult = await runPiRuntimeSync({
+        dryRun,
+        isGlobal,
+        projectRoot,
+        skipGlobalPackageAssurance: options.skipGlobalPackageAssurance,
+        skipExternalToolPatch: options.skipExternalToolPatch,
+    });
 
     // Seed sane per-package defaults (idempotent — skips if user already has one)
     seedGitnexusDefaults(dryRun);
@@ -90,6 +113,8 @@ export async function runPiInstall(dryRun: boolean = false, isGlobal: boolean = 
     } else {
         console.log('');
     }
+
+    return runtimeResult;
 }
 
 /**
