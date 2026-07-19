@@ -29,6 +29,9 @@ const MANAGED_PI_EXTENSION_SOURCE_CANDIDATES = [
     ['packages', 'pi-extensions', 'extensions'],
     ['.xtrm', 'extensions'],
 ] as const;
+const MANAGED_PI_EXTENSION_MANIFEST_CANDIDATES = [
+    ['packages', 'pi-extensions', 'src', 'manifest.json'],
+] as const;
 const MANAGED_PI_THEME_SOURCE_CANDIDATES = [
     ['packages', 'pi-extensions', 'themes', 'xtrm-ui'],
     ['.xtrm', 'themes', 'xtrm-ui'],
@@ -61,6 +64,49 @@ function resolvePkgRoot(): string {
     return candidates[0];
 }
 
+type PiExtensionManifestEntry = {
+    readonly id: string;
+    readonly displayName: string;
+    readonly required: boolean;
+};
+
+type PiExtensionManifest = {
+    readonly active: readonly PiExtensionManifestEntry[];
+    readonly disabled: Readonly<Record<string, string>>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function loadPiExtensionManifest(pkgRoot: string): PiExtensionManifest {
+    const manifestPath = resolveFirstExistingPath(pkgRoot, MANAGED_PI_EXTENSION_MANIFEST_CANDIDATES);
+    if (!manifestPath) return { active: [], disabled: {} };
+
+    const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (!isRecord(parsed) || !Array.isArray(parsed.active) || !isRecord(parsed.disabled)) {
+        throw new Error(`Invalid managed Pi extension manifest: ${manifestPath}`);
+    }
+
+    const activeEntries: readonly unknown[] = parsed.active;
+    const active = activeEntries.map((entry) => {
+        if (!isRecord(entry) || typeof entry.id !== 'string' || typeof entry.displayName !== 'string' || typeof entry.required !== 'boolean') {
+            throw new Error(`Invalid active managed Pi extension entry in ${manifestPath}`);
+        }
+        return { id: entry.id, displayName: entry.displayName, required: entry.required };
+    });
+    const disabled = Object.fromEntries(Object.entries(parsed.disabled).map(([id, reason]) => {
+        if (typeof reason !== 'string' || reason.length === 0) {
+            throw new Error(`Invalid disabled managed Pi extension reason for '${id}' in ${manifestPath}`);
+        }
+        return [id, reason];
+    }));
+
+    return { active, disabled };
+}
+
+const MANAGED_PI_EXTENSION_MANIFEST = loadPiExtensionManifest(resolvePkgRoot());
+
 export function resolveManagedPiExtensionsSourceDir(pkgRoot: string = resolvePkgRoot()): string | null {
     return resolveFirstExistingPath(pkgRoot, MANAGED_PI_EXTENSION_SOURCE_CANDIDATES);
 }
@@ -72,7 +118,6 @@ function resolveManagedPiThemesSourceDir(pkgRoot: string = resolvePkgRoot()): st
 export function resolveManagedPiCoreSourceDir(pkgRoot: string = resolvePkgRoot()): string | null {
     return resolveFirstExistingPath(pkgRoot, [
         ['packages', 'pi-extensions', 'src', 'core'],
-        ['.xtrm', 'extensions', 'core'],
     ]);
 }
 
@@ -182,29 +227,20 @@ export interface ManagedExtension {
     id: string;
     /** Human-readable name */
     displayName: string;
-    /** Is this a library (excluded from settings.json packages list) */
-    isLibrary?: boolean;
     /** Required for XTRM workflow */
     required: boolean;
 }
 
-const MANAGED_EXTENSIONS: ManagedExtension[] = [
-    { id: 'core', displayName: '@xtrm/pi-core', isLibrary: true, required: true },
-    { id: 'auto-session-name', displayName: 'auto-session-name', required: false },
-    { id: 'beads', displayName: 'beads', required: true },
-    { id: 'compact-header', displayName: 'compact-header', required: false },
-    { id: 'custom-footer', displayName: 'custom-footer', required: true },
-    { id: 'custom-provider-qwen-cli', displayName: 'custom-provider-qwen-cli', required: false },
-    { id: 'git-checkpoint', displayName: 'git-checkpoint', required: false },
-    { id: 'lsp-bootstrap', displayName: 'lsp-bootstrap', required: false },
-    { id: 'pi-serena-compact', displayName: 'pi-serena-compact', required: false },
-    // quality-gates disabled at the bundle registry level — broken .claude/hooks
-    // wiring under the managed .xtrm/hooks layout means it never fires. (xtrm-e2vkn)
-    { id: 'service-skills', displayName: 'service-skills', required: false },
-    { id: 'session-flow', displayName: 'session-flow', required: true },
-    { id: 'xtrm-loader', displayName: 'xtrm-loader', required: true },
-    { id: 'xtrm-ui', displayName: 'xtrm-ui', required: true },
-];
+const MANAGED_EXTENSIONS: ManagedExtension[] = MANAGED_PI_EXTENSION_MANIFEST.active.map((entry) => ({
+    id: entry.id,
+    displayName: entry.displayName,
+    required: entry.required,
+}));
+const MANAGED_PI_EXTENSION_IDS = new Set(MANAGED_EXTENSIONS.map((extension) => extension.id));
+const MANAGED_PI_EXTENSION_OWNED_IDS = new Set([
+    ...MANAGED_PI_EXTENSION_IDS,
+    ...Object.keys(MANAGED_PI_EXTENSION_MANIFEST.disabled),
+]);
 
 // ── Package Registry ─────────────────────────────────────────────────────────
 
@@ -409,10 +445,9 @@ export async function inventoryPiRuntime(
         }
     }
 
-    // Detect orphaned extensions (in target but not in source registry)
-    const managedIds = new Set(MANAGED_EXTENSIONS.map(e => e.id));
+    // Only remove known XTRM-owned retired IDs; user extensions are not orphans.
     for (const name of installedExtNames) {
-        if (!managedIds.has(name)) {
+        if (!MANAGED_PI_EXTENSION_IDS.has(name) && MANAGED_PI_EXTENSION_OWNED_IDS.has(name)) {
             orphanedExtensions.push(name);
         }
     }
@@ -1555,8 +1590,7 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
     // Clean stale global extension symlinks from pre-package-mode installs
     const globalExtDir = path.join(PI_AGENT_DIR, 'extensions');
     if (await fs.pathExists(globalExtDir)) {
-        const MANAGED_EXT_IDS = new Set(MANAGED_EXTENSIONS.map(e => e.id));
-        const STALE_SYMLINKS = new Set([...MANAGED_EXT_IDS, 'core', 'gitnexus', 'serena']);
+        const STALE_SYMLINKS = MANAGED_PI_EXTENSION_OWNED_IDS;
         const globalEntries = await fs.readdir(globalExtDir, { withFileTypes: true });
         for (const entry of globalEntries) {
             if (entry.isSymbolicLink() && STALE_SYMLINKS.has(entry.name)) {
