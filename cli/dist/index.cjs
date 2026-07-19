@@ -63170,10 +63170,10 @@ Examples:
 
 // src/commands/pi.ts
 init_kleur();
-var import_path6 = __toESM(require("path"), 1);
+var import_path7 = __toESM(require("path"), 1);
 var import_node_child_process5 = require("child_process");
 var import_node_os9 = require("os");
-var import_fs_extra14 = __toESM(require_lib(), 1);
+var import_fs_extra16 = __toESM(require_lib(), 1);
 
 // src/commands/pi-install.ts
 init_kleur();
@@ -63258,428 +63258,21 @@ function seedGitnexusDefaults(dryRun) {
 // src/commands/install-pi.ts
 init_kleur();
 var import_prompts2 = __toESM(require_prompts3(), 1);
-var import_fs_extra13 = __toESM(require_lib(), 1);
-var import_path5 = __toESM(require("path"), 1);
+var import_fs_extra15 = __toESM(require_lib(), 1);
+var import_path6 = __toESM(require("path"), 1);
 var import_node_child_process4 = require("child_process");
 var import_node_os8 = require("os");
-var PI_AGENT_DIR3 = process.env.PI_AGENT_DIR || import_path5.default.join((0, import_node_os8.homedir)(), ".pi", "agent");
-function fillTemplate(template, values) {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => values[key] ?? "");
-}
-function readExistingPiValues(piAgentDir) {
-  const values = {};
-  try {
-    const auth = JSON.parse(require("fs").readFileSync(import_path5.default.join(piAgentDir, "auth.json"), "utf8"));
-    if (auth?.dashscope?.key) values["DASHSCOPE_API_KEY"] = auth.dashscope.key;
-    if (auth?.zai?.key) values["ZAI_API_KEY"] = auth.zai.key;
-  } catch {
-  }
-  try {
-    const models = JSON.parse(require("fs").readFileSync(import_path5.default.join(piAgentDir, "models.json"), "utf8"));
-    if (!values["DASHSCOPE_API_KEY"] && models?.providers?.dashscope?.apiKey) {
-      values["DASHSCOPE_API_KEY"] = models.providers.dashscope.apiKey;
-    }
-  } catch {
-  }
-  return values;
-}
-function ensurePnpm2() {
-  if (isPnpmInstalled()) {
-    const v = (0, import_node_child_process4.spawnSync)("pnpm", ["--version"], { encoding: "utf8", stdio: "pipe" });
-    console.log(t.success(`  \u2713 pnpm ${v.stdout.trim()} already installed`));
-    return;
-  }
-  console.log(kleur_default.yellow("\n  pnpm not found \u2014 installing via npm..."));
-  const r = (0, import_node_child_process4.spawnSync)("npm", ["install", "-g", "pnpm"], { stdio: "inherit" });
-  if (r.status !== 0) {
-    console.log(kleur_default.yellow("  \u26A0 Failed to install pnpm. Run: npm install -g pnpm"));
-  } else {
-    console.log(t.success("  \u2713 pnpm installed"));
-  }
-}
-function createInstallPiCommand() {
-  const cmd = new Command("pi");
-  cmd.description("Install Pi coding agent with providers, extensions, and npm packages").option("-y, --yes", "Skip confirmation prompts", false).option("--check", "Check Pi extension deployment drift without writing changes", false).option("--setup", "Run first-time configuration (API keys, OAuth)", false).action(async (opts) => {
-    const { yes, check: check2, setup } = opts;
-    const repoRoot = await findRepoRoot();
-    const piConfigDir = import_path5.default.join(repoRoot, "config", "pi");
-    if (check2) {
-      const sourceDir2 = resolveManagedPiExtensionsSourceDir();
-      const targetDir2 = import_path5.default.join(PI_AGENT_DIR3, "extensions");
-      if (!sourceDir2) {
-        console.log(kleur_default.dim("\n  Managed extensions: skipped (not bundled in npm package)\n"));
-        return;
-      }
-      const plan = await inventoryPiRuntime(sourceDir2, targetDir2);
-      renderPiRuntimePlan(plan);
-      const hasDrift = plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0 || plan.orphanedExtensions.length > 0;
-      if (hasDrift) {
-        console.error(kleur_default.red("  \u2717 Pi runtime drift detected. Run `xtrm pi` to sync.\n"));
-        process.exit(1);
-      }
-      return;
-    }
-    if (setup || !import_fs_extra13.default.pathExists(import_path5.default.join(PI_AGENT_DIR3, "auth.json"))) {
-      console.log(t.bold("\n  Pi Coding Agent Setup\n"));
-      if (!isPiInstalled()) {
-        console.log(kleur_default.yellow("  pi not found \u2014 installing oh-pi globally...\n"));
-        const r = (0, import_node_child_process4.spawnSync)("npm", ["install", "-g", "oh-pi"], { stdio: "inherit" });
-        if (r.status !== 0) {
-          console.error(kleur_default.red("\n  Failed to install oh-pi. Run: npm install -g oh-pi\n"));
-          process.exit(1);
-        }
-        console.log(t.success("  \u2713 pi installed\n"));
-      } else {
-        const v = (0, import_node_child_process4.spawnSync)("pi", ["--version"], { encoding: "utf8" });
-        console.log(t.success(`  \u2713 pi ${v.stdout.trim()} already installed
-`));
-      }
-      console.log(t.bold("  pnpm\n"));
-      ensurePnpm2();
-      const schema2 = await import_fs_extra13.default.readJson(import_path5.default.join(piConfigDir, "install-schema.json"));
-      const existing = readExistingPiValues(PI_AGENT_DIR3);
-      const values = { ...existing };
-      console.log(t.bold("\n  API Keys\n"));
-      for (const field of schema2.fields) {
-        if (existing[field.key]) {
-          console.log(t.success(`    ${sym.ok} ${field.label} [already set]`));
-          continue;
-        }
-        if (!field.required && !yes) {
-          const { include } = await (0, import_prompts2.default)({
-            type: "confirm",
-            name: "include",
-            message: `  Configure ${field.label}? (optional)`,
-            initial: false
-          });
-          if (!include) continue;
-        }
-        const { value } = await (0, import_prompts2.default)({
-          type: field.secret ? "password" : "text",
-          name: "value",
-          message: `  ${field.label}`,
-          hint: field.hint,
-          validate: (v) => field.required && !v ? "Required" : true
-        });
-        if (value) values[field.key] = value;
-      }
-      await import_fs_extra13.default.ensureDir(PI_AGENT_DIR3);
-      console.log(t.muted(`
-  Writing config to ${PI_AGENT_DIR3}`));
-      for (const name of ["models.json", "auth.json", "settings.json"]) {
-        const destPath = import_path5.default.join(PI_AGENT_DIR3, name);
-        if (name === "auth.json" && await import_fs_extra13.default.pathExists(destPath) && !yes) {
-          const { overwrite } = await (0, import_prompts2.default)({
-            type: "confirm",
-            name: "overwrite",
-            message: `  ${name} already exists \u2014 overwrite? (OAuth tokens will be lost)`,
-            initial: false
-          });
-          if (!overwrite) {
-            console.log(t.muted(`    skipped ${name}`));
-            continue;
-          }
-        }
-        const raw = await import_fs_extra13.default.readFile(import_path5.default.join(piConfigDir, `${name}.template`), "utf8");
-        await import_fs_extra13.default.writeFile(destPath, fillTemplate(raw, values), "utf8");
-        console.log(t.success(`    ${sym.ok} ${name}`));
-      }
-    }
-    const sourceDir = resolveManagedPiExtensionsSourceDir();
-    const targetDir = import_path5.default.join(PI_AGENT_DIR3, "extensions");
-    if (!sourceDir) {
-      console.log(kleur_default.dim("\n  Managed extensions: skipped (not bundled in npm package)\n"));
-    } else {
-      const plan = await inventoryPiRuntime(sourceDir, targetDir);
-      renderPiRuntimePlan(plan);
-      if (!plan.allPresent) {
-        const result = await executePiSync(plan, sourceDir, targetDir, {
-          dryRun: false,
-          isGlobal: true,
-          removeOrphaned: true,
-          log: (msg) => console.log(kleur_default.dim(`    ${msg}`))
-        });
-        const total = result.extensionsAdded.length + result.extensionsUpdated.length + result.packagesInstalled.length;
-        if (total > 0) {
-          console.log(t.success(`
-    ${sym.ok} Synced ${total} items`));
-        }
-      }
-    }
-    console.log(t.bold("\n  OAuth (manual steps)\n"));
-    const schema = await import_fs_extra13.default.readJson(import_path5.default.join(piConfigDir, "install-schema.json"));
-    for (const provider of schema.oauth_providers) {
-      console.log(t.muted(`    ${provider.key}: ${provider.instruction}`));
-    }
-    console.log(t.boldGreen("\n  Pi setup complete\n"));
-  });
-  return cmd;
-}
-
-// src/commands/pi.ts
-var PI_AGENT_DIR4 = process.env.PI_AGENT_DIR || import_path6.default.join((0, import_node_os9.homedir)(), ".pi", "agent");
-function resolveProjectRoot() {
-  const gitResult = (0, import_node_child_process5.spawnSync)("git", ["rev-parse", "--show-toplevel"], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-    stdio: "pipe"
-  });
-  return gitResult.status === 0 ? (gitResult.stdout ?? "").trim() : process.cwd();
-}
-function hasSettingsEntry(entries, expectedEntry) {
-  if (!Array.isArray(entries)) return false;
-  return entries.some((entry) => {
-    if (typeof entry !== "string") return false;
-    return entry.replace(/\\/g, "/") === expectedEntry;
-  });
-}
-async function getPiProjectPointer(projectRoot) {
-  const settingsPath = import_path6.default.join(projectRoot, ".pi", "settings.json");
-  const hasSettingsFile = await import_fs_extra14.default.pathExists(settingsPath);
-  if (!hasSettingsFile) {
-    return { hasProjectSettings: false, hasProjectExtensionPackage: false, pointsToXtrmExtensions: false };
-  }
-  try {
-    const settings = await import_fs_extra14.default.readJson(settingsPath);
-    const packageEntries = Array.isArray(settings.packages) ? settings.packages.filter((entry) => typeof entry === "string") : [];
-    return {
-      hasProjectSettings: true,
-      hasProjectExtensionPackage: packageEntries.includes("npm:@jaggerxtrm/pi-extensions"),
-      pointsToXtrmExtensions: hasSettingsEntry(settings.extensions, "../.xtrm/extensions")
-    };
-  } catch {
-    return { hasProjectSettings: true, hasProjectExtensionPackage: false, pointsToXtrmExtensions: false };
-  }
-}
-function createPiCommand() {
-  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)").option("--prompt <text>", "Use <text> as the initial user prompt (mutually exclusive with --bead)").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to pi; with --role, overrides specialist.execution.model").option("--thinking <level>", "Forward `--thinking <level>` to pi; with --role, overrides specialist.execution.thinking_level").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
-Passthrough (requires --role):
-  Everything after \`--\` is forwarded verbatim to the pi runtime. xt-owned
-  flags (--session-dir, --name, --system-prompt, --append-system-prompt,
-  --skill) are rejected; batch-mode flags (--print, --list-models, --export,
-  --mode) are dropped with a warning.
-
-Examples:
-  $ xt pi demo --no-attach --prompt 'inspect the failing build' --model openai-codex/gpt-5.6-luna
-  $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
-  $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
-  $ xt pi --role reviewer --prompt 'review the auth changes in cli/src/auth/'
-  $ xt pi --role planner                          # skills-only prime; pane idles
-`).action(async (name, opts) => {
-    const dashIdx = process.argv.indexOf("--");
-    const passthrough = dashIdx >= 0 ? process.argv.slice(dashIdx + 1) : [];
-    await launchWorktreeSession({
-      runtime: "pi",
-      name,
-      role: opts.role,
-      bead: opts.bead,
-      prompt: opts.prompt,
-      attach: opts.attach,
-      model: opts.model,
-      thinking: opts.thinking,
-      skills: opts.skill,
-      newSession: Boolean(opts.newSession || opts.ns),
-      parent: opts.parent,
-      child: Boolean(opts.child),
-      reuse: Boolean(opts.reuse),
-      passthrough
-    });
-  });
-  const piSetup = createInstallPiCommand();
-  piSetup.name("setup");
-  piSetup.description("Interactive first-time setup: API keys, config files, OAuth instructions");
-  cmd.addCommand(piSetup);
-  cmd.command("status").description("Check Pi version and extension deployment drift").action(async () => {
-    console.log(t.bold("\n  Pi Runtime Status\n"));
-    const piResult = (0, import_node_child_process5.spawnSync)("pi", ["--version"], { encoding: "utf8", stdio: "pipe" });
-    if (piResult.status === 0) {
-      console.log(t.success(`  \u2713 pi ${piResult.stdout.trim()} installed`));
-    } else {
-      console.log(kleur_default.red("  \u2717 pi not found \u2014 run: xt pi setup"));
-      console.log("");
-      return;
-    }
-    const projectRoot = resolveProjectRoot();
-    const pointer = await getPiProjectPointer(projectRoot);
-    const bundleRoot = await findRepoRoot();
-    const sourceDir = resolveManagedPiExtensionsSourceDir(bundleRoot);
-    const globalTargetDir = import_path6.default.join(PI_AGENT_DIR4, "extensions");
-    if (!sourceDir || !await import_fs_extra14.default.pathExists(sourceDir)) {
-      console.log(kleur_default.dim("  \u25CB managed extensions not bundled in this install\n"));
-      return;
-    }
-    const plan = await inventoryPiRuntime(sourceDir, globalTargetDir);
-    const pkgOk = plan.packages.filter((s) => s.installed).length;
-    const projectScoped = pointer.hasProjectExtensionPackage || pointer.pointsToXtrmExtensions;
-    if (projectScoped) {
-      console.log(kleur_default.dim("  Scope:      project"));
-      console.log(kleur_default.dim(`  Extensions: package mode (npm:@jaggerxtrm/pi-extensions${pointer.hasProjectExtensionPackage ? "" : " missing"})`));
-    } else {
-      console.log(kleur_default.dim("  Scope:      global"));
-      const extOk = plan.extensions.filter((s) => s.installed && !s.stale).length;
-      console.log(kleur_default.dim(`  Extensions: ${extOk}/${plan.extensions.length} up-to-date`));
-    }
-    console.log(kleur_default.dim(`  Packages:   ${pkgOk}/${plan.packages.length} installed`));
-    if (plan.missingPackages.length > 0) {
-      const names = plan.missingPackages.map((s) => s.pkg.displayName).join(", ");
-      console.log(kleur_default.yellow(`  Packages:   ${names}`));
-    }
-    if (!projectScoped) {
-      if (plan.missingExtensions.length > 0) {
-        const names = plan.missingExtensions.map((s) => s.ext.displayName).join(", ");
-        console.log(kleur_default.yellow(`  Missing:    ${names}`));
-      }
-      if (plan.staleExtensions.length > 0) {
-        const names = plan.staleExtensions.map((s) => s.ext.displayName).join(", ");
-        console.log(kleur_default.yellow(`  Stale:      ${names}`));
-      }
-      if (plan.orphanedExtensions.length > 0) {
-        console.log(kleur_default.red(`  Orphaned:   ${plan.orphanedExtensions.join(", ")}`));
-      }
-    }
-    const hasProjectSettingsDrift = !pointer.hasProjectSettings || !pointer.hasProjectExtensionPackage;
-    const hasGlobalDrift = !projectScoped && !plan.allPresent;
-    const hasPackageDrift = plan.missingPackages.length > 0;
-    if (!hasProjectSettingsDrift && !hasGlobalDrift && !hasPackageDrift) {
-      console.log(t.success("\n  \u2713 Pi runtime configuration looks healthy\n"));
-      return;
-    }
-    if (hasProjectSettingsDrift) {
-      console.log(kleur_default.yellow("  Settings:   .pi/settings.json missing managed npm:@jaggerxtrm/pi-extensions entry"));
-    }
-    console.log(kleur_default.dim("\n  \u2192 run: xt pi reload\n"));
-  });
-  cmd.command("doctor").description("Diagnostic checks: pi installed, extensions deployed, packages present, orphaned extensions").action(async () => {
-    console.log(t.bold("\n  Pi Doctor\n"));
-    let allOk = true;
-    const piResult = (0, import_node_child_process5.spawnSync)("pi", ["--version"], { encoding: "utf8", stdio: "pipe" });
-    if (piResult.status === 0) {
-      console.log(t.success(`  \u2713 pi ${piResult.stdout.trim()} installed`));
-    } else {
-      console.log(kleur_default.red("  \u2717 pi not found \u2014 run: xt pi setup"));
-      allOk = false;
-    }
-    const pnpmResult = (0, import_node_child_process5.spawnSync)("pnpm", ["--version"], { encoding: "utf8", stdio: "pipe" });
-    if (pnpmResult.status === 0) {
-      console.log(t.success(`  \u2713 pnpm ${pnpmResult.stdout.trim()} installed`));
-    } else {
-      console.log(kleur_default.yellow("  \u26A0 pnpm not found"));
-      allOk = false;
-    }
-    const configFiles = ["models.json", "auth.json", "settings.json"];
-    const missingConfig = configFiles.filter((f) => !import_fs_extra14.default.existsSync(import_path6.default.join(PI_AGENT_DIR4, f)));
-    if (missingConfig.length === 0) {
-      console.log(t.success("  \u2713 config files present"));
-    } else {
-      console.log(kleur_default.yellow(`  \u26A0 missing config: ${missingConfig.join(", ")}`));
-      allOk = false;
-    }
-    const projectRoot = resolveProjectRoot();
-    const pointer = await getPiProjectPointer(projectRoot);
-    const bundleRoot = await findRepoRoot();
-    const sourceDir = resolveManagedPiExtensionsSourceDir(bundleRoot);
-    const coreSourceDir = resolveManagedPiCoreSourceDir(bundleRoot);
-    const globalTargetDir = import_path6.default.join(PI_AGENT_DIR4, "extensions");
-    try {
-      const staleOverride = await remediateStalePiMcpAdapterOverride(false);
-      if (staleOverride.stale && staleOverride.remediated) {
-        console.log(t.success("  \u2713 removed stale ~/.pi/agent/extensions/pi-mcp-adapter override"));
-      } else if (staleOverride.stale) {
-        console.log(kleur_default.yellow("  \u26A0 stale ~/.pi/agent/extensions/pi-mcp-adapter override detected"));
-        allOk = false;
-      } else {
-        console.log(t.success("  \u2713 pi-mcp-adapter override check passed"));
-      }
-    } catch (error51) {
-      console.log(kleur_default.yellow(`  \u26A0 failed to remediate pi-mcp-adapter override: ${error51}`));
-      allOk = false;
-    }
-    try {
-      const coreStatus = coreSourceDir ? await ensureCorePackageSymlink(coreSourceDir, projectRoot, false) : "missing-source";
-      if (coreStatus === "repaired" || coreStatus === "created") {
-        console.log(t.success("  \u2713 repaired .xtrm/extensions/node_modules/@xtrm/pi-core symlink"));
-      } else if (coreStatus === "ok") {
-        console.log(t.success("  \u2713 @xtrm/pi-core symlink is healthy"));
-      } else if (coreStatus === "missing-source") {
-        console.log(kleur_default.dim("  \u25CB @xtrm/pi-core source not bundled in this install"));
-      }
-    } catch (error51) {
-      console.log(kleur_default.yellow(`  \u26A0 failed to ensure @xtrm/pi-core symlink: ${error51}`));
-      allOk = false;
-    }
-    if (!sourceDir || !await import_fs_extra14.default.pathExists(sourceDir)) {
-      console.log(kleur_default.dim("  \u25CB managed extensions not bundled in this install"));
-    } else {
-      const plan = await inventoryPiRuntime(sourceDir, globalTargetDir);
-      const projectScoped = pointer.hasProjectExtensionPackage || pointer.pointsToXtrmExtensions;
-      if (!pointer.hasProjectSettings) {
-        console.log(kleur_default.yellow("  \u26A0 missing .pi/settings.json; run xt pi reload to bootstrap project Pi settings"));
-        allOk = false;
-      } else if (projectScoped) {
-        if (pointer.hasProjectExtensionPackage) {
-          console.log(t.success("  \u2713 project runtime uses npm:@jaggerxtrm/pi-extensions"));
-        } else {
-          console.log(kleur_default.yellow("  \u26A0 legacy project extension pointer detected; run xt pi reload to migrate"));
-          allOk = false;
-        }
-      } else if (plan.missingExtensions.length === 0 && plan.staleExtensions.length === 0 && plan.orphanedExtensions.length === 0) {
-        console.log(t.success(`  \u2713 global extensions deployed (${plan.extensions.length})`));
-      } else {
-        if (plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0) {
-          console.log(kleur_default.yellow(`  \u26A0 extension drift (${plan.missingExtensions.length} missing, ${plan.staleExtensions.length} stale)`));
-          allOk = false;
-        }
-        if (plan.orphanedExtensions.length > 0) {
-          console.log(kleur_default.red(`  \u2717 orphaned extensions: ${plan.orphanedExtensions.join(", ")}`));
-          allOk = false;
-        }
-      }
-      if (plan.missingPackages.length === 0) {
-        console.log(t.success(`  \u2713 packages installed (${plan.packages.length})`));
-      } else {
-        console.log(kleur_default.yellow(`  \u26A0 ${plan.missingPackages.length} package(s) missing`));
-        allOk = false;
-      }
-    }
-    console.log("");
-    if (allOk) {
-      console.log(t.boldGreen("  \u2713 All checks passed\n"));
-    } else {
-      console.log(kleur_default.yellow("  \u26A0 Some checks failed \u2014 run: xt pi reload\n"));
-    }
-  });
-  cmd.command("reload").description("Re-sync extensions, remove orphaned, and reinstall missing packages").option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
-    const confirmed = await confirmDestructiveAction({
-      yes: opts.yes,
-      message: "Re-sync Pi runtime and remove orphaned extensions?",
-      initial: true
-    });
-    if (!confirmed) {
-      console.log(kleur_default.dim("  Cancelled\n"));
-      return;
-    }
-    await runPiInstall(false, false, resolveProjectRoot());
-  });
-  return cmd;
-}
-
-// src/commands/init.ts
-init_kleur();
-var import_path14 = __toESM(require("path"), 1);
-var import_fs_extra30 = __toESM(require_lib(), 1);
-var import_prompts3 = __toESM(require_prompts3(), 1);
-var import_child_process6 = require("child_process");
 
 // src/core/registry-scaffold.ts
 init_kleur();
-var import_fs_extra16 = __toESM(require_lib(), 1);
-var import_path7 = __toESM(require("path"), 1);
+var import_fs_extra14 = __toESM(require_lib(), 1);
+var import_path5 = __toESM(require("path"), 1);
 var import_node_crypto7 = __toESM(require("crypto"), 1);
 
 // src/core/drift.ts
 var import_node_crypto6 = __toESM(require("crypto"), 1);
 var import_node_path13 = __toESM(require("path"), 1);
-var import_fs_extra15 = __toESM(require_lib(), 1);
+var import_fs_extra13 = __toESM(require_lib(), 1);
 function toPosix(value) {
   return value.split(import_node_path13.default.sep).join("/");
 }
@@ -63690,11 +63283,11 @@ function buildUserRelativePath(sourceDir, filePath) {
   return toPosix(import_node_path13.default.posix.join(stripXtrmPrefix(sourceDir), filePath));
 }
 async function hashFile(filePath) {
-  const content = await import_fs_extra15.default.readFile(filePath);
+  const content = await import_fs_extra13.default.readFile(filePath);
   return import_node_crypto6.default.createHash("sha256").update(content).digest("hex");
 }
 async function checkDrift(registryPath, userXtrmDir, overrideRoots) {
-  const registry2 = await import_fs_extra15.default.readJson(registryPath);
+  const registry2 = await import_fs_extra13.default.readJson(registryPath);
   const missing = [];
   const upToDate = [];
   const drifted = [];
@@ -63703,7 +63296,7 @@ async function checkDrift(registryPath, userXtrmDir, overrideRoots) {
     for (const [filePath, entry] of Object.entries(asset.files)) {
       const relativePath = buildUserRelativePath(asset.source_dir, filePath);
       const userFilePath = assetRoot ? import_node_path13.default.join(assetRoot, filePath) : import_node_path13.default.join(userXtrmDir, relativePath);
-      if (!await import_fs_extra15.default.pathExists(userFilePath)) {
+      if (!await import_fs_extra13.default.pathExists(userFilePath)) {
         missing.push(relativePath);
         continue;
       }
@@ -63735,11 +63328,11 @@ function isUserOwnedPath(relativePath) {
 }
 function resolvePackageRoot2() {
   const candidates = [
-    import_path7.default.resolve(__dirname, "../.."),
-    import_path7.default.resolve(__dirname, "../../..")
+    import_path5.default.resolve(__dirname, "../.."),
+    import_path5.default.resolve(__dirname, "../../..")
   ];
   for (const candidate of candidates) {
-    if (import_fs_extra16.default.existsSync(import_path7.default.join(candidate, ".xtrm", "registry.json"))) {
+    if (import_fs_extra14.default.existsSync(import_path5.default.join(candidate, ".xtrm", "registry.json"))) {
       return candidate;
     }
   }
@@ -63752,7 +63345,7 @@ function stripXtrmPrefix2(sourceDir) {
   return sourceDir.replace(/^\.xtrm\/?/, "");
 }
 function toUserRelativePath(sourceDir, filePath) {
-  return toPosix2(import_path7.default.posix.join(stripXtrmPrefix2(sourceDir), filePath));
+  return toPosix2(import_path5.default.posix.join(stripXtrmPrefix2(sourceDir), filePath));
 }
 function isSkillsDefaultPath(relativePath) {
   return relativePath.startsWith("skills/default/");
@@ -63761,39 +63354,39 @@ function resolveInstalledPath(userXtrmDir, relativePath, overrideRoots) {
   if (relativePath.startsWith("skills/default/")) {
     const skillsRoot = overrideRoots?.skills;
     if (skillsRoot) {
-      return import_path7.default.join(skillsRoot, relativePath.slice("skills/default/".length));
+      return import_path5.default.join(skillsRoot, relativePath.slice("skills/default/".length));
     }
   }
   if (relativePath.startsWith("skills/optional/")) {
     const optionalSkillsRoot = overrideRoots?.skills_optional;
     if (optionalSkillsRoot) {
-      return import_path7.default.join(optionalSkillsRoot, relativePath.slice("skills/optional/".length));
+      return import_path5.default.join(optionalSkillsRoot, relativePath.slice("skills/optional/".length));
     }
   }
-  return import_path7.default.join(userXtrmDir, relativePath);
+  return import_path5.default.join(userXtrmDir, relativePath);
 }
 async function hashFile2(filePath) {
-  const content = await import_fs_extra16.default.readFile(filePath);
+  const content = await import_fs_extra14.default.readFile(filePath);
   return import_node_crypto7.default.createHash("sha256").update(content).digest("hex");
 }
 async function scaffoldSkillsDefaultFromPackage(params) {
   const { packageRoot, userXtrmDir, dryRun } = params;
-  const sourceDir = import_path7.default.join(packageRoot, ".xtrm", "skills", "default");
-  const targetDir = import_path7.default.join(userXtrmDir, "skills", "default");
-  const repoRoot = import_path7.default.dirname(userXtrmDir);
+  const sourceDir = import_path5.default.join(packageRoot, ".xtrm", "skills", "default");
+  const targetDir = import_path5.default.join(userXtrmDir, "skills", "default");
+  const repoRoot = import_path5.default.dirname(userXtrmDir);
   if (shouldUseGlobalSkills(repoRoot)) {
     const globalSkillsRoot = resolveGlobalSkillsRoot();
-    const hasGlobalTree = await import_fs_extra16.default.pathExists(import_path7.default.join(globalSkillsRoot, "default")) && await import_fs_extra16.default.pathExists(import_path7.default.join(globalSkillsRoot, "optional"));
+    const hasGlobalTree = await import_fs_extra14.default.pathExists(import_path5.default.join(globalSkillsRoot, "default")) && await import_fs_extra14.default.pathExists(import_path5.default.join(globalSkillsRoot, "optional"));
     if (hasGlobalTree) {
       return "noop";
     }
   }
-  const stat = await import_fs_extra16.default.lstat(targetDir).catch(() => null);
+  const stat = await import_fs_extra14.default.lstat(targetDir).catch(() => null);
   if (stat) {
     if (stat.isSymbolicLink()) {
       const [sourceRealPath, targetRealPath] = await Promise.all([
-        import_fs_extra16.default.realpath(sourceDir).catch(() => null),
-        import_fs_extra16.default.realpath(targetDir).catch(() => null)
+        import_fs_extra14.default.realpath(sourceDir).catch(() => null),
+        import_fs_extra14.default.realpath(targetDir).catch(() => null)
       ]);
       if (sourceRealPath && targetRealPath && sourceRealPath === targetRealPath) {
         return "noop";
@@ -63801,7 +63394,7 @@ async function scaffoldSkillsDefaultFromPackage(params) {
       if (dryRun) {
         return "noop";
       }
-      await import_fs_extra16.default.remove(targetDir);
+      await import_fs_extra14.default.remove(targetDir);
     } else {
       return "noop";
     }
@@ -63809,8 +63402,8 @@ async function scaffoldSkillsDefaultFromPackage(params) {
   if (dryRun) {
     return "noop";
   }
-  await import_fs_extra16.default.ensureDir(import_path7.default.dirname(targetDir));
-  await import_fs_extra16.default.copy(sourceDir, targetDir);
+  await import_fs_extra14.default.ensureDir(import_path5.default.dirname(targetDir));
+  await import_fs_extra14.default.copy(sourceDir, targetDir);
   return "copy";
 }
 function getAssetInstallScope(asset) {
@@ -63830,13 +63423,13 @@ function collectManagedDefaultSkillNames(registry2) {
 async function isDirLike(entryPath, entryStat) {
   if (entryStat.isDirectory()) return true;
   if (!entryStat.isSymbolicLink()) return false;
-  const resolved = await import_fs_extra16.default.stat(entryPath).catch(() => null);
+  const resolved = await import_fs_extra14.default.stat(entryPath).catch(() => null);
   return Boolean(resolved?.isDirectory());
 }
 async function pruneRetiredManagedSkills(params) {
   const { userXtrmDir, registry: registry2, dryRun, overrideRoots } = params;
-  const defaultRoot = overrideRoots?.skills ?? import_path7.default.join(userXtrmDir, "skills", "default");
-  const rootStat = await import_fs_extra16.default.lstat(defaultRoot).catch(() => null);
+  const defaultRoot = overrideRoots?.skills ?? import_path5.default.join(userXtrmDir, "skills", "default");
+  const rootStat = await import_fs_extra14.default.lstat(defaultRoot).catch(() => null);
   if (!rootStat || rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
     return { removed: [] };
   }
@@ -63844,33 +63437,33 @@ async function pruneRetiredManagedSkills(params) {
   if (managedNames.size === 0) {
     return { removed: [] };
   }
-  const onDisk = await import_fs_extra16.default.readdir(defaultRoot);
+  const onDisk = await import_fs_extra14.default.readdir(defaultRoot);
   const removed = [];
   for (const name of onDisk) {
     if (managedNames.has(name)) continue;
-    const entryPath = import_path7.default.join(defaultRoot, name);
-    const entryStat = await import_fs_extra16.default.lstat(entryPath).catch(() => null);
+    const entryPath = import_path5.default.join(defaultRoot, name);
+    const entryStat = await import_fs_extra14.default.lstat(entryPath).catch(() => null);
     if (!entryStat) continue;
     if (!await isDirLike(entryPath, entryStat)) continue;
     removed.push(name);
     if (!dryRun) {
-      await import_fs_extra16.default.remove(entryPath);
+      await import_fs_extra14.default.remove(entryPath);
     }
   }
-  const activeRoot = import_path7.default.join(userXtrmDir, "skills", "active");
-  const activeStat = await import_fs_extra16.default.lstat(activeRoot).catch(() => null);
+  const activeRoot = import_path5.default.join(userXtrmDir, "skills", "active");
+  const activeStat = await import_fs_extra14.default.lstat(activeRoot).catch(() => null);
   if (activeStat?.isDirectory() && !activeStat.isSymbolicLink()) {
-    const resolvedDefaultRoot = import_path7.default.resolve(defaultRoot);
+    const resolvedDefaultRoot = import_path5.default.resolve(defaultRoot);
     for (const name of removed) {
-      const activeEntry = import_path7.default.join(activeRoot, name);
-      const linkStat = await import_fs_extra16.default.lstat(activeEntry).catch(() => null);
+      const activeEntry = import_path5.default.join(activeRoot, name);
+      const linkStat = await import_fs_extra14.default.lstat(activeEntry).catch(() => null);
       if (!linkStat || !linkStat.isSymbolicLink()) continue;
-      const linkTarget = await import_fs_extra16.default.readlink(activeEntry).catch(() => null);
+      const linkTarget = await import_fs_extra14.default.readlink(activeEntry).catch(() => null);
       if (!linkTarget) continue;
-      const resolvedTarget = import_path7.default.resolve(import_path7.default.dirname(activeEntry), linkTarget);
-      if (resolvedTarget === import_path7.default.join(resolvedDefaultRoot, name)) {
+      const resolvedTarget = import_path5.default.resolve(import_path5.default.dirname(activeEntry), linkTarget);
+      if (resolvedTarget === import_path5.default.join(resolvedDefaultRoot, name)) {
         if (!dryRun) {
-          await import_fs_extra16.default.remove(activeEntry);
+          await import_fs_extra14.default.remove(activeEntry);
         }
       }
     }
@@ -63878,9 +63471,9 @@ async function pruneRetiredManagedSkills(params) {
   return { removed };
 }
 async function appendGlobalSkillsSkipLog(asset, count) {
-  const logPath = import_path7.default.join(import_path7.default.dirname(resolveGlobalSkillsRoot()), "logs", "skills-migration.jsonl");
-  await import_fs_extra16.default.ensureDir(import_path7.default.dirname(logPath));
-  await import_fs_extra16.default.appendFile(logPath, `${JSON.stringify({
+  const logPath = import_path5.default.join(import_path5.default.dirname(resolveGlobalSkillsRoot()), "logs", "skills-migration.jsonl");
+  await import_fs_extra14.default.ensureDir(import_path5.default.dirname(logPath));
+  await import_fs_extra14.default.appendFile(logPath, `${JSON.stringify({
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     component: "skills-bootstrap",
     event: "install.skip.global-managed",
@@ -63912,8 +63505,8 @@ function buildExpectedHashes(registry2) {
 }
 async function installFromRegistry(params) {
   const { packageRoot, registry: registry2, userXtrmDir, dryRun, force, yes, strictRegistry = false, overrideRoots } = params;
-  const registryPath = import_path7.default.join(packageRoot, ".xtrm", "registry.json");
-  const installRepoRoot = import_path7.default.dirname(userXtrmDir);
+  const registryPath = import_path5.default.join(packageRoot, ".xtrm", "registry.json");
+  const installRepoRoot = import_path5.default.dirname(userXtrmDir);
   const drift = await checkDrift(registryPath, userXtrmDir, overrideRoots);
   const expectedHashes = buildExpectedHashes(registry2);
   const missingSet = new Set(drift.missing);
@@ -63980,8 +63573,8 @@ async function installFromRegistry(params) {
     }
     for (const [filePath] of Object.entries(asset.files)) {
       const relativePath = toUserRelativePath(asset.source_dir, filePath);
-      const sourcePath = import_path7.default.join(packageRoot, asset.source_dir, filePath);
-      const targetPath = assetRoot ? import_path7.default.join(assetRoot, filePath) : import_path7.default.join(userXtrmDir, relativePath);
+      const sourcePath = import_path5.default.join(packageRoot, asset.source_dir, filePath);
+      const targetPath = assetRoot ? import_path5.default.join(assetRoot, filePath) : import_path5.default.join(userXtrmDir, relativePath);
       if (isUserOwnedPath(relativePath)) {
         continue;
       }
@@ -64000,10 +63593,10 @@ async function installFromRegistry(params) {
         forced += 1;
       }
       expectedInstalls += 1;
-      const sourceExists = await import_fs_extra16.default.pathExists(sourcePath);
+      const sourceExists = await import_fs_extra14.default.pathExists(sourcePath);
       if (!sourceExists) {
         missingSourceSkipped += 1;
-        const missingSource = toPosix2(import_path7.default.relative(packageRoot, sourcePath));
+        const missingSource = toPosix2(import_path5.default.relative(packageRoot, sourcePath));
         missingSources.push(missingSource);
         console.log(kleur_default.yellow(`  \u26A0 Skipping missing source file: ${missingSource}`));
         continue;
@@ -64014,8 +63607,8 @@ async function installFromRegistry(params) {
         installed += 1;
         continue;
       }
-      await import_fs_extra16.default.ensureDir(import_path7.default.dirname(targetPath));
-      await import_fs_extra16.default.copy(sourcePath, targetPath, { overwrite: true });
+      await import_fs_extra14.default.ensureDir(import_path5.default.dirname(targetPath));
+      await import_fs_extra14.default.copy(sourcePath, targetPath, { overwrite: true });
       installed += 1;
     }
   }
@@ -64026,10 +63619,10 @@ async function installFromRegistry(params) {
     ].join("\n"));
   }
   if (!dryRun) {
-    await import_fs_extra16.default.ensureDir(userXtrmDir);
-    const targetRegistryPath = import_path7.default.join(userXtrmDir, "registry.json");
-    await import_fs_extra16.default.writeJson(targetRegistryPath, createProjectRegistrySnapshot(registry2, installRepoRoot), { spaces: 2 });
-    await import_fs_extra16.default.appendFile(targetRegistryPath, "\n");
+    await import_fs_extra14.default.ensureDir(userXtrmDir);
+    const targetRegistryPath = import_path5.default.join(userXtrmDir, "registry.json");
+    await import_fs_extra14.default.writeJson(targetRegistryPath, createProjectRegistrySnapshot(registry2, installRepoRoot), { spaces: 2 });
+    await import_fs_extra14.default.appendFile(targetRegistryPath, "\n");
   }
   return {
     installed,
@@ -64040,6 +63633,417 @@ async function installFromRegistry(params) {
     missingSourceSkipped
   };
 }
+
+// src/commands/install-pi.ts
+var PI_AGENT_DIR3 = process.env.PI_AGENT_DIR || import_path6.default.join((0, import_node_os8.homedir)(), ".pi", "agent");
+function fillTemplate(template, values) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => values[key] ?? "");
+}
+function resolvePiConfigDir(packageRoot = resolvePackageRoot2()) {
+  return import_path6.default.join(packageRoot, ".xtrm", "config", "pi");
+}
+function readExistingPiValues(piAgentDir) {
+  const values = {};
+  try {
+    const auth = JSON.parse(require("fs").readFileSync(import_path6.default.join(piAgentDir, "auth.json"), "utf8"));
+    if (auth?.dashscope?.key) values["DASHSCOPE_API_KEY"] = auth.dashscope.key;
+    if (auth?.zai?.key) values["ZAI_API_KEY"] = auth.zai.key;
+  } catch {
+  }
+  try {
+    const models = JSON.parse(require("fs").readFileSync(import_path6.default.join(piAgentDir, "models.json"), "utf8"));
+    if (!values["DASHSCOPE_API_KEY"] && models?.providers?.dashscope?.apiKey) {
+      values["DASHSCOPE_API_KEY"] = models.providers.dashscope.apiKey;
+    }
+  } catch {
+  }
+  return values;
+}
+function ensurePnpm2() {
+  if (isPnpmInstalled()) {
+    const v = (0, import_node_child_process4.spawnSync)("pnpm", ["--version"], { encoding: "utf8", stdio: "pipe" });
+    console.log(t.success(`  \u2713 pnpm ${v.stdout.trim()} already installed`));
+    return;
+  }
+  console.log(kleur_default.yellow("\n  pnpm not found \u2014 installing via npm..."));
+  const r = (0, import_node_child_process4.spawnSync)("npm", ["install", "-g", "pnpm"], { stdio: "inherit" });
+  if (r.status !== 0) {
+    console.log(kleur_default.yellow("  \u26A0 Failed to install pnpm. Run: npm install -g pnpm"));
+  } else {
+    console.log(t.success("  \u2713 pnpm installed"));
+  }
+}
+function createInstallPiCommand() {
+  const cmd = new Command("pi");
+  cmd.description("Install Pi coding agent with providers, extensions, and npm packages").option("-y, --yes", "Skip confirmation prompts", false).option("--check", "Check Pi extension deployment drift without writing changes", false).option("--setup", "Run first-time configuration (API keys, OAuth)", false).action(async (opts) => {
+    const { yes, check: check2, setup } = opts;
+    const piConfigDir = resolvePiConfigDir();
+    if (check2) {
+      const sourceDir2 = resolveManagedPiExtensionsSourceDir();
+      const targetDir2 = import_path6.default.join(PI_AGENT_DIR3, "extensions");
+      if (!sourceDir2) {
+        console.log(kleur_default.dim("\n  Managed extensions: skipped (not bundled in npm package)\n"));
+        return;
+      }
+      const plan = await inventoryPiRuntime(sourceDir2, targetDir2);
+      renderPiRuntimePlan(plan);
+      const hasDrift = plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0 || plan.orphanedExtensions.length > 0;
+      if (hasDrift) {
+        console.error(kleur_default.red("  \u2717 Pi runtime drift detected. Run `xtrm pi` to sync.\n"));
+        process.exit(1);
+      }
+      return;
+    }
+    if (setup || !import_fs_extra15.default.pathExists(import_path6.default.join(PI_AGENT_DIR3, "auth.json"))) {
+      console.log(t.bold("\n  Pi Coding Agent Setup\n"));
+      if (!isPiInstalled()) {
+        console.log(kleur_default.yellow("  pi not found \u2014 installing oh-pi globally...\n"));
+        const r = (0, import_node_child_process4.spawnSync)("npm", ["install", "-g", "oh-pi"], { stdio: "inherit" });
+        if (r.status !== 0) {
+          console.error(kleur_default.red("\n  Failed to install oh-pi. Run: npm install -g oh-pi\n"));
+          process.exit(1);
+        }
+        console.log(t.success("  \u2713 pi installed\n"));
+      } else {
+        const v = (0, import_node_child_process4.spawnSync)("pi", ["--version"], { encoding: "utf8" });
+        console.log(t.success(`  \u2713 pi ${v.stdout.trim()} already installed
+`));
+      }
+      console.log(t.bold("  pnpm\n"));
+      ensurePnpm2();
+      const schema2 = await import_fs_extra15.default.readJson(import_path6.default.join(piConfigDir, "install-schema.json"));
+      const existing = readExistingPiValues(PI_AGENT_DIR3);
+      const values = { ...existing };
+      console.log(t.bold("\n  API Keys\n"));
+      for (const field of schema2.fields) {
+        if (existing[field.key]) {
+          console.log(t.success(`    ${sym.ok} ${field.label} [already set]`));
+          continue;
+        }
+        if (!field.required && !yes) {
+          const { include } = await (0, import_prompts2.default)({
+            type: "confirm",
+            name: "include",
+            message: `  Configure ${field.label}? (optional)`,
+            initial: false
+          });
+          if (!include) continue;
+        }
+        const { value } = await (0, import_prompts2.default)({
+          type: field.secret ? "password" : "text",
+          name: "value",
+          message: `  ${field.label}`,
+          hint: field.hint,
+          validate: (v) => field.required && !v ? "Required" : true
+        });
+        if (value) values[field.key] = value;
+      }
+      await import_fs_extra15.default.ensureDir(PI_AGENT_DIR3);
+      console.log(t.muted(`
+  Writing config to ${PI_AGENT_DIR3}`));
+      for (const name of ["models.json", "auth.json", "settings.json"]) {
+        const destPath = import_path6.default.join(PI_AGENT_DIR3, name);
+        if (name === "auth.json" && await import_fs_extra15.default.pathExists(destPath) && !yes) {
+          const { overwrite } = await (0, import_prompts2.default)({
+            type: "confirm",
+            name: "overwrite",
+            message: `  ${name} already exists \u2014 overwrite? (OAuth tokens will be lost)`,
+            initial: false
+          });
+          if (!overwrite) {
+            console.log(t.muted(`    skipped ${name}`));
+            continue;
+          }
+        }
+        const raw = await import_fs_extra15.default.readFile(import_path6.default.join(piConfigDir, `${name}.template`), "utf8");
+        await import_fs_extra15.default.writeFile(destPath, fillTemplate(raw, values), "utf8");
+        console.log(t.success(`    ${sym.ok} ${name}`));
+      }
+    }
+    const sourceDir = resolveManagedPiExtensionsSourceDir();
+    const targetDir = import_path6.default.join(PI_AGENT_DIR3, "extensions");
+    if (!sourceDir) {
+      console.log(kleur_default.dim("\n  Managed extensions: skipped (not bundled in npm package)\n"));
+    } else {
+      const plan = await inventoryPiRuntime(sourceDir, targetDir);
+      renderPiRuntimePlan(plan);
+      if (!plan.allPresent) {
+        const result = await executePiSync(plan, sourceDir, targetDir, {
+          dryRun: false,
+          isGlobal: true,
+          removeOrphaned: true,
+          log: (msg) => console.log(kleur_default.dim(`    ${msg}`))
+        });
+        const total = result.extensionsAdded.length + result.extensionsUpdated.length + result.packagesInstalled.length;
+        if (total > 0) {
+          console.log(t.success(`
+    ${sym.ok} Synced ${total} items`));
+        }
+      }
+    }
+    console.log(t.bold("\n  OAuth (manual steps)\n"));
+    const schema = await import_fs_extra15.default.readJson(import_path6.default.join(piConfigDir, "install-schema.json"));
+    for (const provider of schema.oauth_providers) {
+      console.log(t.muted(`    ${provider.key}: ${provider.instruction}`));
+    }
+    console.log(t.boldGreen("\n  Pi setup complete\n"));
+  });
+  return cmd;
+}
+
+// src/commands/pi.ts
+var PI_AGENT_DIR4 = process.env.PI_AGENT_DIR || import_path7.default.join((0, import_node_os9.homedir)(), ".pi", "agent");
+function resolveProjectRoot() {
+  const gitResult = (0, import_node_child_process5.spawnSync)("git", ["rev-parse", "--show-toplevel"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: "pipe"
+  });
+  return gitResult.status === 0 ? (gitResult.stdout ?? "").trim() : process.cwd();
+}
+function hasSettingsEntry(entries, expectedEntry) {
+  if (!Array.isArray(entries)) return false;
+  return entries.some((entry) => {
+    if (typeof entry !== "string") return false;
+    return entry.replace(/\\/g, "/") === expectedEntry;
+  });
+}
+async function getPiProjectPointer(projectRoot) {
+  const settingsPath = import_path7.default.join(projectRoot, ".pi", "settings.json");
+  const hasSettingsFile = await import_fs_extra16.default.pathExists(settingsPath);
+  if (!hasSettingsFile) {
+    return { hasProjectSettings: false, hasProjectExtensionPackage: false, pointsToXtrmExtensions: false };
+  }
+  try {
+    const settings = await import_fs_extra16.default.readJson(settingsPath);
+    const packageEntries = Array.isArray(settings.packages) ? settings.packages.filter((entry) => typeof entry === "string") : [];
+    return {
+      hasProjectSettings: true,
+      hasProjectExtensionPackage: packageEntries.includes("npm:@jaggerxtrm/pi-extensions"),
+      pointsToXtrmExtensions: hasSettingsEntry(settings.extensions, "../.xtrm/extensions")
+    };
+  } catch {
+    return { hasProjectSettings: true, hasProjectExtensionPackage: false, pointsToXtrmExtensions: false };
+  }
+}
+function createPiCommand() {
+  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)").option("--prompt <text>", "Use <text> as the initial user prompt (mutually exclusive with --bead)").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to pi; with --role, overrides specialist.execution.model").option("--thinking <level>", "Forward `--thinking <level>` to pi; with --role, overrides specialist.execution.thinking_level").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
+Passthrough (requires --role):
+  Everything after \`--\` is forwarded verbatim to the pi runtime. xt-owned
+  flags (--session-dir, --name, --system-prompt, --append-system-prompt,
+  --skill) are rejected; batch-mode flags (--print, --list-models, --export,
+  --mode) are dropped with a warning.
+
+Examples:
+  $ xt pi demo --no-attach --prompt 'inspect the failing build' --model openai-codex/gpt-5.6-luna
+  $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
+  $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
+  $ xt pi --role reviewer --prompt 'review the auth changes in cli/src/auth/'
+  $ xt pi --role planner                          # skills-only prime; pane idles
+`).action(async (name, opts) => {
+    const dashIdx = process.argv.indexOf("--");
+    const passthrough = dashIdx >= 0 ? process.argv.slice(dashIdx + 1) : [];
+    await launchWorktreeSession({
+      runtime: "pi",
+      name,
+      role: opts.role,
+      bead: opts.bead,
+      prompt: opts.prompt,
+      attach: opts.attach,
+      model: opts.model,
+      thinking: opts.thinking,
+      skills: opts.skill,
+      newSession: Boolean(opts.newSession || opts.ns),
+      parent: opts.parent,
+      child: Boolean(opts.child),
+      reuse: Boolean(opts.reuse),
+      passthrough
+    });
+  });
+  const piSetup = createInstallPiCommand();
+  piSetup.name("setup");
+  piSetup.description("Interactive first-time setup: API keys, config files, OAuth instructions");
+  cmd.addCommand(piSetup);
+  cmd.command("status").description("Check Pi version and extension deployment drift").action(async () => {
+    console.log(t.bold("\n  Pi Runtime Status\n"));
+    const piResult = (0, import_node_child_process5.spawnSync)("pi", ["--version"], { encoding: "utf8", stdio: "pipe" });
+    if (piResult.status === 0) {
+      console.log(t.success(`  \u2713 pi ${piResult.stdout.trim()} installed`));
+    } else {
+      console.log(kleur_default.red("  \u2717 pi not found \u2014 run: xt pi setup"));
+      console.log("");
+      return;
+    }
+    const projectRoot = resolveProjectRoot();
+    const pointer = await getPiProjectPointer(projectRoot);
+    const bundleRoot = await findRepoRoot();
+    const sourceDir = resolveManagedPiExtensionsSourceDir(bundleRoot);
+    const globalTargetDir = import_path7.default.join(PI_AGENT_DIR4, "extensions");
+    if (!sourceDir || !await import_fs_extra16.default.pathExists(sourceDir)) {
+      console.log(kleur_default.dim("  \u25CB managed extensions not bundled in this install\n"));
+      return;
+    }
+    const plan = await inventoryPiRuntime(sourceDir, globalTargetDir);
+    const pkgOk = plan.packages.filter((s) => s.installed).length;
+    const projectScoped = pointer.hasProjectExtensionPackage || pointer.pointsToXtrmExtensions;
+    if (projectScoped) {
+      console.log(kleur_default.dim("  Scope:      project"));
+      console.log(kleur_default.dim(`  Extensions: package mode (npm:@jaggerxtrm/pi-extensions${pointer.hasProjectExtensionPackage ? "" : " missing"})`));
+    } else {
+      console.log(kleur_default.dim("  Scope:      global"));
+      const extOk = plan.extensions.filter((s) => s.installed && !s.stale).length;
+      console.log(kleur_default.dim(`  Extensions: ${extOk}/${plan.extensions.length} up-to-date`));
+    }
+    console.log(kleur_default.dim(`  Packages:   ${pkgOk}/${plan.packages.length} installed`));
+    if (plan.missingPackages.length > 0) {
+      const names = plan.missingPackages.map((s) => s.pkg.displayName).join(", ");
+      console.log(kleur_default.yellow(`  Packages:   ${names}`));
+    }
+    if (!projectScoped) {
+      if (plan.missingExtensions.length > 0) {
+        const names = plan.missingExtensions.map((s) => s.ext.displayName).join(", ");
+        console.log(kleur_default.yellow(`  Missing:    ${names}`));
+      }
+      if (plan.staleExtensions.length > 0) {
+        const names = plan.staleExtensions.map((s) => s.ext.displayName).join(", ");
+        console.log(kleur_default.yellow(`  Stale:      ${names}`));
+      }
+      if (plan.orphanedExtensions.length > 0) {
+        console.log(kleur_default.red(`  Orphaned:   ${plan.orphanedExtensions.join(", ")}`));
+      }
+    }
+    const hasProjectSettingsDrift = !pointer.hasProjectSettings || !pointer.hasProjectExtensionPackage;
+    const hasGlobalDrift = !projectScoped && !plan.allPresent;
+    const hasPackageDrift = plan.missingPackages.length > 0;
+    if (!hasProjectSettingsDrift && !hasGlobalDrift && !hasPackageDrift) {
+      console.log(t.success("\n  \u2713 Pi runtime configuration looks healthy\n"));
+      return;
+    }
+    if (hasProjectSettingsDrift) {
+      console.log(kleur_default.yellow("  Settings:   .pi/settings.json missing managed npm:@jaggerxtrm/pi-extensions entry"));
+    }
+    console.log(kleur_default.dim("\n  \u2192 run: xt pi reload\n"));
+  });
+  cmd.command("doctor").description("Diagnostic checks: pi installed, extensions deployed, packages present, orphaned extensions").action(async () => {
+    console.log(t.bold("\n  Pi Doctor\n"));
+    let allOk = true;
+    const piResult = (0, import_node_child_process5.spawnSync)("pi", ["--version"], { encoding: "utf8", stdio: "pipe" });
+    if (piResult.status === 0) {
+      console.log(t.success(`  \u2713 pi ${piResult.stdout.trim()} installed`));
+    } else {
+      console.log(kleur_default.red("  \u2717 pi not found \u2014 run: xt pi setup"));
+      allOk = false;
+    }
+    const pnpmResult = (0, import_node_child_process5.spawnSync)("pnpm", ["--version"], { encoding: "utf8", stdio: "pipe" });
+    if (pnpmResult.status === 0) {
+      console.log(t.success(`  \u2713 pnpm ${pnpmResult.stdout.trim()} installed`));
+    } else {
+      console.log(kleur_default.yellow("  \u26A0 pnpm not found"));
+      allOk = false;
+    }
+    const configFiles = ["models.json", "auth.json", "settings.json"];
+    const missingConfig = configFiles.filter((f) => !import_fs_extra16.default.existsSync(import_path7.default.join(PI_AGENT_DIR4, f)));
+    if (missingConfig.length === 0) {
+      console.log(t.success("  \u2713 config files present"));
+    } else {
+      console.log(kleur_default.yellow(`  \u26A0 missing config: ${missingConfig.join(", ")}`));
+      allOk = false;
+    }
+    const projectRoot = resolveProjectRoot();
+    const pointer = await getPiProjectPointer(projectRoot);
+    const bundleRoot = await findRepoRoot();
+    const sourceDir = resolveManagedPiExtensionsSourceDir(bundleRoot);
+    const coreSourceDir = resolveManagedPiCoreSourceDir(bundleRoot);
+    const globalTargetDir = import_path7.default.join(PI_AGENT_DIR4, "extensions");
+    try {
+      const staleOverride = await remediateStalePiMcpAdapterOverride(false);
+      if (staleOverride.stale && staleOverride.remediated) {
+        console.log(t.success("  \u2713 removed stale ~/.pi/agent/extensions/pi-mcp-adapter override"));
+      } else if (staleOverride.stale) {
+        console.log(kleur_default.yellow("  \u26A0 stale ~/.pi/agent/extensions/pi-mcp-adapter override detected"));
+        allOk = false;
+      } else {
+        console.log(t.success("  \u2713 pi-mcp-adapter override check passed"));
+      }
+    } catch (error51) {
+      console.log(kleur_default.yellow(`  \u26A0 failed to remediate pi-mcp-adapter override: ${error51}`));
+      allOk = false;
+    }
+    try {
+      const coreStatus = coreSourceDir ? await ensureCorePackageSymlink(coreSourceDir, projectRoot, false) : "missing-source";
+      if (coreStatus === "repaired" || coreStatus === "created") {
+        console.log(t.success("  \u2713 repaired .xtrm/extensions/node_modules/@xtrm/pi-core symlink"));
+      } else if (coreStatus === "ok") {
+        console.log(t.success("  \u2713 @xtrm/pi-core symlink is healthy"));
+      } else if (coreStatus === "missing-source") {
+        console.log(kleur_default.dim("  \u25CB @xtrm/pi-core source not bundled in this install"));
+      }
+    } catch (error51) {
+      console.log(kleur_default.yellow(`  \u26A0 failed to ensure @xtrm/pi-core symlink: ${error51}`));
+      allOk = false;
+    }
+    if (!sourceDir || !await import_fs_extra16.default.pathExists(sourceDir)) {
+      console.log(kleur_default.dim("  \u25CB managed extensions not bundled in this install"));
+    } else {
+      const plan = await inventoryPiRuntime(sourceDir, globalTargetDir);
+      const projectScoped = pointer.hasProjectExtensionPackage || pointer.pointsToXtrmExtensions;
+      if (!pointer.hasProjectSettings) {
+        console.log(kleur_default.yellow("  \u26A0 missing .pi/settings.json; run xt pi reload to bootstrap project Pi settings"));
+        allOk = false;
+      } else if (projectScoped) {
+        if (pointer.hasProjectExtensionPackage) {
+          console.log(t.success("  \u2713 project runtime uses npm:@jaggerxtrm/pi-extensions"));
+        } else {
+          console.log(kleur_default.yellow("  \u26A0 legacy project extension pointer detected; run xt pi reload to migrate"));
+          allOk = false;
+        }
+      } else if (plan.missingExtensions.length === 0 && plan.staleExtensions.length === 0 && plan.orphanedExtensions.length === 0) {
+        console.log(t.success(`  \u2713 global extensions deployed (${plan.extensions.length})`));
+      } else {
+        if (plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0) {
+          console.log(kleur_default.yellow(`  \u26A0 extension drift (${plan.missingExtensions.length} missing, ${plan.staleExtensions.length} stale)`));
+          allOk = false;
+        }
+        if (plan.orphanedExtensions.length > 0) {
+          console.log(kleur_default.red(`  \u2717 orphaned extensions: ${plan.orphanedExtensions.join(", ")}`));
+          allOk = false;
+        }
+      }
+      if (plan.missingPackages.length === 0) {
+        console.log(t.success(`  \u2713 packages installed (${plan.packages.length})`));
+      } else {
+        console.log(kleur_default.yellow(`  \u26A0 ${plan.missingPackages.length} package(s) missing`));
+        allOk = false;
+      }
+    }
+    console.log("");
+    if (allOk) {
+      console.log(t.boldGreen("  \u2713 All checks passed\n"));
+    } else {
+      console.log(kleur_default.yellow("  \u26A0 Some checks failed \u2014 run: xt pi reload\n"));
+    }
+  });
+  cmd.command("reload").description("Re-sync extensions, remove orphaned, and reinstall missing packages").option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
+    const confirmed = await confirmDestructiveAction({
+      yes: opts.yes,
+      message: "Re-sync Pi runtime and remove orphaned extensions?",
+      initial: true
+    });
+    if (!confirmed) {
+      console.log(kleur_default.dim("  Cancelled\n"));
+      return;
+    }
+    await runPiInstall(false, false, resolveProjectRoot());
+  });
+  return cmd;
+}
+
+// src/commands/init.ts
+init_kleur();
+var import_path14 = __toESM(require("path"), 1);
+var import_fs_extra30 = __toESM(require_lib(), 1);
+var import_prompts3 = __toESM(require_prompts3(), 1);
+var import_child_process6 = require("child_process");
 
 // src/core/plugin-era-cleanup.ts
 init_kleur();
