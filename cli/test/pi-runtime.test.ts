@@ -29,7 +29,8 @@ describe('syncManagedPiThemes', () => {
             await Promise.all(themes.map((name) => fs.writeFile(path.join(targetDir, name), `{"name":"legacy-${name}"}`)));
             await fs.writeFile(path.join(targetDir, 'custom.json'), '{}');
 
-            await syncManagedPiThemes(sourceDir, false, undefined, targetDir);
+            await expect(syncManagedPiThemes(sourceDir, false, undefined, targetDir)).resolves.toBe(true);
+            await expect(syncManagedPiThemes(sourceDir, false, undefined, targetDir)).resolves.toBe(false);
 
             expect((await fs.readdir(targetDir)).sort()).toEqual([...themes, 'custom.json'].sort());
             for (const name of themes) {
@@ -53,7 +54,7 @@ describe('syncManagedPiThemes', () => {
         ].map((name) => fs.writeFile(path.join(sourceDir, name), '{}')));
 
         try {
-            await syncManagedPiThemes(sourceDir, true, undefined, targetDir);
+            await expect(syncManagedPiThemes(sourceDir, true, undefined, targetDir)).resolves.toBe(true);
             expect(await fs.pathExists(targetDir)).toBe(false);
         } finally {
             await fs.remove(sourceDir);
@@ -162,6 +163,21 @@ describe('updatePiSettings', () => {
             expect(settings.theme).toBe(expectedTheme);
             expect(settings.customSetting).toBe('preserved');
             expect(settings).not.toHaveProperty('xtrmExternalCompact');
+        } finally {
+            await fs.remove(projectRoot);
+        }
+    });
+});
+
+describe('updatePiSettings result', () => {
+    it('reports pending changes in dry-run and becomes stable after repair', async () => {
+        const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-settings-result-'));
+
+        try {
+            await expect(updatePiSettings(projectRoot, true)).resolves.toBe(true);
+            expect(await fs.pathExists(path.join(projectRoot, '.pi', 'settings.json'))).toBe(false);
+            await expect(updatePiSettings(projectRoot, false)).resolves.toBe(true);
+            await expect(updatePiSettings(projectRoot, false)).resolves.toBe(false);
         } finally {
             await fs.remove(projectRoot);
         }
