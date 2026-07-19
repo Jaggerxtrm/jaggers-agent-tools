@@ -213,7 +213,13 @@ describe('xtrm update', () => {
     const result = await runUpdateCli(['--repo', repo]);
 
     expect(checkDriftMock).toHaveBeenCalledWith(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(repo, '.xtrm'), undefined);
-    expect(runInstallMock).not.toHaveBeenCalled();
+    expect(runInstallMock).toHaveBeenCalledTimes(1);
+    expect(runInstallMock).toHaveBeenCalledWith(expect.objectContaining({
+      dryRun: true,
+      projectRoot: repo,
+      skipGlobalPiPackageAssurance: true,
+      skipExternalPiToolPatch: true,
+    }));
     expect(assureXtManagedPiPackagesMock).toHaveBeenCalledWith(false);
     expect(result.logs.join('\n')).toContain('refreshed');
     expect(result.logs.join('\n')).not.toContain('already-current');
@@ -230,7 +236,13 @@ describe('xtrm update', () => {
 
     const result = await runUpdateCli(['--repo', repo]);
 
-    expect(runInstallMock).not.toHaveBeenCalled();
+    expect(runInstallMock).toHaveBeenCalledTimes(1);
+    expect(runInstallMock).toHaveBeenCalledWith(expect.objectContaining({
+      dryRun: true,
+      projectRoot: repo,
+      skipGlobalPiPackageAssurance: true,
+      skipExternalPiToolPatch: true,
+    }));
     expect(result.logs.join('\n')).toContain('refreshed');
     expect(result.logs.join('\n')).toContain('bd export.git-add: updated');
   });
@@ -249,7 +261,13 @@ describe('xtrm update', () => {
 
     const result = await runUpdateCli(['--apply', '--repo', repo]);
 
-    expect(runInstallMock).not.toHaveBeenCalled();
+    expect(runInstallMock).toHaveBeenCalledTimes(1);
+    expect(runInstallMock).toHaveBeenCalledWith(expect.objectContaining({
+      dryRun: false,
+      projectRoot: repo,
+      skipGlobalPiPackageAssurance: true,
+      skipExternalPiToolPatch: true,
+    }));
     expect(ensureBdAutoStagePatchMock).toHaveBeenLastCalledWith(repo, true);
     expect(result.logs.join('\n')).toContain('refreshed');
   });
@@ -284,6 +302,8 @@ describe('xtrm update', () => {
     const result = await runUpdateCli(['--apply', '--root', root]);
 
     expect(runInstallMock).toHaveBeenCalledTimes(3);
+    expect(assureXtManagedPiPackagesMock).toHaveBeenCalledTimes(1);
+    expect(runExternalPiToolPatchMock).toHaveBeenCalledTimes(1);
     expect(result.logs.join('\n')).toContain(repoA);
     expect(result.logs.join('\n')).toContain(repoB);
     expect(result.logs.join('\n')).toContain(repoC);
@@ -299,7 +319,57 @@ describe('xtrm update', () => {
     await runUpdateCli(['--apply', '--repo', repo]);
 
     expect(reconcileProjectClaudeHooksMock).toHaveBeenCalledWith(repo, { dryRun: false });
-    expect(runInstallMock).not.toHaveBeenCalled();
+    expect(runInstallMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('dry-run reports pending Pi runtime repair without applying it', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    const repo = writeRepo(tmpDir, 'repo-a');
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+    checkDriftMock.mockResolvedValue({ missing: [], upToDate: ['asset.txt'], drifted: [] });
+    runInstallMock.mockResolvedValue({
+      piRuntime: { extensionsAdded: [], extensionsUpdated: [], extensionsRemoved: [], packagesInstalled: [], failed: [], changed: true },
+    });
+
+    const result = await runUpdateCli(['--repo', repo]);
+
+    expect(result.logs.join('\n')).toContain('Pi runtime repair pending');
+    expect(runInstallMock).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }));
+    expect(reconcileProjectClaudeHooksMock).not.toHaveBeenCalled();
+  });
+
+  it('apply reports a Pi runtime repair when registry is already current', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    const repo = writeRepo(tmpDir, 'repo-a');
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+    checkDriftMock.mockResolvedValue({ missing: [], upToDate: ['asset.txt'], drifted: [] });
+    runInstallMock.mockResolvedValue({
+      piRuntime: { extensionsAdded: [], extensionsUpdated: [], extensionsRemoved: ['pi-dex'], packagesInstalled: [], failed: [], changed: true },
+    });
+
+    const result = await runUpdateCli(['--apply', '--repo', repo]);
+
+    expect(runInstallMock).toHaveBeenCalledTimes(1);
+    expect(result.logs.join('\n')).toContain('Pi runtime repaired');
+    expect(result.logs.join('\n')).not.toContain('already-current');
+  });
+
+  it('apply reports Pi reconciliation failure and sets a non-zero exit code', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    const repo = writeRepo(tmpDir, 'repo-a');
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+    checkDriftMock.mockResolvedValue({ missing: [], upToDate: ['asset.txt'], drifted: [] });
+    runInstallMock.mockResolvedValue({
+      piRuntime: { extensionsAdded: [], extensionsUpdated: [], extensionsRemoved: [], packagesInstalled: [], failed: ['npm:pi-gitnexus'], changed: false },
+    });
+
+    const result = await runUpdateCli(['--apply', '--repo', repo]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.logs.join('\n')).toContain('Pi reconciliation failed: npm:pi-gitnexus');
   });
 
   it('apply self-heals dormant repo: hook rewiring alone flips already-current to refreshed', async () => {

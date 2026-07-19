@@ -14,10 +14,10 @@ import fs from 'fs-extra';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
-import { findRepoRoot } from '../utils/repo-root.js';
 import { t, sym } from '../utils/theme.js';
 import { inventoryPiRuntime, executePiSync, renderPiRuntimePlan, resolveManagedPiExtensionsSourceDir } from '../core/pi-runtime.js';
 import { isPiInstalled, isPnpmInstalled } from '../core/machine-bootstrap.js';
+import { resolvePackageRoot } from '../core/registry-scaffold.js';
 
 const PI_AGENT_DIR = process.env.PI_AGENT_DIR || path.join(homedir(), '.pi', 'agent');
 
@@ -39,6 +39,11 @@ export async function copyExtraConfigs(srcDir: string, destDir: string): Promise
 
 export function fillTemplate(template: string, values: Record<string, string>): string {
     return template.replace(/\{\{(\w+)\}\}/g, (_, key) => values[key] ?? '');
+}
+
+export function resolvePiConfigDir(packageRoot: string = resolvePackageRoot()): string {
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    return path.join(packageRoot, '.xtrm', 'config', 'pi');
 }
 
 export function readExistingPiValues(piAgentDir: string): Record<string, string> {
@@ -81,8 +86,7 @@ export function createInstallPiCommand(): Command {
         .option('--setup', 'Run first-time configuration (API keys, OAuth)', false)
         .action(async (opts) => {
             const { yes, check, setup } = opts;
-            const repoRoot = await findRepoRoot();
-            const piConfigDir = path.join(repoRoot, 'config', 'pi');
+            const piConfigDir = resolvePiConfigDir();
 
             // ── Drift Check Mode ──────────────────────────────────────────────────────
             if (check) {

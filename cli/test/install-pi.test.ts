@@ -184,6 +184,25 @@ describe('createInstallPiCommand', () => {
         nodeFs.rmSync(dstDir, { recursive: true, force: true });
     });
 
+    it('resolves the packaged Pi config directory with all required files', async () => {
+        const { resolvePiConfigDir } = await import('../src/commands/install-pi.js?t=packaged-config-' + Date.now());
+        const fs = require('node:fs');
+        const p = require('node:path');
+        const configDir = resolvePiConfigDir();
+        const requiredFiles = [
+            'install-schema.json',
+            'models.json.template',
+            'auth.json.template',
+            'settings.json.template',
+            'pi-worktrees-settings.json',
+        ];
+
+        expect(configDir).toBe(p.resolve(__dirname, '..', '..', '.xtrm', 'config', 'pi'));
+        for (const file of requiredFiles) {
+            expect(fs.existsSync(p.join(configDir, file))).toBe(true);
+        }
+    });
+
     it('createInstallPiCommand supports --check flag', () => {
         const cmd = createInstallPiCommand();
         const hasCheck = (cmd as any).options.some((opt: any) => opt.long === '--check');

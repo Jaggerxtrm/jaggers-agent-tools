@@ -31,6 +31,10 @@ interface RepoUpdateResult {
     status: UpdateStatus;
     reason?: string;
     maintenance?: DependencyMaintenanceSummary;
+    piRuntime?: {
+        changed: boolean;
+        failed: string[];
+    };
 }
 
 interface UpdateOpts {
@@ -128,27 +132,45 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
             || maintenancePlan.gitnexusIndex.state === 'outdated'
             || maintenancePlan.tools.some(tool => tool.state === 'outdated' || tool.state === 'missing');
         const registryChanges = drift.missing.length > 0 || drift.drifted.length > 0 || sharedServer.changed;
-        const hasChanges = registryChanges || bdPatch.changed || maintenanceNeedsApply;
+        let installResult: Awaited<ReturnType<typeof runInstall>>;
+        try {
+            installResult = await runInstall({
+                force: Boolean(opts.apply),
+                yes: true,
+                dryRun: !opts.apply,
+                projectRoot: repoRoot,
+                skipMachineBootstrap: true,
+                skipClaudeRuntimeSync: true,
+                skipGlobalPiPackageAssurance: true,
+                skipExternalPiToolPatch: true,
+                strictRegistry: isStrictRegistryMode(opts),
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (message.startsWith('Registry/source mismatch:')) throw error;
+            throw new Error(`Pi reconciliation failed: ${message}`);
+        }
+        const piRuntime = installResult?.piRuntime;
+        const piRuntimeResult = piRuntime
+            ? { changed: Boolean(piRuntime.changed), failed: [...piRuntime.failed] }
+            : undefined;
+        const runtimeChanged = piRuntimeResult?.changed ?? false;
+        const runtimeFailed = piRuntimeResult?.failed ?? [];
+        const hasChanges = registryChanges || bdPatch.changed || maintenanceNeedsApply || runtimeChanged;
 
         if (!opts.apply) {
             return {
                 repo: repoRoot,
                 status: hasChanges ? 'refreshed' : 'already-current',
-                reason: hasChanges ? `missing=${drift.missing.length}, drifted=${drift.drifted.length}, ${summarizeBdAutoStagePatch(bdPatch)}` : undefined,
+                reason: hasChanges
+                    ? [
+                        `missing=${drift.missing.length}, drifted=${drift.drifted.length}, ${summarizeBdAutoStagePatch(bdPatch)}`,
+                        runtimeChanged ? 'Pi runtime repair pending' : '',
+                    ].filter(Boolean).join(', ')
+                    : undefined,
                 maintenance: maintenancePlan,
+                piRuntime: piRuntimeResult,
             };
-        }
-
-        if (registryChanges) {
-            await runInstall({
-                force: true,
-                yes: true,
-                dryRun: false,
-                projectRoot: repoRoot,
-                skipMachineBootstrap: true,
-                skipClaudeRuntimeSync: true,
-                strictRegistry: isStrictRegistryMode(opts),
-            });
         }
 
         // Foolproof service-skills migration: runs AFTER skills install so the latest
@@ -160,16 +182,27 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
         await ensureAgentsSkillsSymlink(repoRoot);
 
         // Reconcile .claude/settings.json hooks against canonical hooks.json on every
-        // apply. runInstall is invoked with skipClaudeRuntimeSync (and is not invoked at
-        // all when no registry files drifted), so newly-added xtrm-managed hooks — e.g.
-        // the service-skills activation/cataloger/drift hooks shipped in 0.8.2 — would
-        // otherwise stay dormant in existing consumers (xtrm-0p7bp). This is idempotent:
-        // a no-op when the wired hooks already match canonical, so already-current repos
-        // self-heal without churn.
+        // apply. runInstall skips this phase so update can keep its project hook
+        // reconciliation explicit and idempotent.
         const hookSync = await reconcileProjectClaudeHooks(repoRoot, { dryRun: false });
 
+        if (runtimeFailed.length > 0) {
+            return {
+                repo: repoRoot,
+                status: 'failed',
+                reason: `Pi reconciliation failed: ${runtimeFailed.join(', ')}`,
+                maintenance: maintenancePlan,
+                piRuntime: piRuntimeResult,
+            };
+        }
+
         if (!hasChanges && serviceSkills.alreadyCurrent && !hookSync.changed) {
-            return { repo: repoRoot, status: 'already-current', maintenance: maintenancePlan };
+            return {
+                repo: repoRoot,
+                status: 'already-current',
+                maintenance: maintenancePlan,
+                piRuntime: piRuntimeResult,
+            };
         }
 
         const appliedPatch = hasBeads ? await ensureBdAutoStagePatch(repoRoot, true) : bdPatch;
@@ -184,14 +217,16 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
             ? `, service-skills migrated: ${serviceSkills.migratedPacks.join(',')}`
             : '';
         const hookSyncReason = hookSync.changed ? ', claude hooks rewired' : '';
+        const runtimeReason = runtimeChanged ? ', Pi runtime repaired' : '';
         const stageReason = stageResult.filesStaged > 0
             ? `, ${stageResult.filesStaged} file(s) staged`
             : '';
         return {
             repo: repoRoot,
             status: 'refreshed',
-            reason: `missing=${drift.missing.length}, drifted=${drift.drifted.length}, ${summarizeBdAutoStagePatch(appliedPatch)}${serviceSkillsReason}${hookSyncReason}${stageReason}`,
+            reason: `missing=${drift.missing.length}, drifted=${drift.drifted.length}, ${summarizeBdAutoStagePatch(appliedPatch)}${runtimeReason}${serviceSkillsReason}${hookSyncReason}${stageReason}`,
             maintenance,
+            piRuntime: piRuntimeResult,
         };
     } catch (error) {
         return {

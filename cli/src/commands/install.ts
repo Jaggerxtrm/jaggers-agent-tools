@@ -5,6 +5,7 @@ import { resolveMainProjectRoot } from '../utils/repo-root.js';
 import { getContext } from '../core/context.js';
 import { t } from '../utils/theme.js';
 import { runPiInstall } from './pi-install.js';
+import type { PiSyncResult } from '../core/pi-runtime.js';
 import { runClaudeRuntimeSyncPhase } from '../core/claude-runtime-sync.js';
 import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
 import { ensureAgentsSkillsSymlink, ensureUserAgentsSkillsSymlink } from '../core/skills-scaffold.js';
@@ -44,6 +45,14 @@ export interface InstallOpts {
     skipMachineBootstrap?: boolean;
     /** Skip Claude runtime sync (hooks/settings wiring). */
     skipClaudeRuntimeSync?: boolean;
+    /** Update performs global Pi package assurance once after all repo reconciliations. */
+    skipGlobalPiPackageAssurance?: boolean;
+    /** Update applies the external Pi tool patch once after all repo reconciliations. */
+    skipExternalPiToolPatch?: boolean;
+}
+
+export interface InstallResult {
+    piRuntime?: PiSyncResult;
 }
 
 function printNextSteps(): void {
@@ -110,7 +119,7 @@ export function isStrictRegistryMode(opts: { strictRegistry?: boolean }): boolea
     return opts.strictRegistry ?? process.env.XTRM_STRICT_REGISTRY === '1';
 }
 
-export async function runInstall(opts: InstallOpts = {}): Promise<void> {
+export async function runInstall(opts: InstallOpts = {}): Promise<InstallResult> {
     const {
         dryRun = false,
         yes = false,
@@ -125,7 +134,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
 
     if (backport) {
         console.log(kleur.yellow('  ⚠ Backport mode is no longer supported in registry mode.'));
-        return;
+        return {};
     }
 
     const effectiveYes = yes || process.argv.includes('--yes') || process.argv.includes('-y');
@@ -233,7 +242,10 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
         await runClaudeRuntimeSyncPhase({ repoRoot: projectRoot, dryRun, isGlobal, prune });
     }
 
-    await runPiInstall(dryRun, isGlobal, projectRoot);
+    const piRuntime = await runPiInstall(dryRun, isGlobal, projectRoot, {
+        skipGlobalPackageAssurance: opts.skipGlobalPiPackageAssurance,
+        skipExternalToolPatch: opts.skipExternalPiToolPatch,
+    });
 
     if (!dryRun) {
         if (force) {
@@ -262,4 +274,6 @@ export async function runInstall(opts: InstallOpts = {}): Promise<void> {
     if (!dryRun) {
         printNextSteps();
     }
+
+    return { piRuntime };
 }
