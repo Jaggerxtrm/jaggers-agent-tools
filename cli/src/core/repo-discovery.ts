@@ -18,7 +18,8 @@ const REGISTRY_MARKER = path.join(XTRM_DIR, 'registry.json');
  *   the normal update flow.
  * - `incomplete`: repos with `.xtrm/` but no `.xtrm/registry.json`. Partial
  *   installs, mid-migration, or corrupted scaffolds. Operators should be
- *   made aware so they can run `xt init` or `xt install` to repair.
+ *   made aware so they can run `xt init` to bootstrap or
+ *   `xt update --apply --repo <path>` to repair.
  */
 export interface XtrmRepoScan {
     managed: string[];

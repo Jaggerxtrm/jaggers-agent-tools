@@ -17,9 +17,14 @@ function run(args: string[]): { stdout: string; stderr: string; status: number }
 
 describe('install command surface (c1qd, j2jk, 6gpf, a875)', () => {
 
-    it('xtrm install is no longer a registered command', () => {
-        const r = run(['install']);
-        expect(r.stdout + r.stderr).toMatch(/unknown command|error|too many/i);
+    it('root help and invocation contain no install command', () => {
+        const help = run(['--help']);
+        expect(help.status).toBe(0);
+        expect(help.stdout).not.toMatch(/^\s+install\b/im);
+
+        const invocation = run(['install']);
+        expect(invocation.status).toBe(1);
+        expect(invocation.stdout + invocation.stderr).toMatch(/unknown command|error|too many/i);
     });
 
     it('xtrm project exits with unknown command error', () => {
@@ -28,7 +33,7 @@ describe('install command surface (c1qd, j2jk, 6gpf, a875)', () => {
         expect(combined.toLowerCase()).toMatch(/unknown command|error/);
     });
 
-    it('xt pi install is no longer a subcommand (handled by xtrm init)', () => {
+    it('xt pi help does not advertise the retired install token', () => {
         const r = run(['pi', '--help']);
         expect(r.stdout).not.toMatch(/^\s+install\b/im);
     });

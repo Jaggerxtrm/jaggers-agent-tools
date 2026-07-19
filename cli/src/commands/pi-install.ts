@@ -1,7 +1,7 @@
 /**
  * Non-interactive Pi install command.
  *
- * Called automatically as part of `xtrm install` and `xtrm init`.
+ * Used by `xt init` and `xt update --apply` for non-interactive runtime maintenance.
  * Delegates to the unified pi-runtime service.
  *
  * @see cli/src/core/pi-runtime.ts
@@ -39,7 +39,7 @@ function ensurePnpm(dryRun: boolean): void {
 
 /**
  * Non-interactive Pi install: syncs Pi runtime packages/extensions.
- * Called automatically as part of `xtrm install`.
+ * Used by `xt init` and `xt update --apply`.
  *
  * @param isGlobal - When true, installs to global Pi dirs (~/.pi/agent/). Default false = project-scoped.
  * @param projectRoot - Project root for project-scoped installs. Defaults to git root.

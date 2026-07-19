@@ -103,7 +103,7 @@ export function createInstallPiCommand(): Command {
 
                 const hasDrift = plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0 || plan.orphanedExtensions.length > 0;
                 if (hasDrift) {
-                    console.error(kleur.red('  ✗ Pi runtime drift detected. Run `xtrm pi` to sync.\n'));
+                    console.error(kleur.red('  ✗ Pi runtime drift detected. Run `xt pi reload` to sync.\n'));
                     process.exit(1);
                 }
                 return;

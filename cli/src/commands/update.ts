@@ -309,7 +309,7 @@ function printTable(rows: RepoUpdateResult[]): void {
 export function createUpdateCommand(): Command {
     return new Command('update')
         .description('Refresh xtrm-managed files and assure global xt Pi packages for one repo or many; missing or outdated packages are refreshed on --apply. Alias for init-era repo refresh; see xtrm init for full bootstrap.')
-        .option('--apply', 'Write changes with install force mode', false)
+        .option('--apply', 'Write changes with forced registry mode', false)
         .option('--strict-registry', 'Fail on registry/source mismatch or missing registry source files', false)
         .option('--root <dir>', 'Walk root and update every repo with .xtrm/registry.json')
         .option('--all-repos', 'Sweep ~/dev and ~/projects for xtrm-managed repos (dry-run by default; --apply patches and commits each changed repo)', false)
@@ -337,7 +337,7 @@ export function createUpdateCommand(): Command {
                 rows.push({
                     repo,
                     status: 'incomplete',
-                    reason: 'missing .xtrm/registry.json — run `xt init` or `xt install` to repair',
+                    reason: 'missing .xtrm/registry.json — run `xt init` to bootstrap or `xt update --apply --repo <path>` to repair',
                 });
             }
 

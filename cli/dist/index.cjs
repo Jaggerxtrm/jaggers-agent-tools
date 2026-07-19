@@ -63764,7 +63764,7 @@ function createInstallPiCommand() {
       renderPiRuntimePlan(plan);
       const hasDrift = plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0 || plan.orphanedExtensions.length > 0;
       if (hasDrift) {
-        console.error(kleur_default.red("  \u2717 Pi runtime drift detected. Run `xtrm pi` to sync.\n"));
+        console.error(kleur_default.red("  \u2717 Pi runtime drift detected. Run `xt pi reload` to sync.\n"));
         process.exit(1);
       }
       return;
@@ -63868,6 +63868,8 @@ function createInstallPiCommand() {
 
 // src/commands/pi.ts
 var PI_AGENT_DIR4 = process.env.PI_AGENT_DIR || import_path7.default.join((0, import_node_os9.homedir)(), ".pi", "agent");
+var RETIRED_PI_COMMANDS = /* @__PURE__ */ new Set(["install"]);
+var RETIRED_PI_INSTALL_REDIRECT = "xt pi install is retired \u2014 run: xt pi reload";
 function resolveProjectRoot() {
   const gitResult = (0, import_node_child_process5.spawnSync)("git", ["rev-parse", "--show-toplevel"], {
     cwd: process.cwd(),
@@ -63935,6 +63937,13 @@ Examples:
       passthrough
     });
   });
+  for (const commandName of RETIRED_PI_COMMANDS) {
+    const tombstone = new Command(commandName).description("Retired maintenance token; use xt pi reload").helpOption(false).allowUnknownOption(true).allowExcessArguments(true).action(() => {
+      console.error(RETIRED_PI_INSTALL_REDIRECT);
+      process.exitCode = 1;
+    });
+    cmd.addCommand(tombstone, { hidden: true });
+  }
   const piSetup = createInstallPiCommand();
   piSetup.name("setup");
   piSetup.description("Interactive first-time setup: API keys, config files, OAuth instructions");
@@ -68532,7 +68541,7 @@ function createCleanCommand() {
     }
     if (!dryRun) {
       console.log(t.boldGreen("\n  \u2713 Cleanup complete\n"));
-      console.log(kleur_default.dim("  Run `xtrm update --apply` to restore canonical components if needed\n"));
+      console.log(kleur_default.dim("  Run `xt update --apply --repo <path>` to repair canonical components\n"));
     } else {
       console.log(kleur_default.yellow("\n  \u2139 Dry run \u2014 run without --dry-run to apply changes\n"));
     }
@@ -72638,7 +72647,7 @@ function printNextSteps() {
 async function renderSummaryCard(stats, isDryRun) {
   const boxen2 = (await Promise.resolve().then(() => (init_boxen(), boxen_exports))).default;
   const lines = [
-    kleur_default.bold("  \u2713 Install complete"),
+    kleur_default.bold("  \u2713 Runtime maintenance complete"),
     "",
     `  ${t.label("Expected installs")} ${stats.expectedInstalls}`,
     `  ${t.label("Installed")} ${stats.installed}`,
@@ -72676,7 +72685,7 @@ async function runInstall(opts = {}) {
   } = opts;
   const strictRegistry = isStrictRegistryMode(opts);
   if (backport) {
-    console.log(kleur_default.yellow("  \u26A0 xtrm install --backport is no longer supported in registry mode."));
+    console.log(kleur_default.yellow("  \u26A0 Backport mode is no longer supported in registry mode."));
     return {};
   }
   const effectiveYes = yes || process.argv.includes("--yes") || process.argv.includes("-y");
@@ -72707,7 +72716,7 @@ async function runInstall(opts = {}) {
   }
   const registryPath = import_path25.default.join(packageRoot, ".xtrm", "registry.json");
   const registry2 = await import_fs_extra46.default.readJson(registryPath);
-  console.log(kleur_default.bold("\n  \u2699  xtrm install (.xtrm registry scaffold)"));
+  console.log(kleur_default.bold("\n  \u2699  xtrm runtime maintenance (.xtrm registry scaffold)"));
   console.log(kleur_default.dim(`  \u2022 registry: ${registryPath}`));
   console.log(kleur_default.dim(`  \u2022 target: ${userXtrmDir}`));
   const scaffoldResult = await scaffoldSkillsDefaultFromPackage({
@@ -73021,7 +73030,7 @@ function printTable(rows) {
   }
 }
 function createUpdateCommand() {
-  return new Command("update").description("Refresh xtrm-managed files and assure global xt Pi packages for one repo or many; missing or outdated packages are refreshed on --apply. Alias for init-era repo refresh; see xtrm init for full bootstrap.").option("--apply", "Write changes with install force mode", false).option("--strict-registry", "Fail on registry/source mismatch or missing registry source files", false).option("--root <dir>", "Walk root and update every repo with .xtrm/registry.json").option("--all-repos", "Sweep ~/dev and ~/projects for xtrm-managed repos (dry-run by default; --apply patches and commits each changed repo)", false).option("--repo <path>", "Target one repo path instead of cwd").option("--json", "Print JSON output", false).action(async (opts) => {
+  return new Command("update").description("Refresh xtrm-managed files and assure global xt Pi packages for one repo or many; missing or outdated packages are refreshed on --apply. Alias for init-era repo refresh; see xtrm init for full bootstrap.").option("--apply", "Write changes with forced registry mode", false).option("--strict-registry", "Fail on registry/source mismatch or missing registry source files", false).option("--root <dir>", "Walk root and update every repo with .xtrm/registry.json").option("--all-repos", "Sweep ~/dev and ~/projects for xtrm-managed repos (dry-run by default; --apply patches and commits each changed repo)", false).option("--repo <path>", "Target one repo path instead of cwd").option("--json", "Print JSON output", false).action(async (opts) => {
     const typedOpts = opts;
     const { targets, incomplete } = await resolveTargetRepos(typedOpts);
     const rows = [];
@@ -73040,7 +73049,7 @@ function createUpdateCommand() {
       rows.push({
         repo,
         status: "incomplete",
-        reason: "missing .xtrm/registry.json \u2014 run `xt init` or `xt install` to repair"
+        reason: "missing .xtrm/registry.json \u2014 run `xt init` to bootstrap or `xt update --apply --repo <path>` to repair"
       });
     }
     const packageAssurance = await assureXtManagedPiPackages(Boolean(typedOpts.apply));

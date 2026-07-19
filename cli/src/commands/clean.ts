@@ -169,7 +169,7 @@ export function createCleanCommand(): Command {
 
             if (!dryRun) {
                 console.log(t.boldGreen('\n  ✓ Cleanup complete\n'));
-                console.log(kleur.dim('  Run `xtrm update --apply` to restore canonical components if needed\n'));
+                console.log(kleur.dim('  Run `xt update --apply --repo <path>` to repair canonical components\n'));
             } else {
                 console.log(kleur.yellow('\n  ℹ Dry run — run without --dry-run to apply changes\n'));
             }

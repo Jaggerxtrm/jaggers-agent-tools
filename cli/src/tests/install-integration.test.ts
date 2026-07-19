@@ -19,7 +19,7 @@ vi.mock('../core/machine-bootstrap.js', async () => {
   };
 });
 
-import { createInstallCommand } from '../commands/install.js';
+import { runInstall } from '../commands/install.js';
 
 interface HooksConfig {
   hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> }>>;
@@ -58,8 +58,12 @@ async function runInstallCli(args: string[]): Promise<{ logs: string[] }> {
   });
 
   try {
-    const command = createInstallCommand();
-    await command.parseAsync(['node', 'xtrm-install-test', ...args]);
+    await runInstall({
+      dryRun: args.includes('--dry-run'),
+      force: args.includes('--force'),
+      prune: args.includes('--prune'),
+      yes: args.includes('--yes'),
+    });
     return { logs };
   } finally {
     logSpy.mockRestore();
@@ -74,7 +78,7 @@ function expectedCommand(commandTemplate: string, hooksRoot: string): string {
   return commandTemplate.replace(/\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/([^\s"]+)/g, `"${hooksRoot}/$1"`);
 }
 
-describe('xtrm install integration', () => {
+describe('runtime maintenance integration', () => {
   it('fresh install scaffolds .xtrm and writes absolute hook commands to settings.json', async () => {
     await runInstallCli(['--yes']);
 
