@@ -31,6 +31,7 @@ import { createUpdateCommand } from './commands/update.js';
 import { createReleaseCommand } from './commands/release.js';
 import { createSpecCommand } from './commands/spec.js';
 import { createMigrateCommand } from './commands/migrate.js';
+import { createVersionCommand } from './commands/version.js';
 import { printBanner } from './utils/banner.js';
 
 const program = new Command();
@@ -82,6 +83,7 @@ program.addCommand(createUpdateCommand());
 program.addCommand(createReleaseCommand());
 program.addCommand(createSpecCommand());
 program.addCommand(createMigrateCommand());
+program.addCommand(createVersionCommand());
 program.addCommand(createHelpCommand());
 
 // Default action: show help

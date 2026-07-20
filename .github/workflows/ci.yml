@@ -71,6 +71,12 @@ jobs:
         npm run check:specialists-vendor
         git diff --exit-code -- .xtrm/skills/default .xtrm/specialists-source.json .xtrm/registry.json
 
+    - name: Verify command deprecation ledger
+      run: npm run check:deprecations
+
+    - name: Verify Pi extension manifest schema
+      run: npm run check:pi-manifest
+
     - name: Flat active skills layout guard
       run: npm run check:layout-guards
 
