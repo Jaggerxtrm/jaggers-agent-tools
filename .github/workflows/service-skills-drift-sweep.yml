@@ -266,7 +266,7 @@ jobs:
         with:
           # @earendil-works/pi-coding-agent (the pi binary sp spawns) requires
           # node >= 22.19. Bumped from 20 in xtrm-d8r36.5 smoke v9.
-          node-version: '22'
+          node-version: '24'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
