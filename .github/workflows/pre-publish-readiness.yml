@@ -51,6 +51,13 @@ jobs:
     with:
       specialists_ref: ${{ needs.resolve_ref.outputs.specialists_ref }}
 
+  integration_suite:
+    # Audit §P2-01: cross-repository installed-artifact conformance suite.
+    needs: resolve_ref
+    uses: ./.github/workflows/integration-suite.yml
+    with:
+      specialists_ref: ${{ needs.resolve_ref.outputs.specialists_ref }}
+
   publish_dry_run:
     needs: [resolve_ref, fresh_machine_smoke]
     runs-on: ubuntu-latest
