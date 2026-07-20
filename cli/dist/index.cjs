@@ -63695,7 +63695,7 @@ async function installFromRegistry(params) {
       formatMissingSources(missingSources)
     ].join("\n"));
   }
-  if (!dryRun) {
+  if (!dryRun && import_path5.default.resolve(installRepoRoot) !== import_path5.default.resolve(packageRoot)) {
     await import_fs_extra14.default.ensureDir(userXtrmDir);
     const targetRegistryPath = import_path5.default.join(userXtrmDir, "registry.json");
     await import_fs_extra14.default.writeJson(targetRegistryPath, createProjectRegistrySnapshot(registry2, installRepoRoot), { spaces: 2 });

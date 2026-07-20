@@ -594,6 +594,65 @@ describe('installFromRegistry', () => {
     expect(await fs.pathExists(path.join(userXtrmDir, 'registry.json'))).toBe(false);
   });
 
+  it('does not clobber the source registry when packageRoot === installRepoRoot (xtrm-5ts3l)', async () => {
+    // Real scenario: running `xt update --apply [--force]` from the xtrm-tools
+    // source repo itself. Under global-skills mode, createProjectRegistrySnapshot
+    // filters out every global-scoped asset (hooks/skills/skills_optional).
+    // Without the source==target guard, the filtered snapshot gets written back
+    // to the source registry — stripping it down to just `config`. The guard
+    // must skip the snapshot write when source and target are the same repo.
+    const tempDir = await createTempDir();
+    const sourceRepo = path.join(tempDir, 'source-repo');
+    const userXtrmDir = path.join(sourceRepo, '.xtrm'); // <-- source IS target
+
+    // Hash-match source content so drift check reports no missing/drifted files
+    // → installFromRegistry does no copies → only the snapshot write remains,
+    // which is what this test exercises.
+    const hookSourcePath = path.join(sourceRepo, '.xtrm', 'hooks', 'post-tool-use.mjs');
+    await fs.ensureDir(path.dirname(hookSourcePath));
+    await fs.writeFile(hookSourcePath, 'export default {}\n', 'utf8');
+    const hookHash = await hashFile(hookSourcePath);
+
+    const originalRegistry = {
+      version: '1.0.0',
+      assets: {
+        hooks: {
+          source_dir: '.xtrm/hooks',
+          install_mode: 'copy' as const,
+          install_scope: 'global' as const,
+          files: { 'post-tool-use.mjs': { hash: hookHash, version: '1.0.0' } },
+        },
+        config: {
+          source_dir: '.xtrm/config',
+          install_mode: 'copy' as const,
+          install_scope: 'project' as const,
+          files: {},
+        },
+      },
+    };
+    await fs.writeJson(path.join(sourceRepo, '.xtrm', 'registry.json'), originalRegistry);
+
+    const previousFlag = process.env.XTRM_GLOBAL_SKILLS;
+    process.env.XTRM_GLOBAL_SKILLS = '1';
+    try {
+      await installFromRegistry({
+        packageRoot: sourceRepo,
+        registry: originalRegistry,
+        userXtrmDir,
+        dryRun: false,
+        force: true,
+        yes: true,
+      });
+
+      const afterRegistry = await fs.readJson(path.join(sourceRepo, '.xtrm', 'registry.json'));
+      expect(afterRegistry.assets.hooks).toBeTruthy();
+      expect(afterRegistry.assets.hooks.files['post-tool-use.mjs']).toBeTruthy();
+      expect(afterRegistry).toEqual(originalRegistry);
+    } finally {
+      process.env.XTRM_GLOBAL_SKILLS = previousFlag;
+    }
+  });
+
   it('installs optional skills packs from registry assets', async () => {
     const tempDir = await createTempDir();
     const packageRoot = path.join(tempDir, 'pkg');
