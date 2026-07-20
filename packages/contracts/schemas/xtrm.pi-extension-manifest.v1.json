@@ -1,0 +1,31 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.pi-extension-manifest.v1",
+    "title": "xtrm pi extension manifest",
+    "description": "Declares which xtrm-managed Pi extensions are active and which are disabled (with a reason). Instance: packages/pi-extensions/src/manifest.json. Loader: cli/src/core/pi-runtime.ts (loadPiExtensionManifest). Note: the loader validates id/displayName/required and ignores ownership; ownership is kept here as an optional field.",
+    "type": "object",
+    "required": ["schema_version", "active", "disabled"],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": { "const": "xtrm.pi-extension-manifest.v1" },
+        "active": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["id", "displayName", "required"],
+                "additionalProperties": false,
+                "properties": {
+                    "id": { "type": "string", "minLength": 1 },
+                    "displayName": { "type": "string", "minLength": 1 },
+                    "required": { "type": "boolean" },
+                    "ownership": { "type": "string" }
+                }
+            }
+        },
+        "disabled": {
+            "type": "object",
+            "description": "extension-id -> non-empty reason string.",
+            "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+    }
+}

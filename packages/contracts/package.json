@@ -1,0 +1,57 @@
+{
+  "name": "@xtrm/contracts",
+  "version": "0.11.1",
+  "description": "Shared xtrm cross-runtime contracts: JSON Schemas, TypeScript types, runtime validators and golden fixtures (audit P2-02)",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "xtrm",
+    "contracts",
+    "json-schema",
+    "runtime-compatibility"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./schemas/*": "./schemas/*"
+  },
+  "author": "xtrm",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xtrm-dev/core.git",
+    "directory": "packages/contracts"
+  },
+  "homepage": "https://github.com/xtrm-dev/core/tree/main/packages/contracts",
+  "bugs": {
+    "url": "https://github.com/xtrm-dev/core/issues"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "fixtures",
+    "README.md"
+  ]
+}

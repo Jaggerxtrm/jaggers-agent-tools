@@ -1,0 +1,36 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.branch.integration.v1",
+    "title": "xtrm branch integration event",
+    "description": "Append-only RESULT record emitted by Specialists after a chain/specialist branch merges into a target (coordinator or main) branch. Source: specialists src/specialist/branch-integration-events.ts (createBranchIntegrationEvent). Persisted to Specialists' observability.db (table branch_integration_events); git remains the authority, this only observes. target.role is omitted (not null) when unset.",
+    "type": "object",
+    "required": ["schema_version", "timestamp", "t_unix_ms", "source", "target", "status", "commit"],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": { "const": "xtrm.branch.integration.v1" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "t_unix_ms": { "type": "integer", "minimum": 0 },
+        "source": {
+            "type": "object",
+            "required": ["job_id", "branch", "worktree"],
+            "additionalProperties": false,
+            "properties": {
+                "job_id": { "type": "string", "minLength": 1 },
+                "branch": { "type": "string", "minLength": 1 },
+                "worktree": { "type": "string", "minLength": 1 }
+            }
+        },
+        "target": {
+            "type": "object",
+            "required": ["branch", "worktree"],
+            "additionalProperties": false,
+            "properties": {
+                "branch": { "type": "string", "minLength": 1 },
+                "worktree": { "type": "string", "minLength": 1 },
+                "role": { "type": "string", "minLength": 1 }
+            }
+        },
+        "status": { "type": "string", "enum": ["merged"] },
+        "commit": { "type": "string", "minLength": 7 }
+    }
+}

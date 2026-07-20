@@ -1,0 +1,43 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.runtime-compatibility.v1",
+    "title": "xtrm runtime compatibility",
+    "description": "Core's declared compatibility window against Specialists / xtmux / node, plus the registry of known contract ids. Instance: docs/runtime-compatibility.json. Build-time gate: scripts/check-runtime-compatibility.mjs.",
+    "type": "object",
+    "required": ["schema_version", "core", "contracts"],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": { "const": "xtrm.runtime-compatibility.v1" },
+        "notes": {
+            "type": "array",
+            "items": { "type": "string" }
+        },
+        "core": {
+            "type": "object",
+            "required": ["package", "requires"],
+            "additionalProperties": false,
+            "properties": {
+                "package": { "type": "string", "minLength": 1 },
+                "requires": {
+                    "type": "object",
+                    "required": ["specialists", "xtmux", "node"],
+                    "additionalProperties": { "type": "string", "minLength": 1 },
+                    "properties": {
+                        "specialists": { "type": "string", "minLength": 1 },
+                        "xtmux": { "type": "string", "minLength": 1 },
+                        "node": { "type": "string", "minLength": 1 }
+                    }
+                }
+            }
+        },
+        "contracts": {
+            "type": "object",
+            "description": "contract-name -> schema id. Ids follow xtrm.<kebab>.v<int> or the legacy literal \"1\".",
+            "minProperties": 1,
+            "additionalProperties": {
+                "type": "string",
+                "pattern": "^(xtrm\\.[a-z][\\w.-]*\\.v\\d+|1)$"
+            }
+        }
+    }
+}

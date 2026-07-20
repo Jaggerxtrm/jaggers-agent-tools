@@ -1,0 +1,48 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.xtmux.bridge.v1",
+    "title": "xtmux read-only bridge frame",
+    "description": "One NDJSON frame of the read-only xtmux bridge protocol (BRIDGE_SCHEMA='xtrm.xtmux.bridge.v1'). Source: xtmux src/bridge/stdio.ts. A frame is exactly one of: a request (id + method [+ params]), a success reply (id + result), or an error reply (id + error). Invariant: every reply echoes the request id — exactly one reply per request id. snake_case on params/result/detail. Only READ_ONLY_METHODS are accepted; mutation methods return XTMUX_BRIDGE_READ_ONLY.",
+    "oneOf": [
+        {
+            "type": "object",
+            "required": ["id", "method"],
+            "additionalProperties": false,
+            "properties": {
+                "id": { "type": ["string", "number"] },
+                "method": {
+                    "type": "string",
+                    "enum": ["bridge.hello", "bridge.cancel", "topology.snapshot", "journal.query", "journal.follow", "pane.capture", "health.get"]
+                },
+                "params": { "type": "object" }
+            }
+        },
+        {
+            "type": "object",
+            "required": ["id", "result"],
+            "additionalProperties": false,
+            "properties": {
+                "id": { "type": ["string", "number", "null"] },
+                "result": { "type": "object" }
+            }
+        },
+        {
+            "type": "object",
+            "required": ["id", "error"],
+            "additionalProperties": false,
+            "properties": {
+                "id": { "type": ["string", "number", "null"] },
+                "error": {
+                    "type": "object",
+                    "required": ["code", "message"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "code": { "type": "string", "minLength": 1 },
+                        "message": { "type": "string" },
+                        "detail": { "type": "object" }
+                    }
+                }
+            }
+        }
+    ]
+}

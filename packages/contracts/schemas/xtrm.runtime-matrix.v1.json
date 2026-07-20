@@ -1,0 +1,44 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.runtime-matrix.v1",
+    "title": "xtrm runtime matrix",
+    "description": "Per-repo runtime profile (node/bun) and cross-repo consumer workflows. Instance: docs/runtime-matrix.yml. Repo blocks are intentionally non-uniform (core uses minimum/bun_usage; xtmux/specialists use bun_minimum/node_minimum), so a repo block requires primary_runtime and allows the observed union of keys.",
+    "type": "object",
+    "required": ["schema_version", "core", "xtmux", "specialists", "consumers"],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": { "const": "xtrm.runtime-matrix.v1" },
+        "core": { "$ref": "#/definitions/repoBlock" },
+        "xtmux": { "$ref": "#/definitions/repoBlock" },
+        "specialists": { "$ref": "#/definitions/repoBlock" },
+        "consumers": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["workflow", "repo", "runtime"],
+                "additionalProperties": false,
+                "properties": {
+                    "workflow": { "type": "string", "minLength": 1 },
+                    "repo": { "type": "string", "minLength": 1 },
+                    "runtime": { "type": "string", "minLength": 1 }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "repoBlock": {
+            "type": "object",
+            "required": ["primary_runtime"],
+            "additionalProperties": false,
+            "properties": {
+                "primary_runtime": { "type": "string", "enum": ["node", "bun"] },
+                "minimum": { "type": "string" },
+                "bun_minimum": { "type": "string" },
+                "node_minimum": { "type": ["string", "null"] },
+                "node_usage": { "type": "array", "items": { "type": "string" } },
+                "bun_usage": { "type": "array", "items": { "type": "string" } },
+                "notes": { "type": "string" }
+            }
+        }
+    }
+}

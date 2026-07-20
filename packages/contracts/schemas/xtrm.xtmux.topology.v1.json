@@ -1,0 +1,85 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.xtmux.topology.v1",
+    "title": "xtmux topology projection",
+    "description": "Aggregated tmux topology projection produced by the xtmux bash picker ($XTMUX_PICKER topology --json) and relayed verbatim by the read-only bridge (topology.snapshot). snake_case, deliberate cross-repo contract. Canonical shape: xtmux docs/xtmux-gaps.md §5.3.",
+    "type": "object",
+    "required": ["schema_version", "generated_at_ms", "host", "sessions"],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": { "const": "xtrm.xtmux.topology.v1" },
+        "generated_at_ms": { "type": "number", "minimum": 0 },
+        "host": {
+            "type": "object",
+            "required": ["host_id", "tmux_server_id"],
+            "additionalProperties": false,
+            "properties": {
+                "host_id": { "type": "string", "minLength": 1 },
+                "tmux_server_id": { "type": "string", "minLength": 1 }
+            }
+        },
+        "sessions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["session_id", "name", "created_at_ms", "activity_at_ms", "attached", "active", "windows"],
+                "additionalProperties": false,
+                "properties": {
+                    "session_id": { "type": "string", "minLength": 1 },
+                    "name": { "type": "string" },
+                    "created_at_ms": { "type": "number", "minimum": 0 },
+                    "activity_at_ms": { "type": "number", "minimum": 0 },
+                    "attached": { "type": "boolean" },
+                    "active": { "type": "boolean" },
+                    "windows": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["window_id", "window_index", "name", "active", "panes"],
+                            "additionalProperties": false,
+                            "properties": {
+                                "window_id": { "type": "string", "minLength": 1 },
+                                "window_index": { "type": "number" },
+                                "name": { "type": "string" },
+                                "active": { "type": "boolean" },
+                                "panes": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "required": ["pane_id", "pane_index", "active", "width", "height", "left", "top", "pid", "current_command", "current_path"],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "pane_id": { "type": "string", "minLength": 1 },
+                                            "pane_index": { "type": "number" },
+                                            "active": { "type": "boolean" },
+                                            "width": { "type": "number" },
+                                            "height": { "type": "number" },
+                                            "left": { "type": "number" },
+                                            "top": { "type": "number" },
+                                            "pid": { "type": "number" },
+                                            "current_command": { "type": "string" },
+                                            "current_path": { "type": "string" },
+                                            "agent": {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "properties": {
+                                                    "instance_id": { "type": "string" },
+                                                    "state": { "type": "string" },
+                                                    "bead_id": { "type": "string" },
+                                                    "task": { "type": "string" },
+                                                    "prompt_file": { "type": "string" },
+                                                    "parent_session_id": { "type": "string" },
+                                                    "last_transition": { "type": "string" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

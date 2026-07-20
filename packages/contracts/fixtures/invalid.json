@@ -1,0 +1,121 @@
+{
+    "xtrm.runtime-compatibility.v1": {
+        "schema_version": "xtrm.runtime-compatibility.v1",
+        "contracts": { "runtime_origin": "xtrm.runtime-origin.v1" }
+    },
+    "xtrm.interactive-role-envelope.v1": {
+        "role": "chain-coordinator",
+        "systemPrompt": "missing skillPaths"
+    },
+    "xtrm.pi-extension-manifest.v1": {
+        "schema_version": "xtrm.pi-extension-manifest.v1",
+        "active": [{ "id": "beads", "displayName": "beads", "required": "yes" }],
+        "disabled": {}
+    },
+    "xtrm.command-deprecations.v1": {
+        "schema_version": "xtrm.command-deprecations.v1",
+        "entries": [
+            {
+                "command": "xt bootstrap",
+                "deprecated_since": "0.11.0",
+                "remove_in": "0.13.0",
+                "replacement": "xt update --apply",
+                "behavior": "explode-loudly",
+                "code_ref": "cli/src/commands/bootstrap.ts"
+            }
+        ]
+    },
+    "xtrm.runtime-matrix.v1": {
+        "schema_version": "xtrm.runtime-matrix.v1",
+        "core": { "minimum": ">=24.0.0" },
+        "xtmux": { "primary_runtime": "bun" },
+        "specialists": { "primary_runtime": "bun" },
+        "consumers": []
+    },
+    "xtrm.runtime-origin.v1": {
+        "schema_version": "xtrm.runtime-origin.v1",
+        "kind": "xtmux.agent_instance",
+        "host_id": "host-01",
+        "tmux_session_id": "$3",
+        "tmux_window_id": "@7",
+        "captured_at_ms": 1783987200000,
+        "capture_source": "xtmux-context",
+        "verified": true
+    },
+    "xtrm.branch.integration.v1": {
+        "schema_version": "xtrm.branch.integration.v1",
+        "timestamp": "2023-11-14T22:13:20.000Z",
+        "t_unix_ms": 1700000000000,
+        "source": { "job_id": "job-abc", "branch": "sp/x", "worktree": "/w" },
+        "target": { "branch": "main", "worktree": "/repo" },
+        "status": "reverted",
+        "commit": "76b888fa1c2d3e4f"
+    },
+    "xtrm.xtmux.topology.v1": {
+        "schema_version": "xtrm.xtmux.topology.v1",
+        "generated_at_ms": 1783987200000,
+        "host": { "host_id": "host-01", "tmux_server_id": "tmux-1" },
+        "sessions": [
+            { "session_id": "$3", "name": "dev", "created_at_ms": 1, "activity_at_ms": 2, "attached": true, "active": true }
+        ]
+    },
+    "xtrm.xtmux.message.v1": {
+        "senderId": "$3",
+        "recipientId": "$1",
+        "summary": "missing messageKey"
+    },
+    "xtrm.xtmux.obligation.v1": {
+        "messageKey": "msg-1",
+        "messageId": 42,
+        "senderId": "$3",
+        "senderPaneId": "%17",
+        "recipientId": "$1",
+        "targetPaneId": "%2",
+        "summary": "review",
+        "createdAtMs": 1783987200000,
+        "acked": false,
+        "ackedAtMs": null,
+        "replyStatus": "fulfilled"
+    },
+    "xtrm.xtmux.monitor.v1": {
+        "monitorId": "monitor-1",
+        "target": "reviewer",
+        "sessionId": "$3",
+        "paneId": "%17",
+        "state": "running",
+        "startedAtMs": 1,
+        "updatedAtMs": 2,
+        "timeoutMs": 600000,
+        "intervalMs": 5000,
+        "wakeDelivered": false,
+        "wakeConsumed": false
+    },
+    "xtrm.xtmux.wait.v1": {
+        "waitId": "wait-1",
+        "target": "reviewer",
+        "requesterSessionId": "$1",
+        "requesterPaneId": "%2",
+        "targetSessionId": "$3",
+        "targetPaneId": "%17",
+        "state": "terminal",
+        "wakeDelivered": true,
+        "wakeConsumed": false,
+        "replayed": false,
+        "startedAtMs": 1,
+        "intervalMs": 5000
+    },
+    "xtrm.xtmux.bridge.v1": {
+        "id": 2,
+        "method": "message.send"
+    },
+    "xtrm.agent-role-launched.v1": {
+        "role": 123
+    },
+    "xtrm.specialist-role-envelope.v1": {
+        "specialist": {
+            "metadata": { "name": "smoke-echo", "version": "1.0.0", "description": "d", "category": "test" },
+            "execution": { "model": null },
+            "prompt": {}
+        }
+    }
+}

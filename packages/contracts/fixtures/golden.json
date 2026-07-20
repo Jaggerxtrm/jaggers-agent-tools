@@ -1,0 +1,230 @@
+{
+    "xtrm.runtime-compatibility.v1": {
+        "schema_version": "xtrm.runtime-compatibility.v1",
+        "notes": ["Declares Core's compatibility window against Specialists / xtmux / node."],
+        "core": {
+            "package": "xtrm-tools",
+            "requires": { "specialists": ">=3.21.0 <4", "xtmux": ">=0.1.0 <0.2", "node": ">=24.0.0" }
+        },
+        "contracts": {
+            "runtime_origin": "xtrm.runtime-origin.v1",
+            "runtime_compatibility": "xtrm.runtime-compatibility.v1",
+            "specialist_role_envelope": "1"
+        }
+    },
+    "xtrm.interactive-role-envelope.v1": {
+        "role": "chain-coordinator",
+        "systemPrompt": "You are the chain coordinator.",
+        "skillPaths": ["/home/u/.xtrm/skills/active/using-specialists/SKILL.md"],
+        "model": "claude-opus-4-8",
+        "thinkingLevel": "high"
+    },
+    "xtrm.pi-extension-manifest.v1": {
+        "schema_version": "xtrm.pi-extension-manifest.v1",
+        "active": [
+            { "id": "beads", "displayName": "beads", "required": true, "ownership": "xtrm" },
+            { "id": "lsp-bootstrap", "displayName": "lsp-bootstrap", "required": false }
+        ],
+        "disabled": { "gitnexus": "Retired; provided by the npm:pi-gitnexus package." }
+    },
+    "xtrm.command-deprecations.v1": {
+        "schema_version": "xtrm.command-deprecations.v1",
+        "notes": ["Source of truth for xt/xtrm command tokens marked deprecated or retired."],
+        "entries": [
+            {
+                "command": "xt bootstrap",
+                "deprecated_since": "0.11.0",
+                "remove_in": "0.13.0",
+                "replacement": "xt update --apply --force",
+                "behavior": "execute-with-warning",
+                "code_ref": "cli/src/commands/bootstrap.ts"
+            }
+        ]
+    },
+    "xtrm.runtime-matrix.v1": {
+        "schema_version": "xtrm.runtime-matrix.v1",
+        "core": { "primary_runtime": "node", "minimum": ">=24.0.0", "node_usage": ["CLI entrypoint"], "bun_usage": [], "notes": "Pinned to Node 24 LTS." },
+        "xtmux": { "primary_runtime": "bun", "bun_minimum": ">=1.0.0", "node_usage": ["npm packaging"], "node_minimum": ">=20.0.0", "notes": "xtmux binaries run under Bun." },
+        "specialists": { "primary_runtime": "bun", "bun_minimum": ">=1.0.0", "node_usage": ["vendoring helpers"], "node_minimum": null, "notes": "sp binary uses bun shebang." },
+        "consumers": [{ "workflow": ".github/workflows/ci.yml", "repo": "core", "runtime": "node" }]
+    },
+    "xtrm.runtime-origin.v1": {
+        "schema_version": "xtrm.runtime-origin.v1",
+        "kind": "xtmux.agent_instance",
+        "host_id": "host-01J2M8GQY8",
+        "tmux_session_id": "$3",
+        "tmux_window_id": "@7",
+        "tmux_pane_id": "%17",
+        "agent_instance_id": "7cc0b27f-41b0-4cae-b6e8-6929035bbb44",
+        "bead_id": "specialists-123",
+        "parent_session_id": "$1",
+        "captured_at_ms": 1783987200000,
+        "capture_source": "xtmux-context",
+        "verified": true
+    },
+    "xtrm.branch.integration.v1": {
+        "schema_version": "xtrm.branch.integration.v1",
+        "timestamp": "2023-11-14T22:13:20.000Z",
+        "t_unix_ms": 1700000000000,
+        "source": { "job_id": "job-abc123", "branch": "specialist/executor/xtrm-5ts3l", "worktree": "/home/dev/.specialists/jobs/job-abc123" },
+        "target": { "branch": "main", "worktree": "/home/dev/specialists" },
+        "status": "merged",
+        "commit": "76b888fa1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f"
+    },
+    "xtrm.xtmux.topology.v1": {
+        "schema_version": "xtrm.xtmux.topology.v1",
+        "generated_at_ms": 1783987200000,
+        "host": { "host_id": "host-01J2M8GQY8", "tmux_server_id": "tmux-6a89e1" },
+        "sessions": [
+            {
+                "session_id": "$3",
+                "name": "specialists-dev",
+                "created_at_ms": 1783980000000,
+                "activity_at_ms": 1783987190000,
+                "attached": true,
+                "active": true,
+                "windows": [
+                    {
+                        "window_id": "@7",
+                        "window_index": 1,
+                        "name": "agent",
+                        "active": true,
+                        "panes": [
+                            {
+                                "pane_id": "%17",
+                                "pane_index": 0,
+                                "active": true,
+                                "width": 160,
+                                "height": 48,
+                                "left": 0,
+                                "top": 0,
+                                "pid": 31415,
+                                "current_command": "pi",
+                                "current_path": "/srv/specialists",
+                                "agent": {
+                                    "instance_id": "7cc0b27f",
+                                    "state": "running",
+                                    "bead_id": "specialists-123",
+                                    "task": "review runtime bridge",
+                                    "prompt_file": "/tmp/review-runtime.md",
+                                    "parent_session_id": "$1",
+                                    "last_transition": "2026-07-14T02:39:50+02:00"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "xtrm.xtmux.message.v1": {
+        "messageKey": "msg-1783987200000-421337",
+        "senderId": "$3",
+        "senderPaneId": "%17",
+        "recipientId": "$1",
+        "targetPaneId": "%2",
+        "beadId": "xtmux-123",
+        "summary": "review runtime bridge",
+        "createdAtMs": 1783987200000,
+        "expectsReply": true,
+        "acked": true,
+        "ackedAtMs": 1783987205000,
+        "ackedBy": "$1",
+        "replyStatus": "fulfilled",
+        "fulfilledAtMs": 1783987260000,
+        "fulfilledByMessageKey": "reply-msg-1",
+        "correlatedReply": {
+            "messageKey": "reply-msg-1",
+            "senderId": "$1",
+            "senderPaneId": "%2",
+            "recipientId": "$3",
+            "targetPaneId": "%17",
+            "summary": "done",
+            "createdAtMs": 1783987260000
+        }
+    },
+    "xtrm.xtmux.obligation.v1": {
+        "messageKey": "msg-1783987200000-421337",
+        "messageId": 42,
+        "senderId": "$3",
+        "senderPaneId": "%17",
+        "recipientId": "$1",
+        "targetPaneId": "%2",
+        "summary": "review runtime bridge",
+        "createdAtMs": 1783987200000,
+        "acked": false,
+        "ackedAtMs": null,
+        "replyStatus": "pending"
+    },
+    "xtrm.xtmux.monitor.v1": {
+        "monitorId": "monitor-1783987200000-123456",
+        "waitId": "wait-1783987200000-123456",
+        "target": "reviewer",
+        "requesterSessionId": "$1",
+        "requesterPaneId": "%2",
+        "sessionId": "$3",
+        "paneId": "%17",
+        "state": "running",
+        "startedAtMs": 1783987200000,
+        "updatedAtMs": 1783987205000,
+        "timeoutMs": 600000,
+        "intervalMs": 5000,
+        "terminalStatus": null,
+        "terminalAtMs": null,
+        "wakeDelivered": false,
+        "wakeConsumed": false,
+        "orphan": false
+    },
+    "xtrm.xtmux.wait.v1": {
+        "waitId": "wait-1783987200000-123456",
+        "target": "reviewer",
+        "requesterSessionId": "$1",
+        "requesterPaneId": "%2",
+        "targetSessionId": "$3",
+        "targetPaneId": "%17",
+        "state": "terminal",
+        "monitorId": "monitor-1783987200000-123456",
+        "terminalStatus": "done",
+        "wakeDelivered": true,
+        "wakeConsumed": false,
+        "replayed": false,
+        "startedAtMs": 1783987200000,
+        "completedAtMs": 1783987260000,
+        "timeoutMs": 600000,
+        "intervalMs": null
+    },
+    "xtrm.xtmux.bridge.v1": {
+        "id": 1,
+        "method": "pane.capture",
+        "params": { "pane_id": "%17", "lines": 200 }
+    },
+    "xtrm.agent-role-launched.v1": {
+        "instance_id": "7cc0b27f",
+        "session": "$3",
+        "session_name": "specialists-dev",
+        "pane": "%17",
+        "runtime": "pi",
+        "role": "reviewer",
+        "bead": "xtmux-123",
+        "task": "review runtime bridge",
+        "prompt_file": "/tmp/review-runtime.md",
+        "parent": "$1"
+    },
+    "xtrm.specialist-role-envelope.v1": {
+        "specialist": {
+            "metadata": { "name": "smoke-echo", "version": "1.0.0", "description": "Minimal script-class specialist.", "category": "test" },
+            "execution": {
+                "mode": "auto",
+                "model": "nano-gpt/moonshotai/kimi-k2.5",
+                "timeout_ms": 30000,
+                "interactive": false,
+                "response_format": "json",
+                "output_type": "custom",
+                "permission_required": "READ_ONLY",
+                "requires_worktree": false,
+                "max_retries": 0
+            },
+            "prompt": { "task_template": "Summarize the following text.\n\n$content", "output_schema": { "required": ["summary"] } }
+        }
+    }
+}
