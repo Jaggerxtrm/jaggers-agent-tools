@@ -3,6 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// xtrm-on2mk: force the pre-global-hooks branch this file was written to
+// exercise. Without this mock, operators with XTRM_GLOBAL_HOOKS=1 exported
+// in their shell drop into reconcileGlobalClaudeHooks — which reads
+// <tmpHome>/.xtrm/config/hooks.json that this test never seeds.
+vi.mock('../core/global-hooks-flag.js', () => ({
+  shouldUseGlobalHooks: () => false,
+}));
+
 import { runClaudeRuntimeSyncPhase } from '../core/claude-runtime-sync.js';
 
 // xtrm-il7ov: runClaudeRuntimeSyncPhase must NOT overwrite the hooks section of

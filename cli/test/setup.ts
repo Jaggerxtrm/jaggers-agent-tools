@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,50 +10,63 @@ const runnerCwd = path.resolve(process.cwd());
 const tmpGitPath = path.join(tempRoot, '.git');
 const runnerStartsOutsideTmp = runnerCwd !== tempRoot && !runnerCwd.startsWith(`${tempRoot}${path.sep}`);
 
-// HOME LEAK DETECTOR (xtrm-8zsi1).
-// A prior full-suite run wiped the operator's real ~/.xtrm/skills/default and
-// ~/.xtrm/hooks/ payload because tests that trigger init/install/bootstrap
-// paths did not sandbox HOME. A universal HOME override was too aggressive
-// (pi-runtime tests fall back to `npm view` when their PI_AGENT_DIR is
-// package-empty, adding 5s network timeouts per managed package). Instead:
-//
-//   * Each leaky test file (init-phases, prune-retired-managed-skills, etc.)
-//     sandboxes HOME in its own beforeEach/afterEach.
-//   * This setup DETECTS regressions: if the guarded state.json files under
-//     the real user's ~/.xtrm/{hooks,skills}/ ever change mtime during the
-//     test process, throw immediately in afterEach so the offender is named.
+// xtrm-on2mk: TREE-HASH LEAK GUARD.
+// The prior mtime-only detector could not catch a wipe that leaves
+// state.json alone. When an operator ran vitest from a repo root whose glob
+// reached older worktree copies of init-phases (pre-xtrm-8zsi1), those
+// tests wiped ~/.xtrm/{hooks/*,skills/default/*} because they resolved
+// os.homedir() live and state.json's mtime did not change in the same
+// process. Hash the whole ~/.xtrm/{hooks,skills/default} tree at module
+// load and again in afterEach; throw and name the offender if it drifted.
 const realHome = process.env.HOME ?? os.homedir();
-const guardedPaths = [
-  path.join(realHome, '.xtrm', 'hooks', 'state.json'),
-  path.join(realHome, '.xtrm', 'skills', 'state.json'),
+const guardedTrees = [
+  path.join(realHome, '.xtrm', 'hooks'),
+  path.join(realHome, '.xtrm', 'skills', 'default'),
 ];
 
-async function currentMtime(p: string): Promise<number> {
-  try { return (await fs.stat(p)).mtimeMs; } catch { return -1; }
+async function treeHash(dir: string): Promise<string> {
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const parts: string[] = [];
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(dir, entry.name);
+      // eslint-disable-next-line no-await-in-loop
+      const stat = await fs.stat(full).catch(() => null);
+      if (!stat) continue;
+      if (stat.isDirectory()) {
+        // eslint-disable-next-line no-await-in-loop
+        parts.push(`${entry.name}/${await treeHash(full)}`);
+      } else {
+        parts.push(`${entry.name}:${stat.size}:${stat.mtimeMs}`);
+      }
+    }
+    return crypto.createHash('sha256').update(parts.join('\n')).digest('hex');
+  } catch {
+    return 'missing';
+  }
 }
 
-const initialMtimes = new Map<string, number>();
-for (const p of guardedPaths) {
+const initialTreeHashes = new Map<string, string>();
+for (const tree of guardedTrees) {
   // eslint-disable-next-line no-await-in-loop
-  initialMtimes.set(p, await currentMtime(p));
+  initialTreeHashes.set(tree, await treeHash(tree));
 }
 
 async function assertRealHomeUntouched(): Promise<void> {
-  for (const p of guardedPaths) {
+  for (const tree of guardedTrees) {
     // eslint-disable-next-line no-await-in-loop
-    const now = await currentMtime(p);
-    const initial = initialMtimes.get(p) ?? -1;
+    const now = await treeHash(tree);
+    const initial = initialTreeHashes.get(tree) ?? 'missing';
     if (now !== initial) {
-      // Update baseline so subsequent tests aren't spammed with the same
-      // failure — but throw once loudly so the responsible test is named.
-      initialMtimes.set(p, now);
+      initialTreeHashes.set(tree, now);
       throw new Error(
-        `test setup: real user's ${p} was touched during a test `
-        + `(mtime ${initial} -> ${now}). This is the class of leak that wiped `
-        + `~/.xtrm/skills/default and ~/.xtrm/hooks/ in xtrm-8zsi1. `
+        `test setup: real user's ${tree} tree was modified during a test `
+        + `(hash ${initial.slice(0, 12)} -> ${now.slice(0, 12)}). This is the class of `
+        + `leak that wiped ~/.xtrm/{hooks,skills/default} during xtrm-on2mk. `
         + `Sandbox HOME in this test's beforeEach: `
         + `previousHome = process.env.HOME; process.env.HOME = fs.mkdtempSync(...); `
-        + `and restore in afterEach.`,
+        + `and restore in afterEach. If your code path uses os.homedir(), also `
+        + `vi.spyOn(os, 'homedir').mockReturnValue(sandboxHome).`,
       );
     }
   }
@@ -65,7 +80,21 @@ async function removeTmpGitPollution(): Promise<void> {
 
 await removeTmpGitPollution();
 
-beforeEach(removeTmpGitPollution);
+// xtrm-on2mk: operators using the global migration export
+// XTRM_GLOBAL_HOOKS=1 and XTRM_GLOBAL_SKILLS=1 in their shell. Vitest
+// inherits the parent env, which forces tests that assume the pre-global
+// branches (registry-scaffold, prune-retired-managed-skills, update,
+// claude-runtime-sync-global-guard, ...) down code paths they never seed.
+// Tests that want the global branches set the env var explicitly inside
+// their own beforeEach.
+delete process.env.XTRM_GLOBAL_HOOKS;
+delete process.env.XTRM_GLOBAL_SKILLS;
+
+beforeEach(() => {
+  delete process.env.XTRM_GLOBAL_HOOKS;
+  delete process.env.XTRM_GLOBAL_SKILLS;
+  return removeTmpGitPollution();
+});
 afterEach(async () => {
   await removeTmpGitPollution();
   await assertRealHomeUntouched();
