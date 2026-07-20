@@ -113,7 +113,7 @@ Examples:
         });
 
     cmd.command('install')
-        .description('Install/refresh Claude settings hook wiring from .xtrm/config/hooks.json')
+        .description('Repair Claude settings hook wiring from .xtrm/config/hooks.json')
         .option('--dry-run', 'Preview without making changes', false)
         .option('-y, --yes', 'Skip confirmation prompt', false)
         .action(async (opts: { dryRun: boolean; yes: boolean }) => {
@@ -135,9 +135,10 @@ Examples:
 
     cmd.command('reload')
         .alias('reinstall')
-        .description('Re-sync Claude settings hook wiring from the current repo')
+        .description('[deprecated] Use xt claude install (planned removal: v0.13.0)')
         .option('-y, --yes', 'Skip confirmation prompt', false)
         .action(async (opts: { yes: boolean }) => {
+            console.error('xt claude reload/reinstall is deprecated — use: xt claude install (planned removal: v0.13.0)');
             const confirmed = await confirmDestructiveAction({
                 yes: opts.yes,
                 message: 'Re-sync Claude hooks into settings.json?',
@@ -185,8 +186,9 @@ Examples:
         });
 
     cmd.command('doctor')
-        .description('Run diagnostic checks on Claude Code setup')
+        .description('[deprecated] Use xt doctor for runtime diagnosis (planned removal: v0.13.0)')
         .action(async () => {
+            console.error('xt claude doctor is deprecated — use: xt doctor (planned removal: v0.13.0)');
             console.log(t.bold('\n  Claude Code Doctor\n'));
 
             let allOk = true;

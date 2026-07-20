@@ -14,11 +14,14 @@ interface BootstrapOptions {
     force?: boolean;
 }
 
+const BOOTSTRAP_DEPRECATION = 'xt bootstrap is deprecated — use: xt update --apply --force (planned removal: v0.13.0)';
+
 export function createBootstrapCommand(): Command {
     return new Command('bootstrap')
-        .description('Populate ~/.xtrm global payloads from running xt package payload')
+        .description('[deprecated] Populate global payloads; use xt update --apply --force (planned removal: v0.13.0)')
         .option('--force', 'Re-copy global skills payload even when version matches', false)
         .action(async (opts: BootstrapOptions) => {
+            console.error(BOOTSTRAP_DEPRECATION);
             try {
                 const packageRoot = resolvePackageRoot();
                 const pkgJson = await fs.readJson(path.join(packageRoot, 'package.json')) as { version?: string };

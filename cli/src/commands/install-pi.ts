@@ -80,16 +80,20 @@ function ensurePnpm(): void {
 export function createInstallPiCommand(): Command {
     const cmd = new Command('pi');
     cmd
-        .description('Install Pi coding agent with providers, extensions, and npm packages')
+        .description('Configure Pi credentials and complete first-time setup')
         .option('-y, --yes', 'Skip confirmation prompts', false)
-        .option('--check', 'Check Pi extension deployment drift without writing changes', false)
-        .option('--setup', 'Run first-time configuration (API keys, OAuth)', false)
+        .option('--check', '[deprecated] Check runtime drift; use xt pi status (planned removal: v0.13.0)', false)
+        .option('--setup', '[deprecated] Setup is already the default (planned removal: v0.13.0)', false)
         .action(async (opts) => {
             const { yes, check, setup } = opts;
+            if (setup) {
+                console.error('xt pi setup --setup is deprecated — omit --setup; setup is the default (planned removal: v0.13.0)');
+            }
             const piConfigDir = resolvePiConfigDir();
 
-            // ── Drift Check Mode ──────────────────────────────────────────────────────
+            // ── Compatibility check mode ───────────────────────────────────────────────
             if (check) {
+                console.error('xt pi setup --check is deprecated — use: xt pi status (planned removal: v0.13.0)');
                 const sourceDir = resolveManagedPiExtensionsSourceDir();
                 const targetDir = path.join(PI_AGENT_DIR, 'extensions');
 
@@ -103,7 +107,7 @@ export function createInstallPiCommand(): Command {
 
                 const hasDrift = plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0 || plan.orphanedExtensions.length > 0;
                 if (hasDrift) {
-                    console.error(kleur.red('  ✗ Pi runtime drift detected. Run `xt pi reload` to sync.\n'));
+                    console.error(kleur.red('  ✗ Pi runtime drift detected. Run `xt update --apply --repo <path>` to repair.\n'));
                     process.exit(1);
                 }
                 return;

@@ -63145,7 +63145,7 @@ Examples:
       passthrough
     });
   });
-  cmd.command("install").description("Install/refresh Claude settings hook wiring from .xtrm/config/hooks.json").option("--dry-run", "Preview without making changes", false).option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
+  cmd.command("install").description("Repair Claude settings hook wiring from .xtrm/config/hooks.json").option("--dry-run", "Preview without making changes", false).option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
     if (!opts.dryRun) {
       const confirmed = await confirmDestructiveAction({
         yes: opts.yes,
@@ -63160,7 +63160,8 @@ Examples:
     const repoRoot = await findRepoRoot();
     await runClaudeRuntimeSyncPhase({ repoRoot, dryRun: opts.dryRun, isGlobal: false });
   });
-  cmd.command("reload").alias("reinstall").description("Re-sync Claude settings hook wiring from the current repo").option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
+  cmd.command("reload").alias("reinstall").description("[deprecated] Use xt claude install (planned removal: v0.13.0)").option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
+    console.error("xt claude reload/reinstall is deprecated \u2014 use: xt claude install (planned removal: v0.13.0)");
     const confirmed = await confirmDestructiveAction({
       yes: opts.yes,
       message: "Re-sync Claude hooks into settings.json?",
@@ -63198,7 +63199,8 @@ Examples:
     }
     console.log("");
   });
-  cmd.command("doctor").description("Run diagnostic checks on Claude Code setup").action(async () => {
+  cmd.command("doctor").description("[deprecated] Use xt doctor for runtime diagnosis (planned removal: v0.13.0)").action(async () => {
+    console.error("xt claude doctor is deprecated \u2014 use: xt doctor (planned removal: v0.13.0)");
     console.log(t.bold("\n  Claude Code Doctor\n"));
     let allOk = true;
     try {
@@ -63750,10 +63752,14 @@ function ensurePnpm2() {
 }
 function createInstallPiCommand() {
   const cmd = new Command("pi");
-  cmd.description("Install Pi coding agent with providers, extensions, and npm packages").option("-y, --yes", "Skip confirmation prompts", false).option("--check", "Check Pi extension deployment drift without writing changes", false).option("--setup", "Run first-time configuration (API keys, OAuth)", false).action(async (opts) => {
+  cmd.description("Configure Pi credentials and complete first-time setup").option("-y, --yes", "Skip confirmation prompts", false).option("--check", "[deprecated] Check runtime drift; use xt pi status (planned removal: v0.13.0)", false).option("--setup", "[deprecated] Setup is already the default (planned removal: v0.13.0)", false).action(async (opts) => {
     const { yes, check: check2, setup } = opts;
+    if (setup) {
+      console.error("xt pi setup --setup is deprecated \u2014 omit --setup; setup is the default (planned removal: v0.13.0)");
+    }
     const piConfigDir = resolvePiConfigDir();
     if (check2) {
+      console.error("xt pi setup --check is deprecated \u2014 use: xt pi status (planned removal: v0.13.0)");
       const sourceDir2 = resolveManagedPiExtensionsSourceDir();
       const targetDir2 = import_path6.default.join(PI_AGENT_DIR3, "extensions");
       if (!sourceDir2) {
@@ -63764,7 +63770,7 @@ function createInstallPiCommand() {
       renderPiRuntimePlan(plan);
       const hasDrift = plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0 || plan.orphanedExtensions.length > 0;
       if (hasDrift) {
-        console.error(kleur_default.red("  \u2717 Pi runtime drift detected. Run `xt pi reload` to sync.\n"));
+        console.error(kleur_default.red("  \u2717 Pi runtime drift detected. Run `xt update --apply --repo <path>` to repair.\n"));
         process.exit(1);
       }
       return;
@@ -63869,7 +63875,7 @@ function createInstallPiCommand() {
 // src/commands/pi.ts
 var PI_AGENT_DIR4 = process.env.PI_AGENT_DIR || import_path7.default.join((0, import_node_os9.homedir)(), ".pi", "agent");
 var RETIRED_PI_COMMANDS = /* @__PURE__ */ new Set(["install"]);
-var RETIRED_PI_INSTALL_REDIRECT = "xt pi install is retired \u2014 run: xt pi reload";
+var RETIRED_PI_INSTALL_REDIRECT = "xt pi install is retired \u2014 run: xt update --apply --repo <path> (planned removal: v0.13.0)";
 function resolveProjectRoot() {
   const gitResult = (0, import_node_child_process5.spawnSync)("git", ["rev-parse", "--show-toplevel"], {
     cwd: process.cwd(),
@@ -63938,7 +63944,7 @@ Examples:
     });
   });
   for (const commandName of RETIRED_PI_COMMANDS) {
-    const tombstone = new Command(commandName).description("Retired maintenance token; use xt pi reload").helpOption(false).allowUnknownOption(true).allowExcessArguments(true).action(() => {
+    const tombstone = new Command(commandName).description("Retired maintenance token; use xt update --apply (planned removal: v0.13.0)").helpOption(false).allowUnknownOption(true).allowExcessArguments(true).action(() => {
       console.error(RETIRED_PI_INSTALL_REDIRECT);
       process.exitCode = 1;
     });
@@ -63946,7 +63952,7 @@ Examples:
   }
   const piSetup = createInstallPiCommand();
   piSetup.name("setup");
-  piSetup.description("Interactive first-time setup: API keys, config files, OAuth instructions");
+  piSetup.description("Configure Pi credentials and complete first-time setup");
   cmd.addCommand(piSetup);
   cmd.command("status").description("Check Pi version and extension deployment drift").action(async () => {
     console.log(t.bold("\n  Pi Runtime Status\n"));
@@ -64006,9 +64012,10 @@ Examples:
     if (hasProjectSettingsDrift) {
       console.log(kleur_default.yellow("  Settings:   .pi/settings.json missing managed npm:@jaggerxtrm/pi-extensions entry"));
     }
-    console.log(kleur_default.dim("\n  \u2192 run: xt pi reload\n"));
+    console.log(kleur_default.dim("\n  \u2192 run: xt update --apply --repo <path>\n"));
   });
-  cmd.command("doctor").description("Diagnostic checks: pi installed, extensions deployed, packages present, orphaned extensions").action(async () => {
+  cmd.command("doctor").description("[deprecated] Use xt doctor for runtime diagnosis (planned removal: v0.13.0)").action(async () => {
+    console.error("xt pi doctor is deprecated \u2014 use: xt doctor (planned removal: v0.13.0)");
     console.log(t.bold("\n  Pi Doctor\n"));
     let allOk = true;
     const piResult = (0, import_node_child_process5.spawnSync)("pi", ["--version"], { encoding: "utf8", stdio: "pipe" });
@@ -64107,7 +64114,8 @@ Examples:
       console.log(kleur_default.yellow("  \u26A0 Some checks failed \u2014 run: xt pi reload\n"));
     }
   });
-  cmd.command("reload").description("Re-sync extensions, remove orphaned, and reinstall missing packages").option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
+  cmd.command("reload").description("[deprecated] Re-sync Pi runtime; use xt update --apply --repo <path> (planned removal: v0.13.0)").option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
+    console.error("xt pi reload is deprecated \u2014 use: xt update --apply --repo <path> (planned removal: v0.13.0)");
     const confirmed = await confirmDestructiveAction({
       yes: opts.yes,
       message: "Re-sync Pi runtime and remove orphaned extensions?",
@@ -67298,7 +67306,7 @@ async function runProjectInit(opts = {}) {
   } else {
     console.log(kleur_default.bold("  Troubleshooting:"));
     console.log(kleur_default.white("    \u2022 Re-run `xtrm init` to retry incomplete phases"));
-    console.log(kleur_default.white("    \u2022 Check individual tool status with `xt pi doctor` or `xt claude doctor`"));
+    console.log(kleur_default.white("    \u2022 Run `xt doctor` for the combined runtime and project diagnosis"));
   }
   console.log("");
 }
@@ -68321,17 +68329,18 @@ function createHelpCommand() {
       "      8. Verify        \u2014 unified outcome summary",
       "    Options: --dry-run, --yes/-y, --global",
       "",
-      "  xtrm update [--apply] [--repo <path>] [--root <dir>] [--json]",
-      "    Refresh xtrm-managed files for one repo or many.",
+      "  xtrm update [--apply] [--force] [--repo <path>] [--root <dir>] [--json]",
+      "    Routine refresh and repair for xtrm-managed files, runtimes, hooks, skills, and packages.",
       "    Default is dry-run for the current repo; --apply writes changes.",
+      "    --force refreshes global payloads; retained for deprecated xt bootstrap.",
       "    --repo targets one repo; --root discovers repos with .xtrm/registry.json.",
       "",
       "  xtrm status [--json]",
       "    Show pending changes for detected environments.",
       "",
-      "  xtrm clean [options]",
-      "    Remove orphaned hooks/skills and stale hook wiring entries.",
-      "    Options: --dry-run, --hooks-only, --skills-only, --yes/-y",
+      "  xtrm clean [deprecated] [options]",
+      "    Compatibility cleanup alias; use xt update [--apply].",
+      "    Options retained: --dry-run, --hooks-only, --skills-only, --yes/-y",
       "",
       "  xtrm docs --help",
       "    Documentation inspection and drift-check submenu.",
@@ -68382,14 +68391,23 @@ function createHelpCommand() {
       "  xt claude [name]",
       "    Launch Claude in a sandboxed xt/<name> worktree.",
       "  xt claude install [--dry-run] [--yes/-y]",
-      "    Install/refresh .xtrm hook wiring in Claude settings.json.",
-      "  xt claude status | xt claude doctor | xt claude reload",
+      "    Targeted Claude hook repair; routine repair belongs to xt update --apply.",
+      "  xt claude status",
+      "  xt claude reload|reinstall [deprecated] \u2192 xt claude install",
+      "  xt claude doctor [deprecated] \u2192 xt doctor",
       "",
       "  xt pi [name]",
       "    Launch Pi in a sandboxed xt/<name> worktree.",
-      "  xt pi setup",
-      "    Interactive first-time setup.",
-      "  xt pi status | xt pi doctor | xt pi reload [--yes/-y]"
+      "  xt pi setup [--check] [--yes/-y]",
+      "    Interactive first-time credentials setup; --check is retained \u2192 xt pi status.",
+      "  xt pi status",
+      "  xt pi doctor [deprecated] \u2192 xt doctor",
+      "  xt pi reload [--yes/-y] [deprecated] \u2192 xt update --apply"
+    ]));
+    blocks.push(section("COMPATIBILITY COMMANDS", [
+      "  xt bootstrap [--force] [deprecated] \u2192 xt update --apply --force",
+      "    Compatibility alias retained through v0.13.0.",
+      "  xt migrate, xt reset, xt skills, and xt claude-sync remain distinct commands."
     ]));
     blocks.push(section("WORKTREE COMMANDS", [
       "  xt attach [slug]",
@@ -68469,8 +68487,10 @@ async function cleanSkills(dryRun, projectRoot) {
     preserved: ["~/.xtrm/skills/active/* (unknown entries preserved; only proven managed links are pruned)"]
   };
 }
+var CLEAN_DEPRECATION = "xt clean is deprecated \u2014 use: xt update [--apply] --repo <path> (planned removal: v0.13.0)";
 function createCleanCommand() {
-  return new Command("clean").description("Remove xtrm-owned legacy hooks, plugins, and retired skills").option("--dry-run", "Preview what would be removed without making changes", false).option("--hooks-only", "Only clean hooks, skip skills", false).option("--skills-only", "Only clean skills, skip hooks", false).option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
+  return new Command("clean").description("[deprecated] Remove xtrm-owned legacy artifacts; use xt update [--apply] (planned removal: v0.13.0)").option("--dry-run", "Preview what would be removed without making changes", false).option("--hooks-only", "Only clean hooks, skip skills", false).option("--skills-only", "Only clean skills, skip hooks", false).option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
+    console.error(CLEAN_DEPRECATION);
     const { dryRun, hooksOnly, skillsOnly, yes } = opts;
     const projectRoot = await findProjectRoot();
     console.log(t.bold("\n  XTRM Clean \u2014 Remove Managed Legacy Artifacts\n"));
@@ -72507,7 +72527,7 @@ function hasCatBIssues(report) {
   return report.skills.some((row) => row.status !== "in-sync") || report.hooks.some((row) => row.status !== "in-sync") || !report.runtimeView.activeReady || !report.runtimeView.globalClaudePointerReady || !report.runtimeView.globalPiPointerReady || report.runtimeView.projectClaudePointerState === "missing" || report.runtimeView.projectPiPointerState === "missing" || report.duplicates.length > 0;
 }
 function createDoctorCommand() {
-  return new Command("doctor").description("Health check for the xtrm-managed surfaces of the current project").option("--cwd <path>", "Operate on this directory (default: process.cwd())").option("--json", "Output machine-readable JSON", false).option("--check-drift", "Exit non-zero on any drift, missing, extra, or duplicate").action(async (opts) => {
+  return new Command("doctor").description("Canonical diagnosis for xtrm-managed project and runtime surfaces").option("--cwd <path>", "Operate on this directory (default: process.cwd())").option("--json", "Output machine-readable JSON", false).option("--check-drift", "Exit non-zero on any drift, missing, extra, or duplicate").action(async (opts) => {
     const cwd = await resolveDoctorCwd(opts.cwd);
     const registry2 = await loadRegistry(cwd);
     const drift = await checkDrift(import_node_path35.default.join(cwd, ".xtrm", "registry.json"), import_node_path35.default.join(cwd, ".xtrm"));
@@ -72525,6 +72545,17 @@ function createDoctorCommand() {
     console.log(`
 ${kleur_default.bold("xt doctor")}
 `);
+    section2("Runtime availability");
+    const claudeAvailable = (0, import_node_child_process20.spawnSync)("claude", ["--version"], { stdio: "ignore" }).status === 0;
+    const piAvailable = (0, import_node_child_process20.spawnSync)("pi", ["--version"], { stdio: "ignore" }).status === 0;
+    const pnpmAvailable = (0, import_node_child_process20.spawnSync)("pnpm", ["--version"], { stdio: "ignore" }).status === 0;
+    claudeAvailable ? ok("claude CLI available") : warn("claude CLI not found");
+    piAvailable ? ok("pi CLI available") : warn("pi CLI not found");
+    pnpmAvailable ? ok("pnpm available") : warn("pnpm not found");
+    const piAgentDir = process.env.PI_AGENT_DIR ?? import_node_path35.default.join(process.env.HOME ?? "", ".pi", "agent");
+    const missingPiConfig = ["models.json", "auth.json", "settings.json"].filter((name) => !import_fs_extra43.default.existsSync(import_node_path35.default.join(piAgentDir, name)));
+    if (missingPiConfig.length === 0) ok("Pi config files present");
+    else warn(`missing Pi config: ${missingPiConfig.join(", ")}`);
     const fragmentsOk = checkClaudeMdFragments(cwd);
     const piPackagesOk = renderXtManagedPiPackages(piPackages);
     renderCatB(catB);
@@ -72545,8 +72576,10 @@ ${kleur_default.bold("xt doctor")}
 init_kleur();
 var import_fs_extra44 = __toESM(require_lib(), 1);
 var import_node_path36 = __toESM(require("path"), 1);
+var BOOTSTRAP_DEPRECATION = "xt bootstrap is deprecated \u2014 use: xt update --apply --force (planned removal: v0.13.0)";
 function createBootstrapCommand() {
-  return new Command("bootstrap").description("Populate ~/.xtrm global payloads from running xt package payload").option("--force", "Re-copy global skills payload even when version matches", false).action(async (opts) => {
+  return new Command("bootstrap").description("[deprecated] Populate global payloads; use xt update --apply --force (planned removal: v0.13.0)").option("--force", "Re-copy global skills payload even when version matches", false).action(async (opts) => {
+    console.error(BOOTSTRAP_DEPRECATION);
     try {
       const packageRoot = resolvePackageRoot2();
       const pkgJson = await import_fs_extra44.default.readJson(import_node_path36.default.join(packageRoot, "package.json"));
@@ -72879,10 +72912,10 @@ async function updateRepo(repoRoot, opts) {
         cwd: process.cwd(),
         pkgVersion: pkgJson.version ?? "0.0.0"
       });
-      await ensureGlobalSkillsBootstrapped(packageRoot);
+      await ensureGlobalSkillsBootstrapped(packageRoot, opts.force ? { force: true } : {});
       await ensureUserAgentsSkillsSymlink({ force: true });
       if (shouldUseGlobalHooks()) {
-        await ensureGlobalHooksBootstrapped(packageRoot);
+        await ensureGlobalHooksBootstrapped(packageRoot, opts.force ? { force: true } : {});
         await reconcileGlobalClaudeHooks();
         await reconcileGlobalPiHooks();
       }
@@ -73030,7 +73063,7 @@ function printTable(rows) {
   }
 }
 function createUpdateCommand() {
-  return new Command("update").description("Refresh xtrm-managed files and assure global xt Pi packages for one repo or many; missing or outdated packages are refreshed on --apply. Alias for init-era repo refresh; see xtrm init for full bootstrap.").option("--apply", "Write changes with forced registry mode", false).option("--strict-registry", "Fail on registry/source mismatch or missing registry source files", false).option("--root <dir>", "Walk root and update every repo with .xtrm/registry.json").option("--all-repos", "Sweep ~/dev and ~/projects for xtrm-managed repos (dry-run by default; --apply patches and commits each changed repo)", false).option("--repo <path>", "Target one repo path instead of cwd").option("--json", "Print JSON output", false).action(async (opts) => {
+  return new Command("update").description("Routine refresh and repair for xtrm-managed files, runtimes, hooks, skills, and packages").option("--apply", "Write changes with forced registry mode", false).option("--force", "Force global payload refresh; retained for the deprecated xt bootstrap alias", false).option("--strict-registry", "Fail on registry/source mismatch or missing registry source files", false).option("--root <dir>", "Walk root and update every repo with .xtrm/registry.json").option("--all-repos", "Sweep ~/dev and ~/projects for xtrm-managed repos (dry-run by default; --apply patches and commits each changed repo)", false).option("--repo <path>", "Target one repo path instead of cwd").option("--json", "Print JSON output", false).action(async (opts) => {
     const typedOpts = opts;
     const { targets, incomplete } = await resolveTargetRepos(typedOpts);
     const rows = [];
@@ -75441,7 +75474,7 @@ program2.exitOverride((err) => {
 });
 program2.addCommand(createClaudeCommand());
 program2.addCommand(createPiCommand());
-program2.command("init").description("Bootstrap xtrm with phased installer: machine \u2192 Claude \u2192 Pi \u2192 project").option("--dry-run", "Preview changes without making any modifications", false).option("-y, --yes", "Skip confirmation prompts", false).option("--global", "Install tooling to user-global scope instead of project-local", false).option("--prune", "Remove plugin-era artifacts (Claude plugin cache, stale settings keys)", false).action(async (opts) => {
+program2.command("init").description("First-time xtrm bootstrap: machine \u2192 Claude \u2192 Pi \u2192 project").option("--dry-run", "Preview changes without making any modifications", false).option("-y, --yes", "Skip confirmation prompts", false).option("--global", "Install tooling to user-global scope instead of project-local", false).option("--prune", "Remove plugin-era artifacts (Claude plugin cache, stale settings keys)", false).action(async (opts) => {
   await runProjectInit(opts);
 });
 program2.addCommand(createStatusCommand());
@@ -75483,7 +75516,7 @@ process.on("unhandledRejection", (reason) => {
   process.exit(1);
 });
 var isHelpOrVersion = process.argv.some((a) => a === "--help" || a === "-h" || a === "--version" || a === "-V");
-var isSetupCommand = ["init", "bootstrap"].includes(process.argv[2] ?? "");
+var isSetupCommand = process.argv[2] === "init";
 (async () => {
   if (!isHelpOrVersion && isSetupCommand) {
     await printBanner(version2);

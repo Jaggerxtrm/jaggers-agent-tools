@@ -25,6 +25,7 @@ describe('xt claude runtime subcommands (bjvn)', () => {
         expect(out).toMatch(/reload/);
         expect(out).toMatch(/status/);
         expect(out).toMatch(/doctor/);
+        expect(out).toMatch(/deprecated/);
     });
 
     it('xt claude install --help exits 0', () => {
@@ -78,13 +79,13 @@ describe('xt pi runtime subcommands (bjvn)', () => {
     it('xt pi install fails with the current maintenance redirect', () => {
         const r = run(['pi', 'install']);
         expect(r.status).toBe(1);
-        expect(r.stdout + r.stderr).toBe('xt pi install is retired — run: xt pi reload\n');
+        expect(r.stdout + r.stderr).toBe('xt pi install is retired — run: xt update --apply --repo <path> (planned removal: v0.13.0)\n');
     });
 
     it('xt pi install --help stays on the retired-token tombstone', () => {
         const r = run(['pi', 'install', '--help']);
         expect(r.status).toBe(1);
-        expect(r.stdout + r.stderr).toBe('xt pi install is retired — run: xt pi reload\n');
+        expect(r.stdout + r.stderr).toBe('xt pi install is retired — run: xt update --apply --repo <path> (planned removal: v0.13.0)\n');
     });
 
     it('xt pi setup --help exits 0', () => {

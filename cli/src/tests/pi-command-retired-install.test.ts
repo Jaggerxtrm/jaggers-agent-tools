@@ -26,7 +26,7 @@ describe('retired Pi install token', () => {
 
         await createPiCommand().parseAsync(['node', 'xt', 'install']);
 
-        expect(errorSpy).toHaveBeenCalledWith('xt pi install is retired — run: xt pi reload');
+        expect(errorSpy).toHaveBeenCalledWith('xt pi install is retired — run: xt update --apply --repo <path> (planned removal: v0.13.0)');
         expect(process.exitCode).toBe(1);
         expect(mocked.launchWorktreeSession).not.toHaveBeenCalled();
     });
@@ -36,7 +36,7 @@ describe('retired Pi install token', () => {
 
         await createPiCommand().parseAsync(['node', 'xt', 'install', '--help']);
 
-        expect(errorSpy).toHaveBeenCalledWith('xt pi install is retired — run: xt pi reload');
+        expect(errorSpy).toHaveBeenCalledWith('xt pi install is retired — run: xt update --apply --repo <path> (planned removal: v0.13.0)');
         expect(process.exitCode).toBe(1);
         expect(mocked.launchWorktreeSession).not.toHaveBeenCalled();
     });

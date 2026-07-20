@@ -919,7 +919,7 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
     } else {
         console.log(kleur.bold('  Troubleshooting:'));
         console.log(kleur.white('    • Re-run `xtrm init` to retry incomplete phases'));
-        console.log(kleur.white('    • Check individual tool status with `xt pi doctor` or `xt claude doctor`'));
+        console.log(kleur.white('    • Run `xt doctor` for the combined runtime and project diagnosis'));
     }
     console.log('');
 }
