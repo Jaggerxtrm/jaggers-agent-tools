@@ -212,7 +212,11 @@ describe('xtrm update', () => {
 
     const result = await runUpdateCli(['--repo', repo]);
 
-    expect(checkDriftMock).toHaveBeenCalledWith(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(repo, '.xtrm'), undefined);
+    expect(checkDriftMock).toHaveBeenCalledWith(
+      path.join(packageRoot, '.xtrm', 'registry.json'),
+      path.join(repo, '.xtrm'),
+      undefined, // ponytail: dry-run doesn't compute globalRoots
+    );
     expect(runInstallMock).toHaveBeenCalledTimes(1);
     expect(runInstallMock).toHaveBeenCalledWith(expect.objectContaining({
       dryRun: true,
@@ -281,7 +285,11 @@ describe('xtrm update', () => {
 
     const result = await runUpdateCli(['--apply', '--repo', repo]);
 
-    expect(checkDriftMock).toHaveBeenCalledWith(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(repo, '.xtrm'), undefined);
+    expect(checkDriftMock).toHaveBeenCalledWith(
+      path.join(packageRoot, '.xtrm', 'registry.json'),
+      path.join(repo, '.xtrm'),
+      undefined, // ponytail: globalRoots is undefined when HOME has no .xtrm/skills (CI temp HOME)
+    );
     expect(runInstallMock).toHaveBeenCalledTimes(1);
     expect(assureXtManagedPiPackagesMock).toHaveBeenCalledWith(true);
     expect(runExternalPiToolPatchMock).toHaveBeenCalledWith(packageRoot, false);
@@ -484,7 +492,9 @@ describe('xtrm update', () => {
   it('help mentions package freshness and refresh behavior', async () => {
     const command = createUpdateCommand();
     const help = await command.helpInformation();
-    expect(help).toContain('Routine refresh and repair for xtrm-managed files, runtimes, hooks, skills, and packages');
+    // ponytail: short substrings — commander word-wraps at terminal width; long assertion strung across wrap breaks in CI
+    expect(help).toContain('Routine refresh and repair');
+    expect(help).toContain('runtimes, hooks, skills');
     expect(help).toContain('--all-repos');
   });
 });
