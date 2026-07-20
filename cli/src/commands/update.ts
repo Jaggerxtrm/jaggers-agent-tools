@@ -44,6 +44,7 @@ interface UpdateOpts {
     apply?: boolean;
     allRepos?: boolean;
     strictRegistry?: boolean;
+    force?: boolean;
 }
 
 interface ResolvedTargets {
@@ -107,10 +108,10 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
                 cwd: process.cwd(),
                 pkgVersion: pkgJson.version ?? '0.0.0',
             });
-            await ensureGlobalSkillsBootstrapped(packageRoot);
+            await ensureGlobalSkillsBootstrapped(packageRoot, opts.force ? { force: true } : {});
             await ensureUserAgentsSkillsSymlink({ force: true });
             if (shouldUseGlobalHooks()) {
-                await ensureGlobalHooksBootstrapped(packageRoot);
+                await ensureGlobalHooksBootstrapped(packageRoot, opts.force ? { force: true } : {});
                 await reconcileGlobalClaudeHooks();
                 await reconcileGlobalPiHooks();
             }
@@ -308,8 +309,9 @@ function printTable(rows: RepoUpdateResult[]): void {
 
 export function createUpdateCommand(): Command {
     return new Command('update')
-        .description('Refresh xtrm-managed files and assure global xt Pi packages for one repo or many; missing or outdated packages are refreshed on --apply. Alias for init-era repo refresh; see xtrm init for full bootstrap.')
+        .description('Routine refresh and repair for xtrm-managed files, runtimes, hooks, skills, and packages')
         .option('--apply', 'Write changes with forced registry mode', false)
+        .option('--force', 'Force global payload refresh; retained for the deprecated xt bootstrap alias', false)
         .option('--strict-registry', 'Fail on registry/source mismatch or missing registry source files', false)
         .option('--root <dir>', 'Walk root and update every repo with .xtrm/registry.json')
         .option('--all-repos', 'Sweep ~/dev and ~/projects for xtrm-managed repos (dry-run by default; --apply patches and commits each changed repo)', false)

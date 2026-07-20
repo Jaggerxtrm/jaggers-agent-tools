@@ -55,7 +55,7 @@ program.addCommand(createClaudeCommand());
 program.addCommand(createPiCommand());
 program
     .command('init')
-    .description('Bootstrap xtrm with phased installer: machine → Claude → Pi → project')
+    .description('First-time xtrm bootstrap: machine → Claude → Pi → project')
     .option('--dry-run', 'Preview changes without making any modifications', false)
     .option('-y, --yes', 'Skip confirmation prompts', false)
     .option('--global', 'Install tooling to user-global scope instead of project-local', false)
@@ -104,9 +104,9 @@ process.on('unhandledRejection', (reason) => {
     process.exit(1);
 });
 
-// Show banner for setup commands (never for help/version output)
+// Show the banner only for first-time setup (never for help/version output).
 const isHelpOrVersion = process.argv.some(a => a === '--help' || a === '-h' || a === '--version' || a === '-V');
-const isSetupCommand = ['init', 'bootstrap'].includes(process.argv[2] ?? '');
+const isSetupCommand = process.argv[2] === 'init';
 
 (async () => {
     if (!isHelpOrVersion && isSetupCommand) {

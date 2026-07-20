@@ -20,7 +20,7 @@ import { confirmDestructiveAction } from '../utils/confirmation.js';
 
 const PI_AGENT_DIR = process.env.PI_AGENT_DIR || path.join(homedir(), '.pi', 'agent');
 const RETIRED_PI_COMMANDS = new Set(['install']);
-const RETIRED_PI_INSTALL_REDIRECT = 'xt pi install is retired — run: xt pi reload';
+const RETIRED_PI_INSTALL_REDIRECT = 'xt pi install is retired — run: xt update --apply --repo <path> (planned removal: v0.13.0)';
 
 interface PiProjectPointer {
     hasProjectSettings: boolean;
@@ -138,7 +138,7 @@ Examples:
 
     for (const commandName of RETIRED_PI_COMMANDS) {
         const tombstone = new Command(commandName)
-            .description('Retired maintenance token; use xt pi reload')
+            .description('Retired maintenance token; use xt update --apply (planned removal: v0.13.0)')
             .helpOption(false)
             .allowUnknownOption(true)
             .allowExcessArguments(true)
@@ -152,7 +152,7 @@ Examples:
     // 'setup' = interactive first-time API key + OAuth config
     const piSetup = createInstallPiCommand();
     piSetup.name('setup');
-    piSetup.description('Interactive first-time setup: API keys, config files, OAuth instructions');
+    piSetup.description('Configure Pi credentials and complete first-time setup');
     cmd.addCommand(piSetup);
 
     cmd.command('status')
@@ -228,12 +228,13 @@ Examples:
                 console.log(kleur.yellow('  Settings:   .pi/settings.json missing managed npm:@jaggerxtrm/pi-extensions entry'));
             }
 
-            console.log(kleur.dim('\n  → run: xt pi reload\n'));
+            console.log(kleur.dim('\n  → run: xt update --apply --repo <path>\n'));
         });
 
     cmd.command('doctor')
-        .description('Diagnostic checks: pi installed, extensions deployed, packages present, orphaned extensions')
+        .description('[deprecated] Use xt doctor for runtime diagnosis (planned removal: v0.13.0)')
         .action(async () => {
+            console.error('xt pi doctor is deprecated — use: xt doctor (planned removal: v0.13.0)');
             console.log(t.bold('\n  Pi Doctor\n'));
 
             let allOk = true;
@@ -347,9 +348,10 @@ Examples:
         });
 
     cmd.command('reload')
-        .description('Re-sync extensions, remove orphaned, and reinstall missing packages')
+        .description('[deprecated] Re-sync Pi runtime; use xt update --apply --repo <path> (planned removal: v0.13.0)')
         .option('-y, --yes', 'Skip confirmation prompt', false)
         .action(async (opts: { yes: boolean }) => {
+            console.error('xt pi reload is deprecated — use: xt update --apply --repo <path> (planned removal: v0.13.0)');
             const confirmed = await confirmDestructiveAction({
                 yes: opts.yes,
                 message: 'Re-sync Pi runtime and remove orphaned extensions?',

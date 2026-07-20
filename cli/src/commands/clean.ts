@@ -79,14 +79,17 @@ async function cleanSkills(
     };
 }
 
+const CLEAN_DEPRECATION = 'xt clean is deprecated — use: xt update [--apply] --repo <path> (planned removal: v0.13.0)';
+
 export function createCleanCommand(): Command {
     return new Command('clean')
-        .description('Remove xtrm-owned legacy hooks, plugins, and retired skills')
+        .description('[deprecated] Remove xtrm-owned legacy artifacts; use xt update [--apply] (planned removal: v0.13.0)')
         .option('--dry-run', 'Preview what would be removed without making changes', false)
         .option('--hooks-only', 'Only clean hooks, skip skills', false)
         .option('--skills-only', 'Only clean skills, skip hooks', false)
         .option('-y, --yes', 'Skip confirmation prompt', false)
         .action(async (opts) => {
+            console.error(CLEAN_DEPRECATION);
             const { dryRun, hooksOnly, skillsOnly, yes } = opts;
             const projectRoot = await findProjectRoot();
 

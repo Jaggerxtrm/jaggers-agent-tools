@@ -335,7 +335,7 @@ function hasCatBIssues(report: CatBJson): boolean {
 
 export function createDoctorCommand(): Command {
   return new Command('doctor')
-    .description('Health check for the xtrm-managed surfaces of the current project')
+    .description('Canonical diagnosis for xtrm-managed project and runtime surfaces')
     .option('--cwd <path>', 'Operate on this directory (default: process.cwd())')
     .option('--json', 'Output machine-readable JSON', false)
     .option('--check-drift', 'Exit non-zero on any drift, missing, extra, or duplicate')
@@ -359,6 +359,19 @@ export function createDoctorCommand(): Command {
       }
 
       console.log(`\n${kleur.bold('xt doctor')}\n`);
+      section('Runtime availability');
+      const claudeAvailable = spawnSync('claude', ['--version'], { stdio: 'ignore' }).status === 0;
+      const piAvailable = spawnSync('pi', ['--version'], { stdio: 'ignore' }).status === 0;
+      const pnpmAvailable = spawnSync('pnpm', ['--version'], { stdio: 'ignore' }).status === 0;
+      claudeAvailable ? ok('claude CLI available') : warn('claude CLI not found');
+      piAvailable ? ok('pi CLI available') : warn('pi CLI not found');
+      pnpmAvailable ? ok('pnpm available') : warn('pnpm not found');
+      const piAgentDir = process.env.PI_AGENT_DIR ?? path.join(process.env.HOME ?? '', '.pi', 'agent');
+      const missingPiConfig = ['models.json', 'auth.json', 'settings.json']
+        .filter(name => !fs.existsSync(path.join(piAgentDir, name)));
+      if (missingPiConfig.length === 0) ok('Pi config files present');
+      else warn(`missing Pi config: ${missingPiConfig.join(', ')}`);
+
       const fragmentsOk = checkClaudeMdFragments(cwd);
       const piPackagesOk = renderXtManagedPiPackages(piPackages);
       renderCatB(catB);

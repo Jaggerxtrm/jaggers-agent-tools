@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Consolidated the operator path around `xt init` (first-time bootstrap), `xt update [--apply]` (routine refresh/repair), `xt doctor` (diagnosis), and `xt migrate` (explicit one-time migrations). Existing bootstrap, cleanup, and runtime repair verbs remain compatibility aliases with replacement guidance through v0.13.0.
+
 ## [0.11.0] - 2026-07-16
 
 ### Added

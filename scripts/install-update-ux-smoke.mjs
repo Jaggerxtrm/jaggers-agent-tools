@@ -95,7 +95,7 @@ try {
   for (const args of [['pi', 'install'], ['pi', 'install', '--help']]) {
     const retired = run('node', [cli, ...args], { cwd: project, env });
     assert.equal(retired.status, 1, `retired ${args.join(' ')} did not fail safely`);
-    assert.match(combined(retired), /xt pi install is retired.*xt pi reload/i);
+    assert.match(combined(retired), /xt pi install is retired.*xt update --apply/i);
     assertNoSecret(`retired ${args.join(' ')}`, retired);
   }
 
