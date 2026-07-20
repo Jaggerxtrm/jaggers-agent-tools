@@ -1,0 +1,83 @@
+{
+  "schema_version": "xtrm.command-deprecations.v1",
+  "notes": [
+    "Source of truth for xt/xtrm command tokens that are marked deprecated or retired in code and slated for removal.",
+    "Every 'is deprecated —' or 'is retired —' string emitted by cli/src/commands/**/*.ts must correspond to an entry here.",
+    "Adding a new deprecation? Add both the runtime message (in the command file) and the ledger entry in the same PR."
+  ],
+  "entries": [
+    {
+      "command": "xt bootstrap",
+      "deprecated_since": "0.11.0",
+      "remove_in": "0.13.0",
+      "replacement": "xt update --apply --force",
+      "behavior": "execute-with-warning",
+      "code_ref": "cli/src/commands/bootstrap.ts"
+    },
+    {
+      "command": "xt clean",
+      "deprecated_since": "0.11.0",
+      "remove_in": "0.13.0",
+      "replacement": "xt update [--apply] --repo <path>",
+      "behavior": "execute-with-warning",
+      "code_ref": "cli/src/commands/clean.ts"
+    },
+    {
+      "command": "xt pi install",
+      "deprecated_since": "0.11.0",
+      "remove_in": "0.13.0",
+      "replacement": "xt update --apply --repo <path>",
+      "behavior": "fail-with-redirect",
+      "code_ref": "cli/src/commands/pi.ts"
+    },
+    {
+      "command": "xt pi doctor",
+      "deprecated_since": "0.11.0",
+      "remove_in": "0.13.0",
+      "replacement": "xt doctor",
+      "behavior": "execute-with-warning",
+      "code_ref": "cli/src/commands/pi.ts"
+    },
+    {
+      "command": "xt pi reload",
+      "deprecated_since": "0.11.0",
+      "remove_in": "0.13.0",
+      "replacement": "xt update --apply --repo <path>",
+      "behavior": "execute-with-warning",
+      "code_ref": "cli/src/commands/pi.ts"
+    },
+    {
+      "command": "xt claude reload/reinstall",
+      "deprecated_since": "0.11.0",
+      "remove_in": "0.13.0",
+      "replacement": "xt claude install",
+      "behavior": "execute-with-warning",
+      "code_ref": "cli/src/commands/claude.ts",
+      "notes": "Emitted as a combined message in code; help.ts renders as 'reload|reinstall'."
+    },
+    {
+      "command": "xt claude doctor",
+      "deprecated_since": "0.11.0",
+      "remove_in": "0.13.0",
+      "replacement": "xt doctor",
+      "behavior": "execute-with-warning",
+      "code_ref": "cli/src/commands/claude.ts"
+    },
+    {
+      "command": "xt pi setup --check",
+      "deprecated_since": "0.11.0",
+      "remove_in": "0.13.0",
+      "replacement": "xt pi status",
+      "behavior": "execute-with-warning",
+      "code_ref": "cli/src/commands/install-pi.ts"
+    },
+    {
+      "command": "xt pi setup --setup",
+      "deprecated_since": "0.11.0",
+      "remove_in": "0.13.0",
+      "replacement": "omit --setup; setup is the default",
+      "behavior": "execute-with-warning",
+      "code_ref": "cli/src/commands/install-pi.ts"
+    }
+  ]
+}

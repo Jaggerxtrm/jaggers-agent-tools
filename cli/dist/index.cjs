@@ -3585,8 +3585,8 @@ var require_universalify = __commonJS({
       return Object.defineProperty(function(...args) {
         if (typeof args[args.length - 1] === "function") fn.apply(this, args);
         else {
-          return new Promise((resolve4, reject) => {
-            args.push((err, res) => err != null ? reject(err) : resolve4(res));
+          return new Promise((resolve5, reject) => {
+            args.push((err, res) => err != null ? reject(err) : resolve5(res));
             fn.apply(this, args);
           });
         }
@@ -4441,18 +4441,18 @@ var require_fs = __commonJS({
       if (typeof callback === "function") {
         return fs60.exists(filename, callback);
       }
-      return new Promise((resolve4) => {
-        return fs60.exists(filename, resolve4);
+      return new Promise((resolve5) => {
+        return fs60.exists(filename, resolve5);
       });
     };
     exports2.read = function(fd, buffer, offset, length, position, callback) {
       if (typeof callback === "function") {
         return fs60.read(fd, buffer, offset, length, position, callback);
       }
-      return new Promise((resolve4, reject) => {
+      return new Promise((resolve5, reject) => {
         fs60.read(fd, buffer, offset, length, position, (err, bytesRead, buffer2) => {
           if (err) return reject(err);
-          resolve4({ bytesRead, buffer: buffer2 });
+          resolve5({ bytesRead, buffer: buffer2 });
         });
       });
     };
@@ -4460,10 +4460,10 @@ var require_fs = __commonJS({
       if (typeof args[args.length - 1] === "function") {
         return fs60.write(fd, buffer, ...args);
       }
-      return new Promise((resolve4, reject) => {
+      return new Promise((resolve5, reject) => {
         fs60.write(fd, buffer, ...args, (err, bytesWritten, buffer2) => {
           if (err) return reject(err);
-          resolve4({ bytesWritten, buffer: buffer2 });
+          resolve5({ bytesWritten, buffer: buffer2 });
         });
       });
     };
@@ -4471,10 +4471,10 @@ var require_fs = __commonJS({
       if (typeof args[args.length - 1] === "function") {
         return fs60.readv(fd, buffers, ...args);
       }
-      return new Promise((resolve4, reject) => {
+      return new Promise((resolve5, reject) => {
         fs60.readv(fd, buffers, ...args, (err, bytesRead, buffers2) => {
           if (err) return reject(err);
-          resolve4({ bytesRead, buffers: buffers2 });
+          resolve5({ bytesRead, buffers: buffers2 });
         });
       });
     };
@@ -4482,10 +4482,10 @@ var require_fs = __commonJS({
       if (typeof args[args.length - 1] === "function") {
         return fs60.writev(fd, buffers, ...args);
       }
-      return new Promise((resolve4, reject) => {
+      return new Promise((resolve5, reject) => {
         fs60.writev(fd, buffers, ...args, (err, bytesWritten, buffers2) => {
           if (err) return reject(err);
-          resolve4({ bytesWritten, buffers: buffers2 });
+          resolve5({ bytesWritten, buffers: buffers2 });
         });
       });
     };
@@ -5506,7 +5506,7 @@ var require_jsonfile = __commonJS({
       return obj;
     }
     var readFile = universalify.fromPromise(_readFile);
-    function readFileSync6(file2, options = {}) {
+    function readFileSync7(file2, options = {}) {
       if (typeof options === "string") {
         options = { encoding: options };
       }
@@ -5538,7 +5538,7 @@ var require_jsonfile = __commonJS({
     }
     module2.exports = {
       readFile,
-      readFileSync: readFileSync6,
+      readFileSync: readFileSync7,
       writeFile,
       writeFileSync: writeFileSync4
     };
@@ -6267,7 +6267,7 @@ var require_prompt = __commonJS({
 var require_text = __commonJS({
   "../node_modules/prompts/dist/elements/text.js"(exports2, module2) {
     "use strict";
-    function asyncGeneratorStep(gen, resolve4, reject, _next, _throw, key, arg) {
+    function asyncGeneratorStep(gen, resolve5, reject, _next, _throw, key, arg) {
       try {
         var info = gen[key](arg);
         var value = info.value;
@@ -6276,7 +6276,7 @@ var require_text = __commonJS({
         return;
       }
       if (info.done) {
-        resolve4(value);
+        resolve5(value);
       } else {
         Promise.resolve(value).then(_next, _throw);
       }
@@ -6284,13 +6284,13 @@ var require_text = __commonJS({
     function _asyncToGenerator(fn) {
       return function() {
         var self = this, args = arguments;
-        return new Promise(function(resolve4, reject) {
+        return new Promise(function(resolve5, reject) {
           var gen = fn.apply(self, args);
           function _next(value) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "next", value);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "next", value);
           }
           function _throw(err) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "throw", err);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "throw", err);
           }
           _next(void 0);
         });
@@ -7006,7 +7006,7 @@ var require_dateparts = __commonJS({
 var require_date = __commonJS({
   "../node_modules/prompts/dist/elements/date.js"(exports2, module2) {
     "use strict";
-    function asyncGeneratorStep(gen, resolve4, reject, _next, _throw, key, arg) {
+    function asyncGeneratorStep(gen, resolve5, reject, _next, _throw, key, arg) {
       try {
         var info = gen[key](arg);
         var value = info.value;
@@ -7015,7 +7015,7 @@ var require_date = __commonJS({
         return;
       }
       if (info.done) {
-        resolve4(value);
+        resolve5(value);
       } else {
         Promise.resolve(value).then(_next, _throw);
       }
@@ -7023,13 +7023,13 @@ var require_date = __commonJS({
     function _asyncToGenerator(fn) {
       return function() {
         var self = this, args = arguments;
-        return new Promise(function(resolve4, reject) {
+        return new Promise(function(resolve5, reject) {
           var gen = fn.apply(self, args);
           function _next(value) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "next", value);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "next", value);
           }
           function _throw(err) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "throw", err);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "throw", err);
           }
           _next(void 0);
         });
@@ -7232,7 +7232,7 @@ ${i ? ` ` : figures.pointerSmall} ${color.red().italic(l)}`, ``);
 var require_number = __commonJS({
   "../node_modules/prompts/dist/elements/number.js"(exports2, module2) {
     "use strict";
-    function asyncGeneratorStep(gen, resolve4, reject, _next, _throw, key, arg) {
+    function asyncGeneratorStep(gen, resolve5, reject, _next, _throw, key, arg) {
       try {
         var info = gen[key](arg);
         var value = info.value;
@@ -7241,7 +7241,7 @@ var require_number = __commonJS({
         return;
       }
       if (info.done) {
-        resolve4(value);
+        resolve5(value);
       } else {
         Promise.resolve(value).then(_next, _throw);
       }
@@ -7249,13 +7249,13 @@ var require_number = __commonJS({
     function _asyncToGenerator(fn) {
       return function() {
         var self = this, args = arguments;
-        return new Promise(function(resolve4, reject) {
+        return new Promise(function(resolve5, reject) {
           var gen = fn.apply(self, args);
           function _next(value) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "next", value);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "next", value);
           }
           function _throw(err) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "throw", err);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "throw", err);
           }
           _next(void 0);
         });
@@ -7678,7 +7678,7 @@ Instructions:
 var require_autocomplete = __commonJS({
   "../node_modules/prompts/dist/elements/autocomplete.js"(exports2, module2) {
     "use strict";
-    function asyncGeneratorStep(gen, resolve4, reject, _next, _throw, key, arg) {
+    function asyncGeneratorStep(gen, resolve5, reject, _next, _throw, key, arg) {
       try {
         var info = gen[key](arg);
         var value = info.value;
@@ -7687,7 +7687,7 @@ var require_autocomplete = __commonJS({
         return;
       }
       if (info.done) {
-        resolve4(value);
+        resolve5(value);
       } else {
         Promise.resolve(value).then(_next, _throw);
       }
@@ -7695,13 +7695,13 @@ var require_autocomplete = __commonJS({
     function _asyncToGenerator(fn) {
       return function() {
         var self = this, args = arguments;
-        return new Promise(function(resolve4, reject) {
+        return new Promise(function(resolve5, reject) {
           var gen = fn.apply(self, args);
           function _next(value) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "next", value);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "next", value);
           }
           function _throw(err) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "throw", err);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "throw", err);
           }
           _next(void 0);
         });
@@ -8210,9 +8210,9 @@ var require_prompts = __commonJS({
     $2.date = (args) => toPrompt("DatePrompt", args);
     $2.confirm = (args) => toPrompt("ConfirmPrompt", args);
     $2.list = (args) => {
-      const sep2 = args.separator || ",";
+      const sep3 = args.separator || ",";
       return toPrompt("TextPrompt", args, {
-        onSubmit: (str) => str.split(sep2).map((s) => s.trim())
+        onSubmit: (str) => str.split(sep3).map((s) => s.trim())
       });
     };
     $2.toggle = (args) => toPrompt("TogglePrompt", args);
@@ -8332,7 +8332,7 @@ var require_dist = __commonJS({
       for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
       return arr2;
     }
-    function asyncGeneratorStep(gen, resolve4, reject, _next, _throw, key, arg) {
+    function asyncGeneratorStep(gen, resolve5, reject, _next, _throw, key, arg) {
       try {
         var info = gen[key](arg);
         var value = info.value;
@@ -8341,7 +8341,7 @@ var require_dist = __commonJS({
         return;
       }
       if (info.done) {
-        resolve4(value);
+        resolve5(value);
       } else {
         Promise.resolve(value).then(_next, _throw);
       }
@@ -8349,13 +8349,13 @@ var require_dist = __commonJS({
     function _asyncToGenerator(fn) {
       return function() {
         var self = this, args = arguments;
-        return new Promise(function(resolve4, reject) {
+        return new Promise(function(resolve5, reject) {
           var gen = fn.apply(self, args);
           function _next(value) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "next", value);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "next", value);
           }
           function _throw(err) {
-            asyncGeneratorStep(gen, resolve4, reject, _next, _throw, "throw", err);
+            asyncGeneratorStep(gen, resolve5, reject, _next, _throw, "throw", err);
           }
           _next(void 0);
         });
@@ -10504,9 +10504,9 @@ var require_prompts2 = __commonJS({
     $2.date = (args) => toPrompt("DatePrompt", args);
     $2.confirm = (args) => toPrompt("ConfirmPrompt", args);
     $2.list = (args) => {
-      const sep2 = args.separator || ",";
+      const sep3 = args.separator || ",";
       return toPrompt("TextPrompt", args, {
-        onSubmit: (str) => str.split(sep2).map((s) => s.trim())
+        onSubmit: (str) => str.split(sep3).map((s) => s.trim())
       });
     };
     $2.toggle = (args) => toPrompt("TogglePrompt", args);
@@ -13580,7 +13580,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve4.call(this, root, ref);
+      let _sch = resolve5.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -13607,7 +13607,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve4(root, ref) {
+    function resolve5(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -14238,7 +14238,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve4(baseURI, relativeURI, options) {
+    function resolve5(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -14496,7 +14496,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve4,
+      resolve: resolve5,
       resolveComponent,
       equal,
       serialize,
@@ -20163,7 +20163,7 @@ var require_compile2 = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve4.call(this, root, ref);
+      let _sch = resolve5.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -20190,7 +20190,7 @@ var require_compile2 = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve4(root, ref) {
+    function resolve5(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -28947,10 +28947,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep: sep2, value } = collItem;
+        const { start, key, sep: sep3, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep2?.[0],
+          next: key ?? sep3?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -28964,7 +28964,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep2) {
+          if (!keyProps.anchor && !keyProps.tag && !sep3) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map2.comment)
@@ -28988,7 +28988,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map2.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep2 ?? [], {
+        const valueProps = resolveProps.resolveProps(sep3 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -29004,7 +29004,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep2, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep3, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -29095,7 +29095,7 @@ var require_resolve_end = __commonJS({
       let comment = "";
       if (end) {
         let hasSpace = false;
-        let sep2 = "";
+        let sep3 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -29109,13 +29109,13 @@ var require_resolve_end = __commonJS({
               if (!comment)
                 comment = cb;
               else
-                comment += sep2 + cb;
-              sep2 = "";
+                comment += sep3 + cb;
+              sep3 = "";
               break;
             }
             case "newline":
               if (comment)
-                sep2 += source;
+                sep3 += source;
               hasSpace = true;
               break;
             default:
@@ -29158,18 +29158,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep: sep2, value } = collItem;
+        const { start, key, sep: sep3, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep2?.[0],
+          next: key ?? sep3?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep2 && !value) {
+          if (!props.anchor && !props.tag && !sep3 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -29223,8 +29223,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap && !sep2 && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep2, null, props, onError);
+        if (!isMap && !sep3 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep3, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -29236,7 +29236,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep2 ?? [], {
+          const valueProps = resolveProps.resolveProps(sep3 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -29247,8 +29247,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap && !props.found && ctx.options.strict) {
-              if (sep2)
-                for (const st of sep2) {
+              if (sep3)
+                for (const st of sep3) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -29265,7 +29265,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep2, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep3, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -29445,7 +29445,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep2 = "";
+      let sep3 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -29462,24 +29462,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep2 + indent.slice(trimIndent) + content;
-          sep2 = "\n";
+          value += sep3 + indent.slice(trimIndent) + content;
+          sep3 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep2 === " ")
-            sep2 = "\n";
-          else if (!prevMoreIndented && sep2 === "\n")
-            sep2 = "\n\n";
-          value += sep2 + indent.slice(trimIndent) + content;
-          sep2 = "\n";
+          if (sep3 === " ")
+            sep3 = "\n";
+          else if (!prevMoreIndented && sep3 === "\n")
+            sep3 = "\n\n";
+          value += sep3 + indent.slice(trimIndent) + content;
+          sep3 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep2 === "\n")
+          if (sep3 === "\n")
             value += "\n";
           else
-            sep2 = "\n";
+            sep3 = "\n";
         } else {
-          value += sep2 + content;
-          sep2 = " ";
+          value += sep3 + content;
+          sep3 = " ";
           prevMoreIndented = false;
         }
       }
@@ -29661,25 +29661,25 @@ var require_resolve_flow_scalar = __commonJS({
       if (!match)
         return source;
       let res = match[1];
-      let sep2 = " ";
+      let sep3 = " ";
       let pos = first.lastIndex;
       line.lastIndex = pos;
       while (match = line.exec(source)) {
         if (match[1] === "") {
-          if (sep2 === "\n")
-            res += sep2;
+          if (sep3 === "\n")
+            res += sep3;
           else
-            sep2 = "\n";
+            sep3 = "\n";
         } else {
-          res += sep2 + match[1];
-          sep2 = " ";
+          res += sep3 + match[1];
+          sep3 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep2 + (match?.[1] ?? "");
+      return res + sep3 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -30489,14 +30489,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep: sep2, value }) {
+    function stringifyItem({ start, key, sep: sep3, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep2)
-        for (const st of sep2)
+      if (sep3)
+        for (const st of sep3)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -31663,18 +31663,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep2;
+          let sep3;
           if (scalar.end) {
-            sep2 = scalar.end;
-            sep2.push(this.sourceToken);
+            sep3 = scalar.end;
+            sep3.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep2 = [this.sourceToken];
+            sep3 = [this.sourceToken];
           const map2 = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep: sep2 }]
+            items: [{ start, key: scalar, sep: sep3 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map2;
@@ -31827,15 +31827,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep2 = it.sep;
-                  sep2.push(this.sourceToken);
+                  const sep3 = it.sep;
+                  sep3.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep: sep2 }]
+                    items: [{ start: start2, key, sep: sep3 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -32029,13 +32029,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep2 = fc.end.splice(1, fc.end.length);
-            sep2.push(this.sourceToken);
+            const sep3 = fc.end.splice(1, fc.end.length);
+            sep3.push(this.sourceToken);
             const map2 = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep: sep2 }]
+              items: [{ start, key: fc, sep: sep3 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map2;
@@ -44614,8 +44614,8 @@ var init_handoff = __esm({
 });
 
 // src/index.ts
-var import_node_fs15 = require("fs");
-var import_node_path51 = require("path");
+var import_node_fs16 = require("fs");
+var import_node_path52 = require("path");
 
 // ../node_modules/commander/esm.mjs
 var import_index = __toESM(require_commander(), 1);
@@ -65555,7 +65555,7 @@ var retryifyAsync = (fn, options) => {
           throw error51;
         const delay2 = Math.round(interval * Math.random());
         if (delay2 > 0) {
-          const delayPromise = new Promise((resolve4) => setTimeout(resolve4, delay2));
+          const delayPromise = new Promise((resolve5) => setTimeout(resolve5, delay2));
           return delayPromise.then(() => attempt.apply(void 0, args));
         } else {
           return attempt.apply(void 0, args);
@@ -70425,9 +70425,9 @@ function createDocsCommand() {
     const repoRoot = await findProjectRoot();
     let fmFilter;
     if (opts.filter) {
-      const sep2 = opts.filter.indexOf("=");
-      if (sep2 !== -1) {
-        fmFilter = { field: opts.filter.slice(0, sep2), value: opts.filter.slice(sep2 + 1) };
+      const sep3 = opts.filter.indexOf("=");
+      if (sep3 !== -1) {
+        fmFilter = { field: opts.filter.slice(0, sep3), value: opts.filter.slice(sep3 + 1) };
       }
     }
     const scanOpts = { dir: opts.dir ?? "docs", pattern: opts.pattern, filter: fmFilter, recursive: false };
@@ -70707,9 +70707,9 @@ function createMemoryUpdateCommand() {
 `));
     console.log(kleur_default.dim(`  ${spinnerText}
 `));
-    const exitCode = await new Promise((resolve4) => {
+    const exitCode = await new Promise((resolve5) => {
       const proc = (0, import_node_child_process15.spawn)("specialists", args, { cwd, stdio: "inherit" });
-      proc.on("close", (code) => resolve4(code ?? 0));
+      proc.on("close", (code) => resolve5(code ?? 0));
     });
     if (exitCode !== 0) {
       console.error(kleur_default.red("\n  \u2717 memory-processor failed.\n"));
@@ -71441,7 +71441,7 @@ async function listReports(cwd) {
 }
 async function diffReports(cwd, a, b) {
   const reportsDir = import_path24.default.join(cwd, ".xtrm", "reports");
-  const resolve4 = async (ref) => {
+  const resolve5 = async (ref) => {
     if (await import_fs_extra39.default.pathExists(ref)) return ref;
     const candidate = import_path24.default.join(reportsDir, ref.endsWith(".md") ? ref : `${ref}.md`);
     if (await import_fs_extra39.default.pathExists(candidate)) return candidate;
@@ -71450,8 +71450,8 @@ async function diffReports(cwd, a, b) {
     console.error(kleur_default.red(`  No report matching "${ref}"`));
     process.exit(1);
   };
-  const pathA = await resolve4(a);
-  const pathB = await resolve4(b);
+  const pathA = await resolve5(a);
+  const pathB = await resolve5(b);
   const result = run3("diff", ["--unified=3", "--color=always", pathA, pathB], cwd);
   if (!result.out) {
     console.log(kleur_default.dim("\n  Reports are identical\n"));
@@ -75227,10 +75227,10 @@ function createMigrateCommand() {
           input: process.stdin,
           output: process.stdout
         });
-        const answer = await new Promise((resolve4) => {
+        const answer = await new Promise((resolve5) => {
           rl.question(
             kleur_default.yellow("  \u26A0  This will DELETE per-repo skills/hooks. Continue? [y/N] "),
-            resolve4
+            resolve5
           );
         });
         rl.close();
@@ -75297,6 +75297,95 @@ function createMigrateCommand() {
         reason: error51 instanceof Error ? error51.message : String(error51)
       });
       process.exitCode = 1;
+    }
+  });
+}
+
+// src/commands/version.ts
+var import_node_fs15 = require("fs");
+var import_node_path51 = require("path");
+var import_node_child_process29 = require("child_process");
+init_kleur();
+function readInstallPackageJson() {
+  const candidates = [
+    (0, import_node_path51.resolve)(__dirname, "..", "..", "package.json"),
+    (0, import_node_path51.resolve)(__dirname, "..", "package.json")
+  ];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse((0, import_node_fs15.readFileSync)(candidate, "utf8"));
+      if (parsed?.name && parsed?.version) {
+        return { name: parsed.name, version: parsed.version, root: (0, import_node_path51.dirname)(candidate) };
+      }
+    } catch {
+    }
+  }
+  return { name: "xtrm-tools", version: "0.0.0", root: (0, import_node_path51.resolve)(__dirname, "..", "..") };
+}
+function detectSource(installRoot) {
+  return installRoot.split(import_node_path51.sep).includes("node_modules") ? "npm" : "local";
+}
+function readGitCommit(installRoot) {
+  if (!(0, import_node_fs15.existsSync)((0, import_node_path51.resolve)(installRoot, ".git"))) return null;
+  const result = (0, import_node_child_process29.spawnSync)("git", ["rev-parse", "HEAD"], {
+    cwd: installRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+  if (result.status !== 0) return null;
+  return result.stdout.trim() || null;
+}
+function readGitDirty(installRoot) {
+  if (!(0, import_node_fs15.existsSync)((0, import_node_path51.resolve)(installRoot, ".git"))) return null;
+  const result = (0, import_node_child_process29.spawnSync)("git", ["status", "--porcelain"], {
+    cwd: installRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+  if (result.status !== 0) return null;
+  return result.stdout.trim().length > 0;
+}
+function readBuiltAt(installRoot) {
+  const distPath = (0, import_node_path51.resolve)(installRoot, "cli", "dist", "index.cjs");
+  if (!(0, import_node_fs15.existsSync)(distPath)) return null;
+  try {
+    const stats = require("fs").statSync(distPath);
+    return new Date(stats.mtime).toISOString();
+  } catch {
+    return null;
+  }
+}
+function collectVersionInfo() {
+  const pkg = readInstallPackageJson();
+  return {
+    package: pkg.name === "xtrm-cli" ? "xtrm-tools" : pkg.name,
+    version: pkg.version,
+    commit: readGitCommit(pkg.root),
+    dirty: readGitDirty(pkg.root),
+    source: detectSource(pkg.root),
+    built_at: readBuiltAt(pkg.root),
+    runtime: {
+      node: process.versions.node
+    }
+  };
+}
+function formatHuman(info) {
+  const commitStr = info.commit ? info.commit.slice(0, 7) + (info.dirty ? "-dirty" : "") : "unknown";
+  return [
+    `${kleur_default.bold(info.package)} ${info.version}`,
+    `  commit:   ${commitStr}`,
+    `  source:   ${info.source}`,
+    `  built at: ${info.built_at ?? "unknown"}`,
+    `  runtime:  node ${info.runtime.node}`
+  ].join("\n");
+}
+function createVersionCommand() {
+  return new Command("version").description("Print xtrm-tools build identity (package, version, commit, source, node runtime)").option("--json", "Emit machine-readable JSON", false).action((opts) => {
+    const info = collectVersionInfo();
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(info) + "\n");
+    } else {
+      process.stdout.write(formatHuman(info) + "\n");
     }
   });
 }
@@ -75458,7 +75547,7 @@ async function printBanner(version3) {
 // src/index.ts
 var version2 = "0.0.0";
 try {
-  version2 = JSON.parse((0, import_node_fs15.readFileSync)((0, import_node_path51.resolve)(__dirname, "../package.json"), "utf8")).version;
+  version2 = JSON.parse((0, import_node_fs16.readFileSync)((0, import_node_path52.resolve)(__dirname, "../package.json"), "utf8")).version;
 } catch {
 }
 var program2 = new Command();
@@ -75496,6 +75585,7 @@ program2.addCommand(createUpdateCommand());
 program2.addCommand(createReleaseCommand());
 program2.addCommand(createSpecCommand());
 program2.addCommand(createMigrateCommand());
+program2.addCommand(createVersionCommand());
 program2.addCommand(createHelpCommand());
 program2.action(async () => {
   program2.help();
