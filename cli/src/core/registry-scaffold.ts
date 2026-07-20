@@ -453,7 +453,17 @@ export async function installFromRegistry(params: {
     // Without this, freshly-init'd repos show as "incomplete" until the
     // operator manually copies registry.json from the xtrm-tools package
     // (see xtrm-ya2i).
-    if (!dryRun) {
+    //
+    // xtrm-5ts3l: when the "project" being installed into IS the xtrm-tools
+    // source repo (packageRoot === installRepoRoot), the snapshot target
+    // path IS the source registry itself. Filtered snapshotting-into-self
+    // would strip every global-scoped asset (hooks/skills/skills_optional)
+    // from the master registry — leaving only `config`. Skip in that case:
+    // the source registry is already authoritative and never needs seeding.
+    // installRepoRoot is derived from userXtrmDir (getContext); packageRoot is
+    // resolvePackageRoot(). Both internal, not user input.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    if (!dryRun && path.resolve(installRepoRoot) !== path.resolve(packageRoot)) {
         await fs.ensureDir(userXtrmDir);
         // Both inputs internal: userXtrmDir resolved by getContext from package
         // config; 'registry.json' is a hardcoded filename. No user input here.
