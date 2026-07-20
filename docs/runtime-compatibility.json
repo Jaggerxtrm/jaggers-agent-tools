@@ -1,0 +1,27 @@
+{
+  "schema_version": "xtrm.runtime-compatibility.v1",
+  "notes": [
+    "Declares Core's compatibility window against Specialists / xtmux / node.",
+    "Consumed by scripts/check-runtime-compatibility.mjs (build-time gate).",
+    "NOT enforced at CLI startup — see NON_GOALS in xtrm-f2pey.2. A future preflight can consult this file but must not hard-fail without operator opt-in.",
+    "Bumping a minimum here should coincide with the release PR that requires it (see ~/dev/11.md P1-06 for the target flow)."
+  ],
+  "core": {
+    "package": "xtrm-tools",
+    "requires": {
+      "specialists": ">=3.21.0 <4",
+      "xtmux": ">=0.1.0 <0.2",
+      "node": ">=24.0.0"
+    }
+  },
+  "contracts": {
+    "runtime_origin": "xtrm.runtime-origin.v1",
+    "interactive_role_envelope": "xtrm.interactive-role-envelope.v1",
+    "specialist_role_envelope": "1",
+    "xtmux_bridge": "xtrm.xtmux.bridge.v1",
+    "pi_extension_manifest": "xtrm.pi-extension-manifest.v1",
+    "command_deprecations": "xtrm.command-deprecations.v1",
+    "runtime_matrix": "xtrm.runtime-matrix.v1",
+    "runtime_compatibility": "xtrm.runtime-compatibility.v1"
+  }
+}
