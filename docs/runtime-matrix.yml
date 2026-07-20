@@ -1,0 +1,69 @@
+# xtrm runtime matrix
+#
+# Single source of truth for the runtime minimums of every repo in
+# the xtrm-tools stack. Consulted by operators when provisioning
+# fresh machines and by CI when validating release readiness.
+#
+# Whenever you bump a minimum in a repo's package.json engines
+# (Core), engines (xtmux packaging), or bun-version pin
+# (specialists), update this file in the same PR.
+#
+# Referenced by:
+#   - ~/dev/11.md §P1-08 (audit)
+#   - .github/workflows/fresh-machine-smoke.yml
+#   - .github/workflows/publish.yml
+#   - docs/runtime-compatibility.json (compatibility contract)
+
+schema_version: "xtrm.runtime-matrix.v1"
+
+core:
+  # Node-only Commander CLI. Bun not required.
+  primary_runtime: node
+  minimum: ">=24.0.0"
+  node_usage:
+    - "CLI entrypoint (cli/dist/index.cjs)"
+    - "Scripts under scripts/"
+  bun_usage: []
+  notes: >
+    Pinned to Node 24 LTS in v0.11.0 (PR #448). Older Node versions
+    will exit early via engines guard.
+
+xtmux:
+  # Bun-first runtime; Node used for packaging + one-shot scripts.
+  primary_runtime: bun
+  bun_minimum: ">=1.0.0"
+  node_usage:
+    - "npm packaging"
+    - "install scripts"
+  node_minimum: ">=20.0.0"
+  notes: >
+    xtmux's own binaries run under Bun. Node is only used when the
+    package is installed via npm (postinstall build steps).
+
+specialists:
+  # Bun-first runtime.
+  primary_runtime: bun
+  bun_minimum: ">=1.0.0"
+  node_usage:
+    - "select scripts (vendoring helpers)"
+    - "package tooling"
+  node_minimum: null
+  notes: >
+    sp binary uses `#!/usr/bin/env bun`. No Node minimum enforced —
+    call-sites that need node use whatever the local install provides.
+
+# Consumed-by matrix — which downstream CI/workflow steps depend on
+# each runtime minimum. Update when adding a new workflow.
+consumers:
+  - workflow: .github/workflows/ci.yml
+    repo: core
+    runtime: node
+  - workflow: .github/workflows/publish.yml
+    repo: core
+    runtime: node
+  - workflow: .github/workflows/pre-publish-readiness.yml
+    repo: core
+    runtime: node
+  - workflow: .github/workflows/fresh-machine-smoke.yml
+    repo: core+specialists
+    runtime: node+bun
