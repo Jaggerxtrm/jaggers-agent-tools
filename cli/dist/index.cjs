@@ -63157,7 +63157,7 @@ Examples:
         return;
       }
     }
-    const repoRoot = await findRepoRoot();
+    const repoRoot = resolveMainProjectRoot(process.cwd());
     await runClaudeRuntimeSyncPhase({ repoRoot, dryRun: opts.dryRun, isGlobal: false });
   });
   cmd.command("reload").alias("reinstall").description("[deprecated] Use xt claude install (planned removal: v0.13.0)").option("-y, --yes", "Skip confirmation prompt", false).action(async (opts) => {
@@ -63171,7 +63171,7 @@ Examples:
       console.log(kleur_default.dim("  Cancelled\n"));
       return;
     }
-    const repoRoot = await findRepoRoot();
+    const repoRoot = resolveMainProjectRoot(process.cwd());
     await runClaudeRuntimeSyncPhase({ repoRoot, dryRun: false, isGlobal: false });
   });
   cmd.command("status").description("Show Claude CLI version and .xtrm hook wiring status").action(async () => {
@@ -63184,7 +63184,7 @@ Examples:
       console.log("");
       return;
     }
-    const repoRoot = await findRepoRoot();
+    const repoRoot = resolveMainProjectRoot(process.cwd());
     const settingsPath = getProjectSettingsPath(repoRoot);
     if (hasXtrmHookWiring(settingsPath)) {
       console.log(t.success(`  \u2713 Claude hooks wired (${settingsPath})`));
@@ -63210,7 +63210,7 @@ Examples:
       console.log(kleur_default.red("  \u2717 claude CLI not found \u2014 install Claude Code"));
       allOk = false;
     }
-    const repoRoot = await findRepoRoot();
+    const repoRoot = resolveMainProjectRoot(process.cwd());
     const settingsPath = getProjectSettingsPath(repoRoot);
     if (hasXtrmHookWiring(settingsPath)) {
       console.log(t.success("  \u2713 .xtrm hooks are wired in .claude/settings.json"));

@@ -3,7 +3,7 @@ import kleur from 'kleur';
 import { execSync } from 'node:child_process';
 import fs from 'fs-extra';
 import path from 'node:path';
-import { findRepoRoot } from '../utils/repo-root.js';
+import { resolveMainProjectRoot } from '../utils/repo-root.js';
 import { t } from '../utils/theme.js';
 import { runClaudeRuntimeSyncPhase } from '../core/claude-runtime-sync.js';
 import { launchWorktreeSession } from '../utils/worktree-session.js';
@@ -129,7 +129,7 @@ Examples:
                 }
             }
 
-            const repoRoot = await findRepoRoot();
+            const repoRoot = resolveMainProjectRoot(process.cwd());
             await runClaudeRuntimeSyncPhase({ repoRoot, dryRun: opts.dryRun, isGlobal: false });
         });
 
@@ -149,7 +149,7 @@ Examples:
                 return;
             }
 
-            const repoRoot = await findRepoRoot();
+            const repoRoot = resolveMainProjectRoot(process.cwd());
             await runClaudeRuntimeSyncPhase({ repoRoot, dryRun: false, isGlobal: false });
         });
 
@@ -167,7 +167,7 @@ Examples:
                 return;
             }
 
-            const repoRoot = await findRepoRoot();
+            const repoRoot = resolveMainProjectRoot(process.cwd());
             const settingsPath = getProjectSettingsPath(repoRoot);
             if (hasXtrmHookWiring(settingsPath)) {
                 console.log(t.success(`  ✓ Claude hooks wired (${settingsPath})`));
@@ -201,7 +201,7 @@ Examples:
                 allOk = false;
             }
 
-            const repoRoot = await findRepoRoot();
+            const repoRoot = resolveMainProjectRoot(process.cwd());
             const settingsPath = getProjectSettingsPath(repoRoot);
             if (hasXtrmHookWiring(settingsPath)) {
                 console.log(t.success('  ✓ .xtrm hooks are wired in .claude/settings.json'));
