@@ -96,6 +96,22 @@ jobs:
       - name: Check asset contract
         run: node scripts/verify-asset-contract.mjs --contract ./specialists-src/dist/asset-contract.json --vendor-root .xtrm/skills/default
 
+      - name: Pack for install-update UX smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --json > /tmp/xtrm-pack.json
+          tarball="$(jq -r '.[0].filename' /tmp/xtrm-pack.json)"
+          cp "$tarball" /tmp/xtrm-tools.tgz
+          echo "Packed $tarball for smoke"
+
+      - name: Install-update UX smoke on packed tarball
+        # Additive publish gate: proves the exact tarball we're about to
+        # publish installs cleanly and behaves correctly on a fresh HOME
+        # (retired tokens, ownership-safe clean, redaction, packaged Pi
+        # resolver). If this fails, publish must not proceed.
+        run: node scripts/install-update-ux-smoke.mjs /tmp/xtrm-tools.tgz
+
       - name: Publish xtrm-tools to npm
         run: npm publish --provenance
         env:

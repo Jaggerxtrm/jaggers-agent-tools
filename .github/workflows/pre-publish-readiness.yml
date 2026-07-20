@@ -108,6 +108,18 @@ jobs:
       - name: npm pack dry-run
         run: npm pack --dry-run
 
+      - name: Pack for install-update UX smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --json > /tmp/xtrm-pack.json
+          tarball="$(jq -r '.[0].filename' /tmp/xtrm-pack.json)"
+          cp "$tarball" /tmp/xtrm-tools.tgz
+          echo "Packed $tarball for smoke"
+
+      - name: Install-update UX smoke on packed tarball
+        run: node scripts/install-update-ux-smoke.mjs /tmp/xtrm-tools.tgz
+
       - name: Readiness summary
         if: success()
         run: echo "✅ All publish gates green. Safe to tag and release."
