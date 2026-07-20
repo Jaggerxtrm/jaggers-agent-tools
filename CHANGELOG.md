@@ -9,9 +9,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.11.1] - 2026-07-20
 
-- Consolidated the operator path around `xt init` (first-time bootstrap), `xt update [--apply]` (routine refresh/repair), `xt doctor` (diagnosis), and `xt migrate` (explicit one-time migrations). Existing bootstrap, cleanup, and runtime repair verbs remain compatibility aliases with replacement guidance through v0.13.0.
+### Added
+
+- **Allow launch overrides without roles (#433)** ([981d0b6](https://github.com/xtrm-dev/core/commit/981d0b6ea3c23adb72e8d6d495c7ee5ca52eb7c4)) — 2026-07-17 00:39
+
+- **Consolidate setup/update/repair/doctor command UX (xtrm-f42ns.8) (#446)** ([f9496e1](https://github.com/xtrm-dev/core/commit/f9496e140ec83522c745a8d447750cec507d34b2)) — 2026-07-20 11:20
+
+### Deprecated
+
+PR #446 introduced the canonical operator surface (`xt init`, `xt update [--apply]`, `xt doctor`, `xt migrate`, `xt pi setup`). The commands below remain as compatibility shims with replacement guidance and are scheduled for removal in `v0.13.0`. Do not re-run `npm run changelog:update -- --tag v0.11.1` against a released commit — it regenerates this subsection from `git log` and would drop this table.
+
+| Deprecated command    | Since  | Removed in | Replacement                                    |
+| --------------------- | ------ | ---------- | ---------------------------------------------- |
+| `xt bootstrap`        | 0.11.1 | 0.13.0     | `xt init` (first-time) / `xt update --apply`   |
+| `xt clean`            | 0.11.1 | 0.13.0     | `xt update [--apply] --repo <path>`            |
+| `xt pi install`       | 0.11.1 | 0.13.0     | `xt update --apply --repo <path>`              |
+| `xt pi reload`        | 0.11.1 | 0.13.0     | `xt update --apply --repo <path>`              |
+| `xt pi doctor`        | 0.11.1 | 0.13.0     | `xt doctor --repo <path>`                      |
+| `xt claude reload`    | 0.11.1 | 0.13.0     | `xt update --apply --repo <path>`              |
+| `xt claude reinstall` | 0.11.1 | 0.13.0     | `xt update --apply --repo <path>`              |
+| `xt claude doctor`    | 0.11.1 | 0.13.0     | `xt doctor --repo <path>`                      |
+
+### Fixed
+
+- **Seed Claude permission defaults (#434)** ([d1bfcda](https://github.com/xtrm-dev/core/commit/d1bfcda242822c78018fd23956c5118f28d141c4)) — 2026-07-17 22:21
+
+- **Allow leading slash in bare-mode --prompt (checkPositionZeroSlash) (#439)** ([180aea7](https://github.com/xtrm-dev/core/commit/180aea7111b00df24ec63ca310561c8dbbed8bb1)) — 2026-07-18 10:31
+
+- **Resolve packaged Pi config from .xtrm/config/pi (xtrm-f42ns.3) (#440)** ([bf1799e](https://github.com/xtrm-dev/core/commit/bf1799ed4cabebd10464eed68f60a1b168129a9e)) — 2026-07-19 13:22
+
+- **Unify Pi extension ownership across setup and package modes (xtrm-f42ns.4) (#441)** ([9137e69](https://github.com/xtrm-dev/core/commit/9137e6975a4af4ff53484af7c239c350ad66b184)) — 2026-07-19 14:46
+
+- **Make xt clean ownership-safe on current layouts (xtrm-f42ns.7) (#442)** ([ba07a00](https://github.com/xtrm-dev/core/commit/ba07a00064b6ce0372781a46e183c272fdc924aa)) — 2026-07-19 14:59
+
+- **Make xt update reconcile Pi state when registry is current (xtrm-f42ns.5) (#443)** ([cfac358](https://github.com/xtrm-dev/core/commit/cfac35846c501ec65b2f220924a5130314021b34)) — 2026-07-19 22:28
+
+- **Xt claude subcommands resolve target project via resolveMainProjectRoot (xtrm-9635h) (#450)** ([0384241](https://github.com/xtrm-dev/core/commit/03842417ba3232ee6888197d2fe1e704dc15197f)) — 2026-07-20 14:53
+
+- **Guard installFromRegistry snapshot when packageRoot === installRepoRoot (xtrm-5ts3l) (#452)** ([cf43952](https://github.com/xtrm-dev/core/commit/cf43952ad7dfad818b3901b4dcddfb09703a6fa0)) — 2026-07-20 15:50
+
+### Other changes
+
+- **Drop permissionsDefaults seed (PR #434) — mechanism was unneeded (#438)** ([e96d499](https://github.com/xtrm-dev/core/commit/e96d49956c311c40124dd8dc7d8c62b2b4d44d0c)) — 2026-07-18 09:18
+
+### Project maintenance
+
+- **Memory system evolution (r6g research) (#435)** ([17e3f87](https://github.com/xtrm-dev/core/commit/17e3f872912ec21aef5d30dc2cada39bae3723ab)) — 2026-07-18 00:09
+
+- **Document bare xt claude/pi --prompt launch mode (post PR #433) (#437)** ([807d9bc](https://github.com/xtrm-dev/core/commit/807d9bc183c50b39b37ec9dff0946f4c4ab6aceb)) — 2026-07-18 10:43
+
+- **Remove dead install guidance and guard retired pi install (xtrm-f42ns.6) (#444)** ([6b2f14e](https://github.com/xtrm-dev/core/commit/6b2f14e950f68e714682f8641350151795779cff)) — 2026-07-19 22:53
+
+- **Add install update UX pack smoke (#445)** ([76d37bc](https://github.com/xtrm-dev/core/commit/76d37bcb6e9a5286dc69758463949081aec89f3e)) — 2026-07-20 10:49
+
+- **Fix update.test.ts stale mock + help expectations post-f42ns.8 (xtrm-f42ns.10) (#447)** ([ac7ec7f](https://github.com/xtrm-dev/core/commit/ac7ec7f6194ccdef44e1f953da6f2a7a73e37fa6)) — 2026-07-20 11:33
+
+- **Align repo to Node 24 LTS (xtrm-y21vz) (#448)** ([bda3571](https://github.com/xtrm-dev/core/commit/bda3571cec6385e087428aca0069e69cf3c622e1)) — 2026-07-20 12:27
+
+- **Fix update.test.ts remaining regressions post-f42ns.8 (#449)** ([72bbfb4](https://github.com/xtrm-dev/core/commit/72bbfb43582ba01712e7809e875de38f6eaf4ea2)) — 2026-07-20 12:48
+
+- **Harden HOME leak guard + strip env leaks + exclude worktrees from root vitest (xtrm-on2mk) (#451)** ([e8cd33b](https://github.com/xtrm-dev/core/commit/e8cd33be5ae7c40a7e9c57a837ad546ff39d4348)) — 2026-07-20 14:53
 
 ## [0.11.0] - 2026-07-16
 
