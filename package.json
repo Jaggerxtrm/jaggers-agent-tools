@@ -79,7 +79,7 @@
     "check:payload-hygiene": "node scripts/check-payload-hygiene.mjs"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "dependencies": {
     "comment-json": "^4.2.3",
