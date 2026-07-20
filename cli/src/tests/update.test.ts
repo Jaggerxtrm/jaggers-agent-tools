@@ -441,7 +441,7 @@ describe('xtrm update', () => {
     await runUpdateCli(['--apply', '--repo', repo]);
 
     expect(logBootstrapTriggerMock).toHaveBeenCalledWith({ command: 'update', cwd: tmpDir, pkgVersion: '1.2.3' });
-    expect(ensureGlobalSkillsBootstrappedMock).toHaveBeenCalledWith(packageRoot);
+    expect(ensureGlobalSkillsBootstrappedMock).toHaveBeenCalledWith(packageRoot, {});
     expect(logBootstrapTriggerMock.mock.invocationCallOrder[0]).toBeLessThan(checkDriftMock.mock.invocationCallOrder[0]);
     expect(ensureGlobalSkillsBootstrappedMock.mock.invocationCallOrder[0]).toBeLessThan(checkDriftMock.mock.invocationCallOrder[0]);
   });
@@ -484,8 +484,7 @@ describe('xtrm update', () => {
   it('help mentions package freshness and refresh behavior', async () => {
     const command = createUpdateCommand();
     const help = await command.helpInformation();
-    expect(help).toContain('global xt Pi packages');
-    expect(help).toContain('missing or outdated packages');
+    expect(help).toContain('Routine refresh and repair for xtrm-managed files, runtimes, hooks, skills, and packages');
     expect(help).toContain('--all-repos');
   });
 });
