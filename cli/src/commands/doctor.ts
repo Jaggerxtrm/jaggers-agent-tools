@@ -10,6 +10,7 @@ import { getXtManagedPiPackageDoctorReport, type XtManagedPiPackageDoctorReport 
 import { discoverDefaultSkills, type DiscoveredSkill } from '../core/skill-discovery.js';
 import { ensureBeadsSharedServerEnabled, hasBeadsDir, type SharedBeadsServerState } from '../core/beads-shared-server.js';
 import { findProjectRoot } from '../utils/repo-root.js';
+import { auditSettings, type SettingsAuditOutcome, type SettingsFinding } from '../core/settings-audit.js';
 
 interface CheckJson {
   managed_sections: Array<{ name: string; version: string; canonical_version: string | null }>;
@@ -333,8 +334,108 @@ function hasCatBIssues(report: CatBJson): boolean {
     || report.duplicates.length > 0;
 }
 
+const FINDING_LABEL: Record<SettingsFinding['kind'], string> = {
+  'dead-hook-command': 'dead hook command',
+  'duplicate-registration': 'duplicate registration',
+  'duplicate-of-global': 'duplicates global',
+  'legacy-path': 'legacy path',
+  'dangling-reference': 'dangling reference',
+  'orphaned-key': 'orphaned key',
+};
+
+function renderSettingsAudit(outcome: SettingsAuditOutcome): void {
+  console.log(`\n${kleur.bold('xt doctor settings')} ${kleur.dim('(read-only)')}\n`);
+
+  section('Scanned');
+  if (outcome.scanned.length === 0) warn('no settings.json found in the requested scope');
+  for (const file of outcome.scanned) console.log(`  ${kleur.dim(file)}`);
+
+  const byFile = new Map<string, SettingsFinding[]>();
+  for (const finding of outcome.planned) {
+    const bucket = byFile.get(finding.file) ?? [];
+    bucket.push(finding);
+    byFile.set(finding.file, bucket);
+  }
+
+  section('Findings');
+  if (outcome.planned.length === 0) {
+    ok('no findings');
+  } else {
+    for (const [file, findings] of byFile) {
+      console.log(`\n  ${kleur.bold(file)}  ${kleur.dim(`(${findings.length})`)}`);
+      const table = new Table({
+        head: [kleur.bold('Kind'), kleur.bold('Subject'), kleur.bold('Evidence')],
+        style: { head: [], border: [] },
+        wordWrap: true,
+        colWidths: [24, 52, 56],
+      });
+      for (const finding of findings) table.push([FINDING_LABEL[finding.kind], finding.subject, finding.evidence]);
+      console.log(table.toString());
+      for (const remediation of new Set(findings.map(f => f.remediation))) fix(remediation);
+    }
+  }
+
+  section('Preserved');
+  if (outcome.preserved.length === 0) {
+    ok('nothing needed preserving');
+  } else {
+    console.log(kleur.dim('  left alone — ownership is never inferred from absence'));
+    for (const item of outcome.preserved) {
+      warn(`${item.classification.padEnd(20)} ${item.subject}`);
+      console.log(`    ${kleur.dim(item.reason)}`);
+    }
+  }
+
+  if (outcome.failed.length > 0) {
+    section('Failed');
+    for (const failure of outcome.failed) warn(`${failure.file}: ${failure.error}`);
+  }
+
+  console.log('');
+  console.log(`  ${outcome.planned.length === 0 ? kleur.green('✓') : kleur.yellow('○')} ${outcome.planned.length} finding(s), ${outcome.preserved.length} preserved, ${outcome.failed.length} failed`);
+  console.log(kleur.dim('  read-only — nothing was written. --fix is deferred (xtrm-kdwvu §3).'));
+  console.log('');
+}
+
+function createDoctorSettingsCommand(): Command {
+  return new Command('settings')
+    .description('Read-only audit of the settings.json files the installer writes into')
+    .option('--cwd <path>', 'Project to audit (default: nearest project root)')
+    .option('--scope <scope>', 'home | project | all', 'all')
+    .option('--scan-all-repos', 'Audit every xt consumer project under ~/dev and ~/projects', false)
+    .option('--json', 'Output machine-readable ReconciliationOutcome/1 JSON', false)
+    .action(async (opts: { cwd?: string; scope?: string; scanAllRepos?: boolean; json?: boolean }, cmd: Command) => {
+      // `doctor` declares --json and --cwd too. Commander v14 resolves a flag
+      // the parent also declares onto the PARENT, leaving the subcommand's copy
+      // at its default — so read both. Declaring them here keeps `--help` honest.
+      const parentOpts = (cmd.parent?.opts() ?? {}) as { cwd?: string; json?: boolean };
+      const json = Boolean(opts.json || parentOpts.json);
+      const cwdOpt = opts.cwd ?? parentOpts.cwd;
+
+      const scope = opts.scope ?? 'all';
+      if (scope !== 'home' && scope !== 'project' && scope !== 'all') {
+        throw new Error(`--scope must be home, project or all (got: ${scope})`);
+      }
+
+      const projectRoot = opts.scanAllRepos
+        ? undefined
+        : (cwdOpt ? path.resolve(cwdOpt) : await findProjectRoot().catch(() => undefined));
+
+      const outcome = await auditSettings({
+        projectRoot,
+        scope,
+        scanAllRepos: opts.scanAllRepos,
+      });
+
+      if (json) console.log(JSON.stringify(outcome, null, 2));
+      else renderSettingsAudit(outcome);
+
+      if (outcome.planned.length > 0 || outcome.failed.length > 0) process.exitCode = 1;
+    });
+}
+
 export function createDoctorCommand(): Command {
-  return new Command('doctor')
+  const doctor = new Command('doctor')
     .description('Canonical diagnosis for xtrm-managed project and runtime surfaces')
     .option('--cwd <path>', 'Operate on this directory (default: process.cwd())')
     .option('--json', 'Output machine-readable JSON', false)
@@ -387,4 +488,7 @@ export function createDoctorCommand(): Command {
       }
       console.log('');
     });
+
+  doctor.addCommand(createDoctorSettingsCommand());
+  return doctor;
 }
