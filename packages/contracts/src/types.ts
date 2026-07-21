@@ -21,6 +21,7 @@ export const SCHEMA_ID = {
     xtmuxBridge: 'xtrm.xtmux.bridge.v1',
     agentRoleLaunched: 'xtrm.agent-role-launched.v1',
     specialistRoleEnvelope: 'xtrm.specialist-role-envelope.v1',
+    topologyProjection: 'xtrm.topology.projection.v1',
 } as const;
 
 export type SchemaId = (typeof SCHEMA_ID)[keyof typeof SCHEMA_ID];
@@ -331,6 +332,112 @@ export interface SpecialistRoleEnvelopeV1 {
 }
 
 /** Map from schema id to its TypeScript payload type. */
+// --- xtrm.topology.projection.v1 ---
+/**
+ * Owning system behind one projection source. Each maps to one published
+ * read-only CLI surface; Core never reads another repo's database directly.
+ */
+export type TopologySourceName = 'xtmux' | 'tmux' | 'specialists' | 'beads' | 'git' | 'github';
+/**
+ * `unavailable` (binary absent) vs `error` (present but failed) is a load-bearing
+ * distinction: only the latter is a bug signal.
+ */
+export type TopologySourceStatus = 'ok' | 'unavailable' | 'error';
+export interface TopologySource {
+    name: TopologySourceName;
+    status: TopologySourceStatus;
+    reason: string | null;
+    duration_ms: number;
+}
+/** Lineage published by Core's launcher as `@agent_*` pane options (PR #465). */
+export interface TopologyPaneAgent {
+    /** Runtime lifecycle signal — never a completion signal. */
+    state: string | null;
+    /** `@agent_role` (audit P2-03); `task` keeps the legacy `role:<name>` encoding. */
+    role: string | null;
+    task: string | null;
+    bead_id: string | null;
+    worktree: string | null;
+    /** For a coordinator pane, also the integration target its chains derive from. */
+    branch: string | null;
+    parent_session_id: string | null;
+    parent_pane_id?: string | null;
+    instance_id?: string | null;
+}
+export interface TopologyJob {
+    job_id: string;
+    specialist: string;
+    /** Specialists-owned vocabulary, passed through unreinterpreted. */
+    status: string;
+    bead_id: string | null;
+    epic_id?: string | null;
+    chain_id?: string | null;
+    chain_root_job_id?: string | null;
+    is_chain_root: boolean;
+    branch: string | null;
+    worktree_path: string | null;
+    integration_target_branch?: string | null;
+    started_at_ms?: number | null;
+    owning_pane_id?: string | null;
+}
+export interface TopologyBead {
+    id: string;
+    /** One of the two authoritative completion signals (with `merged_at`). */
+    status: string;
+    title?: string | null;
+    issue_type?: string | null;
+    priority?: number | null;
+    parent_id?: string | null;
+}
+export interface TopologyWorktree {
+    path: string;
+    branch: string | null;
+    head_sha: string | null;
+    detached: boolean;
+    /** Length > 1 is a worktree collision. */
+    shared_by_pane_ids?: string[];
+}
+export interface TopologyPullRequest {
+    number: number;
+    state: string;
+    url?: string | null;
+    title?: string | null;
+    head_branch: string;
+    base_branch?: string | null;
+    is_draft?: boolean | null;
+    /** Authoritative completion signal. */
+    merged_at?: string | null;
+    checks_state?: string | null;
+}
+export interface TopologyPane {
+    pane_id: string;
+    session_id: string;
+    session_name: string;
+    window_id?: string | null;
+    current_command: string;
+    current_path: string;
+    /** Null for a pane that is not an xtrm-launched agent. */
+    agent: TopologyPaneAgent | null;
+    jobs: TopologyJob[];
+    bead: TopologyBead | null;
+    worktree: TopologyWorktree | null;
+    pull_request: TopologyPullRequest | null;
+}
+/**
+ * A read-only snapshot, recomputed per invocation from live sources. Nothing here
+ * is cached, materialized or written back, and no field is authoritative over its
+ * source. There is deliberately no pane-capture/preview/output field at any level.
+ */
+export interface TopologyProjectionV1 {
+    schema_version: 'xtrm.topology.projection.v1';
+    generated_at_ms: number;
+    host: { host_id: string; tmux_server_id?: string | null };
+    sources: TopologySource[];
+    panes: TopologyPane[];
+    /** Facts belonging to no live pane — the leak an operator needs to see. */
+    orphans: { jobs: TopologyJob[]; worktrees: TopologyWorktree[] };
+}
+
 export interface ContractTypeMap {
     'xtrm.runtime-compatibility.v1': RuntimeCompatibilityV1;
     'xtrm.interactive-role-envelope.v1': InteractiveRoleEnvelopeV1;
@@ -348,4 +455,5 @@ export interface ContractTypeMap {
     'xtrm.xtmux.bridge.v1': XtmuxBridgeV1;
     'xtrm.agent-role-launched.v1': AgentRoleLaunchedV1;
     'xtrm.specialist-role-envelope.v1': SpecialistRoleEnvelopeV1;
+    'xtrm.topology.projection.v1': TopologyProjectionV1;
 }

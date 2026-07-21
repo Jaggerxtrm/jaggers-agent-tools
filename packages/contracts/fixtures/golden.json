@@ -241,5 +241,127 @@
             },
             "prompt": { "task_template": "Summarize the following text.\n\n$content", "output_schema": { "required": ["summary"] } }
         }
+    },
+    "xtrm.topology.projection.v1": {
+        "schema_version": "xtrm.topology.projection.v1",
+        "generated_at_ms": 1784656342032,
+        "host": { "host_id": "workstation", "tmux_server_id": "default" },
+        "sources": [
+            { "name": "xtmux", "status": "ok", "reason": null, "duration_ms": 41 },
+            { "name": "tmux", "status": "ok", "reason": null, "duration_ms": 12 },
+            { "name": "specialists", "status": "ok", "reason": null, "duration_ms": 88 },
+            { "name": "beads", "status": "ok", "reason": null, "duration_ms": 61 },
+            { "name": "git", "status": "ok", "reason": null, "duration_ms": 9 },
+            { "name": "github", "status": "unavailable", "reason": "gh not found on PATH", "duration_ms": 0 }
+        ],
+        "panes": [
+            {
+                "pane_id": "%1656",
+                "session_id": "$1495",
+                "session_name": "role-claude-chain-coordinator-xtrm-6hey0",
+                "window_id": "@88",
+                "current_command": "claude",
+                "current_path": "/repo/.xtrm/worktrees/coordinator-epic",
+                "agent": {
+                    "state": "idle",
+                    "role": "chain-coordinator",
+                    "task": "role:chain-coordinator",
+                    "bead_id": "xtrm-6hey0",
+                    "worktree": "/repo/.xtrm/worktrees/coordinator-epic",
+                    "branch": "xt/coordinator-epic",
+                    "parent_session_id": "$1"
+                },
+                "jobs": [
+                    {
+                        "job_id": "382786",
+                        "specialist": "executor",
+                        "status": "running",
+                        "bead_id": "xtrm-6hey0.1",
+                        "epic_id": "xtrm-6hey0",
+                        "chain_id": "382786",
+                        "chain_root_job_id": "382786",
+                        "is_chain_root": true,
+                        "branch": "sp/executor-382786",
+                        "worktree_path": "/repo/.worktrees/xtrm-6hey0.1/executor",
+                        "integration_target_branch": "xt/coordinator-epic",
+                        "started_at_ms": 1784211149565,
+                        "owning_pane_id": "%1656"
+                    }
+                ],
+                "bead": {
+                    "id": "xtrm-6hey0",
+                    "status": "in_progress",
+                    "title": "[epic] coordinator invariants",
+                    "issue_type": "epic",
+                    "priority": 1,
+                    "parent_id": null
+                },
+                "worktree": {
+                    "path": "/repo/.xtrm/worktrees/coordinator-epic",
+                    "branch": "xt/coordinator-epic",
+                    "head_sha": "15888bbf47122aea9b5732a487a075d18c041249",
+                    "detached": false,
+                    "shared_by_pane_ids": ["%1656"]
+                },
+                "pull_request": {
+                    "number": 466,
+                    "state": "MERGED",
+                    "url": "https://github.com/xtrm-dev/core/pull/466",
+                    "title": "feat(cli): coordinator launch validation",
+                    "head_branch": "xt/coordinator-epic",
+                    "base_branch": "main",
+                    "is_draft": false,
+                    "merged_at": "2026-07-21T17:04:11Z",
+                    "checks_state": "SUCCESS"
+                }
+            },
+            {
+                "pane_id": "%2",
+                "session_id": "$1",
+                "session_name": "orch",
+                "window_id": null,
+                "current_command": "zsh",
+                "current_path": "/repo",
+                "agent": null,
+                "jobs": [],
+                "bead": null,
+                "worktree": {
+                    "path": "/repo",
+                    "branch": "main",
+                    "head_sha": "15888bbf47122aea9b5732a487a075d18c041249",
+                    "detached": false,
+                    "shared_by_pane_ids": ["%2"]
+                },
+                "pull_request": null
+            }
+        ],
+        "orphans": {
+            "jobs": [
+                {
+                    "job_id": "371002",
+                    "specialist": "reviewer",
+                    "status": "error",
+                    "bead_id": "xtrm-h42ka.3",
+                    "epic_id": "xtrm-h42ka",
+                    "chain_id": "371002",
+                    "chain_root_job_id": "371002",
+                    "is_chain_root": true,
+                    "branch": "feature/xtrm-h42ka.3-reviewer",
+                    "worktree_path": "/repo/.worktrees/xtrm-h42ka.3/reviewer",
+                    "integration_target_branch": null,
+                    "started_at_ms": 1784211149565,
+                    "owning_pane_id": null
+                }
+            ],
+            "worktrees": [
+                {
+                    "path": "/repo/.xtrm/worktrees/core-postmerge-425",
+                    "branch": null,
+                    "head_sha": "5a8326d16625f291ee778175c8b2db39271bf20a",
+                    "detached": true,
+                    "shared_by_pane_ids": []
+                }
+            ]
+        }
     }
 }

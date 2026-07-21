@@ -39,6 +39,10 @@ Lineage/observability: `xtrm.runtime-origin.v1`, `xtrm.branch.integration.v1`,
 xtmux runtime: `xtrm.xtmux.topology.v1`, `xtrm.xtmux.message.v1`, `xtrm.xtmux.obligation.v1`,
 `xtrm.xtmux.monitor.v1`, `xtrm.xtmux.wait.v1`, `xtrm.xtmux.bridge.v1`, `xtrm.agent-role-launched.v1`.
 Legacy specialists: `xtrm.specialist-role-envelope.v1` (registry version `"1"`).
+Aggregation: `xtrm.topology.projection.v1` — the read-only join across xtmux, tmux,
+Specialists, Beads, git and GitHub emitted by `xt topology --json` (audit P2-05). It is a
+per-invocation snapshot, never a persisted graph, and it deliberately cannot carry pane
+capture: no content/preview/output field exists at any level.
 
 Each schema documents its authoritative source file in its `description`. The
 JSON Schema is the source of truth — the TS types mirror it and the fixture test
