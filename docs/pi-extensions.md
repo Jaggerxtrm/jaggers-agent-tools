@@ -126,10 +126,17 @@ Worktrees reuse the same package model; no extension source mirroring from legac
 
 Beads workflow enforcement for Pi. Implements claim-based edit gates and session lifecycle:
 
-- **Edit gate**: Blocks file edits when no beads issue is claimed
-- **Commit gate**: Blocks `git commit` when claimed issue is still in_progress
-- **Close tracking**: On `bd close`, marks `closed-this-session` KV to trigger memory gate
-- **Memory gate**: Nudges (non-blocking `sendUserMessage`) with 4-criteria filter when a claim was closed this session
+- **Edit gate**: Blocks file edits when no beads issue is claimed. The active claim is resolved
+  once per run and cached (run-scoped), invalidated only when a claim/close/KV mutation is
+  observed — no per-edit `bd` subprocess after the first resolution. There is no `bd list` board
+  scan fallback (xtrm-64pl0): within a beads project an unclaimed edit blocks directly, so
+  empty-board edits require a claim too.
+- **Commit gate**: Blocks `git commit` when the claimed issue is still in_progress.
+- **Close tracking**: On `bd close`, marks `closed-this-session` KV and verifies the per-issue
+  memory ack (`memory-acked:<id>`); a close without an ack is blocked with remediation guidance.
+- **Memory gate**: Silent — the reminder is injected into the `bd close` tool_result (agent-visible
+  only, no UI notify). Marker hygiene runs once at `session_shutdown` (xtrm-64pl0 consolidated the
+  previous duplicate `agent_end` + `session_shutdown` subprocess checks).
 
 ### `session-flow`
 
@@ -217,7 +224,7 @@ scroll, and PageUp/PageDown page.
 
 - `quality-gates` — TypeScript/Python linting on file edit
 - `service-skills` — Service skill routing and activation
-- `custom-footer` — 2-line status bar with claim/open issues
+- `custom-footer` — 3-line status bar (path/branch, context/model, one compact cached beads line); pure reader of `.xtrm/cache/beads-status.json` with no `bd` subprocess on render/startup and no expandable tree (xtrm-64pl0)
 - `xtrm-ui` — XTRM themes, header, editor density, and native/external tool rendering
 - `sp-terminal-overlay` — centered overlay for streaming `sp feed -f`, snapshot `sp ps`, and arbitrary shell commands
 - `serena-pool` — shared Serena MCP daemon per repo root with deterministic ports, `SERENA_MCP_PORT` wiring, and ownership-based orphan cleanup

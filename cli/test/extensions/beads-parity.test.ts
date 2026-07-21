@@ -58,8 +58,10 @@ describe("Pi beads extension parity", () => {
 		expect(result?.content?.[1]?.text).toContain("Beads Memory Gate");
 	});
 
-	it("memory gate is silent at agent_end — injected into bd close tool_result instead", async () => {
+	it("runs the memory gate once at session_shutdown (not agent_end) and stays silent", async () => {
+		const calls: string[][] = [];
 		(SubprocessRunner.run as any).mockImplementation(async (_cmd: string, args: string[]) => {
+			calls.push(args);
 			if (args[0] === "kv" && args[1] === "get" && `${args[2]}`.startsWith("closed-this-session:")) {
 				return { code: 0, stdout: "xtrm-123\n", stderr: "" };
 			}
@@ -68,12 +70,15 @@ describe("Pi beads extension parity", () => {
 
 		beadsExtension(harness.pi);
 
+		// xtrm-64pl0: agent_end no longer runs the memory gate (was a duplicate per-turn check).
 		await harness.emit("agent_end", { messages: [] });
-		await harness.emit("agent_end", { messages: [] });
+		expect(calls).toHaveLength(0);
 
-		// Memory gate is now injected silently into bd close tool_result content.
-		// agent_end must not call ui.notify (no visible notification, no new turn).
+		// session_shutdown is the single lifecycle check, and it stays silent (no ui.notify):
+		// the memory gate is injected into bd close tool_result content instead.
+		await harness.emit("session_shutdown", {});
 		expect(harness.ctx.ui.notify).not.toHaveBeenCalled();
+		expect(calls.length).toBeGreaterThan(0);
 	});
 
 	it.skip("consumes .memory-gate-done marker and clears session markers (test environment issue)", async () => {

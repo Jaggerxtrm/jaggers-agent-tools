@@ -23,11 +23,14 @@ vi.mock("../../../packages/pi-extensions/src/core", async () => {
 
 const repoRoot = join(import.meta.dirname, "../../..");
 
+// xtrm-64pl0: the footer is a pure cache reader. The expandable epic/parent tree, the
+// /beads command + Alt+G toggle, and all descendant/parent bd subprocesses were removed.
+// These tests cover what remains: timer hygiene, compact-formatter parity, no subprocess
+// on render/startup, and absence of the removed toggle UI.
 describe("custom-footer shared beads cache", () => {
 	let handlers: Record<string, Function[]>;
 	let footerRenderer: any;
 	let ctx: any;
-	let toolsExpanded: boolean;
 	let commands: Record<string, any>;
 	let shortcuts: Record<string, any>;
 	let requestRenderSpy: ReturnType<typeof vi.fn>;
@@ -38,7 +41,6 @@ describe("custom-footer shared beads cache", () => {
 		vi.resetAllMocks();
 		handlers = {};
 		footerRenderer = null;
-		toolsExpanded = false;
 		commands = {};
 		shortcuts = {};
 		requestRenderSpy = vi.fn();
@@ -51,7 +53,6 @@ describe("custom-footer shared beads cache", () => {
 			hasUI: true,
 			mode: "tui",
 			ui: {
-				getToolsExpanded: () => toolsExpanded,
 				setFooter: vi.fn((factory: any) => {
 					footerRenderer = factory(
 						{ requestRender: requestRenderSpy },
@@ -128,197 +129,36 @@ describe("custom-footer shared beads cache", () => {
 		expect(SubprocessRunner.run).not.toHaveBeenCalled();
 	});
 
-	it("expands cached in-progress issues without an epic on Alt+G", async () => {
-		beadsCache.writeCache(cacheRoot, {
-			counts: { open: 2, in_progress: 3, blocked: 0 },
-			activeIssues: [
-				{ id: "xtrm-one", title: "First claim", status: "in_progress" },
-				{ id: "xtrm-two", title: "Second claim", status: "in_progress" },
-				{ id: "xtrm-three", title: "Third claim", status: "in_progress" },
-			],
-			activeEpic: null,
-		});
-		await start();
-		expect(shortcuts["ctrl+b"]).toBeUndefined();
-		expect(shortcuts["alt+b"]).toBeUndefined();
-		expect(shortcuts["alt+g"]).toBeDefined();
-		await shortcuts["alt+g"].handler(ctx);
-		const text = footerRenderer.render(120).join("\n");
-		expect(text).toContain("in progress (3)");
-		expect(text).toContain("◐ one  First claim");
-		expect(text).toContain("◐ two  Second claim");
-		expect(text).toContain("◐ three  Third claim");
-	});
-
-	it("keeps Ctrl+O tool expansion independent from the beads tree", async () => {
+	it("registers no beads toggle command/shortcut and spawns no bd or refresh subprocess on startup", async () => {
 		beadsCache.writeCache(cacheRoot, {
 			counts: { open: 2, in_progress: 1, blocked: 0 },
-			activeIssues: [],
-			activeEpic: { id: "xtrm-epic", title: "Compact footer", closed: 1, total: 3 },
-			descendants: {
-				epicId: "xtrm-epic", ts: Date.now(), overflow: 0,
-				items: [
-					{ id: "xtrm-epic.1", parent: "xtrm-epic", title: "First child", status: "in_progress" },
-					{ id: "xtrm-epic.1.1", parent: "xtrm-epic.1", title: "Nested child", status: "open" },
-					{ id: "xtrm-epic.1.1.1", parent: "xtrm-epic.1.1", title: "Closed leaf", status: "closed" },
-				],
-			},
+			activeIssues: [{ id: "xtrm-one", title: "First claim", status: "in_progress" }],
+			activeEpic: { id: "xtrm-epic", title: "Some epic", closed: 1, total: 3 },
 		});
-		toolsExpanded = true;
 		await start();
-		expect(footerRenderer.render(120).join("\n")).not.toContain("First child");
-		await commands.beads.handler("", ctx);
-		const text = footerRenderer.render(120).join("\n");
-		expect(text).toContain("epic epic (1/3 done) — Compact footer");
-		expect(text).toContain("  ◐ .1  in progress  First child");
-		expect(text).toContain("    ○ .1.1  open  Nested child");
-		expect(text).toContain("      ✓ .1.1.1  closed  Closed leaf");
+
+		// The expandable tree UI is gone: no /beads command, no Alt+G shortcut.
+		expect(commands.beads).toBeUndefined();
+		expect(shortcuts["alt+g"]).toBeUndefined();
+
+		// Startup is git-only (branch line). No bd, and no node cache-refresh subprocess.
+		const calls = (SubprocessRunner.run as any).mock.calls as Array<[string, string[]]>;
+		expect(calls.filter(([cmd]) => cmd === "bd")).toHaveLength(0);
+		expect(calls.filter(([cmd]) => cmd !== "git" && cmd !== "bd")).toHaveLength(0);
+
+		// The footer still renders exactly three lines: path/branch, context/model, compact beads.
+		expect(footerRenderer.render(120)).toHaveLength(3);
 	});
 
-	it("caps expanded trees at 50 rows and reports overflow", async () => {
-		const items = Array.from({ length: 52 }, (_, index) => ({
-			id: `xtrm-epic.${index + 1}`,
-			parent: "xtrm-epic",
-			title: `Child ${index + 1}`,
-			status: "open",
-		}));
+	it("re-reads the cache file (no subprocess) when a bd mutation tool_result arrives", async () => {
 		beadsCache.writeCache(cacheRoot, {
-			counts: { open: 52, in_progress: 1, blocked: 0 }, activeIssues: [],
-			activeEpic: { id: "xtrm-epic", title: "Large epic", closed: 0, total: 52 },
-			descendants: { epicId: "xtrm-epic", ts: Date.now(), items: items.slice(0, 50), overflow: 2 },
+			counts: { open: 1, in_progress: 0, blocked: 0 }, activeIssues: [], activeEpic: null,
 		});
 		await start();
-		await commands.beads.handler("", ctx);
-		expect(footerRenderer.render(120).join("\n")).toContain("+2 more (bd show xtrm-epic)");
-	});
-
-	it("shows a loading skeleton, fetches descendants once, then repaints", async () => {
-		beadsCache.writeCache(cacheRoot, {
-			counts: { open: 2, in_progress: 1, blocked: 0 }, activeIssues: [],
-			activeEpic: { id: "xtrm-epic", title: "Compact footer", closed: 0, total: 1 },
-		});
-		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
-			if (command === "bd" && args[0] === "query") {
-				return { code: 0, stdout: JSON.stringify([
-					{ id: "xtrm-epic.1", parent: "xtrm-epic", title: "Fetched child", status: "open" },
-				]), stderr: "" };
-			}
-			return { code: 1, stdout: "", stderr: "" };
-		});
-		await start();
-		await commands.beads.handler("", ctx);
-		expect(footerRenderer.render(120).join("\n")).toContain("loading epic tree…");
+		vi.clearAllMocks();
+		await handlers.tool_result[0]({ input: { command: "bd close xtrm-1 --reason done" } }, ctx);
 		await vi.runOnlyPendingTimersAsync();
-		await Promise.resolve();
-		expect((SubprocessRunner.run as any).mock.calls.filter((call: any[]) => call[0] === "bd")).toHaveLength(1);
-		expect(footerRenderer.render(120).join("\n")).toContain("Fetched child");
-		expect(requestRenderSpy).toHaveBeenCalled();
-	});
-
-	it("renders a non-epic parent-child group with closed siblings", async () => {
-		beadsCache.writeCache(cacheRoot, {
-			counts: { open: 1, in_progress: 1, blocked: 0 },
-			activeIssues: [{ id: "xtrm-parent.2", parent: "xtrm-parent", title: "Active child", status: "in_progress" }],
-			activeEpic: null,
-		});
-		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
-			if (command !== "bd") return { code: 1, stdout: "", stderr: "" };
-			if (args[0] === "show" && args[1] === "xtrm-parent") {
-				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-parent", title: "Ordinary parent", status: "closed" }]), stderr: "" };
-			}
-			if (args[0] === "children" && args[1] === "xtrm-parent") {
-				return { code: 0, stdout: JSON.stringify([
-					{ id: "xtrm-parent.1", parent: "xtrm-parent", title: "Closed sibling", status: "closed" },
-					{ id: "xtrm-parent.2", parent: "xtrm-parent", title: "Active child", status: "in_progress" },
-				]), stderr: "" };
-			}
-			return { code: 1, stdout: "", stderr: "" };
-		});
-		await start();
-		await commands.beads.handler("", ctx);
-		expect(footerRenderer.render(120).join("\n")).toContain("loading parent-child group…");
-		await vi.runOnlyPendingTimersAsync();
-		await Promise.resolve();
-		const text = footerRenderer.render(120).join("\n");
-		expect(text).toContain("parent parent (1/2 done) — Ordinary parent");
-		expect(text).toContain("✓ .1  closed  Closed sibling");
-		expect(text).toContain("◐ .2  in progress  Active child");
-	});
-
-	it("falls back to the active issue's structural parent when the cache predates parent ids", async () => {
-		beadsCache.writeCache(cacheRoot, {
-			counts: { open: 1, in_progress: 1, blocked: 0 },
-			activeIssues: [{ id: "xtrm-parent.2", title: "Active child", status: "in_progress" }],
-			activeEpic: null,
-		});
-		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
-			if (command !== "bd") return { code: 1, stdout: "", stderr: "" };
-			if (args[0] === "show" && args[1] === "xtrm-parent.2") {
-				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-parent.2", parent: "xtrm-parent" }]), stderr: "" };
-			}
-			if (args[0] === "show" && args[1] === "xtrm-parent") {
-				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-parent", title: "Ordinary parent", status: "open" }]), stderr: "" };
-			}
-			if (args[0] === "children" && args[1] === "xtrm-parent") {
-				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-parent.2", title: "Active child", status: "in_progress" }]), stderr: "" };
-			}
-			return { code: 1, stdout: "", stderr: "" };
-		});
-		await start();
-		await commands.beads.handler("", ctx);
-		await vi.runOnlyPendingTimersAsync();
-		await Promise.resolve();
-		expect(footerRenderer.render(120).join("\n")).toContain("parent parent (0/1 done) — Ordinary parent");
-		expect((SubprocessRunner.run as any).mock.calls.filter((call: any[]) => call[0] === "bd")).toHaveLength(3);
-	});
-
-	it("loads only the first active parent-child group", async () => {
-		beadsCache.writeCache(cacheRoot, {
-			counts: { open: 2, in_progress: 2, blocked: 0 },
-			activeIssues: [
-				{ id: "xtrm-first.1", parent: "xtrm-first", title: "First child", status: "in_progress" },
-				{ id: "xtrm-second.1", parent: "xtrm-second", title: "Second child", status: "in_progress" },
-			],
-			activeEpic: null,
-		});
-		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
-			if (command !== "bd" || args[1] !== "xtrm-first") return { code: 1, stdout: "", stderr: "" };
-			if (args[0] === "show") return { code: 0, stdout: JSON.stringify([{ id: "xtrm-first", title: "First parent", status: "open" }]), stderr: "" };
-			return { code: 0, stdout: JSON.stringify([{ id: "xtrm-first.1", title: "First child", status: "in_progress" }]), stderr: "" };
-		});
-		await start();
-		await commands.beads.handler("", ctx);
-		await vi.runOnlyPendingTimersAsync();
-		await Promise.resolve();
-		const text = footerRenderer.render(120).join("\n");
-		expect(text).toContain("First parent");
-		expect(text).not.toContain("Second child");
-		expect((SubprocessRunner.run as any).mock.calls.filter((call: any[]) => call[0] === "bd")).toHaveLength(2);
-	});
-
-	it("does not create a group from non-parent dependency metadata", async () => {
-		beadsCache.writeCache(cacheRoot, {
-			counts: { open: 1, in_progress: 1, blocked: 0 },
-			activeIssues: [{
-				id: "xtrm-standalone",
-				title: "Standalone",
-				status: "in_progress",
-				dependencies: [{ id: "xtrm-origin", dependency_type: "discovered-from" }],
-			}],
-			activeEpic: null,
-		});
-		(SubprocessRunner.run as any).mockImplementation(async (command: string, args: string[]) => {
-			if (command === "bd" && args[0] === "show" && args[1] === "xtrm-standalone") {
-				return { code: 0, stdout: JSON.stringify([{ id: "xtrm-standalone", dependencies: [{ id: "xtrm-origin", dependency_type: "discovered-from" }] }]), stderr: "" };
-			}
-			return { code: 1, stdout: "", stderr: "" };
-		});
-		await start();
-		await commands.beads.handler("", ctx);
-		await vi.runOnlyPendingTimersAsync();
-		expect(footerRenderer.render(120).join("\n")).not.toContain("parent ");
-		const bdCalls = (SubprocessRunner.run as any).mock.calls.filter((call: any[]) => call[0] === "bd");
-		expect(bdCalls).toHaveLength(1);
-		expect(bdCalls[0][1]).toEqual(["show", "xtrm-standalone", "--json"]);
+		// No subprocess is spawned to refresh; the footer only re-reads the on-disk cache.
+		expect(SubprocessRunner.run).not.toHaveBeenCalled();
 	});
 });
