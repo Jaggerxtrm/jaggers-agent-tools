@@ -66,7 +66,10 @@ describe('auditSettings', () => {
         await fs.ensureDir(path.join(home, '.pi'));
         await fs.writeJson(path.join(home, '.pi', 'settings.json'), {
             xtrmExternalCompact: true,
-            skills: ['../.xtrm/skills/active/claude'],
+            // One value, two findings: the path resolves nowhere AND names a
+            // retired skills pack. A stale per-runtime active/* path would do
+            // the same, but check:layout-guards bans that literal in source.
+            skills: ['../.xtrm/skills/local-legacy'],
             packages: ['npm:@jaggerxtrm/pi-extensions'],
         });
 
