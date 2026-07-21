@@ -67,7 +67,7 @@
         ]
       },
       {
-        "matcher": "Read|Write|Edit|Glob|Grep|Bash|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
+        "matcher": "Read|Write|Edit|Glob|Grep|Bash",
         "hooks": [
           {
             "type": "command",
@@ -103,7 +103,7 @@
         ]
       },
       {
-        "matcher": "Bash|Grep|Read|Glob|mcp__serena__find_symbol|mcp__serena__get_symbols_overview|mcp__serena__search_for_pattern|mcp__serena__find_referencing_symbols|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol|mcp__serena__rename_symbol",
+        "matcher": "Bash|Grep|Read|Glob",
         "hooks": [
           {
             "type": "command",
@@ -113,7 +113,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",

@@ -10,6 +10,20 @@ if ! command -v semgrep >/dev/null; then
     exit 0
 fi
 
+# Git exports GIT_DIR (and friends) into the hook environment. semgrep's
+# --baseline-commit materializes the baseline in a throwaway `git worktree` and
+# runs `git checkout` inside it — with GIT_DIR inherited, that checkout retargets
+# the INVOKING worktree instead: HEAD detaches at the baseline and the commit
+# being pushed unwinds into unstaged changes (xtrm-bjbdf). Drop the inherited
+# vars so every git call resolves the repo from cwd. No-op when unset, and
+# skipped if the repo isn't discoverable without them.
+GIT_HOOK_ENV="GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX GIT_QUARANTINE_PATH"
+# shellcheck disable=SC2086
+if (unset $GIT_HOOK_ENV; git rev-parse --show-toplevel >/dev/null 2>&1); then
+    # shellcheck disable=SC2086
+    unset $GIT_HOOK_ENV
+fi
+
 # Derive base ref dynamically. Order:
 #   1. branch's tracked upstream ('@{u}') — most reliable
 #   2. common default branches if their *remote* version exists (origin/*)
@@ -19,6 +33,7 @@ fi
 # nothing on every push.
 HEAD_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
 HEAD_SHA=$(git rev-parse HEAD)
+HEAD_REF=$(git symbolic-ref --quiet HEAD 2>/dev/null || true)
 
 upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
 BASE_REF=""
@@ -55,7 +70,8 @@ if [ ${#SEMGREP_BASELINE_ARGS[@]} -eq 0 ]; then
     fi
 fi
 
-exec semgrep scan \
+rc=0
+semgrep scan \
     --config=p/default \
     --config=p/security-audit \
     --config=p/secrets \
@@ -65,4 +81,24 @@ exec semgrep scan \
     "${SEMGREP_BASELINE_ARGS[@]}" \
     --error \
     --quiet \
-    --skip-unknown-extensions
+    --skip-unknown-extensions || rc=$?
+
+# A scan must never move the invoking worktree's HEAD. If it does anyway,
+# reattach non-destructively (working tree is left alone, so genuine unstaged
+# edits survive) and fail loudly instead of leaving a silently detached worktree.
+HEAD_REF_AFTER=$(git symbolic-ref --quiet HEAD 2>/dev/null || true)
+HEAD_SHA_AFTER=$(git rev-parse HEAD)
+if [ "$HEAD_REF_AFTER" != "$HEAD_REF" ] || [ "$HEAD_SHA_AFTER" != "$HEAD_SHA" ]; then
+    echo "[semgrep-diff] semgrep moved HEAD (${HEAD_REF:-detached}@${HEAD_SHA} -> ${HEAD_REF_AFTER:-detached}@${HEAD_SHA_AFTER}) — restoring" >&2
+    if [ -n "$HEAD_REF" ]; then
+        git symbolic-ref HEAD "$HEAD_REF"
+    else
+        git update-ref --no-deref HEAD "$HEAD_SHA"
+    fi
+    git reset --quiet --mixed
+    git worktree prune >/dev/null 2>&1 || true
+    echo "[semgrep-diff] HEAD restored to ${HEAD_REF:-$HEAD_SHA}; working tree untouched. Aborting push." >&2
+    exit 1
+fi
+
+exit $rc
