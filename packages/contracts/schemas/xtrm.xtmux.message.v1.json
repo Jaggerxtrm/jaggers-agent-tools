@@ -1,0 +1,47 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.xtmux.message.v1",
+    "title": "xtmux message record",
+    "description": "A message record as emitted by the xtmux message CLI (message-send / message-list / message-status / message-reply, all --json). Source: xtmux src/cli-messages.ts + src/domains/messages/*. camelCase, no schema_version on the wire. One permissive record covering all message responses: messageKey/senderId/recipientId are the stable core; send-, list-, status- and reply-specific fields are optional. replyStatus is only present for reply-required messages.",
+    "type": "object",
+    "required": ["messageKey", "senderId", "recipientId"],
+    "additionalProperties": false,
+    "properties": {
+        "messageKey": { "type": "string", "minLength": 1 },
+        "messageId": { "type": "number" },
+        "duplicate": { "type": "boolean" },
+        "senderId": { "type": "string", "minLength": 1 },
+        "senderPaneId": { "type": ["string", "null"] },
+        "senderKind": { "type": "string" },
+        "recipientId": { "type": "string", "minLength": 1 },
+        "targetPaneId": { "type": ["string", "null"] },
+        "recipientKind": { "type": "string" },
+        "beadId": { "type": ["string", "null"] },
+        "summary": { "type": "string" },
+        "createdAtMs": { "type": ["number", "null"] },
+        "expectsReply": { "type": "boolean" },
+        "acked": { "type": "boolean" },
+        "ackedAtMs": { "type": ["number", "null"] },
+        "ackedBy": { "type": ["string", "null"] },
+        "replyStatus": { "type": ["string", "null"], "enum": ["pending", "fulfilled", "cancelled", null] },
+        "fulfilledAtMs": { "type": ["number", "null"] },
+        "fulfilledByMessageKey": { "type": ["string", "null"] },
+        "replyToMessageKey": { "type": "string" },
+        "fulfilledMessageKey": { "type": "string" },
+        "fulfilled": { "type": "boolean" },
+        "correlatedReply": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["messageKey", "senderId", "recipientId", "summary", "createdAtMs"],
+            "properties": {
+                "messageKey": { "type": "string", "minLength": 1 },
+                "senderId": { "type": "string" },
+                "senderPaneId": { "type": ["string", "null"] },
+                "recipientId": { "type": "string" },
+                "targetPaneId": { "type": ["string", "null"] },
+                "summary": { "type": "string" },
+                "createdAtMs": { "type": "number" }
+            }
+        }
+    }
+}

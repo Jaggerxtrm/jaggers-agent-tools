@@ -1,0 +1,27 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.xtmux.wait.v1",
+    "title": "xtmux wait projection",
+    "description": "The single object emitted by `xtmux wait-agent --json`. Source: xtmux src/cli-monitors.ts (waitProjection). camelCase. No schema_version on the wire. intervalMs is always null in the wait projection.",
+    "type": "object",
+    "required": ["waitId", "target", "requesterSessionId", "requesterPaneId", "targetSessionId", "targetPaneId", "state", "wakeDelivered", "wakeConsumed", "replayed", "startedAtMs"],
+    "additionalProperties": false,
+    "properties": {
+        "waitId": { "type": "string", "minLength": 1 },
+        "target": { "type": "string" },
+        "requesterSessionId": { "type": "string" },
+        "requesterPaneId": { "type": "string" },
+        "targetSessionId": { "type": "string" },
+        "targetPaneId": { "type": "string" },
+        "state": { "type": "string" },
+        "monitorId": { "type": ["string", "null"] },
+        "terminalStatus": { "type": ["string", "null"] },
+        "wakeDelivered": { "type": "boolean" },
+        "wakeConsumed": { "type": "boolean" },
+        "replayed": { "type": "boolean" },
+        "startedAtMs": { "type": "number" },
+        "completedAtMs": { "type": ["number", "null"] },
+        "timeoutMs": { "type": ["number", "null"] },
+        "intervalMs": { "type": "null" }
+    }
+}

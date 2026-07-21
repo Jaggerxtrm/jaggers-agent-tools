@@ -1,0 +1,36 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.command-deprecations.v1",
+    "title": "xtrm command deprecations",
+    "description": "Source of truth for xt/xtrm command tokens marked deprecated or retired. Instance: docs/command-deprecations.json. Build-time gate: scripts/check-command-deprecations.mjs.",
+    "type": "object",
+    "required": ["schema_version", "entries"],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": { "const": "xtrm.command-deprecations.v1" },
+        "notes": {
+            "type": "array",
+            "items": { "type": "string" }
+        },
+        "entries": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["command", "deprecated_since", "remove_in", "replacement", "behavior", "code_ref"],
+                "additionalProperties": false,
+                "properties": {
+                    "command": { "type": "string", "minLength": 1 },
+                    "deprecated_since": { "type": "string", "minLength": 1 },
+                    "remove_in": { "type": "string", "minLength": 1 },
+                    "replacement": { "type": "string", "minLength": 1 },
+                    "behavior": {
+                        "type": "string",
+                        "enum": ["execute-with-warning", "fail-with-redirect"]
+                    },
+                    "code_ref": { "type": "string", "minLength": 1 },
+                    "notes": { "type": "string" }
+                }
+            }
+        }
+    }
+}
