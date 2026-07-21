@@ -8,7 +8,7 @@
     "hooks": [
       {
         "event": "PostToolUse",
-        "matcher": "Bash|Grep|Read|Glob|mcp__serena__find_symbol|mcp__serena__get_symbols_overview|mcp__serena__search_for_pattern|mcp__serena__find_referencing_symbols|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol|mcp__serena__rename_symbol",
+        "matcher": "Bash|Grep|Read|Glob",
         "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/gitnexus/gitnexus-hook.cjs",
         "timeout": 10000
       }

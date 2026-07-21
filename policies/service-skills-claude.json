@@ -12,12 +12,12 @@
       },
       {
         "event": "PreToolUse",
-        "matcher": "Read|Write|Edit|Glob|Grep|Bash|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
+        "matcher": "Read|Write|Edit|Glob|Grep|Bash",
         "command": "sh -c 'p=\"$HOME/.xtrm/skills/default/service-skills/scripts/skill_activator.py\"; [ -f \"$p\" ] && python3 \"$p\"; exit 0'"
       },
       {
         "event": "PostToolUse",
-        "matcher": "Write|Edit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
+        "matcher": "Write|Edit",
         "command": "sh -c 'p=\"$HOME/.xtrm/skills/default/service-skills/scripts/drift_detector.py\"; [ -f \"$p\" ] && python3 \"$p\" check-hook; exit 0'",
         "timeout": 10000
       }
