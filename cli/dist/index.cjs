@@ -41728,23 +41728,23 @@ var require_utils4 = __commonJS({
     function repeat(str2, times) {
       return Array(times + 1).join(str2);
     }
-    function pad(str2, len, pad2, dir) {
+    function pad2(str2, len, pad3, dir) {
       let length = strlen(str2);
       if (len + 1 >= length) {
         let padlen = len - length;
         switch (dir) {
           case "right": {
-            str2 = repeat(pad2, padlen) + str2;
+            str2 = repeat(pad3, padlen) + str2;
             break;
           }
           case "center": {
             let right = Math.ceil(padlen / 2);
             let left = padlen - right;
-            str2 = repeat(pad2, left) + str2 + repeat(pad2, right);
+            str2 = repeat(pad3, left) + str2 + repeat(pad3, right);
             break;
           }
           default: {
-            str2 = str2 + repeat(pad2, padlen);
+            str2 = str2 + repeat(pad3, padlen);
             break;
           }
         }
@@ -42002,7 +42002,7 @@ var require_utils4 = __commonJS({
     module2.exports = {
       strlen,
       repeat,
-      pad,
+      pad: pad2,
       truncate,
       mergeOptions,
       wordWrap: multiLineWordWrap,
@@ -43781,7 +43781,7 @@ var require_ansi_align = __commonJS({
       const align = opts.align || "center";
       if (align === "left") return text;
       const split = opts.split || "\n";
-      const pad = opts.pad || " ";
+      const pad2 = opts.pad || " ";
       const widthDiffFn = align !== "right" ? halfDiff : fullDiff;
       let returnString = false;
       if (!Array.isArray(text)) {
@@ -43799,7 +43799,7 @@ var require_ansi_align = __commonJS({
           width
         };
       }).map(function(obj) {
-        return new Array(widthDiffFn(maxWidth, obj.width) + 1).join(pad) + obj.str;
+        return new Array(widthDiffFn(maxWidth, obj.width) + 1).join(pad2) + obj.str;
       });
       return returnString ? text.join(split) : text;
     }
@@ -74403,35 +74403,35 @@ function elem(tag, children) {
   return { tag, children };
 }
 function render(node, indent = 0) {
-  const pad = "  ".repeat(indent);
+  const pad2 = "  ".repeat(indent);
   if (!node.children || node.children.length === 0) {
-    return `${pad}<${node.tag}/>`;
+    return `${pad2}<${node.tag}/>`;
   }
   const allText2 = node.children.every((c) => typeof c === "string");
   if (allText2) {
     const body = node.children.map(escape2).join("").trim();
-    if (body.length === 0) return `${pad}<${node.tag}/>`;
+    if (body.length === 0) return `${pad2}<${node.tag}/>`;
     if (!body.includes("\n") && body.length < 80) {
-      return `${pad}<${node.tag}>${body}</${node.tag}>`;
+      return `${pad2}<${node.tag}>${body}</${node.tag}>`;
     }
-    return `${pad}<${node.tag}>
+    return `${pad2}<${node.tag}>
 ${reindentText(body, indent + 1)}
-${pad}</${node.tag}>`;
+${pad2}</${node.tag}>`;
   }
   const inner = node.children.map((c) => {
     if (typeof c === "string") return reindentText(escape2(c), indent + 1);
     return render(c, indent + 1);
   }).join("\n");
-  return `${pad}<${node.tag}>
+  return `${pad2}<${node.tag}>
 ${inner}
-${pad}</${node.tag}>`;
+${pad2}</${node.tag}>`;
 }
 function escape2(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 function reindentText(s, indentLevel) {
-  const pad = "  ".repeat(indentLevel);
-  return s.split("\n").map((line) => line.trim().length === 0 ? "" : pad + line.trim()).join("\n");
+  const pad2 = "  ".repeat(indentLevel);
+  return s.split("\n").map((line) => line.trim().length === 0 ? "" : pad2 + line.trim()).join("\n");
 }
 function bullets(items) {
   return items.map((i) => elem("item", [i]));
@@ -76107,34 +76107,249 @@ async function collectProjection(options = {}) {
   };
 }
 
-// src/commands/topology.ts
-function printSummary(projection) {
-  const agentPanes = projection.panes.filter((p) => p.agent);
-  const jobs = projection.panes.reduce((n, p) => n + p.jobs.length, 0);
-  const collisions = projection.panes.map((p) => p.worktree).filter((w) => Boolean(w) && (w.shared_by_pane_ids?.length ?? 0) > 1);
-  console.log(kleur_default.bold("sources"));
-  for (const s of projection.sources) {
-    const mark = s.status === "ok" ? kleur_default.green("ok") : s.status === "unavailable" ? kleur_default.yellow("unavailable") : kleur_default.red("error");
-    const detail = s.reason ? kleur_default.dim(` \u2014 ${s.reason}`) : "";
-    console.log(`  ${s.name.padEnd(12)} ${mark}${detail} ${kleur_default.dim(`(${s.duration_ms}ms)`)}`);
-  }
-  console.log(kleur_default.bold("\nprojection"));
-  console.log(`  panes            ${projection.panes.length} (${agentPanes.length} agent)`);
-  console.log(`  specialist jobs  ${jobs} attached, ${projection.orphans.jobs.length} orphaned`);
-  console.log(`  worktrees        ${projection.orphans.worktrees.length} unattached`);
-  if (collisions.length > 0) {
-    console.log(kleur_default.yellow(`  collisions       ${new Set(collisions.map((w) => w.path)).size} worktree(s) shared by >1 pane`));
-  }
-  const degraded = projection.sources.filter((s) => s.status !== "ok");
-  if (degraded.length > 0) {
-    console.log(kleur_default.dim(`
-${degraded.length} source(s) did not report; counts above are partial.`));
-  }
-  console.log(kleur_default.dim("\nFull snapshot: xt topology --json"));
+// src/core/topology-views.ts
+init_kleur();
+var VIEW_NAMES = [
+  "summary",
+  "topology",
+  "chains",
+  "lineage",
+  "worktrees",
+  "collisions",
+  "integration",
+  "beads",
+  "prs",
+  "routes"
+];
+var VIEW_DESCRIPTIONS = {
+  summary: "source ledger + counts (default)",
+  topology: "runtime topology \u2014 every pane, its session, command and role",
+  chains: "coordinator chains \u2014 coordinator panes and the jobs they own",
+  lineage: "specialist lineage \u2014 chain roots and their descendants",
+  worktrees: "worktree and branch graph, including unattached worktrees",
+  collisions: "worktrees shared by more than one live pane",
+  integration: "integration status \u2014 job branch, target branch and PR state",
+  beads: "bead state per pane",
+  prs: "pull-request evidence per branch",
+  routes: "exact commands for the live/diagnostic surfaces xtmux and git own"
+};
+var dim = (s) => kleur_default.dim(s);
+var NONE2 = dim("  (none)");
+function degradationNotice(p, sources) {
+  const down = p.sources.filter((s) => sources.includes(s.name) && s.status !== "ok");
+  if (down.length === 0) return [];
+  return [
+    "",
+    kleur_default.yellow(`! ${down.length} source(s) did not report \u2014 this view is incomplete:`),
+    ...down.map((s) => kleur_default.yellow(`    ${s.name}: ${s.status}${s.reason ? ` \u2014 ${s.reason}` : ""}`))
+  ];
 }
+var pad = (s, n) => (s ?? "-").slice(0, n).padEnd(n);
+function completionOf(pane) {
+  if (pane.pull_request?.merged_at) return kleur_default.green("merged");
+  if (pane.bead?.status === "closed") return kleur_default.green("bead closed");
+  if (pane.pull_request) return `pr ${pane.pull_request.state.toLowerCase()}`;
+  if (pane.bead) return `bead ${pane.bead.status}`;
+  return dim("-");
+}
+function viewSummary(p) {
+  const agents = p.panes.filter((x) => x.agent).length;
+  const jobs = p.panes.reduce((n, x) => n + x.jobs.length, 0);
+  const collisions = collidingWorktrees(p).length;
+  const out = [kleur_default.bold("sources")];
+  for (const s of p.sources) {
+    const mark = s.status === "ok" ? kleur_default.green("ok") : s.status === "unavailable" ? kleur_default.yellow("unavailable") : kleur_default.red("error");
+    out.push(`  ${pad(s.name, 12)} ${mark}${s.reason ? dim(` \u2014 ${s.reason}`) : ""} ${dim(`(${s.duration_ms}ms)`)}`);
+  }
+  out.push("", kleur_default.bold("projection"));
+  out.push(`  panes            ${p.panes.length} (${agents} agent)`);
+  out.push(`  specialist jobs  ${jobs} attached, ${p.orphans.jobs.length} orphaned`);
+  out.push(`  worktrees        ${p.orphans.worktrees.length} unattached`);
+  if (collisions > 0) out.push(kleur_default.yellow(`  collisions       ${collisions} worktree(s) shared by >1 pane`));
+  out.push(...degradationNotice(p, ["xtmux", "tmux", "specialists", "beads", "git", "github"]));
+  out.push("", dim("Views: xt topology --view <name>   (xt topology --help lists them)"));
+  return out;
+}
+function viewTopology(p) {
+  const out = [kleur_default.bold(`${pad("PANE", 8)} ${pad("SESSION", 30)} ${pad("CMD", 10)} ${pad("ROLE", 18)} PATH`)];
+  if (p.panes.length === 0) out.push(NONE2);
+  for (const x of p.panes) {
+    out.push(`${pad(x.pane_id, 8)} ${pad(x.session_name, 30)} ${pad(x.current_command, 10)} ${pad(x.agent?.role, 18)} ${dim(x.current_path)}`);
+  }
+  return [...out, ...degradationNotice(p, ["tmux", "xtmux"])];
+}
+function viewChains(p) {
+  const coordinators = p.panes.filter((x) => x.agent?.role || x.jobs.length > 0);
+  const out = [];
+  if (coordinators.length === 0) out.push(NONE2);
+  for (const x of coordinators) {
+    out.push(`${kleur_default.bold(x.pane_id)} ${x.session_name} ${dim(`role=${x.agent?.role ?? "-"} bead=${x.agent?.bead_id ?? "-"} branch=${x.agent?.branch ?? "-"}`)}`);
+    out.push(`  ${dim("status:")} ${completionOf(x)}`);
+    if (x.jobs.length === 0) out.push(dim("  no specialist jobs"));
+    for (const j of x.jobs) out.push(`  - ${pad(j.job_id, 8)} ${pad(j.specialist, 16)} ${pad(j.status, 10)} ${dim(`${j.branch ?? "-"} -> ${j.integration_target_branch ?? "-"}`)}`);
+  }
+  return [...out, ...degradationNotice(p, ["tmux", "specialists"])];
+}
+function viewLineage(p) {
+  const all = [...p.panes.flatMap((x) => x.jobs), ...p.orphans.jobs];
+  const out = [];
+  if (all.length === 0) out.push(NONE2);
+  const roots = all.filter((j) => j.is_chain_root);
+  const childrenOf = (root) => all.filter((j) => !j.is_chain_root && j.chain_root_job_id === root.job_id);
+  for (const root of roots) {
+    const owner = root.owning_pane_id ?? kleur_default.yellow("orphan");
+    out.push(`${kleur_default.bold(root.job_id)} ${pad(root.specialist, 16)} ${pad(root.status, 10)} ${dim(`bead=${root.bead_id ?? "-"} epic=${root.epic_id ?? "-"} owner=${owner}`)}`);
+    for (const c of childrenOf(root)) {
+      out.push(`  \u2514\u2500 ${pad(c.job_id, 8)} ${pad(c.specialist, 16)} ${pad(c.status, 10)} ${dim(c.branch ?? "-")}`);
+    }
+  }
+  const orphanedDescendants = all.filter(
+    (j) => !j.is_chain_root && !roots.some((r) => r.job_id === j.chain_root_job_id)
+  );
+  if (orphanedDescendants.length > 0) {
+    out.push("", kleur_default.yellow("descendants whose chain root is not present:"));
+    for (const j of orphanedDescendants) out.push(`  ${pad(j.job_id, 8)} ${pad(j.specialist, 16)} ${dim(`root=${j.chain_root_job_id ?? "-"}`)}`);
+  }
+  return [...out, ...degradationNotice(p, ["specialists"])];
+}
+function viewWorktrees(p) {
+  const out = [kleur_default.bold(`${pad("BRANCH", 34)} ${pad("PANES", 8)} PATH`)];
+  const seen = /* @__PURE__ */ new Set();
+  for (const x of p.panes) {
+    const w = x.worktree;
+    if (!w || seen.has(w.path)) continue;
+    seen.add(w.path);
+    out.push(`${pad(w.branch ?? (w.detached ? "(detached)" : "-"), 34)} ${pad(String(w.shared_by_pane_ids?.length ?? 0), 8)} ${dim(w.path)}`);
+  }
+  if (p.orphans.worktrees.length > 0) {
+    out.push("", kleur_default.yellow(`unattached worktrees (${p.orphans.worktrees.length}) \u2014 no live pane:`));
+    for (const w of p.orphans.worktrees) {
+      out.push(`  ${pad(w.branch ?? (w.detached ? "(detached)" : "-"), 34)} ${dim(w.path)}`);
+    }
+  }
+  if (seen.size === 0 && p.orphans.worktrees.length === 0) out.push(NONE2);
+  return [...out, ...degradationNotice(p, ["git", "tmux"])];
+}
+function collidingWorktrees(p) {
+  const byPath = /* @__PURE__ */ new Map();
+  for (const x of p.panes) {
+    if (x.worktree && (x.worktree.shared_by_pane_ids?.length ?? 0) > 1) {
+      byPath.set(x.worktree.path, x.worktree.shared_by_pane_ids ?? []);
+    }
+  }
+  return [...byPath.entries()];
+}
+function viewCollisions(p) {
+  const rows = collidingWorktrees(p);
+  if (rows.length === 0) return ["No worktree is shared by more than one live pane.", ...degradationNotice(p, ["git", "tmux"])];
+  const out = [kleur_default.yellow(`${rows.length} shared worktree(s) \u2014 concurrent git state races are possible:`)];
+  for (const [path69, panes] of rows) out.push(`  ${path69}
+    panes: ${panes.join(" ")}`);
+  out.push("", dim("Mitigation: give each session its own worktree via `xt claude` / `xt pi`."));
+  return [...out, ...degradationNotice(p, ["git", "tmux"])];
+}
+function viewIntegration(p) {
+  const out = [kleur_default.bold(`${pad("JOB", 8)} ${pad("SPECIALIST", 16)} ${pad("SOURCE BRANCH", 28)} ${pad("TARGET", 24)} STATUS`)];
+  const jobs = [...p.panes.flatMap((x) => x.jobs), ...p.orphans.jobs];
+  if (jobs.length === 0) out.push(NONE2);
+  for (const j of jobs) {
+    out.push(`${pad(j.job_id, 8)} ${pad(j.specialist, 16)} ${pad(j.branch, 28)} ${pad(j.integration_target_branch, 24)} ${j.status}`);
+  }
+  const withPr = p.panes.filter((x) => x.pull_request);
+  if (withPr.length > 0) {
+    out.push("", kleur_default.bold("pane branches with a pull request:"));
+    for (const x of withPr) {
+      const pr = x.pull_request;
+      out.push(`  #${String(pr.number).padEnd(5)} ${pad(pr.head_branch, 34)} -> ${pad(pr.base_branch, 12)} ${completionOf(x)}`);
+    }
+  }
+  return [...out, ...degradationNotice(p, ["specialists", "github"])];
+}
+function viewBeads(p) {
+  const out = [kleur_default.bold(`${pad("PANE", 8)} ${pad("BEAD", 18)} ${pad("STATUS", 14)} TITLE`)];
+  const rows = p.panes.filter((x) => x.bead);
+  if (rows.length === 0) out.push(NONE2);
+  for (const x of rows) {
+    const b = x.bead;
+    const note = b.status === "unknown" ? dim(" (other repo)") : "";
+    const status = b.status === "unknown" ? kleur_default.yellow(pad(b.status, 14)) : pad(b.status, 14);
+    out.push(`${pad(x.pane_id, 8)} ${pad(b.id, 18)} ${status}${note} ${dim(b.title ?? "")}`);
+  }
+  return [...out, ...degradationNotice(p, ["beads", "tmux"])];
+}
+function viewPrs(p) {
+  const out = [kleur_default.bold(`${pad("PR", 7)} ${pad("STATE", 10)} ${pad("HEAD", 34)} ${pad("BASE", 12)} MERGED`)];
+  const rows = p.panes.filter((x) => x.pull_request);
+  if (rows.length === 0) out.push(NONE2);
+  for (const x of rows) {
+    const pr = x.pull_request;
+    out.push(`${pad("#" + pr.number, 7)} ${pad(pr.state, 10)} ${pad(pr.head_branch, 34)} ${pad(pr.base_branch, 12)} ${pr.merged_at ?? dim("-")}`);
+  }
+  return [...out, ...degradationNotice(p, ["github"])];
+}
+function viewRoutes(p) {
+  const agentPane = p.panes.find((x) => x.agent)?.pane_id ?? "<%pane-id>";
+  const worktree = p.panes.find((x) => x.worktree)?.worktree?.path ?? "<worktree>";
+  const bead = p.panes.find((x) => x.bead)?.bead?.id;
+  return [
+    "These live/diagnostic surfaces are owned by xtmux and git. This viewer routes",
+    "to them rather than reimplementing them:",
+    "",
+    `  ${kleur_default.bold("live journal feed")}`,
+    `    xtmux log follow --after-id <n>${bead ? `        # or: xtmux log query --bead ${bead}` : ""}`,
+    `  ${kleur_default.bold("reply obligations")}`,
+    `    xtmux obligations list --pane "$(tmux display-message -p '#{pane_id}')" --json`,
+    `  ${kleur_default.bold("monitors and wakes")}`,
+    "    xtmux monitor-list --json",
+    `  ${kleur_default.bold("pane preview")}   ${dim("(diagnostic only \u2014 never journalled or persisted)")}`,
+    `    xtmux pane capture --pane ${agentPane} --lines 40`,
+    `  ${kleur_default.bold("git diff")}`,
+    `    git -C ${worktree} diff`,
+    "",
+    dim("Pane capture is intentionally absent from the projection: the contract cannot"),
+    dim("carry terminal content, so it can never reach the durable event journal.")
+  ];
+}
+var RENDERERS = {
+  summary: viewSummary,
+  topology: viewTopology,
+  chains: viewChains,
+  lineage: viewLineage,
+  worktrees: viewWorktrees,
+  collisions: viewCollisions,
+  integration: viewIntegration,
+  beads: viewBeads,
+  prs: viewPrs,
+  routes: viewRoutes
+};
+function isViewName(v) {
+  return VIEW_NAMES.includes(v);
+}
+function renderView(name, projection) {
+  return RENDERERS[name](projection).join("\n");
+}
+
+// src/commands/topology.ts
 function createTopologyCommand() {
   const cmd = new Command("topology");
-  cmd.description("Read-only aggregated projection joining panes, roles, specialist jobs, beads, worktrees, branches and PRs").option("--json", "Print the machine-readable xtrm.topology.projection.v1 snapshot", false).option("--no-github", "Skip the GitHub query (slowest, rate-limited); PR evidence is omitted").action(async (options) => {
+  const viewHelp = VIEW_NAMES.map((v) => `  ${v.padEnd(12)} ${VIEW_DESCRIPTIONS[v]}`).join("\n");
+  cmd.description("Read-only aggregated projection joining panes, roles, specialist jobs, beads, worktrees, branches and PRs").option("--json", "Print the machine-readable xtrm.topology.projection.v1 snapshot", false).option("--view <name>", "View to render (see Views below)", "summary").option("--no-github", "Skip the GitHub query (slowest, rate-limited); PR evidence is omitted").addHelpText("after", `
+Views:
+${viewHelp}
+
+The live/diagnostic surfaces \u2014 journal feed, reply obligations, monitors, pane
+preview and git diff \u2014 are owned by xtmux and git. \`--view routes\` prints the
+exact command for each, with real pane ids and worktree paths filled in.
+
+Pane capture is deliberately absent: the projection contract cannot carry
+terminal content, so it can never reach the durable event journal.`).action(async (options) => {
+    const view = isViewName(options.view) ? options.view : null;
+    if (!view) {
+      console.error(kleur_default.red(`Unknown view: ${options.view}`));
+      console.error(`Available: ${VIEW_NAMES.join(", ")}`);
+      process.exitCode = 1;
+      return;
+    }
     const projection = await collectProjection({
       includeGithub: options.github !== false
     });
@@ -76142,7 +76357,7 @@ function createTopologyCommand() {
       console.log(JSON.stringify(projection, null, 2));
       return;
     }
-    printSummary(projection);
+    console.log(renderView(view, projection));
   });
   return cmd;
 }
