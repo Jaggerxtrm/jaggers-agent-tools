@@ -9,6 +9,7 @@
         "contracts": {
             "runtime_origin": "xtrm.runtime-origin.v1",
             "runtime_compatibility": "xtrm.runtime-compatibility.v1",
+            "beads_lifecycle_event": "xtrm.beads.lifecycle-event.v1",
             "specialist_role_envelope": "1"
         }
     },
@@ -197,6 +198,20 @@
         "id": 1,
         "method": "pane.capture",
         "params": { "pane_id": "%17", "lines": 200 }
+    },
+    "xtrm.beads.lifecycle-event.v1": {
+        "schema_version": "xtrm.beads.lifecycle-event.v1",
+        "source": "beads.events",
+        "id": "019f847d-530b-77a1-9603-25eeeae6ea27",
+        "issue_id": "xtrm-etmv4.2",
+        "event_type": "claimed",
+        "actor": "jaggerxtrm",
+        "old_value": { "status": "open" },
+        "new_value": { "assignee": "jaggerxtrm", "status": "in_progress" },
+        "comment": null,
+        "created_at": "2026-07-21T13:43:53Z",
+        "occurred_at_ms": 1784634233611,
+        "timestamp_source": "uuidv7"
     },
     "xtrm.agent-role-launched.v1": {
         "instance_id": "7cc0b27f",

@@ -42,6 +42,14 @@ export function getValidator(id: string): ValidateFunction {
     return validator as ValidateFunction;
 }
 
+const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/** Decode the authoritative UTC millisecond timestamp embedded in a UUIDv7 event id. */
+export function uuidV7TimestampMs(id: string): number {
+    if (!UUID_V7.test(id)) throw new Error(`Expected UUIDv7 event id, got: ${id}`);
+    return Number.parseInt(id.replaceAll('-', '').slice(0, 12), 16);
+}
+
 export interface ValidationResult {
     valid: boolean;
     errors: ErrorObject[];

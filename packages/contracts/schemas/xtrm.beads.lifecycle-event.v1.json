@@ -1,0 +1,42 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.beads.lifecycle-event.v1",
+    "title": "xtrm Beads lifecycle event",
+    "description": "Canonical projection of one row from Beads' Dolt events table. Beads owns lifecycle facts for every runtime and raw shell. Core hooks and xtmux telemetry are not source events. The UUIDv7 id is the idempotency key and UTC timestamp source; Beads 1.1.0 created_at may contain local wall time mislabeled with Z.",
+    "type": "object",
+    "required": [
+        "schema_version",
+        "source",
+        "id",
+        "issue_id",
+        "event_type",
+        "actor",
+        "old_value",
+        "new_value",
+        "comment",
+        "created_at",
+        "occurred_at_ms",
+        "timestamp_source"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": { "const": "xtrm.beads.lifecycle-event.v1" },
+        "source": { "const": "beads.events" },
+        "id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "issue_id": { "type": "string", "minLength": 1 },
+        "event_type": {
+            "type": "string",
+            "enum": ["created", "claimed", "updated", "closed", "reopened", "status_changed"]
+        },
+        "actor": { "type": "string", "minLength": 1 },
+        "old_value": {},
+        "new_value": {},
+        "comment": { "type": ["string", "null"] },
+        "created_at": { "type": "string", "minLength": 1 },
+        "occurred_at_ms": { "type": "number", "minimum": 0 },
+        "timestamp_source": { "const": "uuidv7" }
+    }
+}
