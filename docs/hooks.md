@@ -109,7 +109,20 @@ Runs via Claude Code's `statusLine` injection. Reads claim state from `.xtrm/sta
 | `beads-gate-core.mjs` | Core gate decision logic (commit gate, stop gate) |
 | `beads-gate-utils.mjs` | Claim resolution, work-state helpers |
 | `beads-gate-messages.mjs` | Shared message formatting for gate blocks; memory gate uses 4-criteria filter (hard to rediscover, non-obvious, future-relevant, still relevant in 14 days) |
-| `xtrm-logger.mjs` | Event logger for hooks/bd lifecycle — writes to `xtrm_events` table in beads Dolt DB |
+| `xtrm-logger.mjs` | Fail-open hook diagnostics logger — writes to `.xtrm/debug.db`; it is not a Beads lifecycle source |
+
+### Beads lifecycle ownership
+
+Beads owns lifecycle facts in its Dolt `events` table for Claude, Pi, and raw
+shell mutations. Canonical source actions are `created`, `claimed`, `updated`,
+`closed`, `reopened`, and `status_changed`; consumers may display these as
+`bd.<event_type>`. Core claim hooks only maintain session KV, statusline, and
+memory-gate state.
+
+Older Core hooks emitted `bd.claimed` / `bd.closed` diagnostics, while explicit
+xtmux telemetry used `bd.claim` / `bd.close`. These are compatibility records,
+not additional lifecycle facts. New consumers must source from Beads `events`
+and deduplicate by its event ID.
 
 ## Claim Workflow
 
