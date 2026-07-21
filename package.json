@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "cli",
-    "packages/pi-extensions"
+    "packages/pi-extensions",
+    "packages/contracts"
   ],
   "bin": {
     "xtrm": "cli/dist/index.cjs",
@@ -60,6 +61,8 @@
     "start": "node cli/dist/index.cjs",
     "lint": "echo 'No linting configured'",
     "test": "npm test --workspace cli",
+    "test:contracts": "npm test --workspace @xtrm/contracts",
+    "build:contracts": "npm run build --workspace @xtrm/contracts",
     "check:package": "node scripts/assert-no-self-dependency.mjs",
     "changelog:update": "node scripts/changelog-update.mjs",
     "changelog:check": "node scripts/changelog-update.mjs --check",

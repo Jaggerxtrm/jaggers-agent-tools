@@ -1,0 +1,25 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.agent-role-launched.v1",
+    "title": "xtmux agent.role.launched event fields",
+    "description": "The key=value field bag carried by `xtmux log emit agent.role.launched ...`, parsed into agent-instance open input. Source: xtmux src/cli-log.ts (case 'agent.role.launched') -> openInstance (src/domains/agents/instance.ts); persisted envelope type becomes 'agents.instance.open', idempotent on instance_id. Loose event: emitters pass free k=v pairs, so extra keys are tolerated. Canonical + alias keys are typed below; missing session/pane default to ''.",
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+        "instance_id": { "type": "string" },
+        "instance": { "type": "string" },
+        "session": { "type": "string" },
+        "session_id": { "type": "string" },
+        "session_name": { "type": "string" },
+        "pane": { "type": "string" },
+        "pane_id": { "type": "string" },
+        "runtime": { "type": "string" },
+        "role": { "type": "string" },
+        "bead": { "type": "string" },
+        "bead_id": { "type": "string" },
+        "task": { "type": "string" },
+        "prompt_file": { "type": "string" },
+        "parent": { "type": "string" },
+        "parent_session": { "type": "string" }
+    }
+}

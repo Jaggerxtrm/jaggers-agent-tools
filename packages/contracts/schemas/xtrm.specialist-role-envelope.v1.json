@@ -1,0 +1,60 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.specialist-role-envelope.v1",
+    "title": "specialist role envelope (legacy)",
+    "description": "The legacy Specialists-owned role envelope: a .specialist.json document. Registered in docs/runtime-compatibility.json as specialist_role_envelope with the legacy version literal \"1\". Source of truth: specialists src/specialist/schema.ts (Zod SpecialistSchema). Every object is Zod .passthrough(), so this contract is intentionally OPEN (additionalProperties:true) — only the minimal required fields are enforced.",
+    "type": "object",
+    "required": ["specialist"],
+    "additionalProperties": true,
+    "properties": {
+        "specialist": {
+            "type": "object",
+            "required": ["metadata", "execution", "prompt"],
+            "additionalProperties": true,
+            "properties": {
+                "metadata": {
+                    "type": "object",
+                    "required": ["name", "version", "description", "category"],
+                    "additionalProperties": true,
+                    "properties": {
+                        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+                        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+                        "description": { "type": "string" },
+                        "category": { "type": "string" },
+                        "updated": { "type": "string" },
+                        "tags": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "execution": {
+                    "type": "object",
+                    "required": ["model"],
+                    "additionalProperties": true,
+                    "properties": {
+                        "mode": { "type": "string", "enum": ["tool", "skill", "auto"] },
+                        "model": { "type": ["string", "null"] },
+                        "response_format": { "type": "string", "enum": ["text", "json", "markdown"] },
+                        "output_type": { "type": "string", "enum": ["codegen", "analysis", "review", "synthesis", "orchestration", "workflow", "research", "custom"] },
+                        "permission_required": { "type": "string", "enum": ["READ_ONLY", "LOW", "MEDIUM", "HIGH"] },
+                        "thinking_level": { "type": "string", "enum": ["off", "minimal", "low", "medium", "high", "xhigh"] },
+                        "auto_commit": { "type": "string", "enum": ["never", "checkpoint_on_waiting", "checkpoint_on_terminal"] },
+                        "interactive": { "type": "boolean" },
+                        "requires_worktree": { "type": "boolean" },
+                        "bare": { "type": "boolean" },
+                        "max_retries": { "type": "integer", "minimum": 0 },
+                        "timeout_ms": { "type": "number" }
+                    }
+                },
+                "prompt": {
+                    "type": "object",
+                    "required": ["task_template"],
+                    "additionalProperties": true,
+                    "properties": {
+                        "task_template": { "type": "string" },
+                        "system": { "type": "string" },
+                        "system_prompt_mode": { "type": "string", "enum": ["append", "replace"] }
+                    }
+                }
+            }
+        }
+    }
+}

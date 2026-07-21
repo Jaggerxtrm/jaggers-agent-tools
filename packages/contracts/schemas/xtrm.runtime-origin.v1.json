@@ -1,0 +1,34 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.runtime-origin.v1",
+    "title": "xtrm runtime origin",
+    "description": "Where a runtime physically launched: host + tmux session/window/pane + agent instance. Captured by `xtmux context --current --json`, validated by RuntimeOriginV1 (xtmux src/domains/identity/runtime-context.ts; specialists src/specialist/runtime-origin.ts) and propagated to child jobs via SPECIALISTS_RUNTIME_ORIGIN_V1. Strict allowlist: unknown keys are rejected. NOTE: worktree/branch/role/parent-job lineage is NOT here — it lives on SupervisorStatus (spawn_origin / root_runtime_origin).",
+    "type": "object",
+    "required": [
+        "schema_version",
+        "kind",
+        "host_id",
+        "tmux_session_id",
+        "tmux_window_id",
+        "tmux_pane_id",
+        "captured_at_ms",
+        "capture_source",
+        "verified"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": { "const": "xtrm.runtime-origin.v1" },
+        "kind": { "const": "xtmux.agent_instance" },
+        "host_id": { "type": "string", "minLength": 1 },
+        "tmux_server_id": { "type": "string", "minLength": 1 },
+        "tmux_session_id": { "type": "string", "minLength": 1 },
+        "tmux_window_id": { "type": "string", "minLength": 1 },
+        "tmux_pane_id": { "type": "string", "minLength": 1 },
+        "agent_instance_id": { "type": "string", "minLength": 1 },
+        "bead_id": { "type": "string", "minLength": 1 },
+        "parent_session_id": { "type": "string", "minLength": 1 },
+        "captured_at_ms": { "type": "number", "minimum": 0 },
+        "capture_source": { "type": "string", "enum": ["xtmux-context", "propagated"] },
+        "verified": { "type": "boolean" }
+    }
+}

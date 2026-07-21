@@ -1,0 +1,19 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.interactive-role-envelope.v1",
+    "title": "xtrm interactive role envelope",
+    "description": "The slim Core->runtime handoff for an interactive role launch. Authoritative shape: cli/src/types/interactive-role-envelope.ts. Deliberately minimal: Core must NOT carry Specialist job-supervision metadata (retries, stall_timeout, permission_tier, ...). additionalProperties:false enforces the slim envelope; additive optional fields bump the schema, removal/rename bumps the major version.",
+    "type": "object",
+    "required": ["role", "systemPrompt", "skillPaths"],
+    "additionalProperties": false,
+    "properties": {
+        "role": { "type": "string", "minLength": 1 },
+        "systemPrompt": { "type": "string" },
+        "skillPaths": {
+            "type": "array",
+            "items": { "type": "string" }
+        },
+        "model": { "type": "string" },
+        "thinkingLevel": { "type": "string" }
+    }
+}

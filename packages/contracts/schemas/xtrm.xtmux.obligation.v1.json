@@ -1,0 +1,22 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.xtmux.obligation.v1",
+    "title": "xtmux pending obligation",
+    "description": "One reply-obligation row as emitted by `xtmux obligations list --json` (a bare array of these). Source: xtmux src/domains/messages/obligations.ts (PendingObligation). camelCase. No schema_version on the wire; replyStatus is always the literal 'pending'.",
+    "type": "object",
+    "required": ["messageKey", "messageId", "senderId", "senderPaneId", "recipientId", "targetPaneId", "summary", "createdAtMs", "acked", "ackedAtMs", "replyStatus"],
+    "additionalProperties": false,
+    "properties": {
+        "messageKey": { "type": "string", "minLength": 1 },
+        "messageId": { "type": "number" },
+        "senderId": { "type": "string", "minLength": 1 },
+        "senderPaneId": { "type": ["string", "null"] },
+        "recipientId": { "type": "string", "minLength": 1 },
+        "targetPaneId": { "type": ["string", "null"] },
+        "summary": { "type": "string" },
+        "createdAtMs": { "type": "number" },
+        "acked": { "type": "boolean" },
+        "ackedAtMs": { "type": ["number", "null"] },
+        "replyStatus": { "const": "pending" }
+    }
+}
