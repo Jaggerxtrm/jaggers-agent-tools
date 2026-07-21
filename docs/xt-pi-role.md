@@ -58,6 +58,7 @@ No prompt/task file is created. Current-pane launches pass the exact positional 
 | `--parent <target>` | Override `@agent_parent_session` on the target pane. `<target>` = tmux session name, session id (`$3`), or `#{session_id}` string. | Bogus targets fail with a clear error before the runtime spawns. Precedence: `--parent` > `--child` > auto. |
 | `--child` | Explicit form of the auto-behavior (`@agent_parent_session` = current pane's `#{session_id}`). | Kept as a stable opt-in against a future default flip. |
 | `--reuse` | Only with `--new-session` (or outside `$TMUX`): if a session with the resolved name already exists, attach to it (or, with `--no-attach`, print its coordinates) instead of auto-suffixing. | Skips `agent.role.launched` emission — we don't own the reused pane's metadata. |
+| `--subordinate` | Canonical subordinate-coordinator launch (audit P0-05). Expands to `--new-session --no-attach --child`. | Requires `--role`. An explicit `--parent` still wins. Outside `$TMUX` it requires `--parent` (there is no current session to infer one from). See §Subordinate coordinator launch. |
 | `--` `<passthrough>` | Everything after `--` forwarded verbatim to the runtime. | Guarded flags (`--session-dir`, `--name`, `--system-prompt`, `--append-system-prompt`, `--skill`) are rejected. Batch-mode flags (`--print`, `--list-models`, `--export`, `--mode`) are dropped with a warning. |
 
 Run `xt pi --help` or `xt claude --help` for the canonical (auto-generated) flag list plus concrete examples.
@@ -73,6 +74,64 @@ Run `xt pi --help` or `xt claude --help` for the canonical (auto-generated) flag
 | inside `$TMUX` | `--new-session --no-attach` | New session detached; prints `session_name:pane_id` on stdout. Exit 0. |
 | inside `$TMUX` | `--no-attach` alone | **Error** — `--no-attach requires --new-session (or exit tmux first)`. |
 | outside `$TMUX` | (any) | New session; `attach-session` attaches. `--no-attach` still valid. |
+| inside `$TMUX` | `--subordinate` | New detached session parented to the current one; prints `session_name:pane_id`. The launching pane is untouched. |
+
+---
+
+## Subordinate coordinator launch (audit P0-05)
+
+Inside `$TMUX` a role launch defaults to the **current pane**. That is right when
+the operator wants this pane to become the role. It is wrong for spawning a
+subordinate coordinator: it overwrites the orchestrator's own `@agent_*`
+metadata and replaces the orchestrator process.
+
+`--subordinate` is one verb for the safe shape:
+
+```bash
+xt pi coord --role chain-coordinator --bead <epic> --subordinate
+```
+
+is equivalent to
+
+```bash
+xt pi coord --role chain-coordinator --bead <epic> \
+  --new-session --no-attach --parent "$(tmux display-message -p '#{session_id}')"
+```
+
+It expands to flags the launcher already understands rather than adding a third
+launch mode, so there stays exactly one code path to reason about.
+
+**What it does not imply.** `--subordinate` never means *no worktree*, *shared
+branch*, or *direct main integration*. Every interactive launch owns a distinct
+worktree and branch (see §Worktree and branch isolation), and the coordinator is
+no exception — that isolation is what its specialist chains derive from.
+
+**Rejections** (both fire before any worktree is created):
+
+| Condition | Message |
+| --- | --- |
+| no `--role` | `--subordinate is a coordinator launch and requires --role` |
+| outside `$TMUX` with no `--parent` | `subordinate coordinator requires a parent session` |
+
+Each rejection prints the canonical long-form command as remediation.
+
+---
+
+## Worktree and branch isolation
+
+Core treats this as an invariant (audit P1-02):
+
+> every interactive `xt` runtime owns a distinct worktree and branch
+
+It is enforced by construction rather than by a flag check — `launchWorktreeSession`
+unconditionally creates `.xtrm/worktrees/<repo>-xt-<runtime>-<slug>` on branch
+`xt/<slug>`, refuses to reuse an existing worktree path, and refuses to create a
+nested worktree from inside another worktree (which is what keeps the main
+orchestrator in the main worktree). There is deliberately **no `--no-worktree`**
+for interactive role launch, and none should be added.
+
+The relationship is published as pane options and env vars so downstream tools
+can observe it — see the two tables below.
 
 **Session-name collision.** When the resolved session name (`role-<runtime>-<slug>[-<bead>]`, e.g. `role-pi-chain-coordinator-xyz-1` vs `role-claude-chain-coordinator-xyz-1`) is already in use, the launcher does one of two things:
 
@@ -101,9 +160,17 @@ The launcher writes these on the target pane (current pane by default, new sessi
 | `@agent_task` | `role:<name>` |
 | `@agent_parent_session` | Resolved `#{session_id}` (see `--parent` precedence above) |
 | `@agent_state` | `idle` — set at spawn so the picker sees the pane immediately (before the runtime's own agent-state hook fires) |
+| `@agent_worktree` | Absolute path of the worktree this session owns |
+| `@agent_branch` | Branch checked out in that worktree — the integration branch a coordinator's specialist chains derive from (audit P1-03) |
 | `@agent_bead` | Only set when `--bead <id>` was passed |
+| `@agent_role` | Role name. Role launches only — a bare session has no role |
 
 `@agent_prompt_file` was retired in xtrm-8zsi1 — the launcher no longer materializes a prompt file. Downstream skills already read the option absence-safely.
+
+`@agent_worktree` / `@agent_branch` / `@agent_role` were added in xtrm-6hey0.
+The isolation they describe was always enforced; nothing downstream could
+*observe* it. `@agent_branch` is Core's half of branch ancestry: Core publishes
+the base branch, Specialists consumes it when creating `sp/*` branches.
 
 ---
 
@@ -115,7 +182,15 @@ Redundant with pane options on purpose — env survives re-execs the way pane op
 | --- | --- |
 | `XTMUX_AGENT_TASK` | `role:<name>` |
 | `XTMUX_AGENT_PARENT_SESSION` | Same value as `@agent_parent_session` |
+| `XTMUX_AGENT_WORKTREE` | Same value as `@agent_worktree` |
+| `XTMUX_AGENT_BRANCH` | Same value as `@agent_branch` |
 | `XTMUX_AGENT_BEAD` | Only set when `--bead <id>` was passed |
+| `XTMUX_AGENT_ROLE` | Same value as `@agent_role`; role launches only |
+
+The env set is **derived from the pane options** (`buildAgentEnv`), one entry per
+option with `@agent_x` → `XTMUX_AGENT_X`, so the two cannot drift. `@agent_state`
+is the single exception: it is launcher-local bookkeeping owned by the runtime's
+own agent-state hook after turn 1, so there is no `XTMUX_AGENT_STATE`.
 
 `XTMUX_AGENT_PROMPT_FILE` was retired in xtrm-8zsi1 alongside the prompt-file transport.
 

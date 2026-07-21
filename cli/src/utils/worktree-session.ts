@@ -38,6 +38,8 @@ export interface WorktreeSessionOptions {
     parent?: string;
     /** With --role: explicit form of the auto-behavior — @agent_parent_session = current pane's #{session_id}. --parent wins over --child when both set. */
     child?: boolean;
+    /** Canonical subordinate-coordinator launch (audit P0-05). Expands to --new-session --no-attach --child. */
+    subordinate?: boolean;
     /** When --new-session (or outside $TMUX) hits a session-name collision, attach to the existing session instead of auto-suffixing. */
     reuse?: boolean;
     /** Additional skills requested explicitly with repeatable --skill flags. */
@@ -601,6 +603,14 @@ interface CommonTmuxPlanArgs {
     runtime: 'pi' | 'claude';
     bead?: string;
     parentSessionId: string;
+    /** Absolute path of the worktree this session owns. Required, not optional:
+     * "every interactive xt runtime owns a distinct worktree and branch" is an
+     * invariant (audit P1-02), and a plan that could omit it would let one of
+     * the two launch paths silently stop publishing lineage. */
+    worktreePath: string;
+    /** Branch checked out in `worktreePath` — the integration branch for any
+     * specialist chain this session dispatches (audit P1-03). */
+    branchName: string;
     /** Turn-1 positional body — runtime-specific trusted skill prefix + user
      * body already concatenated. Empty string means no positional (skills-only prime). */
     turn1Body: string;
@@ -643,15 +653,19 @@ function finalizeTmuxPlan(args: {
     runtimeArgs: string[];
     agentTask: string;
     bead?: string;
+    /** Role name in role mode; absent in bare mode (a bare session has no role). */
+    role?: string;
     parentSessionId: string;
+    worktreePath: string;
+    branchName: string;
     turn1Body: string;
     model?: string;
     thinking?: string;
     passthrough?: string[];
 }): TmuxLaunchPlan {
     const {
-        runtime, sessionName, runtimeArgs, agentTask, bead, parentSessionId,
-        turn1Body, model, thinking, passthrough,
+        runtime, sessionName, runtimeArgs, agentTask, bead, role, parentSessionId,
+        worktreePath, branchName, turn1Body, model, thinking, passthrough,
     } = args;
 
     // Model: both runtimes accept --model <name>; pi and claude resolve their
@@ -686,12 +700,24 @@ function finalizeTmuxPlan(args: {
     // until the first turn). @agent_prompt_file dropped in xtrm-8zsi1 — the
     // launcher no longer materializes a prompt file (turn-1 is inline), and
     // downstream skills read the option absence-safely (|| true).
+    //
+    // @agent_worktree / @agent_branch make the P1-02 invariant *observable*
+    // rather than merely true: the isolation was always enforced by
+    // construction in launchWorktreeSession, but nothing downstream could see
+    // which worktree or branch a pane owned. @agent_branch is also how a
+    // coordinator tells its specialist chains which integration branch to
+    // derive from (audit P1-03) — Core publishes it, Specialists consumes it.
+    // @agent_role is the role identity that @agent_task only encoded as a
+    // `role:` prefix; a plain key is what a nested-coordinator check can read.
     const paneOptions: Array<{ key: string; value: string }> = [
         { key: '@agent_parent_session', value: parentSessionId },
         { key: '@agent_task', value: agentTask },
         { key: '@agent_state', value: 'idle' },
+        { key: '@agent_worktree', value: worktreePath },
+        { key: '@agent_branch', value: branchName },
     ];
     if (bead) paneOptions.push({ key: '@agent_bead', value: bead });
+    if (role) paneOptions.push({ key: '@agent_role', value: role });
 
     return { sessionName, runtimeCmd: runtime, runtimeArgs, runtimeCmdString, paneOptions };
 }
@@ -700,8 +726,8 @@ export function buildRoleTmuxPlan(args: CommonTmuxPlanArgs & {
     role: ResolvedRole;
 }): TmuxLaunchPlan {
     const {
-        runtime, role, bead, parentSessionId, turn1Body, modelOverride,
-        thinkingOverride, explicitSkillPaths = [], passthrough,
+        runtime, role, bead, parentSessionId, worktreePath, branchName, turn1Body,
+        modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
     } = args;
 
     // Include runtime in the session name so xt pi --role X --bead Y and
@@ -755,7 +781,10 @@ export function buildRoleTmuxPlan(args: CommonTmuxPlanArgs & {
         runtimeArgs,
         agentTask: `role:${role.name}`,
         bead,
+        role: role.name,
         parentSessionId,
+        worktreePath,
+        branchName,
         turn1Body,
         // CLI override wins over the specialist default.
         model: modelOverride ?? role.model,
@@ -777,8 +806,8 @@ export function buildBareTmuxPlan(args: CommonTmuxPlanArgs & {
     sessionSlug: string;
 }): TmuxLaunchPlan {
     const {
-        runtime, sessionSlug, bead, parentSessionId, turn1Body, modelOverride,
-        thinkingOverride, explicitSkillPaths = [], passthrough,
+        runtime, sessionSlug, bead, parentSessionId, worktreePath, branchName,
+        turn1Body, modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
     } = args;
 
     const runtimeArgs: string[] = [];
@@ -798,6 +827,8 @@ export function buildBareTmuxPlan(args: CommonTmuxPlanArgs & {
         agentTask: `session:${sessionSlug}`,
         bead,
         parentSessionId,
+        worktreePath,
+        branchName,
         turn1Body,
         model: modelOverride,
         thinking: thinkingOverride,
@@ -812,21 +843,25 @@ export function buildBareTmuxPlan(args: CommonTmuxPlanArgs & {
  * writes options once at spawn (state=idle etc.), and env vars survive re-
  * execs the way pane options do not. xtmux-1lb.5.1.
  *
+ * Derived from the plan's pane options rather than rebuilt from the same
+ * inputs: the two carry identical lineage, and the previous hand-rolled pair
+ * (one builder for role, an inline object literal for bare) is exactly the
+ * shape that drifts when a field is added — as adding @agent_worktree /
+ * @agent_branch / @agent_role would have. `@agent_state` is launcher-local
+ * bookkeeping owned by the runtime's own hook after turn 1, so it is the one
+ * option that does not become an env var.
+ *
  * XTMUX_AGENT_PROMPT_FILE dropped in xtrm-8zsi1 — turn 1 has no file path,
- * and downstream consumers read the
- * variable absence-safely.
+ * and downstream consumers read the variable absence-safely.
  */
-export function buildAgentEnv(args: {
-    bead?: string;
-    role: string;
-    parentSessionId: string;
-}): Record<string, string> {
-    const { bead, role, parentSessionId } = args;
-    const env: Record<string, string> = {
-        XTMUX_AGENT_TASK: `role:${role}`,
-        XTMUX_AGENT_PARENT_SESSION: parentSessionId,
-    };
-    if (bead) env.XTMUX_AGENT_BEAD = bead;
+export function buildAgentEnv(
+    paneOptions: ReadonlyArray<{ key: string; value: string }>,
+): Record<string, string> {
+    const env: Record<string, string> = {};
+    for (const { key, value } of paneOptions) {
+        if (key === '@agent_state') continue;
+        env[`XTMUX_AGENT_${key.slice('@agent_'.length).toUpperCase()}`] = value;
+    }
     return env;
 }
 
@@ -1026,9 +1061,89 @@ export function unregisterPluginsForWorktree(worktreePath: string): void {
     }
 }
 
+/**
+ * Effective flags a `--subordinate` launch expands to.
+ *
+ * `--subordinate` is one verb for the canonical subordinate-coordinator launch
+ * shape (audit P0-05). Inside $TMUX an interactive role launch otherwise
+ * defaults to the *current* pane — correct when the operator wants this pane to
+ * become the role, unsafe when spawning a subordinate, because it overwrites the
+ * orchestrator's own @agent_* metadata and replaces the orchestrator process.
+ * The safe shape was three flags the operator had to remember and compose:
+ * `--new-session --no-attach --parent "$(tmux display-message -p '#{session_id}')"`.
+ *
+ * It expands to flags the launcher already understands rather than introducing a
+ * third launch mode — deliberately, so there stays exactly one code path to
+ * reason about. It does NOT imply "no worktree", "shared branch", or "direct
+ * main integration": every interactive launch owns a distinct worktree and
+ * branch regardless (audit P1-02), and that is enforced below by construction.
+ */
+export type SubordinateResolution =
+    | { ok: true; newSession: true; attach: false; child: boolean }
+    | { ok: false; error: string };
+
+// Pure — no I/O. Exported for unit testing.
+export function resolveSubordinateLaunch(args: {
+    runtime: 'pi' | 'claude';
+    role?: string;
+    parent?: string;
+    insideTmux: boolean;
+}): SubordinateResolution {
+    const { runtime, role, parent, insideTmux } = args;
+
+    const canonical = [
+        `  xt ${runtime} <name> \\`,
+        '    --role chain-coordinator \\',
+        '    --bead <id> \\',
+        '    --new-session \\',
+        '    --no-attach \\',
+        '    --parent <session-id>',
+    ].join('\n');
+    const reject = (because: string): SubordinateResolution => ({
+        ok: false,
+        error: `subordinate launch rejected:\n  ${because}\n\nUse:\n${canonical}`,
+    });
+
+    if (!role) {
+        return reject('--subordinate is a coordinator launch and requires --role');
+    }
+    // A subordinate is defined by having a parent. Inside tmux the current
+    // session supplies it; outside tmux there is nothing to infer from, so an
+    // explicit --parent is the only way the relationship can exist at all.
+    if (!insideTmux && !parent) {
+        return reject('subordinate coordinator requires a parent session');
+    }
+
+    // `child` is the existing explicit opt-in for "parent = current session".
+    // An explicit --parent is the operator being deliberate and still wins, so
+    // only claim the auto-parent when they did not name one.
+    return { ok: true, newSession: true, attach: false, child: !parent };
+}
+
 export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promise<void> {
-    const { runtime, name, role: roleName, bead, prompt, attach = true, model, thinking } = opts;
+    const { runtime, name, role: roleName, bead, prompt, model, thinking } = opts;
     const cwd = process.cwd();
+
+    // Expand --subordinate before anything else so the rest of the launcher
+    // only ever sees ordinary newSession/attach/parent flags.
+    let { attach = true } = opts;
+    let newSession = opts.newSession;
+    let child = opts.child;
+    if (opts.subordinate) {
+        const subordinate = resolveSubordinateLaunch({
+            runtime,
+            role: roleName,
+            parent: opts.parent,
+            insideTmux: Boolean(process.env.TMUX),
+        });
+        if (!subordinate.ok) {
+            console.error(kleur.red(`\n  ✗ ${subordinate.error}\n`));
+            process.exit(1);
+        }
+        newSession = subordinate.newSession;
+        attach = subordinate.attach;
+        child = subordinate.child;
+    }
 
     // Mutual exclusion: in role mode --bead renders a tracked task and
     // --prompt supplies a literal turn-1 body; the two contract different
@@ -1341,15 +1456,16 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         bead,
         attach,
         worktreePath,
+        branchName,
         modelOverride: model,
         thinkingOverride: thinking,
         turn1Body: composedTurn1Body,
         explicitSkillPaths,
         passthrough: guardedPassthrough,
-        newSession: opts.newSession,
+        newSession,
         reuse: opts.reuse,
         parent: opts.parent,
-        child: opts.child,
+        child,
     };
 
     if (resolvedRole) {
@@ -1359,7 +1475,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
 
     const carriesLaunchState = Boolean(prompt) || Boolean(bead) || Boolean(model)
         || Boolean(thinking) || explicitSkillPaths.length > 0
-        || guardedPassthrough.length > 0 || !attach || Boolean(opts.newSession);
+        || guardedPassthrough.length > 0 || !attach || Boolean(newSession);
     if (carriesLaunchState) {
         await launchTmuxSession({ ...common, mode: 'bare' });
         return;
@@ -1431,6 +1547,7 @@ type TmuxLaunchArgs = {
     bead?: string;
     attach: boolean;
     worktreePath: string;
+    branchName: string;
     modelOverride?: string;
     thinkingOverride?: string;
     /** Composed turn-1 positional body (sp prefix + user body). Empty = skills-only prime. */
@@ -1453,7 +1570,7 @@ type TmuxLaunchArgs = {
 
 async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     const {
-        runtime, sessionSlug, bead, attach, worktreePath, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
+        runtime, sessionSlug, bead, attach, worktreePath, branchName, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
         newSession, parent, child, reuse,
     } = args;
 
@@ -1502,20 +1619,14 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     // trusted to inspect or control the session.
 
     const planCommon = {
-        runtime, bead, parentSessionId, turn1Body,
+        runtime, bead, parentSessionId, worktreePath, branchName, turn1Body,
         modelOverride, thinkingOverride, explicitSkillPaths, passthrough,
     };
     const plan = args.mode === 'role'
         ? buildRoleTmuxPlan({ ...planCommon, role: args.role })
         : buildBareTmuxPlan({ ...planCommon, sessionSlug });
 
-    const agentEnv = args.mode === 'role'
-        ? buildAgentEnv({ bead, role: args.role.name, parentSessionId })
-        : {
-            XTMUX_AGENT_TASK: `session:${sessionSlug}`,
-            XTMUX_AGENT_PARENT_SESSION: parentSessionId,
-            ...(bead ? { XTMUX_AGENT_BEAD: bead } : {}),
-        };
+    const agentEnv = buildAgentEnv(plan.paneOptions);
 
     if (currentPaneMode) {
         // Resolve the current pane id (the pane the launcher was invoked
@@ -1542,6 +1653,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
                 role: args.role.name,
                 parent: parentSessionId,
                 worktree: worktreePath,
+                branch: branchName,
                 task_prompt_renderer: args.renderedTask ? 'success' : 'not_requested',
                 task_prompt_hash: args.renderedTask?.promptHash ?? '',
                 task_prompt_components: args.renderedTask ? JSON.stringify(args.renderedTask.components) : '',
@@ -1722,6 +1834,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             role: args.role.name,
             parent: parentSessionId,
             worktree: worktreePath,
+            branch: branchName,
             task_prompt_renderer: args.renderedTask ? 'success' : 'not_requested',
             task_prompt_hash: args.renderedTask?.promptHash ?? '',
             task_prompt_components: args.renderedTask ? JSON.stringify(args.renderedTask.components) : '',

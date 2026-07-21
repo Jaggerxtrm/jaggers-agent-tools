@@ -32,17 +32,33 @@ by what is buildable against today's shipped surface:
 |---|---|---|---|
 | **A** `suite-a-installed-artifact.mjs` | 1, 6, 19, 20 | **RUNNABLE** (hermetic) | Install all three RCs; version-conformance vs `docs/runtime-compatibility.json`; `xt update --apply` on stale Pi state; user-owned assets preserved. No tmux. |
 | **B** `suite-b-coordination.mjs` | 12-18 | **RUNNABLE** (capability-gated) | Full reply-obligation → ack → correlated-reply → consume-once → restart-no-dup lifecycle + read-only bridge / mutation-refused, against a **private** `tmux -L` server and isolated state. Skips cleanly where tmux/xtmux are absent. |
-| **C** `suite-c-coordinator-lineage.mjs` | 2-5, 7-11 | **BLOCKED** (by design) | Subordinate coordinator launch (P0-05) + mandatory worktrees (P1-02) + branch ancestry (P1-03) all land in **xtrm-3xgs5**, which owns `cli/src/utils/worktree-session.ts` (forbidden to touch, mid-refactor). Probes for the launch contract and reports BLOCKED until it lands. |
+| **C** `suite-c-coordinator-lineage.mjs` | 2-5, 11 (7-10 live-only) | **RUNNABLE** (capability-gated) | Launches a **real subordinate chain coordinator** through the packed Core artifact (`xt claude … --subordinate`) against a private `tmux -L` server and a throwaway git repo, then asserts the lineage invariants: distinct worktree + branch, `@agent_parent_session`/`@agent_role`/`@agent_bead`/`@agent_worktree`/`@agent_branch`, the single-line `session:pane` stdout contract, and main left untouched. Skips cleanly where tmux/git are absent. |
 
-Result: **15 of 20 steps run today**; the coordinator-lineage arc is a
-bead-linked, capability-probing stub that graduates into a live (non-hermetic)
-lane the moment `xt --subordinate` ships.
+Result: **20 of 20 steps are now addressed** — 16 run, and steps 7-10 are
+explicitly deferred to a live-agent lane rather than reported as blocked.
+
+Suite C graduated in **xtrm-6hey0** (audit P0-05 `--subordinate` + P1-02 lineage
+metadata), which is what unblocked it. It became **gating** in `run-all.mjs` at
+the same time: it exits 0 when its capability gate closes, so a runner without
+tmux or git stays green, but a genuine lineage regression now fails the run.
 
 ### Faithful, not green-washed
 
 - **Step 6** asserts the installed Specialists artifact *exposes* the
   `xtrm.runtime-origin.v1` contract (shape-level). Live capture needs a
-  dispatched specialist under a coordinator → Suite C.
+  dispatched specialist under a coordinator → Suite C step 9, which is
+  live-agent-only.
+- **Suite C shims `sp` and the runtime binary, and says so in its header.** Core
+  is the real packed artifact under test; Suite C's subject is *Core's* lineage
+  contract, not Specialists' task rendering (Suite A covers that at contract
+  level) nor a real LLM turn. A real `sp render-task` needs a beads database and
+  a real agent needs credentials — shimming both is what makes steps 2-5 and 11
+  assertable at all.
+- **Suite C steps 7-10 are `[SKIP]`, not `[PASS]`.** They dispatch an actual
+  specialist chain and inspect the branches it creates — Specialists-side
+  behavior requiring live agents. Core only *publishes* the base branch via
+  `@agent_branch` (audit P1-03); it does not create `sp/*` branches, so faking
+  them here would assert nothing about Core.
 - **Step 20** asserts hooks + extensions are preserved (both code-backed
   foreign-preserved surfaces). A bare, unmarked user *skill* dropped into a
   managed skills projection is **repaired away** by `update --apply`; that is

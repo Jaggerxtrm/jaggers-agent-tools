@@ -54,16 +54,19 @@ results.push(['suite-a', sh(node, [path.join(here, 'suite-a-installed-artifact.m
 console.log('\n════════ Suite B — coordination-lifecycle (steps 12-18) ════════');
 results.push(['suite-b', sh(node, [path.join(here, 'suite-b-coordination.mjs')]).status]);
 
-console.log('\n════════ Suite C — coordinator-lineage (steps 2-11, BLOCKED) ════════');
-results.push(['suite-c', sh(node, [path.join(here, 'suite-c-coordinator-lineage.mjs')]).status]);
+console.log('\n════════ Suite C — coordinator-lineage (steps 2-5, 11; 7-10 live-only) ════════');
+results.push(['suite-c', sh(node, [path.join(here, 'suite-c-coordinator-lineage.mjs'), core]).status]);
 
 // ── verdict ─────────────────────────────────────────────────────────────────
+// Suite C became gating in xtrm-6hey0: it now launches a real subordinate
+// coordinator through the packed Core artifact instead of probing for a
+// contract that did not exist. It still exits 0 when its capability gate closes
+// (no tmux/git), so runners without a lineage runtime stay green.
 console.log('\n════════ P2-01 integration suite summary ════════');
 let failed = 0;
 for (const [name, status] of results) {
-  const gating = name !== 'suite-c';
   const verdict = status === 0 ? 'PASS' : 'FAIL';
-  if (gating && status !== 0) failed++;
-  console.log(`  ${name}: ${name === 'suite-c' ? 'BLOCKED-by-design (non-gating)' : verdict}`);
+  if (status !== 0) failed++;
+  console.log(`  ${name}: ${verdict}`);
 }
 process.exit(failed ? 1 : 0);

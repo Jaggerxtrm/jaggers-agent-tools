@@ -54,6 +54,7 @@ export function createClaudeCommand(): Command {
         .option('--parent <target>', 'With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})')
         .option('--child', 'With --role: explicit form of the auto-behavior — @agent_parent_session = current pane\'s session_id')
         .option('--reuse', 'With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one')
+        .option('--subordinate', 'Canonical subordinate-coordinator launch: implies --new-session --no-attach and parents the child to the current session. Requires --role; still gets its own worktree and branch')
         .allowExcessArguments(true)
         .allowUnknownOption(true)
         .addHelpText('after', `
@@ -68,6 +69,7 @@ Examples:
   $ xt claude worker --no-attach --prompt '/multiplexing leggi /tmp/brief.txt e seguilo'
   $ xt claude worker --no-attach --bead xyz --prompt 'work this bead'   # bead as pane metadata
   $ xt claude worker --prompt 'audit the auth flow' -- --add-dir ~/notes
+  $ xt claude coord --role chain-coordinator --bead xyz --subordinate   # subordinate coordinator (P0-05)
   $ xt claude --role reviewer --bead xyz -- --add-dir ~/notes
   $ xt claude --role chain-coordinator --model claude-opus-4-8
   $ xt claude --role reviewer --prompt 'review the auth changes in cli/src/auth/'
@@ -86,6 +88,7 @@ Examples:
             parent?: string;
             child?: boolean;
             reuse?: boolean;
+            subordinate?: boolean;
         }) => {
             // claude has no --thinking flag; if the operator was explicit,
             // warn and continue (specialist.execution.thinking_level from
@@ -111,6 +114,7 @@ Examples:
                 parent: opts.parent,
                 child: Boolean(opts.child),
                 reuse: Boolean(opts.reuse),
+                subordinate: Boolean(opts.subordinate),
                 passthrough,
             });
         });
