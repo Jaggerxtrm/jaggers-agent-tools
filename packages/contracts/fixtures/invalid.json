@@ -131,5 +131,13 @@
             "execution": { "model": null },
             "prompt": {}
         }
+    },
+    "xtrm.topology.projection.v1": {
+        "schema_version": "xtrm.topology.projection.v1",
+        "generated_at_ms": 1784656342032,
+        "host": { "host_id": "workstation" },
+        "sources": [{ "name": "xtmux", "status": "degraded", "reason": null, "duration_ms": 41 }],
+        "panes": [],
+        "orphans": { "jobs": [], "worktrees": [] }
     }
 }

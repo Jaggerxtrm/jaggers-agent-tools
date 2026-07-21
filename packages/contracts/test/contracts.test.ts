@@ -77,6 +77,80 @@ describe('Beads lifecycle event contract', () => {
     });
 });
 
+describe('aggregated topology projection contract', () => {
+    const id = SCHEMA_ID.topologyProjection;
+    const base = () => structuredClone(golden[id]) as Record<string, any>;
+
+    it('rejects an unknown top-level property', () => {
+        expect(validate(id, { ...base(), cached_at_ms: 1 }).valid).toBe(false);
+    });
+
+    it.each(['schema_version', 'generated_at_ms', 'host', 'sources', 'panes', 'orphans'])(
+        'rejects a payload missing %s',
+        (key) => {
+            const payload = base();
+            delete payload[key];
+            expect(validate(id, payload).valid).toBe(false);
+        },
+    );
+
+    // The audit's hardest P2-06 rule: pane capture is diagnostic, and must never be
+    // journalled or persisted. Enforcing it by `additionalProperties: false` means a
+    // producer CANNOT smuggle terminal text through this contract even by accident —
+    // the guarantee survives a careless future edit, which a code comment would not.
+    it.each(['content', 'capture', 'preview', 'output', 'terminal_text'])(
+        'refuses to carry pane content in a %s field',
+        (field) => {
+            const payload = base();
+            payload.panes[0][field] = 'some captured terminal text';
+            expect(validate(id, payload).valid).toBe(false);
+        },
+    );
+
+    it('refuses pane content nested under the agent block', () => {
+        const payload = base();
+        payload.panes[0].agent.capture = 'terminal text';
+        expect(validate(id, payload).valid).toBe(false);
+    });
+
+    it('accepts a fully degraded projection (every source down, no panes)', () => {
+        const names = ['xtmux', 'tmux', 'specialists', 'beads', 'git', 'github'];
+        expect(
+            validate(id, {
+                schema_version: id,
+                generated_at_ms: 1,
+                host: { host_id: 'h' },
+                sources: names.map((name) => ({
+                    name,
+                    status: 'unavailable',
+                    reason: `${name} not found on PATH`,
+                    duration_ms: 0,
+                })),
+                panes: [],
+                orphans: { jobs: [], worktrees: [] },
+            }).valid,
+        ).toBe(true);
+    });
+
+    it('requires a reason slot on every source entry so ok/unavailable stay distinguishable', () => {
+        const payload = base();
+        delete payload.sources[0].reason;
+        expect(validate(id, payload).valid).toBe(false);
+    });
+
+    it('rejects an unknown source name rather than silently accepting a typo', () => {
+        const payload = base();
+        payload.sources[0].name = 'xtmuxx';
+        expect(validate(id, payload).valid).toBe(false);
+    });
+
+    it('accepts a pane with no agent lineage (a plain shell)', () => {
+        const payload = base();
+        expect(validate(id, payload).valid).toBe(true);
+        expect(payload.panes[1].agent).toBeNull();
+    });
+});
+
 describe('validator behavior', () => {
     it('rejects a fabricated invalid pi-extension manifest (audit acceptance criterion)', () => {
         const fabricated = {

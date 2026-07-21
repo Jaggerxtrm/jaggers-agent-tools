@@ -1,0 +1,193 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "xtrm.topology.projection.v1",
+    "title": "xtrm aggregated topology projection",
+    "description": "Read-only aggregated projection produced by Core (`xt topology --json`, audit ~/dev/11.md P2-05). Joins tmux pane -> interactive runtime -> role -> coordinator -> specialist jobs -> bead -> worktree -> branch -> integration target -> pull request, reading each fact live from its owning system's published CLI surface at invocation time. NOT a persisted graph: nothing here is cached, materialized, or written back, and no field is authoritative over its source. snake_case, matching the xtrm.xtmux.topology.v1 cross-repo convention. Deliberately incapable of carrying terminal content: no pane-capture, preview, output or free-text-status field exists at any level, so the audit's 'pane capture is diagnostic and must never be journalled or persisted' rule is enforced by the type system rather than by discipline.",
+    "type": "object",
+    "required": ["schema_version", "generated_at_ms", "host", "sources", "panes", "orphans"],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": { "const": "xtrm.topology.projection.v1" },
+        "generated_at_ms": { "type": "number", "minimum": 0 },
+        "host": {
+            "type": "object",
+            "required": ["host_id"],
+            "additionalProperties": false,
+            "properties": {
+                "host_id": { "type": "string", "minLength": 1 },
+                "tmux_server_id": { "type": ["string", "null"] }
+            }
+        },
+        "sources": {
+            "description": "Per-source outcome ledger. The projection's own observability surface, and the ONLY way a consumer can distinguish a degraded projection from an empty world: an absent `sp` and zero running jobs both yield an empty jobs array, and only this ledger separates them.",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["name", "status", "reason", "duration_ms"],
+                "additionalProperties": false,
+                "properties": {
+                    "name": {
+                        "description": "Owning system queried. Each maps to one published read-only CLI surface.",
+                        "enum": ["xtmux", "tmux", "specialists", "beads", "git", "github"]
+                    },
+                    "status": {
+                        "description": "ok = queried and parsed. unavailable = the binary is not installed or not applicable on this host (not a bug). error = installed but the query failed, timed out, or returned unparseable output (a bug signal).",
+                        "enum": ["ok", "unavailable", "error"]
+                    },
+                    "reason": {
+                        "description": "Human-readable cause for unavailable/error, null when ok. Never contains command output, secrets, or tokens.",
+                        "type": ["string", "null"]
+                    },
+                    "duration_ms": { "type": "number", "minimum": 0 }
+                }
+            }
+        },
+        "panes": {
+            "description": "The join spine. One entry per live tmux pane, carrying everything the other five systems know about it.",
+            "type": "array",
+            "items": { "$ref": "#/definitions/pane" }
+        },
+        "orphans": {
+            "description": "Facts that belong to no live pane. Without this a specialist job whose coordinator pane died, or a worktree whose session was killed, silently vanishes from the projection — which is exactly the leak an operator needs to see.",
+            "type": "object",
+            "required": ["jobs", "worktrees"],
+            "additionalProperties": false,
+            "properties": {
+                "jobs": { "type": "array", "items": { "$ref": "#/definitions/job" } },
+                "worktrees": { "type": "array", "items": { "$ref": "#/definitions/worktree" } }
+            }
+        }
+    },
+    "definitions": {
+        "pane": {
+            "type": "object",
+            "required": [
+                "pane_id", "session_id", "session_name", "current_command", "current_path",
+                "agent", "jobs", "bead", "worktree", "pull_request"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "pane_id": { "type": "string", "minLength": 1 },
+                "session_id": { "type": "string", "minLength": 1 },
+                "session_name": { "type": "string" },
+                "window_id": { "type": ["string", "null"] },
+                "current_command": { "type": "string" },
+                "current_path": { "type": "string" },
+                "agent": {
+                    "description": "Lineage published by Core's launcher as @agent_* pane options (PR #465). Null for a pane that is not an xtrm-launched agent — a plain shell, an editor, the operator's own terminal.",
+                    "oneOf": [
+                        { "type": "null" },
+                        {
+                            "type": "object",
+                            "required": ["state", "role", "task", "bead_id", "worktree", "branch", "parent_session_id"],
+                            "additionalProperties": false,
+                            "properties": {
+                                "state": {
+                                    "description": "@agent_state. A lifecycle signal owned by the runtime's own hook — NOT a completion signal. Completion is read from bead.status, pull_request.merged_at or job.status only.",
+                                    "type": ["string", "null"]
+                                },
+                                "role": {
+                                    "description": "@agent_role (P2-03). Plain role identity; `task` still carries the legacy `role:<name>` encoding and is preserved, not replaced.",
+                                    "type": ["string", "null"]
+                                },
+                                "task": { "type": ["string", "null"] },
+                                "bead_id": { "type": ["string", "null"] },
+                                "worktree": { "type": ["string", "null"] },
+                                "branch": {
+                                    "description": "@agent_branch. For a coordinator pane this doubles as the integration target its specialist chains derive from (audit P1-03).",
+                                    "type": ["string", "null"]
+                                },
+                                "parent_session_id": { "type": ["string", "null"] },
+                                "parent_pane_id": { "type": ["string", "null"] },
+                                "instance_id": { "type": ["string", "null"] }
+                            }
+                        }
+                    ]
+                },
+                "jobs": {
+                    "description": "Specialist jobs attributed to this pane, by bead/epic/worktree match. Chain roots and descendants alike; use is_chain_root and chain_root_job_id to rebuild the lineage tree.",
+                    "type": "array",
+                    "items": { "$ref": "#/definitions/job" }
+                },
+                "bead": { "oneOf": [{ "type": "null" }, { "$ref": "#/definitions/bead" }] },
+                "worktree": { "oneOf": [{ "type": "null" }, { "$ref": "#/definitions/worktree" }] },
+                "pull_request": { "oneOf": [{ "type": "null" }, { "$ref": "#/definitions/pull_request" }] }
+            }
+        },
+        "job": {
+            "description": "One specialist job as published by `sp ps --json`. Mirrors Specialists' field names; Core does not reinterpret them.",
+            "type": "object",
+            "required": ["job_id", "specialist", "status", "bead_id", "branch", "worktree_path", "is_chain_root"],
+            "additionalProperties": false,
+            "properties": {
+                "job_id": { "type": "string", "minLength": 1 },
+                "specialist": { "type": "string" },
+                "status": {
+                    "description": "Specialists-owned job status verbatim. Enumerating it here would fossilize another repo's vocabulary, so it stays an open string.",
+                    "type": "string"
+                },
+                "bead_id": { "type": ["string", "null"] },
+                "epic_id": { "type": ["string", "null"] },
+                "chain_id": { "type": ["string", "null"] },
+                "chain_root_job_id": { "type": ["string", "null"] },
+                "is_chain_root": { "type": "boolean" },
+                "branch": { "type": ["string", "null"] },
+                "worktree_path": { "type": ["string", "null"] },
+                "integration_target_branch": {
+                    "description": "The @agent_branch of the coordinator pane this job is attributed to — the branch its work is destined to integrate into. Null when the job has no live owning pane.",
+                    "type": ["string", "null"]
+                },
+                "started_at_ms": { "type": ["number", "null"] },
+                "owning_pane_id": { "type": ["string", "null"] }
+            }
+        },
+        "bead": {
+            "description": "Beads state as published by `bd`. status is one of the two authoritative completion signals in this projection (the other is pull_request.merged_at).",
+            "type": "object",
+            "required": ["id", "status"],
+            "additionalProperties": false,
+            "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "status": { "type": "string" },
+                "title": { "type": ["string", "null"] },
+                "issue_type": { "type": ["string", "null"] },
+                "priority": { "type": ["number", "null"] },
+                "parent_id": { "type": ["string", "null"] }
+            }
+        },
+        "worktree": {
+            "description": "git worktree metadata from `git worktree list --porcelain`.",
+            "type": "object",
+            "required": ["path", "branch", "head_sha", "detached"],
+            "additionalProperties": false,
+            "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "branch": { "type": ["string", "null"] },
+                "head_sha": { "type": ["string", "null"] },
+                "detached": { "type": "boolean" },
+                "shared_by_pane_ids": {
+                    "description": "Every live pane whose cwd resolves into this worktree. Length > 1 is the worktree-collision warning the multiplexing doctrine calls out.",
+                    "type": "array",
+                    "items": { "type": "string" }
+                }
+            }
+        },
+        "pull_request": {
+            "description": "GitHub PR evidence for a branch, from `gh pr list --json`. merged_at is an authoritative completion signal; nothing else in this projection may be read as one.",
+            "type": "object",
+            "required": ["number", "state", "head_branch"],
+            "additionalProperties": false,
+            "properties": {
+                "number": { "type": "number" },
+                "state": { "type": "string" },
+                "url": { "type": ["string", "null"] },
+                "title": { "type": ["string", "null"] },
+                "head_branch": { "type": "string", "minLength": 1 },
+                "base_branch": { "type": ["string", "null"] },
+                "is_draft": { "type": ["boolean", "null"] },
+                "merged_at": { "type": ["string", "null"] },
+                "checks_state": { "type": ["string", "null"] }
+            }
+        }
+    }
+}
