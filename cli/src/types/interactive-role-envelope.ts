@@ -27,6 +27,22 @@ export interface InteractiveRoleEnvelope {
 
     /** Thinking level where the surface supports it. */
     thinkingLevel?: string;
+
+    /**
+     * Whether this role is meant to run as a persistent interactive session
+     * (`specialist.execution.interactive`) rather than only as a background
+     * Specialists-supervised job.
+     *
+     * Additive in xtrm-6hey0.3 — no version bump, per the rule above. Core uses
+     * it for one thing: refusing a `--subordinate` coordinator launch of a role
+     * that declares `false`. It is deliberately tri-state — `undefined` means
+     * "the installed Specialists release does not declare it", which must stay
+     * permissive so an older release keeps working.
+     *
+     * This is NOT a job-supervision field. It says what shape the role is, not
+     * how Specialists governs it — the distinction the "Rules" section draws.
+     */
+    interactive?: boolean;
 }
 
 /**

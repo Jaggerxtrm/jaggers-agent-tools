@@ -5,14 +5,68 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
 
+/**
+ * Identity of the pane running `xt merge`, as published by the launcher
+ * (xtrm-6hey0.2). A pane that carries a role AND names a different session as
+ * its parent is a *subordinate* — a coordinator or specialist session spawned
+ * by someone else.
+ *
+ * Everything here degrades to "not subordinate" when tmux, the pane options, or
+ * the launcher metadata are absent. That is deliberate: this is a UX guardrail
+ * against the merge-authority mistake the audit names (P1-04), not a security
+ * boundary. Anyone who can run `xt merge` can also run `gh pr merge`.
+ *
+ * Pure-ish — reads tmux only. Exported for unit testing.
+ */
+export function readSubordinateIdentity(
+    query: (args: string[]) => string = (args) =>
+        (spawnSync('tmux', args, { encoding: 'utf8', stdio: 'pipe' }).stdout ?? '').trim(),
+    insideTmux: boolean = Boolean(process.env.TMUX),
+): { subordinate: false } | { subordinate: true; role: string; parent: string } {
+    if (!insideTmux) return { subordinate: false };
+    const paneId = query(['display-message', '-p', '#{pane_id}']);
+    if (!paneId) return { subordinate: false };
+    const role = query(['show-options', '-p', '-t', paneId, '-qv', '@agent_role']);
+    if (!role) return { subordinate: false };
+    const parent = query(['show-options', '-p', '-t', paneId, '-qv', '@agent_parent_session']);
+    const own = query(['display-message', '-p', '#{session_id}']);
+    // A role session whose parent is itself (or unset) is not subordinate to
+    // anyone — it is the operator having primed their own pane with a role.
+    if (!parent || parent === own) return { subordinate: false };
+    return { subordinate: true, role, parent };
+}
+
 export function createMergeCommand(): Command {
     return new Command('merge')
         .description('Drain the xt worktree PR merge queue via the xt-merge specialist')
         .option('--dry-run', 'List queue and CI status without merging', false)
         .option('-y, --yes', 'Skip confirmation prompt', false)
         .option('--no-beads', 'Skip creating a tracking bead for this run', false)
-        .action(async (opts: { dryRun: boolean; yes: boolean; beads: boolean }) => {
+        .option('--override-authority', 'Run from a subordinate role session anyway (operator override — see docs/architecture/coordinator-branch-ancestry.md)', false)
+        .action(async (opts: { dryRun: boolean; yes: boolean; beads: boolean; overrideAuthority: boolean }) => {
             const cwd = process.cwd();
+
+            // Gate: merge authority (audit P1-04). `xt merge` is the one surface
+            // in Core that merges into main, so it is where the authority ladder
+            // is enforceable: a specialist may publish its own branch, a
+            // coordinator may merge accepted specialist branches into its
+            // coordinator branch, but only the main orchestrator merges into
+            // main. A dry run inspects the queue without merging, so it is not
+            // an authority act and stays allowed.
+            const identity = readSubordinateIdentity();
+            if (identity.subordinate && !opts.dryRun && !opts.overrideAuthority) {
+                console.error(kleur.red(
+                    '\n  ✗ xt merge is main-orchestrator authority.\n\n'
+                    + `  This pane runs role '${identity.role}' and is subordinate to ${identity.parent}.\n`
+                    + '  A subordinate session may publish its own branch and open a PR; merging\n'
+                    + '  into main belongs to the orchestrator that owns the epic.\n\n'
+                    + '  Instead:\n'
+                    + '    • report readiness to your parent, and let it merge, or\n'
+                    + '    • xt merge --dry-run          inspect the queue without merging, or\n'
+                    + '    • xt merge --override-authority   operator override, if you are the operator\n',
+                ));
+                process.exit(1);
+            }
 
             // Gate: must be inside a git repository
             const gitCheck = spawnSync('git', ['rev-parse', '--git-dir'], { cwd, encoding: 'utf8', stdio: 'pipe' });

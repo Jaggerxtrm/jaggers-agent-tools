@@ -81,6 +81,10 @@ export interface ResolvedRole {
     thinkingLevel?: string;
     /** specialist.execution.extensions — per-role opt-in/opt-out map. */
     extensions?: Record<string, boolean>;
+    /** specialist.execution.interactive — role runs as a persistent session.
+     * Tri-state: undefined means the installed Specialists release does not
+     * declare it, which must stay permissive. xtrm-6hey0.3. */
+    interactive?: boolean;
 }
 
 // xt-owned flags a passthrough must not clobber. Reject with a clear error if
@@ -255,7 +259,7 @@ export function parseSpecialistJson(name: string, raw: string, mainRepoRoot: str
     // execution.{model,thinking_level,extensions} — all optional. CLI flags win
     // over these at launch time; specialists set them as sensible defaults.
     const execution = (spec as { execution?: unknown }).execution as
-        | { model?: unknown; thinking_level?: unknown; extensions?: unknown }
+        | { model?: unknown; thinking_level?: unknown; extensions?: unknown; interactive?: unknown }
         | undefined;
     const model = typeof execution?.model === 'string' && execution.model ? execution.model : undefined;
     const thinkingLevel = typeof execution?.thinking_level === 'string' && execution.thinking_level ? execution.thinking_level : undefined;
@@ -267,7 +271,11 @@ export function parseSpecialistJson(name: string, raw: string, mainRepoRoot: str
         }
         if (Object.keys(map).length > 0) extensions = map;
     }
-    return { name, systemPrompt, skillPaths, model, thinkingLevel, extensions };
+    // Tri-state: only an explicit boolean is meaningful. Anything else (absent,
+    // null, a string) reads as "not declared" so an older Specialists release
+    // stays launchable. xtrm-6hey0.3.
+    const interactive = typeof execution?.interactive === 'boolean' ? execution.interactive : undefined;
+    return { name, systemPrompt, skillPaths, model, thinkingLevel, extensions, interactive };
 }
 
 function isUnsupportedSurfaceOption(stderr: string): boolean {
@@ -1082,15 +1090,12 @@ export type SubordinateResolution =
     | { ok: true; newSession: true; attach: false; child: boolean }
     | { ok: false; error: string };
 
-// Pure — no I/O. Exported for unit testing.
-export function resolveSubordinateLaunch(args: {
-    runtime: 'pi' | 'claude';
-    role?: string;
-    parent?: string;
-    insideTmux: boolean;
-}): SubordinateResolution {
-    const { runtime, role, parent, insideTmux } = args;
-
+/**
+ * Shape every subordinate rejection the same way: one line naming what was
+ * wrong, then the canonical long-form command as remediation. Matches the error
+ * the audit suggests in P1-05, parameterized by the runtime actually launching.
+ */
+export function subordinateRejection(runtime: 'pi' | 'claude', because: string): string {
     const canonical = [
         `  xt ${runtime} <name> \\`,
         '    --role chain-coordinator \\',
@@ -1099,13 +1104,32 @@ export function resolveSubordinateLaunch(args: {
         '    --no-attach \\',
         '    --parent <session-id>',
     ].join('\n');
+    return `subordinate launch rejected:\n  ${because}\n\nUse:\n${canonical}`;
+}
+
+// Pure — no I/O. Exported for unit testing.
+export function resolveSubordinateLaunch(args: {
+    runtime: 'pi' | 'claude';
+    role?: string;
+    bead?: string;
+    parent?: string;
+    insideTmux: boolean;
+}): SubordinateResolution {
+    const { runtime, role, bead, parent, insideTmux } = args;
     const reject = (because: string): SubordinateResolution => ({
         ok: false,
-        error: `subordinate launch rejected:\n  ${because}\n\nUse:\n${canonical}`,
+        error: subordinateRejection(runtime, because),
     });
 
     if (!role) {
         return reject('--subordinate is a coordinator launch and requires --role');
+    }
+    // Audit P1-05, "a bead is supplied". A coordinator's whole contract is "own
+    // exactly one epic or task-group"; without a bead it has no scope to own and
+    // nothing to report against. Only enforced for --subordinate — a plain
+    // `--role` launch is an operator priming a pane and may legitimately idle.
+    if (!bead) {
+        return reject('--subordinate scopes a coordinator to one epic and requires --bead');
     }
     // A subordinate is defined by having a parent. Inside tmux the current
     // session supplies it; outside tmux there is nothing to infer from, so an
@@ -1118,6 +1142,72 @@ export function resolveSubordinateLaunch(args: {
     // An explicit --parent is the operator being deliberate and still wins, so
     // only claim the auto-parent when they did not name one.
     return { ok: true, newSession: true, attach: false, child: !parent };
+}
+
+/**
+ * The two P1-05 checks that need a resolved role and the launching pane's
+ * identity, rather than just argv. Split from resolveSubordinateLaunch because
+ * they run later — after `sp view` has answered — but still before any worktree
+ * is created, so a rejected launch leaks nothing.
+ *
+ * Pure — no I/O. Exported for unit testing.
+ */
+export function checkSubordinateRole(args: {
+    runtime: 'pi' | 'claude';
+    role: ResolvedRole;
+    /** @agent_role of the pane running the launcher, '' when absent. */
+    launchingPaneRole: string;
+}): { ok: true } | { ok: false; error: string } {
+    const { runtime, role, launchingPaneRole } = args;
+
+    // Tri-state: only an explicit `false` rejects. An older Specialists release
+    // that does not declare `interactive` must stay launchable.
+    if (role.interactive === false) {
+        return {
+            ok: false,
+            error: subordinateRejection(
+                runtime,
+                `role '${role.name}' declares execution.interactive=false — it is a background job, not a session`,
+            ),
+        };
+    }
+
+    // "the role is not being launched by another chain coordinator". The
+    // chain-coordinator system prompt already says "Don't spawn nested
+    // chain-coordinators"; until @agent_role existed (xtrm-6hey0.2) that was
+    // pure honour system. Compares the launching pane's role to the role being
+    // launched, so it generalizes to any self-nesting coordinator rather than
+    // hard-coding one specialist name.
+    if (launchingPaneRole && launchingPaneRole === role.name) {
+        return {
+            ok: false,
+            error: subordinateRejection(
+                runtime,
+                `nested coordinator: this pane is already running role '${launchingPaneRole}'`
+                + ' — escalate to the main orchestrator instead of spawning a peer',
+            ),
+        };
+    }
+
+    return { ok: true };
+}
+
+/**
+ * `@agent_role` of the pane the launcher was invoked from, or '' when there is
+ * no tmux, no pane option, or tmux is unavailable. Absence is always benign:
+ * these checks are launch guardrails, not a security boundary.
+ */
+function currentPaneRole(): string {
+    if (!process.env.TMUX) return '';
+    const r = spawnSync('tmux', ['display-message', '-p', '#{pane_id}'], {
+        stdio: 'pipe', encoding: 'utf8',
+    });
+    const paneId = (r.stdout ?? '').trim();
+    if (!paneId) return '';
+    const option = spawnSync('tmux', ['show-options', '-p', '-t', paneId, '-qv', '@agent_role'], {
+        stdio: 'pipe', encoding: 'utf8',
+    });
+    return (option.stdout ?? '').trim();
 }
 
 export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promise<void> {
@@ -1133,6 +1223,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         const subordinate = resolveSubordinateLaunch({
             runtime,
             role: roleName,
+            bead,
             parent: opts.parent,
             insideTmux: Boolean(process.env.TMUX),
         });
@@ -1169,6 +1260,19 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     if (roleName) {
         try {
             resolvedRole = resolveRole(roleName, cwd, runtime, Boolean(model));
+
+            // The P1-05 checks that need the resolved role. Placed immediately
+            // after `sp view` answers and long before worktree creation, so a
+            // rejected coordinator launch leaves nothing on disk.
+            if (opts.subordinate) {
+                const coordinatorCheck = checkSubordinateRole({
+                    runtime,
+                    role: resolvedRole,
+                    launchingPaneRole: currentPaneRole(),
+                });
+                if (!coordinatorCheck.ok) throw new Error(coordinatorCheck.error);
+            }
+
             resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
             explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
             if (runtime === 'claude') assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);

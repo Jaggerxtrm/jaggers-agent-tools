@@ -61938,7 +61938,8 @@ function parseSpecialistJson(name, raw, mainRepoRoot = process.cwd()) {
     }
     if (Object.keys(map2).length > 0) extensions = map2;
   }
-  return { name, systemPrompt, skillPaths, model, thinkingLevel, extensions };
+  const interactive = typeof execution?.interactive === "boolean" ? execution.interactive : void 0;
+  return { name, systemPrompt, skillPaths, model, thinkingLevel, extensions, interactive };
 }
 function isUnsupportedSurfaceOption(stderr) {
   return /unknown (?:option|flag)|unrecognized option|unexpected argument|invalid option/i.test(stderr);
@@ -62387,8 +62388,7 @@ function unregisterPluginsForWorktree(worktreePath) {
   } catch {
   }
 }
-function resolveSubordinateLaunch(args) {
-  const { runtime, role, parent, insideTmux } = args;
+function subordinateRejection(runtime, because) {
   const canonical = [
     `  xt ${runtime} <name> \\`,
     "    --role chain-coordinator \\",
@@ -62397,21 +62397,64 @@ function resolveSubordinateLaunch(args) {
     "    --no-attach \\",
     "    --parent <session-id>"
   ].join("\n");
-  const reject = (because) => ({
-    ok: false,
-    error: `subordinate launch rejected:
+  return `subordinate launch rejected:
   ${because}
 
 Use:
-${canonical}`
+${canonical}`;
+}
+function resolveSubordinateLaunch(args) {
+  const { runtime, role, bead, parent, insideTmux } = args;
+  const reject = (because) => ({
+    ok: false,
+    error: subordinateRejection(runtime, because)
   });
   if (!role) {
     return reject("--subordinate is a coordinator launch and requires --role");
+  }
+  if (!bead) {
+    return reject("--subordinate scopes a coordinator to one epic and requires --bead");
   }
   if (!insideTmux && !parent) {
     return reject("subordinate coordinator requires a parent session");
   }
   return { ok: true, newSession: true, attach: false, child: !parent };
+}
+function checkSubordinateRole(args) {
+  const { runtime, role, launchingPaneRole } = args;
+  if (role.interactive === false) {
+    return {
+      ok: false,
+      error: subordinateRejection(
+        runtime,
+        `role '${role.name}' declares execution.interactive=false \u2014 it is a background job, not a session`
+      )
+    };
+  }
+  if (launchingPaneRole && launchingPaneRole === role.name) {
+    return {
+      ok: false,
+      error: subordinateRejection(
+        runtime,
+        `nested coordinator: this pane is already running role '${launchingPaneRole}' \u2014 escalate to the main orchestrator instead of spawning a peer`
+      )
+    };
+  }
+  return { ok: true };
+}
+function currentPaneRole() {
+  if (!process.env.TMUX) return "";
+  const r = (0, import_node_child_process.spawnSync)("tmux", ["display-message", "-p", "#{pane_id}"], {
+    stdio: "pipe",
+    encoding: "utf8"
+  });
+  const paneId = (r.stdout ?? "").trim();
+  if (!paneId) return "";
+  const option = (0, import_node_child_process.spawnSync)("tmux", ["show-options", "-p", "-t", paneId, "-qv", "@agent_role"], {
+    stdio: "pipe",
+    encoding: "utf8"
+  });
+  return (option.stdout ?? "").trim();
 }
 async function launchWorktreeSession(opts) {
   const { runtime, name, role: roleName, bead, prompt, model, thinking } = opts;
@@ -62423,6 +62466,7 @@ async function launchWorktreeSession(opts) {
     const subordinate = resolveSubordinateLaunch({
       runtime,
       role: roleName,
+      bead,
       parent: opts.parent,
       insideTmux: Boolean(process.env.TMUX)
     });
@@ -62447,6 +62491,14 @@ async function launchWorktreeSession(opts) {
   if (roleName) {
     try {
       resolvedRole = resolveRole(roleName, cwd, runtime, Boolean(model));
+      if (opts.subordinate) {
+        const coordinatorCheck = checkSubordinateRole({
+          runtime,
+          role: resolvedRole,
+          launchingPaneRole: currentPaneRole()
+        });
+        if (!coordinatorCheck.ok) throw new Error(coordinatorCheck.error);
+      }
       resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
       explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
       if (runtime === "claude") assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
@@ -71000,9 +71052,38 @@ init_kleur();
 var import_node_child_process16 = require("child_process");
 var import_node_fs11 = require("fs");
 var import_node_path30 = require("path");
+function readSubordinateIdentity(query = (args) => ((0, import_node_child_process16.spawnSync)("tmux", args, { encoding: "utf8", stdio: "pipe" }).stdout ?? "").trim(), insideTmux = Boolean(process.env.TMUX)) {
+  if (!insideTmux) return { subordinate: false };
+  const paneId = query(["display-message", "-p", "#{pane_id}"]);
+  if (!paneId) return { subordinate: false };
+  const role = query(["show-options", "-p", "-t", paneId, "-qv", "@agent_role"]);
+  if (!role) return { subordinate: false };
+  const parent = query(["show-options", "-p", "-t", paneId, "-qv", "@agent_parent_session"]);
+  const own = query(["display-message", "-p", "#{session_id}"]);
+  if (!parent || parent === own) return { subordinate: false };
+  return { subordinate: true, role, parent };
+}
 function createMergeCommand() {
-  return new Command("merge").description("Drain the xt worktree PR merge queue via the xt-merge specialist").option("--dry-run", "List queue and CI status without merging", false).option("-y, --yes", "Skip confirmation prompt", false).option("--no-beads", "Skip creating a tracking bead for this run", false).action(async (opts) => {
+  return new Command("merge").description("Drain the xt worktree PR merge queue via the xt-merge specialist").option("--dry-run", "List queue and CI status without merging", false).option("-y, --yes", "Skip confirmation prompt", false).option("--no-beads", "Skip creating a tracking bead for this run", false).option("--override-authority", "Run from a subordinate role session anyway (operator override \u2014 see docs/architecture/coordinator-branch-ancestry.md)", false).action(async (opts) => {
     const cwd = process.cwd();
+    const identity = readSubordinateIdentity();
+    if (identity.subordinate && !opts.dryRun && !opts.overrideAuthority) {
+      console.error(kleur_default.red(
+        `
+  \u2717 xt merge is main-orchestrator authority.
+
+  This pane runs role '${identity.role}' and is subordinate to ${identity.parent}.
+  A subordinate session may publish its own branch and open a PR; merging
+  into main belongs to the orchestrator that owns the epic.
+
+  Instead:
+    \u2022 report readiness to your parent, and let it merge, or
+    \u2022 xt merge --dry-run          inspect the queue without merging, or
+    \u2022 xt merge --override-authority   operator override, if you are the operator
+`
+      ));
+      process.exit(1);
+    }
     const gitCheck = (0, import_node_child_process16.spawnSync)("git", ["rev-parse", "--git-dir"], { cwd, encoding: "utf8", stdio: "pipe" });
     if (gitCheck.status !== 0) {
       console.error(kleur_default.red("\n  \u2717 Not inside a git repository.\n"));
