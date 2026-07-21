@@ -66,47 +66,24 @@ export default function (pi: ExtensionAPI) {
 		await SubprocessRunner.run("bd", ["kv", "clear", `closed-this-session:${sessionId}`], { cwd });
 	};
 
-	const hasTrackableWork = async (cwd: string): Promise<boolean> => {
-		const result = await SubprocessRunner.run("bd", ["list"], { cwd });
-		if (result.code === 0) {
-			const counts = EventAdapter.parseBdCounts(result.stdout);
-			if (counts) return (counts.open + counts.inProgress) > 0;
-		}
-		return false;
-	};
-
-	// --- Claim-lookup cache -------------------------------------------------------
-	// getActiveClaim spawns bd kv get (~850ms) + bd show (~300ms); hasTrackableWork spawns
-	// bd list (~350ms). Running these on EVERY mutating tool call added ~1s to each edit.
-	// Cache the resolved values with a short TTL and invalidate on the bd update --claim /
-	// bd close commands we already intercept in the tool_result hook below.
-	let activeClaimCache: { sessionId: string; cwd: string; value: string | null; expiresAt: number } | null = null;
-	let hasTrackableWorkCache: { cwd: string; value: boolean; expiresAt: number } | null = null;
-	const ACTIVE_CLAIM_TTL_MS = 3000;
-	const HAS_TRACKABLE_WORK_TTL_MS = 5000;
+	// --- Claim-lookup cache (run-scoped) -----------------------------------------
+	// getActiveClaim spawns bd kv get (~850ms) + bd show (~300ms). Running these on EVERY
+	// mutating tool call added ~1s to each edit. Cache the resolved claim for the lifetime
+	// of the run and invalidate only when we OBSERVE a claim/close/KV mutation in the
+	// tool_result hook below. xtrm-64pl0: replaces the old 3s time-based TTL, which re-spawned
+	// bd every 3s even when claim state had not changed.
+	let activeClaimCache: { sessionId: string; cwd: string; value: string | null } | null = null;
 
 	const invalidateClaimCache = (): void => {
 		activeClaimCache = null;
-		hasTrackableWorkCache = null;
 	};
 
 	const getActiveClaimCached = async (sessionId: string, cwd: string): Promise<string | null> => {
-		const now = Date.now();
-		if (activeClaimCache && activeClaimCache.sessionId === sessionId && activeClaimCache.cwd === cwd && activeClaimCache.expiresAt > now) {
+		if (activeClaimCache && activeClaimCache.sessionId === sessionId && activeClaimCache.cwd === cwd) {
 			return activeClaimCache.value;
 		}
 		const value = await getActiveClaim(sessionId, cwd);
-		activeClaimCache = { sessionId, cwd, value, expiresAt: Date.now() + ACTIVE_CLAIM_TTL_MS };
-		return value;
-	};
-
-	const hasTrackableWorkCached = async (cwd: string): Promise<boolean> => {
-		const now = Date.now();
-		if (hasTrackableWorkCache && hasTrackableWorkCache.cwd === cwd && hasTrackableWorkCache.expiresAt > now) {
-			return hasTrackableWorkCache.value;
-		}
-		const value = await hasTrackableWork(cwd);
-		hasTrackableWorkCache = { cwd, value, expiresAt: Date.now() + HAS_TRACKABLE_WORK_TTL_MS };
+		activeClaimCache = { sessionId, cwd, value };
 		return value;
 	};
 
@@ -139,19 +116,21 @@ export default function (pi: ExtensionAPI) {
 		if (!EventAdapter.isBeadsProject(cwd)) return undefined;
 		const sessionId = getSessionId(ctx);
 
+		// xtrm-64pl0: the edit gate no longer falls back to `bd list` (hasTrackableWork) to
+		// decide whether the board has work. Within a beads project (isBeadsProject guard above)
+		// an edit without an active claim is blocked directly — no bd list subprocess. Behavior
+		// change: empty-board edits in a beads project now require a claim too (documented in
+		// CHANGELOG.md and docs/pi-extensions.md).
 		if (EventAdapter.isMutatingFileTool(event)) {
 			const claim = await getActiveClaimCached(sessionId, cwd);
 			if (!claim) {
-				const hasWork = await hasTrackableWorkCached(cwd);
-				if (hasWork) {
-					if (ctx.hasUI) {
-						ctx.ui.notify("Beads: Edit blocked. Claim an issue first.", "warning");
-					}
-					return {
-						block: true,
-						reason: `No active claim for session ${sessionId}.\n  bd update <id> --claim\n`,
-					};
+				if (ctx.hasUI) {
+					ctx.ui.notify("Beads: Edit blocked. Claim an issue first.", "warning");
 				}
+				return {
+					block: true,
+					reason: `No active claim for session ${sessionId}.\n  bd update <id> --claim\n`,
+				};
 			}
 		}
 
@@ -193,6 +172,12 @@ export default function (pi: ExtensionAPI) {
 		const sessionId = getSessionId(ctx);
 		const cwd = getCwd(ctx);
 
+		// xtrm-64pl0: invalidate the run-scoped claim cache when we observe a KV mutation that
+		// could change claim state. claim/close mutations are also invalidated further below.
+		if (/\bbd\s+kv\s+(set|clear)\s+["']?(claimed:|closed-this-session:)/.test(command)) {
+			invalidateClaimCache();
+		}
+
 		// Auto-claim on bd update --claim regardless of exit code.
 		if (/\bbd\s+update\b/.test(command) && /--claim\b/.test(command)) {
 			const issueMatch = command.match(/\bbd\s+update\s+(\S+)/);
@@ -225,7 +210,7 @@ export default function (pi: ExtensionAPI) {
 		return undefined;
 	});
 
-	// Memory gate: clean up session markers and check ack at agent_end/session_shutdown.
+	// Memory gate: clean up session markers and check ack at session_shutdown.
 	// Memory gate prompt was already injected into bd close tool_result context (silent, agent-visible only).
 	// No UI notification — parity with Claude Stop hook {additionalContext} pattern.
 	const triggerMemoryGateIfNeeded = async (ctx: any) => {
@@ -257,11 +242,10 @@ export default function (pi: ExtensionAPI) {
 		// No notify — memory gate was injected into bd close tool_result content (silent, agent-visible only).
 	};
 
-	pi.on("agent_end", async (_event, ctx) => {
-		await triggerMemoryGateIfNeeded(ctx);
-		return undefined;
-	});
-
+	// xtrm-64pl0: single lifecycle memory-gate check. Previously BOTH agent_end (every turn)
+	// and session_shutdown ran this, each spawning ~4 bd kv subprocesses. The authoritative
+	// memory safety is the bd-close block in tool_call above; this is end-of-session marker
+	// hygiene only, so it now runs once at session_shutdown.
 	pi.on("session_shutdown", async (_event, ctx) => {
 		await triggerMemoryGateIfNeeded(ctx);
 		return undefined;

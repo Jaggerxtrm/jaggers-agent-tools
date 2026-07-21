@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Slim Pi custom-footer and beads hot paths (xtrm-64pl0)** — `custom-footer` is now a pure cache
+  reader: it renders path/branch, context/model, and one compact beads line from
+  `.xtrm/cache/beads-status.json` only. Footer render and normal startup spawn no `bd`, and a
+  `bd` mutation `tool_result` re-reads the cache file instead of spawning a refresh subprocess.
+  The `beads` edit gate no longer falls back to `bd list` (`hasTrackableWork` removed); the claim
+  lookup is run-scoped (cached for the run, invalidated on observed claim/close/KV mutations)
+  instead of a 3s TTL; and the memory-gate lifecycle check runs once at `session_shutdown` instead
+  of both `agent_end` and `session_shutdown`.
+
+### Removed
+
+- Pi `custom-footer` expandable beads tree UI — the `/beads` command, the `Alt+G` toggle, and the
+  descendant/parent `bd query/show/children` + cache-refresh subprocess path (xtrm-64pl0).
+
+### Behavior change (xtrm-64pl0)
+
+- Within a beads project, an edit with no active claim is now blocked directly without a `bd list`
+  board scan, so empty-board edits in a beads project require a claim too. Claim and commit safety
+  are otherwise unchanged.
+
 ## [0.11.1] - 2026-07-20
 
 ### Added
