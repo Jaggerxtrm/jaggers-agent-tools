@@ -8,6 +8,7 @@ import { spawnSync } from 'child_process';
 import { t } from '../utils/theme.js';
 import { appendHookLog, hashValue, resolveGlobalHooksConfigPath, resolveGlobalHooksRoot } from './global-hooks-bootstrap.js';
 import { shouldUseGlobalHooks } from './global-hooks-flag.js';
+import { planLegacyHookDedupe } from './legacy-hook-dedupe.js';
 import { writeJsonAtomic } from '../utils/atomic-write.js';
 
 declare const __dirname: string;
@@ -197,7 +198,16 @@ export async function reconcileProjectClaudeHooks(
     const generatedHooks = resolveHooksForProjectRuntime(hooksConfig.hooks ?? {}, projectHooksDir);
     const generatedStatusLine = resolveStatusLineForProjectRuntime(hooksConfig.statusLine, projectHooksDir);
     // xtrm-61cdl: preserve third-party (unmanaged) wrappers on reconcile.
-    const hooksToWrite = mergeProjectOwnedHooks(await readExistingHooks(settingsPath), generatedHooks, projectHooksDir);
+    const mergedHooks = mergeProjectOwnedHooks(await readExistingHooks(settingsPath), generatedHooks, projectHooksDir);
+    // xtrm-v1yck: drop registrations the global install already covers byte-for-byte.
+    // Fail-open — without a readable global baseline nothing is provably redundant.
+    const dedupe = await planLegacyHookDedupe(repoRoot, mergedHooks);
+    if (dedupe.skipped) {
+        console.log(t.muted(`  ↻ hook dedupe skipped: ${dedupe.skipped}`));
+    } else if (dedupe.planned.length > 0) {
+        console.log(t.label(`  • removed ${dedupe.planned.length} hook registration(s) already covered globally`));
+    }
+    const hooksToWrite = dedupe.hooks;
     const hooksEntries = countHookEntries(hooksToWrite);
 
     const hasExistingSettings = await fs.pathExists(settingsPath);

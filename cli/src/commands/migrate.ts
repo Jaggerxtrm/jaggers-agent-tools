@@ -16,6 +16,7 @@ import { isRepoMigrated, markRepoMigrated } from '../utils/known-repos.js';
 import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { stageMigrationChanges } from '../utils/git-staging.js';
+import { planLegacyHookDedupe, type HookWrapperLike } from '../core/legacy-hook-dedupe.js';
 
 interface MigrateOptions {
   dryRun?: boolean;
@@ -673,6 +674,29 @@ async function cleanSettingsJsonEntries(
         });
 
         cleanedHooks[phase] = cleanedEntries;
+      }
+
+      // xtrm-v1yck: the provenance predicate above only matches entries the GLOBAL
+      // installer tagged. Legacy per-project entries predate provenance tagging and
+      // carry neither marker, so they need the coverage + byte-identity ownership
+      // proof instead. Claude settings only — the proof is indexed off
+      // ~/.claude/settings.json. Fail-open: skips rather than throwing.
+      if (settingsPath === claudeSettingsPath) {
+        const dedupe = await planLegacyHookDedupe(
+          repoPath,
+          cleanedHooks as Record<string, HookWrapperLike[]>,
+        );
+        if (dedupe.skipped) {
+          console.log(kleur.yellow(`  settings: dedupe skipped — ${dedupe.skipped}`));
+        } else if (dedupe.planned.length > 0) {
+          for (const [phase, entries] of Object.entries(dedupe.hooks)) {
+            cleanedHooks[phase] = entries;
+          }
+          for (const phase of Object.keys(cleanedHooks)) {
+            if (!(phase in dedupe.hooks)) delete cleanedHooks[phase];
+          }
+          changed = true;
+        }
       }
 
       if (changed) {
