@@ -7,7 +7,7 @@
       "install_scope": "global",
       "files": {
         "beads-claim-sync.mjs": {
-          "hash": "a9663671113f8fd540e6588d6825963a0301679bac8a661c9cc35a2d6b474eed",
+          "hash": "14b3b19302b6764f7536e66967fd99cbc2f0824c41627c98ee2b8e47a8135d26",
           "version": "0.11.1"
         },
         "beads-commit-gate.mjs": {
