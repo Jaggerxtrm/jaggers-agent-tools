@@ -113,8 +113,13 @@ as phase 6 (*"Claude hook state (merge with user-owned hooks, never wholesale
 replace)"*). This script does not contradict that: it is a `scripts/` operator
 diagnostic, not a CLI verb, and it does something `xt update` structurally
 cannot — sweep *across* projects to find registrations made redundant by the
-global block. The durable fix is to teach phase 6 the coverage-plus-hash
-ownership proof below; until then this is the stopgap.
+global block.
+
+Phase 6 now applies the same coverage-plus-hash ownership proof per project
+(`cli/src/core/legacy-hook-dedupe.ts`, shared with `xt migrate hooks`), so
+`xt update --apply` deduplicates the repo it runs in and future migrations do
+not need this script. It remains the one-shot tool for historical residue and
+for the cross-project sweep.
 
 The `runOwnedLegacyCleanup({ projectRoot, dryRun, scopes })` helper that
 `repair-transaction.md:59` documents as "internal cleanup helper stays

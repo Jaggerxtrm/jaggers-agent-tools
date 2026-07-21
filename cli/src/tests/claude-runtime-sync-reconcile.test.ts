@@ -12,13 +12,24 @@ import { mergeProjectOwnedHooks, reconcileProjectClaudeHooks } from '../core/cla
 // consumer settings.json on apply, idempotently, without clobbering other keys.
 
 let repoRoot = '';
+let fakeHome = '';
+let realHome: string | undefined;
 
 beforeEach(() => {
   repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-reconcile-test-'));
   fs.ensureDirSync(path.join(repoRoot, '.xtrm', 'hooks'));
+  // xtrm-v1yck: reconcile now prunes registrations the global install already
+  // covers, so these tests must not read the developer's real ~/.claude/settings.json.
+  // An empty fake home makes the dedupe fail open — canonical hooks stay put.
+  fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-reconcile-home-'));
+  realHome = process.env.HOME;
+  process.env.HOME = fakeHome;
 });
 
 afterEach(() => {
+  if (realHome === undefined) delete process.env.HOME;
+  else process.env.HOME = realHome;
+  fs.removeSync(fakeHome);
   fs.removeSync(repoRoot);
 });
 
