@@ -62159,7 +62159,10 @@ function finalizeTmuxPlan(args) {
     runtimeArgs,
     agentTask,
     bead,
+    role,
     parentSessionId,
+    worktreePath,
+    branchName,
     turn1Body,
     model,
     thinking,
@@ -62178,9 +62181,12 @@ function finalizeTmuxPlan(args) {
   const paneOptions = [
     { key: "@agent_parent_session", value: parentSessionId },
     { key: "@agent_task", value: agentTask },
-    { key: "@agent_state", value: "idle" }
+    { key: "@agent_state", value: "idle" },
+    { key: "@agent_worktree", value: worktreePath },
+    { key: "@agent_branch", value: branchName }
   ];
   if (bead) paneOptions.push({ key: "@agent_bead", value: bead });
+  if (role) paneOptions.push({ key: "@agent_role", value: role });
   return { sessionName, runtimeCmd: runtime, runtimeArgs, runtimeCmdString, paneOptions };
 }
 function buildRoleTmuxPlan(args) {
@@ -62189,6 +62195,8 @@ function buildRoleTmuxPlan(args) {
     role,
     bead,
     parentSessionId,
+    worktreePath,
+    branchName,
     turn1Body,
     modelOverride,
     thinkingOverride,
@@ -62210,7 +62218,10 @@ function buildRoleTmuxPlan(args) {
     runtimeArgs,
     agentTask: `role:${role.name}`,
     bead,
+    role: role.name,
     parentSessionId,
+    worktreePath,
+    branchName,
     turn1Body,
     // CLI override wins over the specialist default.
     model: modelOverride ?? role.model,
@@ -62224,6 +62235,8 @@ function buildBareTmuxPlan(args) {
     sessionSlug,
     bead,
     parentSessionId,
+    worktreePath,
+    branchName,
     turn1Body,
     modelOverride,
     thinkingOverride,
@@ -62243,19 +62256,20 @@ function buildBareTmuxPlan(args) {
     agentTask: `session:${sessionSlug}`,
     bead,
     parentSessionId,
+    worktreePath,
+    branchName,
     turn1Body,
     model: modelOverride,
     thinking: thinkingOverride,
     passthrough
   });
 }
-function buildAgentEnv(args) {
-  const { bead, role, parentSessionId } = args;
-  const env3 = {
-    XTMUX_AGENT_TASK: `role:${role}`,
-    XTMUX_AGENT_PARENT_SESSION: parentSessionId
-  };
-  if (bead) env3.XTMUX_AGENT_BEAD = bead;
+function buildAgentEnv(paneOptions) {
+  const env3 = {};
+  for (const { key, value } of paneOptions) {
+    if (key === "@agent_state") continue;
+    env3[`XTMUX_AGENT_${key.slice("@agent_".length).toUpperCase()}`] = value;
+  }
   return env3;
 }
 function currentTmuxSessionId() {
@@ -62373,9 +62387,55 @@ function unregisterPluginsForWorktree(worktreePath) {
   } catch {
   }
 }
+function resolveSubordinateLaunch(args) {
+  const { runtime, role, parent, insideTmux } = args;
+  const canonical = [
+    `  xt ${runtime} <name> \\`,
+    "    --role chain-coordinator \\",
+    "    --bead <id> \\",
+    "    --new-session \\",
+    "    --no-attach \\",
+    "    --parent <session-id>"
+  ].join("\n");
+  const reject = (because) => ({
+    ok: false,
+    error: `subordinate launch rejected:
+  ${because}
+
+Use:
+${canonical}`
+  });
+  if (!role) {
+    return reject("--subordinate is a coordinator launch and requires --role");
+  }
+  if (!insideTmux && !parent) {
+    return reject("subordinate coordinator requires a parent session");
+  }
+  return { ok: true, newSession: true, attach: false, child: !parent };
+}
 async function launchWorktreeSession(opts) {
-  const { runtime, name, role: roleName, bead, prompt, attach = true, model, thinking } = opts;
+  const { runtime, name, role: roleName, bead, prompt, model, thinking } = opts;
   const cwd = process.cwd();
+  let { attach = true } = opts;
+  let newSession = opts.newSession;
+  let child = opts.child;
+  if (opts.subordinate) {
+    const subordinate = resolveSubordinateLaunch({
+      runtime,
+      role: roleName,
+      parent: opts.parent,
+      insideTmux: Boolean(process.env.TMUX)
+    });
+    if (!subordinate.ok) {
+      console.error(kleur_default.red(`
+  \u2717 ${subordinate.error}
+`));
+      process.exit(1);
+    }
+    newSession = subordinate.newSession;
+    attach = subordinate.attach;
+    child = subordinate.child;
+  }
   if (roleName && bead && prompt) {
     console.error(kleur_default.red("\n  \u2717 --bead and --prompt are mutually exclusive; pick one\n"));
     process.exit(1);
@@ -62581,21 +62641,22 @@ async function launchWorktreeSession(opts) {
     bead,
     attach,
     worktreePath,
+    branchName,
     modelOverride: model,
     thinkingOverride: thinking,
     turn1Body: composedTurn1Body,
     explicitSkillPaths,
     passthrough: guardedPassthrough,
-    newSession: opts.newSession,
+    newSession,
     reuse: opts.reuse,
     parent: opts.parent,
-    child: opts.child
+    child
   };
   if (resolvedRole) {
     await launchTmuxSession({ ...common, mode: "role", role: resolvedRole, renderedTask });
     return;
   }
-  const carriesLaunchState = Boolean(prompt) || Boolean(bead) || Boolean(model) || Boolean(thinking) || explicitSkillPaths.length > 0 || guardedPassthrough.length > 0 || !attach || Boolean(opts.newSession);
+  const carriesLaunchState = Boolean(prompt) || Boolean(bead) || Boolean(model) || Boolean(thinking) || explicitSkillPaths.length > 0 || guardedPassthrough.length > 0 || !attach || Boolean(newSession);
   if (carriesLaunchState) {
     await launchTmuxSession({ ...common, mode: "bare" });
     return;
@@ -62647,6 +62708,7 @@ async function launchTmuxSession(args) {
     bead,
     attach,
     worktreePath,
+    branchName,
     modelOverride,
     thinkingOverride,
     turn1Body,
@@ -62688,6 +62750,8 @@ async function launchTmuxSession(args) {
     runtime,
     bead,
     parentSessionId,
+    worktreePath,
+    branchName,
     turn1Body,
     modelOverride,
     thinkingOverride,
@@ -62695,11 +62759,7 @@ async function launchTmuxSession(args) {
     passthrough
   };
   const plan = args.mode === "role" ? buildRoleTmuxPlan({ ...planCommon, role: args.role }) : buildBareTmuxPlan({ ...planCommon, sessionSlug });
-  const agentEnv = args.mode === "role" ? buildAgentEnv({ bead, role: args.role.name, parentSessionId }) : {
-    XTMUX_AGENT_TASK: `session:${sessionSlug}`,
-    XTMUX_AGENT_PARENT_SESSION: parentSessionId,
-    ...bead ? { XTMUX_AGENT_BEAD: bead } : {}
-  };
+  const agentEnv = buildAgentEnv(plan.paneOptions);
   if (currentPaneMode) {
     const paneQuery2 = (0, import_node_child_process.spawnSync)("tmux", ["display-message", "-p", "#{pane_id}"], {
       stdio: "pipe",
@@ -62721,6 +62781,7 @@ async function launchTmuxSession(args) {
         role: args.role.name,
         parent: parentSessionId,
         worktree: worktreePath,
+        branch: branchName,
         task_prompt_renderer: args.renderedTask ? "success" : "not_requested",
         task_prompt_hash: args.renderedTask?.promptHash ?? "",
         task_prompt_components: args.renderedTask ? JSON.stringify(args.renderedTask.components) : ""
@@ -62884,6 +62945,7 @@ async function launchTmuxSession(args) {
       role: args.role.name,
       parent: parentSessionId,
       worktree: worktreePath,
+      branch: branchName,
       task_prompt_renderer: args.renderedTask ? "success" : "not_requested",
       task_prompt_hash: args.renderedTask?.promptHash ?? "",
       task_prompt_components: args.renderedTask ? JSON.stringify(args.renderedTask.components) : ""
@@ -63313,7 +63375,7 @@ function hasXtrmHookWiring(settingsPath) {
   }
 }
 function createClaudeCommand() {
-  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role \u2014 creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata").option("--bead <id>", "Bind a bead to the session. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only \u2014 @agent_bead pane option + XTMUX_AGENT_BEAD \u2014 and combines freely with --prompt").option("--prompt <text>", "Use <text> as the initial user prompt. A leading /<skill-name> is the supported way to load a skill on turn 1").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to claude; with --role, overrides specialist.execution.model").option("--thinking <level>", "Warn-and-drop \u2014 claude has no --thinking flag; set thinking on the underlying model config instead").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
+  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role \u2014 creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata").option("--bead <id>", "Bind a bead to the session. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only \u2014 @agent_bead pane option + XTMUX_AGENT_BEAD \u2014 and combines freely with --prompt").option("--prompt <text>", "Use <text> as the initial user prompt. A leading /<skill-name> is the supported way to load a skill on turn 1").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to claude; with --role, overrides specialist.execution.model").option("--thinking <level>", "Warn-and-drop \u2014 claude has no --thinking flag; set thinking on the underlying model config instead").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").option("--subordinate", "Canonical subordinate-coordinator launch: implies --new-session --no-attach and parents the child to the current session. Requires --role; still gets its own worktree and branch").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
 Passthrough:
   Everything after \`--\` is forwarded verbatim to the claude runtime, with or
   without --role. xt-owned flags (--session-dir, --name, --system-prompt,
@@ -63325,6 +63387,7 @@ Examples:
   $ xt claude worker --no-attach --prompt '/multiplexing leggi /tmp/brief.txt e seguilo'
   $ xt claude worker --no-attach --bead xyz --prompt 'work this bead'   # bead as pane metadata
   $ xt claude worker --prompt 'audit the auth flow' -- --add-dir ~/notes
+  $ xt claude coord --role chain-coordinator --bead xyz --subordinate   # subordinate coordinator (P0-05)
   $ xt claude --role reviewer --bead xyz -- --add-dir ~/notes
   $ xt claude --role chain-coordinator --model claude-opus-4-8
   $ xt claude --role reviewer --prompt 'review the auth changes in cli/src/auth/'
@@ -63351,6 +63414,7 @@ Examples:
       parent: opts.parent,
       child: Boolean(opts.child),
       reuse: Boolean(opts.reuse),
+      subordinate: Boolean(opts.subordinate),
       passthrough
     });
   });
@@ -64119,7 +64183,7 @@ async function getPiProjectPointer(projectRoot) {
   }
 }
 function createPiCommand() {
-  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Bind a bead to the session. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only \u2014 @agent_bead pane option + XTMUX_AGENT_BEAD \u2014 and combines freely with --prompt").option("--prompt <text>", "Use <text> as the initial user prompt. A leading /skill:<name> is the supported way to load a skill on turn 1").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to pi; with --role, overrides specialist.execution.model").option("--thinking <level>", "Forward `--thinking <level>` to pi; with --role, overrides specialist.execution.thinking_level").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
+  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Bind a bead to the session. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only \u2014 @agent_bead pane option + XTMUX_AGENT_BEAD \u2014 and combines freely with --prompt").option("--prompt <text>", "Use <text> as the initial user prompt. A leading /skill:<name> is the supported way to load a skill on turn 1").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to pi; with --role, overrides specialist.execution.model").option("--thinking <level>", "Forward `--thinking <level>` to pi; with --role, overrides specialist.execution.thinking_level").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").option("--subordinate", "Canonical subordinate-coordinator launch: implies --new-session --no-attach and parents the child to the current session. Requires --role; still gets its own worktree and branch").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
 Passthrough:
   Everything after \`--\` is forwarded verbatim to the pi runtime, with or
   without --role. xt-owned flags (--session-dir, --name, --system-prompt,
@@ -64130,6 +64194,7 @@ Examples:
   $ xt pi demo --no-attach --prompt 'inspect the failing build' --model openai-codex/gpt-5.6-luna
   $ xt pi worker --no-attach --skill multiplexing --prompt 'leggi /tmp/brief.txt e seguilo'
   $ xt pi worker --no-attach --bead xyz --prompt 'work this bead'   # bead as pane metadata
+  $ xt pi coord --role chain-coordinator --bead xyz --subordinate   # subordinate coordinator (P0-05)
   $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
   $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
   $ xt pi --role reviewer --prompt 'review the auth changes in cli/src/auth/'
@@ -64151,6 +64216,7 @@ Examples:
       parent: opts.parent,
       child: Boolean(opts.child),
       reuse: Boolean(opts.reuse),
+      subordinate: Boolean(opts.subordinate),
       passthrough
     });
   });

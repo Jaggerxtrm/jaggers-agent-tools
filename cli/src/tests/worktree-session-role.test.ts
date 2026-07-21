@@ -25,7 +25,16 @@ import {
     resolveRequestedSkills,
     resolveRole,
     resolveSkillPath,
+    resolveSubordinateLaunch,
 } from '../utils/worktree-session.js';
+
+// Every plan carries the worktree + branch it publishes as lineage metadata
+// (audit P1-02), so the builders require both. Tests whose subject is not
+// lineage spread these in rather than restating them. xtrm-6hey0.2.
+const WT = {
+    worktreePath: '/repo/.xtrm/worktrees/repo-xt-pi-demo',
+    branchName: 'xt/demo',
+} as const;
 
 // Use synthetic test-only skill paths that don't exist under real repo OR
 // $HOME. resolveSkillPath's home-fallback (xtmux-1rn) then leaves them
@@ -483,7 +492,7 @@ describe('parseSpecialistJson', () => {
 
 describe('buildBareTmuxPlan', () => {
     it('forwards prompt and model to Claude without role metadata', () => {
-        const plan = buildBareTmuxPlan({
+        const plan = buildBareTmuxPlan({ ...WT,
             runtime: 'claude',
             sessionSlug: 'demo',
             parentSessionId: '',
@@ -501,7 +510,7 @@ describe('buildBareTmuxPlan', () => {
     });
 
     it('emits no --append-system-prompt and no --no-skills for pi', () => {
-        const plan = buildBareTmuxPlan({
+        const plan = buildBareTmuxPlan({ ...WT,
             runtime: 'pi',
             sessionSlug: 'demo',
             parentSessionId: '',
@@ -517,7 +526,7 @@ describe('buildBareTmuxPlan', () => {
     });
 
     it('pushes explicit --skill paths to pi argv (bare mode)', () => {
-        const plan = buildBareTmuxPlan({
+        const plan = buildBareTmuxPlan({ ...WT,
             runtime: 'pi',
             sessionSlug: 'demo',
             parentSessionId: '',
@@ -533,7 +542,7 @@ describe('buildBareTmuxPlan', () => {
     });
 
     it('binds --bead as pane + session metadata without touching the session name', () => {
-        const plan = buildBareTmuxPlan({
+        const plan = buildBareTmuxPlan({ ...WT,
             runtime: 'claude',
             sessionSlug: 'demo',
             bead: 'xtrm-3xgs5',
@@ -547,12 +556,16 @@ describe('buildBareTmuxPlan', () => {
             { key: '@agent_parent_session', value: '$7' },
             { key: '@agent_task', value: 'session:demo' },
             { key: '@agent_state', value: 'idle' },
+            { key: '@agent_worktree', value: WT.worktreePath },
+            { key: '@agent_branch', value: WT.branchName },
             { key: '@agent_bead', value: 'xtrm-3xgs5' },
         ]);
+        // A bare session has no role to publish.
+        expect(plan.paneOptions.some((o) => o.key === '@agent_role')).toBe(false);
     });
 
     it('appends guard-checked passthrough before the turn-1 positional', () => {
-        const plan = buildBareTmuxPlan({
+        const plan = buildBareTmuxPlan({ ...WT,
             runtime: 'claude',
             sessionSlug: 'demo',
             parentSessionId: '',
@@ -572,7 +585,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     const role = parseSpecialistJson('chain-coordinator', SAMPLE_SPECIALIST);
 
     it('inlines system prompt and emits --no-skills unconditionally', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role,
             bead: 'xtmux-2i5',
@@ -599,10 +612,18 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
         expect(state?.value).toBe('idle');
         // xtrm-8zsi1: no more prompt-file transport
         expect(plan.paneOptions.some((o) => o.key === '@agent_prompt_file')).toBe(false);
+        // xtrm-6hey0.2: lineage the P1-02 invariant guarantees but nothing
+        // downstream could observe before.
+        const worktree = plan.paneOptions.find((o) => o.key === '@agent_worktree');
+        expect(worktree?.value).toBe(WT.worktreePath);
+        const branch = plan.paneOptions.find((o) => o.key === '@agent_branch');
+        expect(branch?.value).toBe(WT.branchName);
+        const roleOption = plan.paneOptions.find((o) => o.key === '@agent_role');
+        expect(roleOption?.value).toBe('chain-coordinator');
     });
 
     it('omits @agent_bead and bead-slug when bead is not provided', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role,
             parentSessionId: '',
@@ -615,7 +636,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     });
 
     it('omits positional when turn1Body is empty (skills-only prime)', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role,
             parentSessionId: '',
@@ -627,7 +648,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     });
 
     it('shell-quotes the pi command string including single quotes in body', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role,
             parentSessionId: '',
@@ -638,14 +659,14 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     });
 
     it('encodes runtime in the session name so pi/claude do not collide (xtmux-3h8)', () => {
-        const piPlan = buildRoleTmuxPlan({
+        const piPlan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role,
             bead: 'xtmux-3h8',
             parentSessionId: '',
             turn1Body: '',
         });
-        const claudePlan = buildRoleTmuxPlan({
+        const claudePlan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role,
             bead: 'xtmux-3h8',
@@ -657,7 +678,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     });
 
     it('slugifies bead ids with weird characters', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role,
             bead: 'MY BEAD/1',
@@ -668,7 +689,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     });
 
     it('does not emit --no-extensions or -e — pi discovers its own extensions', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role,
             parentSessionId: '',
@@ -679,7 +700,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     });
 
     it('keeps the Pi surface-resolved provider model unchanged', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role: { ...role, model: 'openai-codex/gpt-5.6-luna' },
             parentSessionId: '',
@@ -690,7 +711,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     });
 
     it('forwards --model / --thinking CLI overrides', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role,
             parentSessionId: '',
@@ -705,7 +726,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     });
 
     it('appends passthrough argv verbatim after all other flags', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role,
             parentSessionId: '',
@@ -727,7 +748,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
         writeFileSync(path.join(skillRoot, 'SKILL.md'), '# skill');
         symlinkSync(skillRoot, aliasRoot, 'dir');
         try {
-            const plan = buildRoleTmuxPlan({
+            const plan = buildRoleTmuxPlan({ ...WT,
                 runtime: 'pi',
                 role: { ...role, skillPaths: [path.join(aliasRoot, 'SKILL.md')] },
                 explicitSkillPaths: [path.join(skillRoot, 'SKILL.md')],
@@ -747,7 +768,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
                 execution: { model: 'default-model', thinking_level: 'medium' },
             },
         }));
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'pi',
             role: roleWithModel,
             parentSessionId: '',
@@ -771,7 +792,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
     }));
 
     it('inlines --append-system-prompt (xtrm-8zsi1 supersedes xtrm-osipt file transport)', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role,
             parentSessionId: '$3',
@@ -785,7 +806,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
     });
 
     it('emits `--` before positional turn-1 body (claude variadic-flag safety)', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role,
             parentSessionId: '',
@@ -795,7 +816,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
     });
 
     it('omits `--` and positional when turn1Body is empty (skills-only prime)', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role,
             parentSessionId: '',
@@ -806,7 +827,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
     });
 
     it('emits NO --skill and NO --plugin-dir on claude (xtrm-8zsi1 drops ephemeral plugin)', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role,
             parentSessionId: '',
@@ -818,7 +839,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
     });
 
     it('preserves an explicit Claude model override over a cross-provider role default', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role: { ...role, model: 'openai-codex/gpt-5.6-luna' },
             parentSessionId: '',
@@ -833,7 +854,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
     });
 
     it('omits --model for a surface-resolved Claude default', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role: { ...role, model: undefined },
             parentSessionId: '',
@@ -843,7 +864,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
     });
 
     it('shell-quotes with claude as the runtime prefix and inlines the system prompt safely', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role,
             parentSessionId: '',
@@ -854,7 +875,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
     });
 
     it('appends passthrough verbatim (before positional body)', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role,
             parentSessionId: '',
@@ -869,7 +890,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
 
     it('keeps runtimeCmdString bounded when body is under the byte ceiling', () => {
         const almostFull = 'X'.repeat(40 * 1024);
-        const plan = buildRoleTmuxPlan({
+        const plan = buildRoleTmuxPlan({ ...WT,
             runtime: 'claude',
             role,
             parentSessionId: '',
@@ -884,11 +905,16 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
 });
 
 describe('buildAgentEnv', () => {
+    const role = parseSpecialistJson('chain-coordinator', SAMPLE_SPECIALIST);
+
     it('exports role + parent session id (no more XTMUX_AGENT_PROMPT_FILE)', () => {
-        const env = buildAgentEnv({
-            role: 'chain-coordinator',
+        const env = buildAgentEnv(buildRoleTmuxPlan({
+            ...WT,
+            runtime: 'pi',
+            role,
             parentSessionId: '$5',
-        });
+            turn1Body: '',
+        }).paneOptions);
         expect(env.XTMUX_AGENT_TASK).toBe('role:chain-coordinator');
         expect(env.XTMUX_AGENT_PARENT_SESSION).toBe('$5');
         expect(env.XTMUX_AGENT_BEAD).toBeUndefined();
@@ -896,12 +922,104 @@ describe('buildAgentEnv', () => {
     });
 
     it('includes bead when provided', () => {
-        const env = buildAgentEnv({
-            role: 'r',
+        const env = buildAgentEnv(buildRoleTmuxPlan({
+            ...WT,
+            runtime: 'pi',
+            role,
             parentSessionId: '',
             bead: 'xtmux-1lb.5',
-        });
+            turn1Body: '',
+        }).paneOptions);
         expect(env.XTMUX_AGENT_BEAD).toBe('xtmux-1lb.5');
+    });
+
+    // Env is derived from the pane options so the two can never drift; the
+    // pair that used to be built by hand in two places is what this proves.
+    it('mirrors every pane option except the launcher-local @agent_state', () => {
+        const env = buildAgentEnv(buildRoleTmuxPlan({
+            ...WT,
+            runtime: 'pi',
+            role,
+            parentSessionId: '$5',
+            bead: 'xtrm-6hey0',
+            turn1Body: '',
+        }).paneOptions);
+        expect(env).toEqual({
+            XTMUX_AGENT_PARENT_SESSION: '$5',
+            XTMUX_AGENT_TASK: 'role:chain-coordinator',
+            XTMUX_AGENT_WORKTREE: WT.worktreePath,
+            XTMUX_AGENT_BRANCH: WT.branchName,
+            XTMUX_AGENT_BEAD: 'xtrm-6hey0',
+            XTMUX_AGENT_ROLE: 'chain-coordinator',
+        });
+        expect(env.XTMUX_AGENT_STATE).toBeUndefined();
+    });
+
+    it('omits XTMUX_AGENT_ROLE for a bare session', () => {
+        const env = buildAgentEnv(buildBareTmuxPlan({
+            ...WT,
+            runtime: 'claude',
+            sessionSlug: 'demo',
+            parentSessionId: '$5',
+            turn1Body: '',
+        }).paneOptions);
+        expect(env.XTMUX_AGENT_TASK).toBe('session:demo');
+        expect(env.XTMUX_AGENT_ROLE).toBeUndefined();
+        expect(env.XTMUX_AGENT_WORKTREE).toBe(WT.worktreePath);
+        expect(env.XTMUX_AGENT_BRANCH).toBe(WT.branchName);
+    });
+});
+
+describe('resolveSubordinateLaunch (audit P0-05)', () => {
+    it('expands to the canonical new-session + detached + auto-parent triple', () => {
+        const r = resolveSubordinateLaunch({
+            runtime: 'pi',
+            role: 'chain-coordinator',
+            insideTmux: true,
+        });
+        expect(r).toEqual({ ok: true, newSession: true, attach: false, child: true });
+    });
+
+    it('leaves parenting to an explicit --parent when the operator named one', () => {
+        const r = resolveSubordinateLaunch({
+            runtime: 'pi',
+            role: 'chain-coordinator',
+            parent: '$12',
+            insideTmux: true,
+        });
+        // child=false: --parent already carries the relationship and wins.
+        expect(r).toEqual({ ok: true, newSession: true, attach: false, child: false });
+    });
+
+    it('rejects a roleless subordinate launch', () => {
+        const r = resolveSubordinateLaunch({ runtime: 'pi', insideTmux: true });
+        expect(r.ok).toBe(false);
+        if (r.ok) throw new Error('unreachable');
+        expect(r.error).toContain('requires --role');
+        expect(r.error).toContain('--role chain-coordinator');
+    });
+
+    it('rejects outside tmux with no --parent — a subordinate needs a parent', () => {
+        const r = resolveSubordinateLaunch({
+            runtime: 'claude',
+            role: 'chain-coordinator',
+            insideTmux: false,
+        });
+        expect(r.ok).toBe(false);
+        if (r.ok) throw new Error('unreachable');
+        expect(r.error).toContain('requires a parent session');
+        // Remediation names the runtime actually being launched.
+        expect(r.error).toContain('xt claude <name>');
+    });
+
+    it('accepts outside tmux when --parent names the session explicitly', () => {
+        const r = resolveSubordinateLaunch({
+            runtime: 'claude',
+            role: 'chain-coordinator',
+            parent: 'xt-design',
+            insideTmux: false,
+        });
+        expect(r.ok).toBe(true);
     });
 });
 

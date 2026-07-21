@@ -83,6 +83,7 @@ export function createPiCommand(): Command {
         .option('--parent <target>', 'With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})')
         .option('--child', 'With --role: explicit form of the auto-behavior — @agent_parent_session = current pane\'s session_id')
         .option('--reuse', 'With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one')
+        .option('--subordinate', 'Canonical subordinate-coordinator launch: implies --new-session --no-attach and parents the child to the current session. Requires --role; still gets its own worktree and branch')
         .allowExcessArguments(true)
         .allowUnknownOption(true)
         .addHelpText('after', `
@@ -96,6 +97,7 @@ Examples:
   $ xt pi demo --no-attach --prompt 'inspect the failing build' --model openai-codex/gpt-5.6-luna
   $ xt pi worker --no-attach --skill multiplexing --prompt 'leggi /tmp/brief.txt e seguilo'
   $ xt pi worker --no-attach --bead xyz --prompt 'work this bead'   # bead as pane metadata
+  $ xt pi coord --role chain-coordinator --bead xyz --subordinate   # subordinate coordinator (P0-05)
   $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
   $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
   $ xt pi --role reviewer --prompt 'review the auth changes in cli/src/auth/'
@@ -114,6 +116,7 @@ Examples:
             parent?: string;
             child?: boolean;
             reuse?: boolean;
+            subordinate?: boolean;
         }) => {
             // Everything after `--` is forwarded verbatim to pi (with guards
             // enforced in the launcher). This is the primary escape hatch for
@@ -134,6 +137,7 @@ Examples:
                 parent: opts.parent,
                 child: Boolean(opts.child),
                 reuse: Boolean(opts.reuse),
+                subordinate: Boolean(opts.subordinate),
                 passthrough,
             });
         });
