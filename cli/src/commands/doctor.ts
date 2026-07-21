@@ -10,7 +10,7 @@ import { getXtManagedPiPackageDoctorReport, type XtManagedPiPackageDoctorReport 
 import { discoverDefaultSkills, type DiscoveredSkill } from '../core/skill-discovery.js';
 import { ensureBeadsSharedServerEnabled, hasBeadsDir, type SharedBeadsServerState } from '../core/beads-shared-server.js';
 import { findProjectRoot } from '../utils/repo-root.js';
-import { auditSettings, type SettingsAuditOutcome, type SettingsFinding } from '../core/settings-audit.js';
+import { applySettingsFixes, auditSettings, type SettingsAuditOutcome, type SettingsFinding } from '../core/settings-audit.js';
 
 interface CheckJson {
   managed_sections: Array<{ name: string; version: string; canonical_version: string | null }>;
@@ -343,8 +343,9 @@ const FINDING_LABEL: Record<SettingsFinding['kind'], string> = {
   'orphaned-key': 'orphaned key',
 };
 
-function renderSettingsAudit(outcome: SettingsAuditOutcome): void {
-  console.log(`\n${kleur.bold('xt doctor settings')} ${kleur.dim('(read-only)')}\n`);
+function renderSettingsAudit(outcome: SettingsAuditOutcome, mode: { fix: boolean; apply: boolean } = { fix: false, apply: false }): void {
+  const banner = !mode.fix ? '(read-only)' : mode.apply ? '(--fix --apply)' : '(--fix, dry run)';
+  console.log(`\n${kleur.bold('xt doctor settings')} ${kleur.dim(banner)}\n`);
 
   section('Scanned');
   if (outcome.scanned.length === 0) warn('no settings.json found in the requested scope');
@@ -391,9 +392,25 @@ function renderSettingsAudit(outcome: SettingsAuditOutcome): void {
     for (const failure of outcome.failed) warn(`${failure.file}: ${failure.error}`);
   }
 
+  const fixable = outcome.planned.filter(f => f.fix).length;
+
+  if (mode.apply && outcome.applied.length > 0) {
+    section('Applied');
+    for (const item of outcome.applied) {
+      ok(`${item.subject}  ${kleur.dim(`(${item.file})`)}`);
+      console.log(`    ${kleur.dim(`backup: ${item.backup}`)}`);
+    }
+  }
+
   console.log('');
   console.log(`  ${outcome.planned.length === 0 ? kleur.green('✓') : kleur.yellow('○')} ${outcome.planned.length} finding(s), ${outcome.preserved.length} preserved, ${outcome.failed.length} failed`);
-  console.log(kleur.dim('  read-only — nothing was written. --fix is deferred (xtrm-kdwvu §3).'));
+  if (!mode.fix) {
+    console.log(kleur.dim(`  read-only — nothing was written. ${fixable} finding(s) are xt-owned; run --fix to see them.`));
+  } else if (!mode.apply) {
+    console.log(kleur.dim(`  dry run — nothing was written. ${fixable} finding(s) would be removed; re-run with --apply.`));
+  } else {
+    console.log(kleur.dim(`  ${outcome.applied.length} finding(s) removed; each mutated file was backed up first.`));
+  }
   console.log('');
 }
 
@@ -404,7 +421,9 @@ function createDoctorSettingsCommand(): Command {
     .option('--scope <scope>', 'home | project | all', 'all')
     .option('--scan-all-repos', 'Audit every xt consumer project under ~/dev and ~/projects', false)
     .option('--json', 'Output machine-readable ReconciliationOutcome/1 JSON', false)
-    .action(async (opts: { cwd?: string; scope?: string; scanAllRepos?: boolean; json?: boolean }, cmd: Command) => {
+    .option('--fix', 'Remove the findings xt owns (dry-run; add --apply to write)', false)
+    .option('--apply', 'With --fix: write the changes, backing each file up first', false)
+    .action(async (opts: { cwd?: string; scope?: string; scanAllRepos?: boolean; json?: boolean; fix?: boolean; apply?: boolean }, cmd: Command) => {
       // `doctor` declares --json and --cwd too. Commander v14 resolves a flag
       // the parent also declares onto the PARENT, leaving the subcommand's copy
       // at its default — so read both. Declaring them here keeps `--help` honest.
@@ -421,16 +440,24 @@ function createDoctorSettingsCommand(): Command {
         ? undefined
         : (cwdOpt ? path.resolve(cwdOpt) : await findProjectRoot().catch(() => undefined));
 
+      if (opts.apply && !opts.fix) {
+        throw new Error('--apply only applies to --fix; run: xt doctor settings --fix --apply');
+      }
+
       const outcome = await auditSettings({
         projectRoot,
         scope,
         scanAllRepos: opts.scanAllRepos,
       });
 
-      if (json) console.log(JSON.stringify(outcome, null, 2));
-      else renderSettingsAudit(outcome);
+      if (opts.fix) await applySettingsFixes(outcome, { apply: opts.apply });
 
-      if (outcome.planned.length > 0 || outcome.failed.length > 0) process.exitCode = 1;
+      if (json) console.log(JSON.stringify(outcome, null, 2));
+      else renderSettingsAudit(outcome, { fix: Boolean(opts.fix), apply: Boolean(opts.apply) });
+
+      // A finding that --fix --apply resolved is no longer outstanding.
+      const outstanding = outcome.planned.length - outcome.applied.length;
+      if (outstanding > 0 || outcome.failed.length > 0) process.exitCode = 1;
     });
 }
 

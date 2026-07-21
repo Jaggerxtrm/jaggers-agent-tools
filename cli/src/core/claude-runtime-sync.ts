@@ -122,6 +122,12 @@ export async function runClaudeRuntimeSyncPhase(opts: ClaudeRuntimeSyncOptions):
 
         console.log(t.muted('  ↻ Global install: skipping hook sync (project .claude/settings.json owns hooks)'));
         console.log(t.label(`  • global settings preserved: ${settingsPath}`));
+        // xtrm-tzzud item 2: ~/.claude/settings.json.statusLine is written on the
+        // global path only. The project path below used to call this on every
+        // exit, so a project-scoped `xt claude sync` mutated a global setting.
+        // Global coverage is unchanged: the other global exit goes through
+        // reconcileGlobalClaudeHooks, which calls it on both of its exits, and
+        // init/install/update/bootstrap all invoke that separately.
         await ensureGlobalStatusLine();
         return {
             settingsPath,
@@ -172,12 +178,10 @@ export async function runClaudeRuntimeSyncPhase(opts: ClaudeRuntimeSyncOptions):
     const existingSerialized = hasExistingSettings ? JSON.stringify(existingSettings) : '';
     const mergedSerialized = JSON.stringify(mergedSettings);
     if (existingSerialized === mergedSerialized) {
-        await ensureGlobalStatusLine();
         return { settingsPath, hooksEventsWritten, hooksEntriesWritten, wroteSettings: false };
     }
 
     await writeJsonAtomic(settingsPath, mergedSettings);
-    await ensureGlobalStatusLine();
 
     return { settingsPath, hooksEventsWritten, hooksEntriesWritten, wroteSettings: true };
 }
