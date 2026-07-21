@@ -25,7 +25,6 @@ import {
     resolveRequestedSkills,
     resolveRole,
     resolveSkillPath,
-    resolveSubordinateLaunch,
 } from '../utils/worktree-session.js';
 
 // Every plan carries the worktree + branch it publishes as lineage metadata
@@ -967,59 +966,6 @@ describe('buildAgentEnv', () => {
         expect(env.XTMUX_AGENT_ROLE).toBeUndefined();
         expect(env.XTMUX_AGENT_WORKTREE).toBe(WT.worktreePath);
         expect(env.XTMUX_AGENT_BRANCH).toBe(WT.branchName);
-    });
-});
-
-describe('resolveSubordinateLaunch (audit P0-05)', () => {
-    it('expands to the canonical new-session + detached + auto-parent triple', () => {
-        const r = resolveSubordinateLaunch({
-            runtime: 'pi',
-            role: 'chain-coordinator',
-            insideTmux: true,
-        });
-        expect(r).toEqual({ ok: true, newSession: true, attach: false, child: true });
-    });
-
-    it('leaves parenting to an explicit --parent when the operator named one', () => {
-        const r = resolveSubordinateLaunch({
-            runtime: 'pi',
-            role: 'chain-coordinator',
-            parent: '$12',
-            insideTmux: true,
-        });
-        // child=false: --parent already carries the relationship and wins.
-        expect(r).toEqual({ ok: true, newSession: true, attach: false, child: false });
-    });
-
-    it('rejects a roleless subordinate launch', () => {
-        const r = resolveSubordinateLaunch({ runtime: 'pi', insideTmux: true });
-        expect(r.ok).toBe(false);
-        if (r.ok) throw new Error('unreachable');
-        expect(r.error).toContain('requires --role');
-        expect(r.error).toContain('--role chain-coordinator');
-    });
-
-    it('rejects outside tmux with no --parent — a subordinate needs a parent', () => {
-        const r = resolveSubordinateLaunch({
-            runtime: 'claude',
-            role: 'chain-coordinator',
-            insideTmux: false,
-        });
-        expect(r.ok).toBe(false);
-        if (r.ok) throw new Error('unreachable');
-        expect(r.error).toContain('requires a parent session');
-        // Remediation names the runtime actually being launched.
-        expect(r.error).toContain('xt claude <name>');
-    });
-
-    it('accepts outside tmux when --parent names the session explicitly', () => {
-        const r = resolveSubordinateLaunch({
-            runtime: 'claude',
-            role: 'chain-coordinator',
-            parent: 'xt-design',
-            insideTmux: false,
-        });
-        expect(r.ok).toBe(true);
     });
 });
 

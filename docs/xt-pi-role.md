@@ -106,14 +106,44 @@ branch*, or *direct main integration*. Every interactive launch owns a distinct
 worktree and branch (see §Worktree and branch isolation), and the coordinator is
 no exception — that isolation is what its specialist chains derive from.
 
-**Rejections** (both fire before any worktree is created):
+### Launch validation (audit P1-05)
+
+Every check below fires **before any worktree is created**, so a rejected launch
+leaves nothing on disk (asserted end-to-end in
+`cli/src/tests/coordinator-launch-validation.test.ts`). Each prints the canonical
+long-form command as remediation.
 
 | Condition | Message |
 | --- | --- |
 | no `--role` | `--subordinate is a coordinator launch and requires --role` |
+| no `--bead` | `--subordinate scopes a coordinator to one epic and requires --bead` |
 | outside `$TMUX` with no `--parent` | `subordinate coordinator requires a parent session` |
+| role declares `execution.interactive: false` | `role '<name>' declares execution.interactive=false — it is a background job, not a session` |
+| launching pane already runs the same role | `nested coordinator: this pane is already running role '<name>'` |
 
-Each rejection prints the canonical long-form command as remediation.
+`interactive` is tri-state: only an explicit `false` rejects. A Specialists
+release that does not declare the field stays launchable.
+
+The nested-coordinator rule compares the launching pane's `@agent_role` to the
+role being launched, so it generalizes to any self-nesting role instead of
+hard-coding `chain-coordinator`. A pane running a *different* role is still a
+valid parent.
+
+The audit's remaining two preconditions are already covered without new code:
+required coordination skills resolve (`resolveRequestedSkills` throws on a
+missing path, before worktree creation), and a dedicated worktree and branch can
+be created (the existing-path refusal plus create-or-fail). "The target scope is
+one epic or task-group" is **not enforceable in Core** — telling an epic bead
+from a task bead would mean owning beads semantics; the coordinator establishes
+that itself on its first turn via `bd show`.
+
+### Merge authority
+
+A subordinate session may publish its branch and open a PR; it may not merge into
+`main`. `xt merge` refuses to run from a pane that carries `@agent_role` and names
+a different session as its parent, with `--override-authority` for the operator
+and `--dry-run` always allowed. Full ladder and enforcement table:
+[`architecture/coordinator-branch-ancestry.md`](./architecture/coordinator-branch-ancestry.md).
 
 ---
 

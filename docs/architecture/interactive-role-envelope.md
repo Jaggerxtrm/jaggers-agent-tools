@@ -21,8 +21,18 @@ interface InteractiveRoleEnvelope {
   skillPaths: string[];      // absolute paths of skills the interactive session must load
   model?: string;            // surface-specific model override, if any
   thinkingLevel?: string;    // thinking level where the surface supports it
+  interactive?: boolean;     // role runs as a persistent interactive session
 }
 ```
+
+`interactive` was added additively in **xtrm-6hey0.3** (audit P1-05) — no version
+bump, per the versioning rule below. Core consumes it for exactly one decision:
+refusing a `--subordinate` coordinator launch of a role that declares `false`.
+It is tri-state on purpose — `undefined` means the installed Specialists release
+does not declare it, and must stay permissive so older releases keep working.
+
+It is not a job-supervision field: it describes the *shape* of the role, not how
+Specialists governs its execution.
 
 ## Core owns
 
