@@ -9,6 +9,7 @@ export {
     getValidator,
     validate,
     assertValid,
+    uuidV7TimestampMs,
     type JsonSchema,
     type ValidationResult,
 } from './validate.js';

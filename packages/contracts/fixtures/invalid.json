@@ -108,6 +108,20 @@
         "id": 2,
         "method": "message.send"
     },
+    "xtrm.beads.lifecycle-event.v1": {
+        "schema_version": "xtrm.beads.lifecycle-event.v1",
+        "source": "xtrm-hook",
+        "id": "not-a-uuidv7",
+        "issue_id": "xtrm-etmv4.2",
+        "event_type": "claim",
+        "actor": "jaggerxtrm",
+        "old_value": "",
+        "new_value": "",
+        "comment": null,
+        "created_at": "2026-07-21T13:43:53Z",
+        "occurred_at_ms": -1,
+        "timestamp_source": "created_at"
+    },
     "xtrm.agent-role-launched.v1": {
         "role": 123
     },

@@ -12,6 +12,7 @@ export const SCHEMA_ID = {
     runtimeMatrix: 'xtrm.runtime-matrix.v1',
     runtimeOrigin: 'xtrm.runtime-origin.v1',
     branchIntegration: 'xtrm.branch.integration.v1',
+    beadsLifecycleEvent: 'xtrm.beads.lifecycle-event.v1',
     xtmuxTopology: 'xtrm.xtmux.topology.v1',
     xtmuxMessage: 'xtrm.xtmux.message.v1',
     xtmuxObligation: 'xtrm.xtmux.obligation.v1',
@@ -111,6 +112,23 @@ export interface BranchIntegrationV1 {
     target: { branch: string; worktree: string; role?: string };
     status: 'merged';
     commit: string;
+}
+
+// --- xtrm.beads.lifecycle-event.v1 ---
+export type BeadsLifecycleEventType = 'created' | 'claimed' | 'updated' | 'closed' | 'reopened' | 'status_changed';
+export interface BeadsLifecycleEventV1 {
+    schema_version: 'xtrm.beads.lifecycle-event.v1';
+    source: 'beads.events';
+    id: string;
+    issue_id: string;
+    event_type: BeadsLifecycleEventType;
+    actor: string;
+    old_value: unknown;
+    new_value: unknown;
+    comment: string | null;
+    created_at: string;
+    occurred_at_ms: number;
+    timestamp_source: 'uuidv7';
 }
 
 // --- xtrm.xtmux.topology.v1 ---
@@ -321,6 +339,7 @@ export interface ContractTypeMap {
     'xtrm.runtime-matrix.v1': RuntimeMatrixV1;
     'xtrm.runtime-origin.v1': RuntimeOriginV1;
     'xtrm.branch.integration.v1': BranchIntegrationV1;
+    'xtrm.beads.lifecycle-event.v1': BeadsLifecycleEventV1;
     'xtrm.xtmux.topology.v1': XtmuxTopologyV1;
     'xtrm.xtmux.message.v1': XtmuxMessageV1;
     'xtrm.xtmux.obligation.v1': XtmuxObligationV1;

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { SCHEMA_IDS, SCHEMA_ID, validate, getSchema, isValid } from '../src/index.js';
+import { SCHEMA_IDS, SCHEMA_ID, validate, getSchema, isValid, uuidV7TimestampMs } from '../src/index.js';
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
 const golden = JSON.parse(readFileSync(path.join(fixturesDir, 'golden.json'), 'utf8')) as Record<string, unknown>;
@@ -44,6 +44,37 @@ describe('invalid fixtures are rejected', () => {
             expect(validate(id, invalid[id]).valid).toBe(false);
         });
     }
+});
+
+describe('Beads lifecycle event contract', () => {
+    const id = 'xtrm.beads.lifecycle-event.v1';
+    const base = {
+        schema_version: id,
+        source: 'beads.events',
+        id: '019f847d-530b-77a1-9603-25eeeae6ea27',
+        issue_id: 'xtrm-etmv4.2',
+        actor: 'jaggerxtrm',
+        old_value: { status: 'open' },
+        new_value: { status: 'in_progress' },
+        comment: null,
+        created_at: '2026-07-21T13:43:53Z',
+        occurred_at_ms: 1784634233611,
+        timestamp_source: 'uuidv7',
+    };
+
+    it.each(['created', 'claimed', 'updated', 'closed', 'reopened', 'status_changed'])('accepts %s', (event_type) => {
+        expect(validate(id, { ...base, event_type }).valid).toBe(true);
+    });
+
+    it('rejects legacy imperative aliases and hook sources', () => {
+        expect(validate(id, { ...base, event_type: 'claim' }).valid).toBe(false);
+        expect(validate(id, { ...base, event_type: 'claimed', source: 'xtrm-hook' }).valid).toBe(false);
+    });
+
+    it('derives UTC milliseconds from the UUIDv7 identity', () => {
+        expect(uuidV7TimestampMs(base.id)).toBe(base.occurred_at_ms);
+        expect(() => uuidV7TimestampMs('not-a-uuidv7')).toThrow(/UUIDv7/);
+    });
 });
 
 describe('validator behavior', () => {

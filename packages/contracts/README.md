@@ -19,12 +19,13 @@ Publishes the wire/record schemas the three repos agree on, as **JSON Schemas**
 ## Usage
 
 ```ts
-import { validate, assertValid, isValid, SCHEMA_ID } from '@xtrm/contracts';
-import type { RuntimeOriginV1 } from '@xtrm/contracts';
+import { validate, assertValid, isValid, SCHEMA_ID, uuidV7TimestampMs } from '@xtrm/contracts';
+import type { RuntimeOriginV1, BeadsLifecycleEventV1 } from '@xtrm/contracts';
 
 const { valid, errors } = validate(SCHEMA_ID.runtimeOrigin, payload);
 assertValid('xtrm.branch.integration.v1', event); // throws with a readable message
 if (isValid(SCHEMA_ID.piExtensionManifest, data)) { /* data: PiExtensionManifestV1 */ }
+const occurredAtMs = uuidV7TimestampMs(beadsEvent.id);
 ```
 
 Consumers who only want the raw schemas can read `@xtrm/contracts/schemas/<id>.json`.
@@ -33,7 +34,8 @@ Consumers who only want the raw schemas can read `@xtrm/contracts/schemas/<id>.j
 
 Core: `xtrm.runtime-compatibility.v1`, `xtrm.interactive-role-envelope.v1`,
 `xtrm.pi-extension-manifest.v1`, `xtrm.command-deprecations.v1`, `xtrm.runtime-matrix.v1`.
-Lineage/observability: `xtrm.runtime-origin.v1`, `xtrm.branch.integration.v1`.
+Lineage/observability: `xtrm.runtime-origin.v1`, `xtrm.branch.integration.v1`,
+`xtrm.beads.lifecycle-event.v1`.
 xtmux runtime: `xtrm.xtmux.topology.v1`, `xtrm.xtmux.message.v1`, `xtrm.xtmux.obligation.v1`,
 `xtrm.xtmux.monitor.v1`, `xtrm.xtmux.wait.v1`, `xtrm.xtmux.bridge.v1`, `xtrm.agent-role-launched.v1`.
 Legacy specialists: `xtrm.specialist-role-envelope.v1` (registry version `"1"`).
@@ -52,6 +54,12 @@ npm test           # vitest
 
 ## Notes
 
+- Beads owns lifecycle facts for Claude, Pi, and raw shells through its Dolt
+  `events` table. Project them as `bd.<event_type>`; do not treat legacy hook or
+  explicit telemetry rows (`bd.claim`, `bd.close`) as additional source facts.
+- `xtrm.beads.lifecycle-event.v1` uses the Beads UUIDv7 event ID for idempotency
+  and UTC milliseconds. Beads 1.1.0 may serialize `created_at` as local wall time
+  with a `Z` suffix, so consumers must use `occurred_at_ms` for ordering/time.
 - Un-versioned xtmux CLI responses (message/obligation/monitor/wait) carry no
   `schema_version` on the wire; their schemas mirror the current CLI output shape.
 - `format` (e.g. `date-time`) is documentation only — not enforced (no ajv-formats dep).
