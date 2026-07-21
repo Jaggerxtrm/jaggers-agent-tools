@@ -43,8 +43,8 @@ export function createClaudeCommand(): Command {
         .description('Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring')
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
         .option('--role <name>', 'Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role — creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata')
-        .option('--bead <id>', 'Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)')
-        .option('--prompt <text>', 'Use <text> as the initial user prompt (mutually exclusive with --bead)')
+        .option('--bead <id>', 'Bind a bead to the session. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only — @agent_bead pane option + XTMUX_AGENT_BEAD — and combines freely with --prompt')
+        .option('--prompt <text>', 'Use <text> as the initial user prompt. A leading /<skill-name> is the supported way to load a skill on turn 1')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
         .option('--model <name>', 'Forward `--model <name>` to claude; with --role, overrides specialist.execution.model')
         .option('--thinking <level>', 'Warn-and-drop — claude has no --thinking flag; set thinking on the underlying model config instead')
@@ -57,14 +57,17 @@ export function createClaudeCommand(): Command {
         .allowExcessArguments(true)
         .allowUnknownOption(true)
         .addHelpText('after', `
-Passthrough (requires --role):
-  Everything after \`--\` is forwarded verbatim to the claude runtime. xt-owned
-  flags (--session-dir, --name, --system-prompt, --append-system-prompt,
-  --skill) are rejected; batch-mode flags (--print, --list-models, --export,
-  --mode) are dropped with a warning.
+Passthrough:
+  Everything after \`--\` is forwarded verbatim to the claude runtime, with or
+  without --role. xt-owned flags (--session-dir, --name, --system-prompt,
+  --append-system-prompt, --skill) are rejected; batch-mode flags (--print,
+  --list-models, --export, --mode) are dropped with a warning.
 
 Examples:
   $ xt claude demo --no-attach --prompt 'inspect the failing build' --model claude-opus-4-8
+  $ xt claude worker --no-attach --prompt '/multiplexing leggi /tmp/brief.txt e seguilo'
+  $ xt claude worker --no-attach --bead xyz --prompt 'work this bead'   # bead as pane metadata
+  $ xt claude worker --prompt 'audit the auth flow' -- --add-dir ~/notes
   $ xt claude --role reviewer --bead xyz -- --add-dir ~/notes
   $ xt claude --role chain-coordinator --model claude-opus-4-8
   $ xt claude --role reviewer --prompt 'review the auth changes in cli/src/auth/'

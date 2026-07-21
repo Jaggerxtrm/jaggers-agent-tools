@@ -146,14 +146,68 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  // xtrm-3xgs5: the slash guard keys off body PROVENANCE, not which launch
+  // path composed it. A bead title is untrusted (test above); an operator's
+  // own --prompt is not, whether or not --role is present.
+  it('accepts a role launch whose --prompt starts with a slash', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    await fs.ensureDir(repoRoot);
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      if (command === 'sp' && args[0] === 'view') {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            specialist: {
+              metadata: { name: 'blank' },
+              prompt: { system: 'role' },
+              skills: { paths: [] },
+            },
+          }),
+          stderr: '',
+        };
+      }
+      if (command === 'sp' && args[0] === 'render-skill-prefix') {
+        return { status: 1, stdout: '', stderr: 'unknown command' };
+      }
+      if (command === 'git' && args.join(' ') === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      // Fail worktree creation so the launcher exits right after composition.
+      if (command === 'git' && args[0] === 'worktree' && args[1] === 'add') {
+        return { status: 1, stdout: '', stderr: 'mock-worktree-add-fail' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        return { status: 1, stdout: '', stderr: 'no beads db' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      role: 'blank',
+      prompt: '/skill:multiplexing take bead X and do Y',
+    })).rejects.toThrow(/exit:/);
+
+    const errorOutput = errorSpy.mock.calls.map((call: unknown[]) => call.join(' ')).join('\n');
+    expect(errorOutput).not.toMatch(/starts with '\/'/);
+    expect(errorOutput).not.toMatch(/would parse untrusted text as a slash-command/);
+  });
+
   it('launches a detached general Pi session with prompt and overrides', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-general');
     await fs.ensureDir(path.join(repoRoot, '.beads'));
     process.chdir(repoRoot);
 
-    let bufferedPayload = '';
-    mocked.spawnSync.mockImplementation((command: string, args: string[], options?: { input?: string }) => {
+    let newSessionArgs: string[] = [];
+    let usedBufferedTransport = false;
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
       const joinedArgs = args.join(' ');
       if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
         return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
@@ -168,8 +222,11 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       if (command === 'tmux' && args[0] === 'has-session') {
         return { status: 1, stdout: '', stderr: '' };
       }
-      if (command === 'tmux' && args[0] === 'load-buffer') {
-        bufferedPayload = options?.input ?? '';
+      if (command === 'tmux' && args[0] === 'new-session') {
+        newSessionArgs = args;
+      }
+      if (command === 'tmux' && (args[0] === 'load-buffer' || args[0] === 'wait-for')) {
+        usedBufferedTransport = true;
       }
       if (command === 'tmux' && args[0] === 'list-panes') {
         return { status: 0, stdout: '%42\n', stderr: '' };
@@ -189,11 +246,12 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       attach: false,
     })).rejects.toThrow('exit:0');
 
-    expect(JSON.parse(bufferedPayload).runtimeArgs).toEqual([
-      '--model', 'openai-codex/gpt-5.6-luna',
-      '--thinking', 'high',
-      'echo hi',
-    ]);
+    // Bare launches hand tmux the runtime command line directly — no buffer,
+    // no consumer wrapper, no wait-for sync-points. xtrm-3xgs5.
+    expect(usedBufferedTransport).toBe(false);
+    expect(newSessionArgs[newSessionArgs.length - 1]).toBe(
+      "'pi' '--model' 'openai-codex/gpt-5.6-luna' '--thinking' 'high' 'echo hi'",
+    );
     expect(mocked.spawnSync).not.toHaveBeenCalledWith('sp', expect.anything(), expect.anything());
     expect(mocked.spawnSync).toHaveBeenCalledWith(
       'tmux',

@@ -180,22 +180,24 @@ xt claude <session-name> --no-attach --prompt '/multiplexing leggi /tmp/<session
 xt pi <session-name> --no-attach --prompt '/skill:multiplexing leggi /tmp/<session>-<topic>.txt e seguilo'
 ```
 
-Both print `session_name:pane_id` on stdout, name the session `<runtime>-<slug>`, and export `XTMUX_AGENT_TASK` and `XTMUX_AGENT_PARENT_SESSION` into the child (`XTMUX_AGENT_BEAD` is added only in `--role --bead` mode; the older `XTMUX_AGENT_PROMPT_FILE` transport was dropped in xtrm-8zsi1 and no longer exists). `--no-attach` = the launcher doesn't switch your current tmux client to the new session; the worker starts detached and its pointer is what you get on stdout.
+Both print `session_name:pane_id` on stdout, name the session `<runtime>-<slug>`, and export `XTMUX_AGENT_TASK` and `XTMUX_AGENT_PARENT_SESSION` into the child (`XTMUX_AGENT_BEAD` is exported whenever `--bead` is passed, in either mode; the older `XTMUX_AGENT_PROMPT_FILE` transport was dropped in xtrm-8zsi1 and no longer exists). `--no-attach` = the launcher doesn't switch your current tmux client to the new session; the worker starts detached and its pointer is what you get on stdout.
 
-**Bare-mode flag matrix.** Only these flags are legal without `--role` (bare gate at `worktree-session.ts:1029-1032` rejects `--bead` and `--` passthrough; everything else falls through):
+**Bare-mode flag matrix** (post xtrm-3xgs5 — bare and role are now separate builders, `buildBareTmuxPlan` / `buildRoleTmuxPlan`, and bare no longer refuses `--bead` or `--` passthrough):
 
 | Flag | Bare + `xt claude` | Bare + `xt pi` |
 |---|---|---|
-| `--prompt <text>` | ✓ | ✓ |
+| `--prompt <text>` | ✓ — leading `/<name>` is the sanctioned turn-1 skill load | ✓ — leading `/skill:<name>` likewise |
 | `--model <name>` | ✓ | ✓ |
-| `--skill <name-or-path>` | ✓ — prepends `/<name>` line to turn-1 body | ✓ — passes through as pi's native `--skill <path>` (`buildRoleTmuxPlan` pi branch, `:659-664`) |
+| `--skill <name-or-path>` | ✓ — prepends `/<name>` line to turn-1 body | ✓ — passes through as pi's native `--skill <path>` |
 | `--thinking <level>` | ✗ (Claude has no `--thinking` flag) | ✓ — forwarded to pi |
 | `--no-attach` / `--new-session` / `--ns` | ✓ | ✓ |
 | `--parent` / `--child` | ✓ | ✓ |
-| `--bead <id>` | ✗ requires `--role` | ✗ requires `--role` |
-| `--` passthrough | ✗ requires `--role` | ✗ requires `--role` |
+| `--bead <id>` | ✓ — metadata only, see below | ✓ — metadata only, see below |
+| `--` passthrough | ✓ — same `guardRolePassthrough` reject set as role mode | ✓ |
 
-In practice `--parent` / `--child` are almost always paired with `--role` (coordinator lineage), but the bare gate does not require it.
+**`--bead` in bare mode is a tag, not a task.** `sp render-task` takes the specialist name as a required positional, so there is no roleless render and bare mode composes no turn-1 body from the bead. What you get is the binding the picker and handoff flow actually read: `@agent_bead` on the pane, `XTMUX_AGENT_BEAD` in the child env, and bead-aware preview. The session name stays `<runtime>-<slug>` — the bead does not enter it (that is role-mode only). Because bare never composes from bead text, it has no untrusted turn-1 source, which is what makes the absent position-0 slash guard safe there. Pair it with `--prompt` freely; the mutual exclusion applies only under `--role`.
+
+In practice `--parent` / `--child` are almost always paired with `--role` (coordinator lineage), but bare does not require it.
 
 **Slash syntax differs across runtimes — do not paste one into the wrong pane:**
 
