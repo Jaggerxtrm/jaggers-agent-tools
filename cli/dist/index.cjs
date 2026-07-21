@@ -45169,11 +45169,9 @@ async function runClaudeRuntimeSyncPhase(opts) {
   const existingSerialized = hasExistingSettings ? JSON.stringify(existingSettings) : "";
   const mergedSerialized = JSON.stringify(mergedSettings);
   if (existingSerialized === mergedSerialized) {
-    await ensureGlobalStatusLine();
     return { settingsPath, hooksEventsWritten, hooksEntriesWritten, wroteSettings: false };
   }
   await writeJsonAtomic(settingsPath, mergedSettings);
-  await ensureGlobalStatusLine();
   return { settingsPath, hooksEventsWritten, hooksEntriesWritten, wroteSettings: true };
 }
 async function reconcileProjectClaudeHooks(repoRoot, opts = {}) {
@@ -61491,6 +61489,19 @@ async function cleanupConflictingPiPackageSettings(projectRoot, dryRun, isGlobal
   );
   return [...globalRemoved, ...projectRemoved];
 }
+async function reconcileProjectExtensionPackageEntry(packages) {
+  const next = packages.filter((entry) => entry !== PROJECT_EXTENSION_PACKAGE_ID);
+  if (await globalPiSettingsDeclareExtensionPackage()) return next;
+  return [...next, PROJECT_EXTENSION_PACKAGE_ID];
+}
+async function globalPiSettingsDeclareExtensionPackage() {
+  try {
+    const settings = await import_fs_extra12.default.readJson(import_path3.default.join(PI_AGENT_DIR, "settings.json"));
+    return normalizeStringArray(settings.packages).includes(PROJECT_EXTENSION_PACKAGE_ID);
+  } catch {
+    return false;
+  }
+}
 async function updatePiSettings(projectRoot, dryRun, log) {
   const piDirPath = import_path3.default.join(projectRoot, ".pi");
   const piSettingsPath = import_path3.default.join(piDirPath, "settings.json");
@@ -61502,10 +61513,8 @@ async function updatePiSettings(projectRoot, dryRun, log) {
   }
   const LEGACY_PACKAGE_IDS = /* @__PURE__ */ new Set(["npm:@xtrm/pi-extensions", "./extensions/"]);
   const existingProjectPackages = normalizeStringArray(existingSettings.packages).filter((entry) => !LEGACY_PACKAGE_IDS.has(entry) && !entry.startsWith("./extensions/"));
-  const { kept: existingPackages } = pruneConflictingPiPackageEntries(existingProjectPackages);
-  if (!existingPackages.includes(PROJECT_EXTENSION_PACKAGE_ID)) {
-    existingPackages.push(PROJECT_EXTENSION_PACKAGE_ID);
-  }
+  const { kept } = pruneConflictingPiPackageEntries(existingProjectPackages);
+  const existingPackages = await reconcileProjectExtensionPackageEntry(kept);
   const existingSkills = normalizeStringArray(existingSettings.skills);
   const normalizedSkills = normalizePiSkillsEntries(existingSkills);
   const existingExtensions = normalizeStringArray(existingSettings.extensions).filter((entry) => !LEGACY_PROJECT_EXTENSION_ENTRIES.has(entry));
@@ -61539,7 +61548,7 @@ async function updatePiSettings(projectRoot, dryRun, log) {
   }
   await import_fs_extra12.default.ensureDir(piDirPath);
   await import_fs_extra12.default.writeJson(piSettingsPath, nextSettings, { spaces: 2 });
-  log?.(kleur_default.dim(`Updated .pi/settings.json \u2192 ${PROJECT_EXTENSION_PACKAGE_ID} + ${normalizedSkills.join(" + ")}`));
+  log?.(kleur_default.dim(`Updated .pi/settings.json \u2192 ${existingPackages.join(" + ") || "no project packages"} + ${normalizedSkills.join(" + ")}`));
   return true;
 }
 async function executePiSync(plan, sourceDir, targetDir, opts = {}) {
@@ -72654,6 +72663,7 @@ async function ensureBeadsSharedServerEnabled(repoRoot, apply) {
 var import_fs_extra44 = __toESM(require_lib(), 1);
 var import_node_os16 = __toESM(require("os"), 1);
 var import_node_path36 = __toESM(require("path"), 1);
+var PI_ARRAY_FIELDS = ["packages", "extensions", "skills"];
 var LEGACY_PATTERNS = [
   { re: /skills\/active\/(?:claude|pi)\b/, label: "per-runtime active skills view (now flat .xtrm/skills/active)" },
   { re: /\blocal-legacy\b/, label: "local-legacy skills pack" },
@@ -72818,7 +72828,8 @@ async function auditPiSettings(file2, scope, home, outcome, globalPiEntries) {
       file: file2,
       subject: key,
       evidence: `no reader consumes this key \u2014 ${since}`,
-      remediation: "xt update --apply"
+      remediation: "xt update --apply, or xt doctor settings --fix --apply",
+      fix: { op: "delete-key", key }
     });
   }
   const base = import_node_path36.default.dirname(file2);
@@ -72827,18 +72838,20 @@ async function auditPiSettings(file2, scope, home, outcome, globalPiEntries) {
       if (!/^[.~/]/.test(entry)) continue;
       const resolved = import_node_path36.default.resolve(base, expandHome(entry, home));
       if (await import_fs_extra44.default.pathExists(resolved)) continue;
+      const owned = LEGACY_XTRM_SKILLS_ENTRIES.has(entry);
       outcome.planned.push({
         kind: "dangling-reference",
         scope,
         file: file2,
         subject: `${field}[] \u2192 ${entry}`,
-        evidence: `${resolved} does not exist`,
-        remediation: "xt update --apply"
+        evidence: owned ? `${resolved} does not exist \u2014 retired xtrm skills pointer` : `${resolved} does not exist`,
+        remediation: owned ? "xt doctor settings --fix --apply" : "not xt-owned \u2014 repair or remove the entry by hand",
+        ...owned ? { fix: { op: "remove-array-entry", field, entry } } : {}
       });
     }
   }
   if (scope !== "project" || !globalPiEntries) return;
-  for (const field of ["packages", "extensions", "skills"]) {
+  for (const field of PI_ARRAY_FIELDS) {
     for (const entry of stringArray(settings[field])) {
       if (!globalPiEntries.has(`${field}\0${entry}`)) continue;
       outcome.planned.push({
@@ -72846,11 +72859,66 @@ async function auditPiSettings(file2, scope, home, outcome, globalPiEntries) {
         scope,
         file: file2,
         subject: `${field}[] \u2192 ${entry}`,
-        evidence: "the global Pi settings already declare this entry",
-        remediation: "no fix yet \u2014 tracked by the installer-writes matrix (xtrm-kdwvu.2)"
+        // Not a harmless duplicate: Pi's getPackageIdentity ignores scope
+        // for npm sources, so dedupePackages collides the two entries and
+        // the PROJECT one wins — shadowing the global install with
+        // whatever copy sits under <project>/.pi/npm (xtrm-tzzud.1).
+        evidence: "the global Pi settings already declare this entry \u2014 the project copy shadows it",
+        remediation: "xt update --apply, or xt doctor settings --fix --apply",
+        fix: { op: "remove-array-entry", field, entry }
       });
     }
   }
+}
+async function backupFile(file2, stamp, home) {
+  const backupDir = import_node_path36.default.join(home, ".xtrm", "migration-backups");
+  await import_fs_extra44.default.ensureDir(backupDir);
+  const name = `${import_node_path36.default.basename(import_node_path36.default.dirname(file2))}-${import_node_path36.default.basename(file2, ".json")}-${stamp}.json`;
+  const backup = import_node_path36.default.join(backupDir, name);
+  await import_fs_extra44.default.copy(file2, backup);
+  return backup;
+}
+function applyFixesToSettings(settings, fixes) {
+  const next = { ...settings };
+  for (const fix2 of fixes) {
+    if (fix2.op === "delete-key") {
+      delete next[fix2.key];
+      continue;
+    }
+    next[fix2.field] = stringArray(next[fix2.field]).filter((entry) => entry !== fix2.entry);
+  }
+  return next;
+}
+async function applySettingsFixes(outcome, opts = {}) {
+  const fixable = outcome.planned.filter(
+    (finding) => Boolean(finding.fix)
+  );
+  if (fixable.length === 0 || !opts.apply) return outcome;
+  const home = opts.home ?? import_node_os16.default.homedir();
+  const stamp = opts.stamp ?? (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+  const byFile = /* @__PURE__ */ new Map();
+  for (const finding of fixable) {
+    byFile.set(finding.file, [...byFile.get(finding.file) ?? [], finding]);
+  }
+  for (const [file2, findings] of byFile) {
+    try {
+      const settings = await readJsonOrNull2(file2);
+      if (!settings) {
+        outcome.failed.push({ file: file2, error: "settings.json vanished or became unparseable before apply" });
+        continue;
+      }
+      const next = applyFixesToSettings(settings, findings.map((finding) => finding.fix));
+      if (JSON.stringify(next) === JSON.stringify(settings)) continue;
+      const backup = await backupFile(file2, stamp, home);
+      await import_fs_extra44.default.writeFile(file2, `${JSON.stringify(next, null, 2)}
+`);
+      outcome.changed = true;
+      for (const finding of findings) outcome.applied.push({ file: file2, subject: finding.subject, backup });
+    } catch (error51) {
+      outcome.failed.push({ file: file2, error: error51 instanceof Error ? error51.message : String(error51) });
+    }
+  }
+  return outcome;
 }
 function globalPiSettingsPaths(home) {
   const agentDir = process.env.PI_AGENT_DIR ?? import_node_path36.default.join(home, ".pi", "agent");
@@ -73156,9 +73224,10 @@ var FINDING_LABEL = {
   "dangling-reference": "dangling reference",
   "orphaned-key": "orphaned key"
 };
-function renderSettingsAudit(outcome) {
+function renderSettingsAudit(outcome, mode = { fix: false, apply: false }) {
+  const banner = !mode.fix ? "(read-only)" : mode.apply ? "(--fix --apply)" : "(--fix, dry run)";
   console.log(`
-${kleur_default.bold("xt doctor settings")} ${kleur_default.dim("(read-only)")}
+${kleur_default.bold("xt doctor settings")} ${kleur_default.dim(banner)}
 `);
   section2("Scanned");
   if (outcome.scanned.length === 0) warn("no settings.json found in the requested scope");
@@ -73201,13 +73270,27 @@ ${kleur_default.bold("xt doctor settings")} ${kleur_default.dim("(read-only)")}
     section2("Failed");
     for (const failure of outcome.failed) warn(`${failure.file}: ${failure.error}`);
   }
+  const fixable = outcome.planned.filter((f) => f.fix).length;
+  if (mode.apply && outcome.applied.length > 0) {
+    section2("Applied");
+    for (const item of outcome.applied) {
+      ok(`${item.subject}  ${kleur_default.dim(`(${item.file})`)}`);
+      console.log(`    ${kleur_default.dim(`backup: ${item.backup}`)}`);
+    }
+  }
   console.log("");
   console.log(`  ${outcome.planned.length === 0 ? kleur_default.green("\u2713") : kleur_default.yellow("\u25CB")} ${outcome.planned.length} finding(s), ${outcome.preserved.length} preserved, ${outcome.failed.length} failed`);
-  console.log(kleur_default.dim("  read-only \u2014 nothing was written. --fix is deferred (xtrm-kdwvu \xA73)."));
+  if (!mode.fix) {
+    console.log(kleur_default.dim(`  read-only \u2014 nothing was written. ${fixable} finding(s) are xt-owned; run --fix to see them.`));
+  } else if (!mode.apply) {
+    console.log(kleur_default.dim(`  dry run \u2014 nothing was written. ${fixable} finding(s) would be removed; re-run with --apply.`));
+  } else {
+    console.log(kleur_default.dim(`  ${outcome.applied.length} finding(s) removed; each mutated file was backed up first.`));
+  }
   console.log("");
 }
 function createDoctorSettingsCommand() {
-  return new Command("settings").description("Read-only audit of the settings.json files the installer writes into").option("--cwd <path>", "Project to audit (default: nearest project root)").option("--scope <scope>", "home | project | all", "all").option("--scan-all-repos", "Audit every xt consumer project under ~/dev and ~/projects", false).option("--json", "Output machine-readable ReconciliationOutcome/1 JSON", false).action(async (opts, cmd) => {
+  return new Command("settings").description("Read-only audit of the settings.json files the installer writes into").option("--cwd <path>", "Project to audit (default: nearest project root)").option("--scope <scope>", "home | project | all", "all").option("--scan-all-repos", "Audit every xt consumer project under ~/dev and ~/projects", false).option("--json", "Output machine-readable ReconciliationOutcome/1 JSON", false).option("--fix", "Remove the findings xt owns (dry-run; add --apply to write)", false).option("--apply", "With --fix: write the changes, backing each file up first", false).action(async (opts, cmd) => {
     const parentOpts = cmd.parent?.opts() ?? {};
     const json2 = Boolean(opts.json || parentOpts.json);
     const cwdOpt = opts.cwd ?? parentOpts.cwd;
@@ -73216,14 +73299,19 @@ function createDoctorSettingsCommand() {
       throw new Error(`--scope must be home, project or all (got: ${scope})`);
     }
     const projectRoot = opts.scanAllRepos ? void 0 : cwdOpt ? import_node_path37.default.resolve(cwdOpt) : await findProjectRoot().catch(() => void 0);
+    if (opts.apply && !opts.fix) {
+      throw new Error("--apply only applies to --fix; run: xt doctor settings --fix --apply");
+    }
     const outcome = await auditSettings({
       projectRoot,
       scope,
       scanAllRepos: opts.scanAllRepos
     });
+    if (opts.fix) await applySettingsFixes(outcome, { apply: opts.apply });
     if (json2) console.log(JSON.stringify(outcome, null, 2));
-    else renderSettingsAudit(outcome);
-    if (outcome.planned.length > 0 || outcome.failed.length > 0) process.exitCode = 1;
+    else renderSettingsAudit(outcome, { fix: Boolean(opts.fix), apply: Boolean(opts.apply) });
+    const outstanding = outcome.planned.length - outcome.applied.length;
+    if (outstanding > 0 || outcome.failed.length > 0) process.exitCode = 1;
   });
 }
 function createDoctorCommand() {
