@@ -61696,13 +61696,13 @@ function guardRolePassthrough(passthrough) {
     const bare = arg.split("=", 1)[0];
     if (ROLE_GUARDED_PI_FLAGS.includes(bare)) {
       return {
-        guardedError: `xt pi --role: ${bare} is set by the launcher and cannot be passed after --`,
+        guardedError: `passthrough: ${bare} is set by the launcher and cannot be passed after --`,
         warnings,
         filteredArgs: []
       };
     }
     if (ROLE_SKIPPED_PI_FLAGS.includes(bare)) {
-      warnings.push(`xt pi --role: ignoring ${bare} \u2014 incompatible with interactive coordination`);
+      warnings.push(`passthrough: ignoring ${bare} \u2014 incompatible with an interactive session`);
       if (!arg.includes("=") && i + 1 < passthrough.length && !passthrough[i + 1].startsWith("-")) {
         i += 1;
       }
@@ -62008,42 +62008,30 @@ Move large task context into a --bead or trim the literal prompt.`
 function chooseAttachCommand(sessionName, insideTmux) {
   return insideTmux ? ["switch-client", "-t", sessionName] : ["attach-session", "-t", sessionName];
 }
-function buildRoleTmuxPlan(args) {
+function pushSkillArgs(runtimeArgs, skillPaths) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const skill of skillPaths) {
+    const identity = (0, import_node_fs2.existsSync)(skill) ? (0, import_node_fs2.realpathSync)(skill) : skill;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    runtimeArgs.push("--skill", skill);
+  }
+}
+function finalizeTmuxPlan(args) {
   const {
     runtime,
-    role,
-    sessionSlug,
+    sessionName,
+    runtimeArgs,
+    agentTask,
     bead,
     parentSessionId,
     turn1Body,
-    modelOverride,
-    thinkingOverride,
-    explicitSkillPaths = [],
+    model,
+    thinking,
     passthrough
   } = args;
-  if (!role && !sessionSlug) throw new Error("role or sessionSlug is required");
-  const roleSlug = role ? slugifyForSession(role.name) : "";
-  const sessionName = role ? bead ? `role-${runtime}-${roleSlug}-${slugifyForSession(bead)}` : `role-${runtime}-${roleSlug}` : `${runtime}-${slugifyForSession(sessionSlug)}`;
-  const runtimeArgs = [];
-  if (role) runtimeArgs.push("--append-system-prompt", role.systemPrompt);
-  if (runtime === "pi") {
-    if (role) runtimeArgs.push("--no-skills");
-    const seenSkills = /* @__PURE__ */ new Set();
-    for (const skill of [...role?.skillPaths ?? [], ...explicitSkillPaths]) {
-      const identity = (0, import_node_fs2.existsSync)(skill) ? (0, import_node_fs2.realpathSync)(skill) : skill;
-      if (seenSkills.has(identity)) continue;
-      seenSkills.add(identity);
-      runtimeArgs.push("--skill", skill);
-    }
-  } else {
-    runtimeArgs.push("--dangerously-skip-permissions");
-  }
-  const model = modelOverride ?? role?.model;
   if (model) runtimeArgs.push("--model", model);
-  if (runtime === "pi") {
-    const thinking = thinkingOverride ?? role?.thinkingLevel;
-    if (thinking) runtimeArgs.push("--thinking", thinking);
-  }
+  if (runtime === "pi" && thinking) runtimeArgs.push("--thinking", thinking);
   if (passthrough && passthrough.length > 0) {
     runtimeArgs.push(...passthrough);
   }
@@ -62054,11 +62042,77 @@ function buildRoleTmuxPlan(args) {
   const runtimeCmdString = [runtime, ...runtimeArgs].map(shellQuote).join(" ");
   const paneOptions = [
     { key: "@agent_parent_session", value: parentSessionId },
-    { key: "@agent_task", value: role ? `role:${role.name}` : `session:${sessionSlug}` },
+    { key: "@agent_task", value: agentTask },
     { key: "@agent_state", value: "idle" }
   ];
   if (bead) paneOptions.push({ key: "@agent_bead", value: bead });
   return { sessionName, runtimeCmd: runtime, runtimeArgs, runtimeCmdString, paneOptions };
+}
+function buildRoleTmuxPlan(args) {
+  const {
+    runtime,
+    role,
+    bead,
+    parentSessionId,
+    turn1Body,
+    modelOverride,
+    thinkingOverride,
+    explicitSkillPaths = [],
+    passthrough
+  } = args;
+  const roleSlug = slugifyForSession(role.name);
+  const sessionName = bead ? `role-${runtime}-${roleSlug}-${slugifyForSession(bead)}` : `role-${runtime}-${roleSlug}`;
+  const runtimeArgs = ["--append-system-prompt", role.systemPrompt];
+  if (runtime === "pi") {
+    runtimeArgs.push("--no-skills");
+    pushSkillArgs(runtimeArgs, [...role.skillPaths, ...explicitSkillPaths]);
+  } else {
+    runtimeArgs.push("--dangerously-skip-permissions");
+  }
+  return finalizeTmuxPlan({
+    runtime,
+    sessionName,
+    runtimeArgs,
+    agentTask: `role:${role.name}`,
+    bead,
+    parentSessionId,
+    turn1Body,
+    // CLI override wins over the specialist default.
+    model: modelOverride ?? role.model,
+    thinking: thinkingOverride ?? role.thinkingLevel,
+    passthrough
+  });
+}
+function buildBareTmuxPlan(args) {
+  const {
+    runtime,
+    sessionSlug,
+    bead,
+    parentSessionId,
+    turn1Body,
+    modelOverride,
+    thinkingOverride,
+    explicitSkillPaths = [],
+    passthrough
+  } = args;
+  const runtimeArgs = [];
+  if (runtime === "pi") {
+    pushSkillArgs(runtimeArgs, explicitSkillPaths);
+  } else {
+    runtimeArgs.push("--dangerously-skip-permissions");
+  }
+  return finalizeTmuxPlan({
+    runtime,
+    sessionName: `${runtime}-${slugifyForSession(sessionSlug)}`,
+    runtimeArgs,
+    agentTask: `session:${sessionSlug}`,
+    bead,
+    parentSessionId,
+    turn1Body,
+    model: modelOverride,
+    thinking: thinkingOverride,
+    passthrough
+  });
 }
 function buildAgentEnv(args) {
   const { bead, role, parentSessionId } = args;
@@ -62187,7 +62241,7 @@ function unregisterPluginsForWorktree(worktreePath) {
 async function launchWorktreeSession(opts) {
   const { runtime, name, role: roleName, bead, prompt, attach = true, model, thinking } = opts;
   const cwd = process.cwd();
-  if (bead && prompt) {
+  if (roleName && bead && prompt) {
     console.error(kleur_default.red("\n  \u2717 --bead and --prompt are mutually exclusive; pick one\n"));
     process.exit(1);
   }
@@ -62212,16 +62266,20 @@ async function launchWorktreeSession(opts) {
         }
         untrustedBody = rawBody.slice(trustedSkillPrefix.length);
       }
-      const rawSlashCheck = checkPositionZeroSlash(untrustedBody, runtime, "");
-      if (!rawSlashCheck.ok) throw new Error(rawSlashCheck.error);
+      if (bead) {
+        const rawSlashCheck = checkPositionZeroSlash(untrustedBody, runtime, "");
+        if (!rawSlashCheck.ok) throw new Error(rawSlashCheck.error);
+      }
       composedTurn1Body = trustedSkillPrefix + untrustedBody;
       if (runtime === "claude" && explicitSkillPaths.length > 0) {
         const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}${trustedPrefix ? "\n" : "\n\n"}`;
         composedTurn1Body = explicitPrefix + composedTurn1Body;
         trustedPrefix = explicitPrefix + trustedPrefix;
       }
-      const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
-      if (!slashCheck.ok) throw new Error(slashCheck.error);
+      if (trustedPrefix || bead) {
+        const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
+        if (!slashCheck.ok) throw new Error(slashCheck.error);
+      }
       const byteCheck = checkByteCeiling({
         systemPrompt: resolvedRole.systemPrompt,
         body: composedTurn1Body,
@@ -62236,10 +62294,6 @@ async function launchWorktreeSession(opts) {
       process.exit(1);
     }
   } else {
-    if (bead || opts.passthrough && opts.passthrough.length > 0) {
-      console.error(kleur_default.red("\n  \u2717 --bead / -- passthrough require --role\n"));
-      process.exit(1);
-    }
     try {
       explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
       composedTurn1Body = prompt ?? "";
@@ -62266,7 +62320,7 @@ async function launchWorktreeSession(opts) {
     }
   }
   let guardedPassthrough = [];
-  if (resolvedRole && opts.passthrough && opts.passthrough.length > 0) {
+  if (opts.passthrough && opts.passthrough.length > 0) {
     const guard = guardRolePassthrough(opts.passthrough);
     if (guard.guardedError) {
       console.error(kleur_default.red(`
@@ -62386,25 +62440,29 @@ async function launchWorktreeSession(opts) {
   if (runtime === "pi") {
     await runPiLaunchPreflight(worktreePath, false);
   }
-  if (resolvedRole || prompt || model || thinking || explicitSkillPaths.length > 0 || !attach || opts.newSession) {
-    await launchRoleTmuxSession({
-      runtime,
-      role: resolvedRole ?? void 0,
-      sessionSlug: slug,
-      bead,
-      attach,
-      worktreePath,
-      modelOverride: model,
-      thinkingOverride: thinking,
-      renderedTask,
-      turn1Body: composedTurn1Body,
-      explicitSkillPaths,
-      passthrough: guardedPassthrough,
-      newSession: opts.newSession,
-      reuse: opts.reuse,
-      parent: opts.parent,
-      child: opts.child
-    });
+  const common = {
+    runtime,
+    sessionSlug: slug,
+    bead,
+    attach,
+    worktreePath,
+    modelOverride: model,
+    thinkingOverride: thinking,
+    turn1Body: composedTurn1Body,
+    explicitSkillPaths,
+    passthrough: guardedPassthrough,
+    newSession: opts.newSession,
+    reuse: opts.reuse,
+    parent: opts.parent,
+    child: opts.child
+  };
+  if (resolvedRole) {
+    await launchTmuxSession({ ...common, mode: "role", role: resolvedRole, renderedTask });
+    return;
+  }
+  const carriesLaunchState = Boolean(prompt) || Boolean(bead) || Boolean(model) || Boolean(thinking) || explicitSkillPaths.length > 0 || guardedPassthrough.length > 0 || !attach || Boolean(opts.newSession);
+  if (carriesLaunchState) {
+    await launchTmuxSession({ ...common, mode: "bare" });
     return;
   }
   const runtimeCmd = runtime === "claude" ? "claude" : "pi";
@@ -62447,17 +62505,15 @@ function emitAgentRoleLaunched(fields) {
     });
   }
 }
-async function launchRoleTmuxSession(args) {
+async function launchTmuxSession(args) {
   const {
     runtime,
-    role,
     sessionSlug,
     bead,
     attach,
     worktreePath,
     modelOverride,
     thinkingOverride,
-    renderedTask,
     turn1Body,
     explicitSkillPaths = [],
     passthrough,
@@ -62467,7 +62523,7 @@ async function launchRoleTmuxSession(args) {
     reuse
   } = args;
   const insideTmux = Boolean(process.env.TMUX);
-  const currentPaneMode = insideTmux && !newSession && (Boolean(role) || attach);
+  const currentPaneMode = insideTmux && !newSession && (args.mode === "role" || attach);
   if (currentPaneMode && !attach) {
     process.stderr.write(kleur_default.red(
       `
@@ -62493,10 +62549,8 @@ async function launchRoleTmuxSession(args) {
   } else {
     parentSessionId = currentTmuxSessionId();
   }
-  const plan = buildRoleTmuxPlan({
+  const planCommon = {
     runtime,
-    role,
-    sessionSlug,
     bead,
     parentSessionId,
     turn1Body,
@@ -62504,10 +62558,12 @@ async function launchRoleTmuxSession(args) {
     thinkingOverride,
     explicitSkillPaths,
     passthrough
-  });
-  const agentEnv = role ? buildAgentEnv({ bead, role: role.name, parentSessionId }) : {
+  };
+  const plan = args.mode === "role" ? buildRoleTmuxPlan({ ...planCommon, role: args.role }) : buildBareTmuxPlan({ ...planCommon, sessionSlug });
+  const agentEnv = args.mode === "role" ? buildAgentEnv({ bead, role: args.role.name, parentSessionId }) : {
     XTMUX_AGENT_TASK: `session:${sessionSlug}`,
-    XTMUX_AGENT_PARENT_SESSION: parentSessionId
+    XTMUX_AGENT_PARENT_SESSION: parentSessionId,
+    ...bead ? { XTMUX_AGENT_BEAD: bead } : {}
   };
   if (currentPaneMode) {
     const paneQuery2 = (0, import_node_child_process.spawnSync)("tmux", ["display-message", "-p", "#{pane_id}"], {
@@ -62522,17 +62578,17 @@ async function launchRoleTmuxSession(args) {
     for (const { key, value } of plan.paneOptions) {
       (0, import_node_child_process.spawnSync)("tmux", ["set-option", "-p", "-t", paneId2, key, value], { stdio: "pipe" });
     }
-    if (role) {
+    if (args.mode === "role") {
       emitAgentRoleLaunched({
         pane: paneId2,
         session: currentTmuxSessionId(),
         bead: bead ?? "",
-        role: role.name,
+        role: args.role.name,
         parent: parentSessionId,
         worktree: worktreePath,
-        task_prompt_renderer: renderedTask ? "success" : "not_requested",
-        task_prompt_hash: renderedTask?.promptHash ?? "",
-        task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : ""
+        task_prompt_renderer: args.renderedTask ? "success" : "not_requested",
+        task_prompt_hash: args.renderedTask?.promptHash ?? "",
+        task_prompt_components: args.renderedTask ? JSON.stringify(args.renderedTask.components) : ""
       });
     }
     const piResult = (0, import_node_child_process.spawnSync)(plan.runtimeCmd, plan.runtimeArgs, {
@@ -62589,66 +62645,81 @@ async function launchRoleTmuxSession(args) {
   for (const [k, v] of Object.entries(agentEnv)) {
     envArgs.push("-e", `${k}=${v}`);
   }
-  const runtimeBuffer = createRuntimeBufferName();
+  let runtimeBuffer = null;
   const cleanupOnSignal = () => {
-    deleteRuntimeBuffer(runtimeBuffer);
+    if (runtimeBuffer) deleteRuntimeBuffer(runtimeBuffer);
     (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
     process.exit(1);
   };
   process.once("SIGINT", cleanupOnSignal);
   process.once("SIGTERM", cleanupOnSignal);
   process.once("SIGHUP", cleanupOnSignal);
-  const newSess = (0, import_node_child_process.spawnSync)("tmux", [
-    "new-session",
-    "-d",
-    "-s",
-    plan.sessionName,
-    "-c",
-    worktreePath,
-    ...envArgs,
-    buildBufferedRuntimeCommand(runtimeBuffer)
-  ], { stdio: "pipe", encoding: "utf8" });
-  if (newSess.status !== 0) {
-    deleteRuntimeBuffer(runtimeBuffer);
-    const stderr = (newSess.stderr ?? "").trim() || "unknown error";
+  const failNewSession = (stderr) => {
+    if (runtimeBuffer) deleteRuntimeBuffer(runtimeBuffer);
     process.stderr.write(kleur_default.red(`
-  \u2717 tmux new-session failed: ${stderr}
+  \u2717 tmux new-session failed: ${stderr || "unknown error"}
 `));
     process.exit(1);
-  }
-  const consumerReady = (0, import_node_child_process.spawnSync)("tmux", ["wait-for", `${runtimeBuffer}-consumer-ready`], {
-    stdio: "pipe",
-    encoding: "utf8",
-    timeout: TMUX_CONSUMER_READY_TIMEOUT_MS,
-    killSignal: "SIGTERM"
-  });
-  if (consumerReady.status !== 0) {
-    deleteRuntimeBuffer(runtimeBuffer);
-    (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
-    const stderr = (consumerReady.stderr ?? consumerReady.error?.message ?? "").trim() || "consumer readiness timed out";
-    process.stderr.write(kleur_default.red(`
+  };
+  if (args.mode === "bare") {
+    const newSess = (0, import_node_child_process.spawnSync)("tmux", [
+      "new-session",
+      "-d",
+      "-s",
+      plan.sessionName,
+      "-c",
+      worktreePath,
+      ...envArgs,
+      plan.runtimeCmdString
+    ], { stdio: "pipe", encoding: "utf8" });
+    if (newSess.status !== 0) failNewSession((newSess.stderr ?? "").trim());
+  } else {
+    runtimeBuffer = createRuntimeBufferName();
+    const newSess = (0, import_node_child_process.spawnSync)("tmux", [
+      "new-session",
+      "-d",
+      "-s",
+      plan.sessionName,
+      "-c",
+      worktreePath,
+      ...envArgs,
+      buildBufferedRuntimeCommand(runtimeBuffer)
+    ], { stdio: "pipe", encoding: "utf8" });
+    if (newSess.status !== 0) failNewSession((newSess.stderr ?? "").trim());
+    const consumerReady = (0, import_node_child_process.spawnSync)("tmux", ["wait-for", `${runtimeBuffer}-consumer-ready`], {
+      stdio: "pipe",
+      encoding: "utf8",
+      timeout: TMUX_CONSUMER_READY_TIMEOUT_MS,
+      killSignal: "SIGTERM"
+    });
+    if (consumerReady.status !== 0) {
+      deleteRuntimeBuffer(runtimeBuffer);
+      (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
+      const stderr = (consumerReady.stderr ?? consumerReady.error?.message ?? "").trim() || "consumer readiness timed out";
+      process.stderr.write(kleur_default.red(`
   \u2717 tmux prompt consumer failed to become ready: ${stderr}
 `));
-    process.exit(1);
-  }
-  const bufferedPayload = JSON.stringify({
-    runtimeCmd: plan.runtimeCmd,
-    runtimeArgs: plan.runtimeArgs
-  });
-  const loaded = (0, import_node_child_process.spawnSync)("tmux", ["load-buffer", "-b", runtimeBuffer, "-"], {
-    input: bufferedPayload,
-    stdio: ["pipe", "pipe", "pipe"],
-    encoding: "utf8"
-  });
-  const signaled = loaded.status === 0 ? (0, import_node_child_process.spawnSync)("tmux", ["wait-for", "-S", `${runtimeBuffer}-ready`], { stdio: "pipe", encoding: "utf8" }) : null;
-  if (loaded.status !== 0 || signaled?.status !== 0) {
-    deleteRuntimeBuffer(runtimeBuffer);
-    (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
-    const stderr = (loaded.stderr ?? signaled?.stderr)?.trim() || "unknown error";
-    process.stderr.write(kleur_default.red(`
+      process.exit(1);
+    }
+    const bufferedPayload = JSON.stringify({
+      runtimeCmd: plan.runtimeCmd,
+      runtimeArgs: plan.runtimeArgs
+    });
+    const loaded = (0, import_node_child_process.spawnSync)("tmux", ["load-buffer", "-b", runtimeBuffer, "-"], {
+      input: bufferedPayload,
+      stdio: ["pipe", "pipe", "pipe"],
+      encoding: "utf8"
+    });
+    const signaled = loaded.status === 0 ? (0, import_node_child_process.spawnSync)("tmux", ["wait-for", "-S", `${runtimeBuffer}-ready`], { stdio: "pipe", encoding: "utf8" }) : null;
+    if (loaded.status !== 0 || signaled?.status !== 0) {
+      deleteRuntimeBuffer(runtimeBuffer);
+      (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
+      const stderr = (loaded.stderr ?? signaled?.stderr)?.trim() || "unknown error";
+      process.stderr.write(kleur_default.red(`
   \u2717 tmux prompt transport failed: ${stderr}
 `));
-    process.exit(1);
+      process.exit(1);
+    }
   }
   const paneQuery = (0, import_node_child_process.spawnSync)("tmux", [
     "list-panes",
@@ -62659,7 +62730,7 @@ async function launchRoleTmuxSession(args) {
   ], { stdio: "pipe", encoding: "utf8" });
   const paneId = (paneQuery.stdout ?? "").trim().split("\n")[0] ?? "";
   if (!paneId) {
-    deleteRuntimeBuffer(runtimeBuffer);
+    if (runtimeBuffer) deleteRuntimeBuffer(runtimeBuffer);
     (0, import_node_child_process.spawnSync)("tmux", ["kill-session", "-t", plan.sessionName], { stdio: "ignore" });
     process.stderr.write(kleur_default.red("\n  \u2717 Could not resolve pane id for new session\n"));
     process.exit(1);
@@ -62670,17 +62741,17 @@ async function launchRoleTmuxSession(args) {
   for (const { key, value } of plan.paneOptions) {
     (0, import_node_child_process.spawnSync)("tmux", ["set-option", "-p", "-t", paneId, key, value], { stdio: "pipe" });
   }
-  if (role) {
+  if (args.mode === "role") {
     emitAgentRoleLaunched({
       pane: paneId,
       session: plan.sessionName,
       bead: bead ?? "",
-      role: role.name,
+      role: args.role.name,
       parent: parentSessionId,
       worktree: worktreePath,
-      task_prompt_renderer: renderedTask ? "success" : "not_requested",
-      task_prompt_hash: renderedTask?.promptHash ?? "",
-      task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : ""
+      task_prompt_renderer: args.renderedTask ? "success" : "not_requested",
+      task_prompt_hash: args.renderedTask?.promptHash ?? "",
+      task_prompt_components: args.renderedTask ? JSON.stringify(args.renderedTask.components) : ""
     });
   }
   if (!attach) {
@@ -63107,15 +63178,18 @@ function hasXtrmHookWiring(settingsPath) {
   }
 }
 function createClaudeCommand() {
-  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role \u2014 creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)").option("--prompt <text>", "Use <text> as the initial user prompt (mutually exclusive with --bead)").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to claude; with --role, overrides specialist.execution.model").option("--thinking <level>", "Warn-and-drop \u2014 claude has no --thinking flag; set thinking on the underlying model config instead").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
-Passthrough (requires --role):
-  Everything after \`--\` is forwarded verbatim to the claude runtime. xt-owned
-  flags (--session-dir, --name, --system-prompt, --append-system-prompt,
-  --skill) are rejected; batch-mode flags (--print, --list-models, --export,
-  --mode) are dropped with a warning.
+  const cmd = new Command("claude").description("Launch a Claude session in a sandboxed worktree, or manage Claude hook wiring").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch claude as a specialist role (resolved via `sp view <name>`); mirrors xt pi --role \u2014 creates a tmux session (or runs in current pane inside $TMUX) with @agent_task metadata").option("--bead <id>", "Bind a bead to the session. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only \u2014 @agent_bead pane option + XTMUX_AGENT_BEAD \u2014 and combines freely with --prompt").option("--prompt <text>", "Use <text> as the initial user prompt. A leading /<skill-name> is the supported way to load a skill on turn 1").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to claude; with --role, overrides specialist.execution.model").option("--thinking <level>", "Warn-and-drop \u2014 claude has no --thinking flag; set thinking on the underlying model config instead").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
+Passthrough:
+  Everything after \`--\` is forwarded verbatim to the claude runtime, with or
+  without --role. xt-owned flags (--session-dir, --name, --system-prompt,
+  --append-system-prompt, --skill) are rejected; batch-mode flags (--print,
+  --list-models, --export, --mode) are dropped with a warning.
 
 Examples:
   $ xt claude demo --no-attach --prompt 'inspect the failing build' --model claude-opus-4-8
+  $ xt claude worker --no-attach --prompt '/multiplexing leggi /tmp/brief.txt e seguilo'
+  $ xt claude worker --no-attach --bead xyz --prompt 'work this bead'   # bead as pane metadata
+  $ xt claude worker --prompt 'audit the auth flow' -- --add-dir ~/notes
   $ xt claude --role reviewer --bead xyz -- --add-dir ~/notes
   $ xt claude --role chain-coordinator --model claude-opus-4-8
   $ xt claude --role reviewer --prompt 'review the auth changes in cli/src/auth/'
@@ -63910,15 +63984,17 @@ async function getPiProjectPointer(projectRoot) {
   }
 }
 function createPiCommand() {
-  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)").option("--prompt <text>", "Use <text> as the initial user prompt (mutually exclusive with --bead)").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to pi; with --role, overrides specialist.execution.model").option("--thinking <level>", "Forward `--thinking <level>` to pi; with --role, overrides specialist.execution.thinking_level").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
-Passthrough (requires --role):
-  Everything after \`--\` is forwarded verbatim to the pi runtime. xt-owned
-  flags (--session-dir, --name, --system-prompt, --append-system-prompt,
-  --skill) are rejected; batch-mode flags (--print, --list-models, --export,
-  --mode) are dropped with a warning.
+  const cmd = new Command("pi").description("Launch a Pi session in a sandboxed worktree, or manage the Pi runtime").argument("[name]", "Optional session name \u2014 used as xt/<name> branch (random if omitted)").option("--role <name>", "Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata").option("--bead <id>", "Bind a bead to the session. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only \u2014 @agent_bead pane option + XTMUX_AGENT_BEAD \u2014 and combines freely with --prompt").option("--prompt <text>", "Use <text> as the initial user prompt. A leading /skill:<name> is the supported way to load a skill on turn 1").option("--no-attach", "Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)").option("--model <name>", "Forward `--model <name>` to pi; with --role, overrides specialist.execution.model").option("--thinking <level>", "Forward `--thinking <level>` to pi; with --role, overrides specialist.execution.thinking_level").option("--skill <name-or-path>", "Load an additional skill at startup (repeatable)", (value, previous) => [...previous, value], []).option("--new-session", "Inside $TMUX: force a fresh tmux session instead of running in the current pane (default outside $TMUX)").option("--ns", "Alias for --new-session").option("--parent <target>", "With --role: override @agent_parent_session on the target pane (target = tmux session name, id, or #{session_id})").option("--child", "With --role: explicit form of the auto-behavior \u2014 @agent_parent_session = current pane's session_id").option("--reuse", "With --role + --new-session (or outside $TMUX): if a session named role-<slug>[-<bead>] already exists, attach to it instead of auto-suffixing a fresh one").allowExcessArguments(true).allowUnknownOption(true).addHelpText("after", `
+Passthrough:
+  Everything after \`--\` is forwarded verbatim to the pi runtime, with or
+  without --role. xt-owned flags (--session-dir, --name, --system-prompt,
+  --append-system-prompt, --skill) are rejected; batch-mode flags (--print,
+  --list-models, --export, --mode) are dropped with a warning.
 
 Examples:
   $ xt pi demo --no-attach --prompt 'inspect the failing build' --model openai-codex/gpt-5.6-luna
+  $ xt pi worker --no-attach --skill multiplexing --prompt 'leggi /tmp/brief.txt e seguilo'
+  $ xt pi worker --no-attach --bead xyz --prompt 'work this bead'   # bead as pane metadata
   $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
   $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
   $ xt pi --role reviewer --prompt 'review the auth changes in cli/src/auth/'

@@ -72,8 +72,8 @@ export function createPiCommand(): Command {
         .description('Launch a Pi session in a sandboxed worktree, or manage the Pi runtime')
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
         .option('--role <name>', 'Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata')
-        .option('--bead <id>', 'Render the tracked task as the initial user prompt and retain the id via @agent_bead/session slug (mutually exclusive with --prompt)')
-        .option('--prompt <text>', 'Use <text> as the initial user prompt (mutually exclusive with --bead)')
+        .option('--bead <id>', 'Bind a bead to the session. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only — @agent_bead pane option + XTMUX_AGENT_BEAD — and combines freely with --prompt')
+        .option('--prompt <text>', 'Use <text> as the initial user prompt. A leading /skill:<name> is the supported way to load a skill on turn 1')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
         .option('--model <name>', 'Forward `--model <name>` to pi; with --role, overrides specialist.execution.model')
         .option('--thinking <level>', 'Forward `--thinking <level>` to pi; with --role, overrides specialist.execution.thinking_level')
@@ -86,14 +86,16 @@ export function createPiCommand(): Command {
         .allowExcessArguments(true)
         .allowUnknownOption(true)
         .addHelpText('after', `
-Passthrough (requires --role):
-  Everything after \`--\` is forwarded verbatim to the pi runtime. xt-owned
-  flags (--session-dir, --name, --system-prompt, --append-system-prompt,
-  --skill) are rejected; batch-mode flags (--print, --list-models, --export,
-  --mode) are dropped with a warning.
+Passthrough:
+  Everything after \`--\` is forwarded verbatim to the pi runtime, with or
+  without --role. xt-owned flags (--session-dir, --name, --system-prompt,
+  --append-system-prompt, --skill) are rejected; batch-mode flags (--print,
+  --list-models, --export, --mode) are dropped with a warning.
 
 Examples:
   $ xt pi demo --no-attach --prompt 'inspect the failing build' --model openai-codex/gpt-5.6-luna
+  $ xt pi worker --no-attach --skill multiplexing --prompt 'leggi /tmp/brief.txt e seguilo'
+  $ xt pi worker --no-attach --bead xyz --prompt 'work this bead'   # bead as pane metadata
   $ xt pi --role researcher --bead xyz -- --gitnexus-cmd 'foo bar'
   $ xt pi --role chain-coordinator --model openai-codex/gpt-5.4 -- --thinking medium
   $ xt pi --role reviewer --prompt 'review the auth changes in cli/src/auth/'

@@ -70,11 +70,11 @@ describe('worktree session bare-mode slash guard', () => {
 
     await expect(launchWorktreeSession({
       runtime: 'claude',
-      sessionSlug: 'bare-claude-slash',
+      name: 'bare-claude-slash',
       prompt: '/multiplexing leggi /tmp/foo.txt e seguilo',
     })).rejects.toThrow(/exit:/);
 
-    const errorOutput = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+    const errorOutput = errorSpy.mock.calls.map((call: unknown[]) => call.join(' ')).join('\n');
     expect(errorOutput).not.toMatch(/starts with '\/'/);
     expect(errorOutput).not.toMatch(/no '.*' prefix/);
   });
@@ -91,11 +91,11 @@ describe('worktree session bare-mode slash guard', () => {
 
     await expect(launchWorktreeSession({
       runtime: 'pi',
-      sessionSlug: 'bare-pi-slash',
+      name: 'bare-pi-slash',
       prompt: '/skill:multiplexing leggi /tmp/foo.txt e seguilo',
     })).rejects.toThrow(/exit:/);
 
-    const errorOutput = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+    const errorOutput = errorSpy.mock.calls.map((call: unknown[]) => call.join(' ')).join('\n');
     expect(errorOutput).not.toMatch(/starts with '\/'/);
     expect(errorOutput).not.toMatch(/no '.*' prefix/);
   });
@@ -113,11 +113,90 @@ describe('worktree session bare-mode slash guard', () => {
 
     await expect(launchWorktreeSession({
       runtime: 'claude',
-      sessionSlug: 'bare-plain',
+      name: 'bare-plain',
       prompt: 'plain operator prompt without slash',
     })).rejects.toThrow(/exit:/);
 
-    const errorOutput = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+    const errorOutput = errorSpy.mock.calls.map((call: unknown[]) => call.join(' ')).join('\n');
     expect(errorOutput).not.toMatch(/starts with '\/'/);
+  });
+
+  // xtrm-3xgs5: --bead and `--` passthrough used to be refused outright
+  // without --role. Both are legal in bare mode now.
+  it('accepts bare-mode --bead without --role', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    process.env.HOME = path.join(tempRoot, 'home');
+    await fs.ensureDir(repoRoot);
+    process.chdir(repoRoot);
+
+    const errorSpy = mockGitWorktreeAddFails();
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'claude',
+      name: 'bare-bead',
+      bead: 'xtrm-3xgs5',
+      prompt: 'work the bead',
+    })).rejects.toThrow(/exit:/);
+
+    const errorOutput = errorSpy.mock.calls.map((call: unknown[]) => call.join(' ')).join('\n');
+    expect(errorOutput).not.toMatch(/require --role/);
+    // Bare --bead is metadata only, so it does not conflict with --prompt.
+    expect(errorOutput).not.toMatch(/mutually exclusive/);
+    // ...and it must not reach the roleless-impossible sp render-task.
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'sp',
+      expect.arrayContaining(['render-task']),
+      expect.anything(),
+    );
+  });
+
+  it('accepts bare-mode `--` passthrough and still enforces the argv guard', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    process.env.HOME = path.join(tempRoot, 'home');
+    await fs.ensureDir(repoRoot);
+    process.chdir(repoRoot);
+
+    const errorSpy = mockGitWorktreeAddFails();
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'claude',
+      name: 'bare-passthrough',
+      prompt: 'hi',
+      passthrough: ['--add-dir', '/notes'],
+    })).rejects.toThrow(/exit:/);
+
+    const errorOutput = errorSpy.mock.calls.map((call: unknown[]) => call.join(' ')).join('\n');
+    expect(errorOutput).not.toMatch(/require --role/);
+  });
+
+  it('rejects xt-owned flags in bare-mode passthrough', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    process.env.HOME = path.join(tempRoot, 'home');
+    await fs.ensureDir(repoRoot);
+    process.chdir(repoRoot);
+
+    const errorSpy = mockGitWorktreeAddFails();
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'claude',
+      name: 'bare-bad-passthrough',
+      prompt: 'hi',
+      passthrough: ['--session-dir', '/tmp'],
+    })).rejects.toThrow(/exit:1/);
+
+    const errorOutput = errorSpy.mock.calls.map((call: unknown[]) => call.join(' ')).join('\n');
+    expect(errorOutput).toMatch(/--session-dir/);
+    // Guarded before any worktree state is created.
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'bd',
+      expect.arrayContaining(['worktree', 'create']),
+      expect.anything(),
+    );
   });
 });

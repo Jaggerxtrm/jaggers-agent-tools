@@ -9,6 +9,7 @@ import {
     assertClaudeSkillsDiscoverable,
     buildAgentEnv,
     buildBufferedRuntimeCommand,
+    buildBareTmuxPlan,
     buildRoleTmuxPlan,
     checkByteCeiling,
     checkPositionZeroSlash,
@@ -480,9 +481,9 @@ describe('parseSpecialistJson', () => {
     });
 });
 
-describe('buildRoleTmuxPlan (general session)', () => {
+describe('buildBareTmuxPlan', () => {
     it('forwards prompt and model to Claude without role metadata', () => {
-        const plan = buildRoleTmuxPlan({
+        const plan = buildBareTmuxPlan({
             runtime: 'claude',
             sessionSlug: 'demo',
             parentSessionId: '',
@@ -496,6 +497,73 @@ describe('buildRoleTmuxPlan (general session)', () => {
             '--dangerously-skip-permissions',
             '--model', 'claude-opus-4-8',
             '--', 'echo hi',
+        ]);
+    });
+
+    it('emits no --append-system-prompt and no --no-skills for pi', () => {
+        const plan = buildBareTmuxPlan({
+            runtime: 'pi',
+            sessionSlug: 'demo',
+            parentSessionId: '',
+            turn1Body: 'hi',
+            thinkingOverride: 'high',
+        });
+
+        expect(plan.sessionName).toBe('pi-demo');
+        expect(plan.runtimeArgs).not.toContain('--append-system-prompt');
+        expect(plan.runtimeArgs).not.toContain('--no-skills');
+        // pi takes the positional without a `--` delimiter.
+        expect(plan.runtimeArgs).toEqual(['--thinking', 'high', 'hi']);
+    });
+
+    it('pushes explicit --skill paths to pi argv (bare mode)', () => {
+        const plan = buildBareTmuxPlan({
+            runtime: 'pi',
+            sessionSlug: 'demo',
+            parentSessionId: '',
+            turn1Body: '',
+            explicitSkillPaths: ['/skills/multiplexing', '/skills/multiplexing', '/skills/planning'],
+        });
+
+        // Deduped, order preserved, no turn-1 positional when the body is empty.
+        expect(plan.runtimeArgs).toEqual([
+            '--skill', '/skills/multiplexing',
+            '--skill', '/skills/planning',
+        ]);
+    });
+
+    it('binds --bead as pane + session metadata without touching the session name', () => {
+        const plan = buildBareTmuxPlan({
+            runtime: 'claude',
+            sessionSlug: 'demo',
+            bead: 'xtrm-3xgs5',
+            parentSessionId: '$7',
+            turn1Body: 'hi',
+        });
+
+        // Bare session identity is the slug alone — the bead does not enter it.
+        expect(plan.sessionName).toBe('claude-demo');
+        expect(plan.paneOptions).toEqual([
+            { key: '@agent_parent_session', value: '$7' },
+            { key: '@agent_task', value: 'session:demo' },
+            { key: '@agent_state', value: 'idle' },
+            { key: '@agent_bead', value: 'xtrm-3xgs5' },
+        ]);
+    });
+
+    it('appends guard-checked passthrough before the turn-1 positional', () => {
+        const plan = buildBareTmuxPlan({
+            runtime: 'claude',
+            sessionSlug: 'demo',
+            parentSessionId: '',
+            turn1Body: 'hi',
+            passthrough: ['--add-dir', '/notes'],
+        });
+
+        expect(plan.runtimeArgs).toEqual([
+            '--dangerously-skip-permissions',
+            '--add-dir', '/notes',
+            '--', 'hi',
         ]);
     });
 });

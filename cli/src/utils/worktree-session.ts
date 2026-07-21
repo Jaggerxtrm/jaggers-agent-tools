@@ -109,7 +109,9 @@ export interface PiArgvGuardResult {
     filteredArgs: string[];
 }
 
-// Pure — no I/O. Split so tests can drive it directly.
+// Pure — no I/O. Split so tests can drive it directly. Reached from every
+// launch shape (pi/claude, role/bare) since xtrm-3xgs5, so the messages stay
+// runtime- and mode-neutral.
 export function guardRolePassthrough(passthrough: string[]): PiArgvGuardResult {
     const warnings: string[] = [];
     const filteredArgs: string[] = [];
@@ -118,13 +120,13 @@ export function guardRolePassthrough(passthrough: string[]): PiArgvGuardResult {
         const bare = arg.split('=', 1)[0];
         if (ROLE_GUARDED_PI_FLAGS.includes(bare)) {
             return {
-                guardedError: `xt pi --role: ${bare} is set by the launcher and cannot be passed after --`,
+                guardedError: `passthrough: ${bare} is set by the launcher and cannot be passed after --`,
                 warnings,
                 filteredArgs: [],
             };
         }
         if (ROLE_SKIPPED_PI_FLAGS.includes(bare)) {
-            warnings.push(`xt pi --role: ignoring ${bare} — incompatible with interactive coordination`);
+            warnings.push(`passthrough: ignoring ${bare} — incompatible with an interactive session`);
             // consume value if next arg is not another flag
             if (!arg.includes('=') && i + 1 < passthrough.length && !passthrough[i + 1].startsWith('-')) {
                 i += 1;
@@ -575,7 +577,7 @@ export function checkByteCeiling(parts: {
     return { ok: true };
 }
 
-export interface RoleTmuxPlan {
+export interface TmuxLaunchPlan {
     sessionName: string;
     /** Runtime binary — 'pi' or 'claude'. */
     runtimeCmd: 'pi' | 'claude';
@@ -593,22 +595,20 @@ export function chooseAttachCommand(sessionName: string, insideTmux: boolean): s
         : ['attach-session', '-t', sessionName];
 }
 
-export function buildRoleTmuxPlan(args: {
+/** Options shared verbatim by the role and bare plan builders. */
+interface CommonTmuxPlanArgs {
     /** Which runtime binary this plan targets. */
     runtime: 'pi' | 'claude';
-    role?: ResolvedRole;
-    /** Worktree/session slug for a general launch without --role. */
-    sessionSlug?: string;
     bead?: string;
     parentSessionId: string;
     /** Turn-1 positional body — runtime-specific trusted skill prefix + user
      * body already concatenated. Empty string means no positional (skills-only prime). */
     turn1Body: string;
-    /** CLI --model override; wins over role.model. */
+    /** CLI --model override; in role mode it wins over role.model. */
     modelOverride?: string;
-    /** CLI --thinking override; wins over role.thinkingLevel. Silently dropped
-     * for claude (no --thinking flag) — caller warns at CLI level if the user
-     * explicitly passed --thinking to xt claude. */
+    /** CLI --thinking override; in role mode it wins over role.thinkingLevel.
+     * Silently dropped for claude (no --thinking flag) — caller warns at CLI
+     * level if the user explicitly passed --thinking to xt claude. */
     thinkingOverride?: string;
     /** Explicit --skill requests, already resolved to absolute paths.
      * Emitted verbatim to pi's native --skill flag. Claude has no --skill
@@ -617,79 +617,50 @@ export function buildRoleTmuxPlan(args: {
     explicitSkillPaths?: string[];
     /** Argv after `--` on the xt command line, already guard-checked. */
     passthrough?: string[];
-}): RoleTmuxPlan {
-    const {
-        runtime, role, sessionSlug, bead, parentSessionId, turn1Body, modelOverride,
-        thinkingOverride, explicitSkillPaths = [], passthrough,
-    } = args;
-    if (!role && !sessionSlug) throw new Error('role or sessionSlug is required');
+}
 
-    const roleSlug = role ? slugifyForSession(role.name) : '';
-    // Include runtime in the session name so xt pi --role X --bead Y and
-    // xt claude --role X --bead Y produce distinguishable sessions
-    // (role-pi-X-Y vs role-claude-X-Y) instead of colliding on role-X-Y and
-    // relying on xtmux-1lb.6's auto-suffix. Operator's mental model is one
-    // pi + one claude flavor of the same specialist, not "the second one
-    // gets a random hex". See xtmux-3h8.
-    const sessionName = role
-        ? bead
-            ? `role-${runtime}-${roleSlug}-${slugifyForSession(bead)}`
-            : `role-${runtime}-${roleSlug}`
-        : `${runtime}-${slugifyForSession(sessionSlug!)}`;
-
-    const runtimeArgs: string[] = [];
-
-    // Inline system prompt on both runtimes (xtrm-8zsi1). The xtrm-osipt
-    // stopgap's --file variants were needed only when injectSkillContents
-    // (xtrm-14w28) fattened the prompt to ~70KB; sp render-skill-prefix now
-    // forces skill body load via /skill:name at turn-1 so the identity
-    // system prompt stays small enough to inline safely under the byte
-    // guard.
-    if (role) runtimeArgs.push('--append-system-prompt', role.systemPrompt);
-
-    if (runtime === 'pi') {
-        // Role pool isolation: --no-skills disables pi's global skill-pool
-        // auto-discovery. Combined with explicit --skill <path> per declared
-        // + operator-requested skill, only the declared set is
-        // reachable. Matches sp's forthcoming unitAI-0o3pv behavior; core
-        // ships this now regardless of sp release timing (self-diagnosing
-        // "skill not found" is a fine loud-fail surface). xtrm-8zsi1.
-        if (role) runtimeArgs.push('--no-skills');
-        const seenSkills = new Set<string>();
-        for (const skill of [...(role?.skillPaths ?? []), ...explicitSkillPaths]) {
-            const identity = existsSync(skill) ? realpathSync(skill) : skill;
-            if (seenSkills.has(identity)) continue;
-            seenSkills.add(identity);
-            runtimeArgs.push('--skill', skill);
-        }
-        // Extensions: trust pi's own discovery (~/.pi/agent/settings.json plus
-        // any per-repo settings). Previously (PR #365) the launcher emitted
-        // `--no-extensions -e <name>...` from a curated allow-list, but `pi -e`
-        // takes a **filesystem path**, not a registry name — the launcher was
-        // silently crashing pi on startup. Drop the policy; trust discovery.
-        // See xtmux-3rs.
-    } else {
-        // Claude: no --no-skills equivalent exists (--bare is nuclear and
-        // disables hooks/CLAUDE.md/OAuth). Accept partial isolation — global
-        // ~/.claude/skills auto-discovery remains. Declared skills force-load
-        // via sp-owned /<name> lines in the turn-1 body prefix; operator
-        // --skill additions (explicitSkillPaths) are prepended as
-        // /<name> in launchWorktreeSession composition before turn1Body
-        // reaches this function. No --plugin-dir scaffold anymore.
-        runtimeArgs.push('--dangerously-skip-permissions');
+/** Emit `--skill <path>` per unique skill, deduped by realpath. pi-only. */
+function pushSkillArgs(runtimeArgs: string[], skillPaths: string[]): void {
+    const seen = new Set<string>();
+    for (const skill of skillPaths) {
+        const identity = existsSync(skill) ? realpathSync(skill) : skill;
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        runtimeArgs.push('--skill', skill);
     }
+}
 
-    // Model: CLI override wins over specialist default. Both runtimes accept
-    // --model <name>; pi and claude resolve their own defaults when unset.
-    const model = modelOverride ?? role?.model;
+/**
+ * Shared tail of both plan builders. Everything from `--model` onward is
+ * identical between a role launch and a bare one — only the head (system
+ * prompt, skill pool policy, session name, @agent_task) differs, which is
+ * exactly what the two builders own. xtrm-3xgs5.
+ */
+function finalizeTmuxPlan(args: {
+    runtime: 'pi' | 'claude';
+    sessionName: string;
+    /** Head args, mutated in place with the shared tail. */
+    runtimeArgs: string[];
+    agentTask: string;
+    bead?: string;
+    parentSessionId: string;
+    turn1Body: string;
+    model?: string;
+    thinking?: string;
+    passthrough?: string[];
+}): TmuxLaunchPlan {
+    const {
+        runtime, sessionName, runtimeArgs, agentTask, bead, parentSessionId,
+        turn1Body, model, thinking, passthrough,
+    } = args;
+
+    // Model: both runtimes accept --model <name>; pi and claude resolve their
+    // own defaults when unset.
     if (model) runtimeArgs.push('--model', model);
 
     // Thinking: pi-only. Claude has no --thinking flag; silently drop when
     // the target is claude (caller warns at CLI-level if user was explicit).
-    if (runtime === 'pi') {
-        const thinking = thinkingOverride ?? role?.thinkingLevel;
-        if (thinking) runtimeArgs.push('--thinking', thinking);
-    }
+    if (runtime === 'pi' && thinking) runtimeArgs.push('--thinking', thinking);
 
     // Passthrough: append verbatim (caller must have run guardRolePassthrough
     // first to reject xt-owned flags and drop batch-mode incompatibles).
@@ -717,12 +688,121 @@ export function buildRoleTmuxPlan(args: {
     // downstream skills read the option absence-safely (|| true).
     const paneOptions: Array<{ key: string; value: string }> = [
         { key: '@agent_parent_session', value: parentSessionId },
-        { key: '@agent_task', value: role ? `role:${role.name}` : `session:${sessionSlug}` },
+        { key: '@agent_task', value: agentTask },
         { key: '@agent_state', value: 'idle' },
     ];
     if (bead) paneOptions.push({ key: '@agent_bead', value: bead });
 
     return { sessionName, runtimeCmd: runtime, runtimeArgs, runtimeCmdString, paneOptions };
+}
+
+export function buildRoleTmuxPlan(args: CommonTmuxPlanArgs & {
+    role: ResolvedRole;
+}): TmuxLaunchPlan {
+    const {
+        runtime, role, bead, parentSessionId, turn1Body, modelOverride,
+        thinkingOverride, explicitSkillPaths = [], passthrough,
+    } = args;
+
+    // Include runtime in the session name so xt pi --role X --bead Y and
+    // xt claude --role X --bead Y produce distinguishable sessions
+    // (role-pi-X-Y vs role-claude-X-Y) instead of colliding on role-X-Y and
+    // relying on xtmux-1lb.6's auto-suffix. Operator's mental model is one
+    // pi + one claude flavor of the same specialist, not "the second one
+    // gets a random hex". See xtmux-3h8.
+    const roleSlug = slugifyForSession(role.name);
+    const sessionName = bead
+        ? `role-${runtime}-${roleSlug}-${slugifyForSession(bead)}`
+        : `role-${runtime}-${roleSlug}`;
+
+    // Inline system prompt on both runtimes (xtrm-8zsi1). The xtrm-osipt
+    // stopgap's --file variants were needed only when injectSkillContents
+    // (xtrm-14w28) fattened the prompt to ~70KB; sp render-skill-prefix now
+    // forces skill body load via /skill:name at turn-1 so the identity
+    // system prompt stays small enough to inline safely under the byte
+    // guard.
+    const runtimeArgs: string[] = ['--append-system-prompt', role.systemPrompt];
+
+    if (runtime === 'pi') {
+        // Role pool isolation: --no-skills disables pi's global skill-pool
+        // auto-discovery. Combined with explicit --skill <path> per declared
+        // + operator-requested skill, only the declared set is
+        // reachable. Matches sp's forthcoming unitAI-0o3pv behavior; core
+        // ships this now regardless of sp release timing (self-diagnosing
+        // "skill not found" is a fine loud-fail surface). xtrm-8zsi1.
+        runtimeArgs.push('--no-skills');
+        pushSkillArgs(runtimeArgs, [...role.skillPaths, ...explicitSkillPaths]);
+        // Extensions: trust pi's own discovery (~/.pi/agent/settings.json plus
+        // any per-repo settings). Previously (PR #365) the launcher emitted
+        // `--no-extensions -e <name>...` from a curated allow-list, but `pi -e`
+        // takes a **filesystem path**, not a registry name — the launcher was
+        // silently crashing pi on startup. Drop the policy; trust discovery.
+        // See xtmux-3rs.
+    } else {
+        // Claude: no --no-skills equivalent exists (--bare is nuclear and
+        // disables hooks/CLAUDE.md/OAuth). Accept partial isolation — global
+        // ~/.claude/skills auto-discovery remains. Declared skills force-load
+        // via sp-owned /<name> lines in the turn-1 body prefix; operator
+        // --skill additions (explicitSkillPaths) are prepended as
+        // /<name> in launchWorktreeSession composition before turn1Body
+        // reaches this function. No --plugin-dir scaffold anymore.
+        runtimeArgs.push('--dangerously-skip-permissions');
+    }
+
+    return finalizeTmuxPlan({
+        runtime,
+        sessionName,
+        runtimeArgs,
+        agentTask: `role:${role.name}`,
+        bead,
+        parentSessionId,
+        turn1Body,
+        // CLI override wins over the specialist default.
+        model: modelOverride ?? role.model,
+        thinking: thinkingOverride ?? role.thinkingLevel,
+        passthrough,
+    });
+}
+
+/**
+ * Plan for a launch with no specialist behind it: `xt claude <name>
+ * --prompt ...`. No system prompt, no skill-pool isolation policy, and no
+ * bead in the session name — a bare session is identified by its worktree
+ * slug alone (`<runtime>-<slug>`), with any --bead carried as pane/env
+ * metadata only. xtrm-3xgs5 (was a nullable `role?` through the role
+ * builder, PR #433).
+ */
+export function buildBareTmuxPlan(args: CommonTmuxPlanArgs & {
+    /** Worktree/session slug — the sole identity of a bare session. */
+    sessionSlug: string;
+}): TmuxLaunchPlan {
+    const {
+        runtime, sessionSlug, bead, parentSessionId, turn1Body, modelOverride,
+        thinkingOverride, explicitSkillPaths = [], passthrough,
+    } = args;
+
+    const runtimeArgs: string[] = [];
+    if (runtime === 'pi') {
+        // No --no-skills: a bare session has no declared skill set to isolate
+        // to, so pi's global pool discovery stays on and explicit --skill
+        // requests are additive.
+        pushSkillArgs(runtimeArgs, explicitSkillPaths);
+    } else {
+        runtimeArgs.push('--dangerously-skip-permissions');
+    }
+
+    return finalizeTmuxPlan({
+        runtime,
+        sessionName: `${runtime}-${slugifyForSession(sessionSlug)}`,
+        runtimeArgs,
+        agentTask: `session:${sessionSlug}`,
+        bead,
+        parentSessionId,
+        turn1Body,
+        model: modelOverride,
+        thinking: thinkingOverride,
+        passthrough,
+    });
 }
 
 /**
@@ -950,11 +1030,15 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     const { runtime, name, role: roleName, bead, prompt, attach = true, model, thinking } = opts;
     const cwd = process.cwd();
 
-    // Mutual exclusion: --bead renders a tracked task; --prompt supplies a
-    // literal turn-1 body; the two contract different composition paths and
-    // can't stack. Rejected at the launcher rather than each CLI so both
-    // xt pi and xt claude enforce the same rule from one place.
-    if (bead && prompt) {
+    // Mutual exclusion: in role mode --bead renders a tracked task and
+    // --prompt supplies a literal turn-1 body; the two contract different
+    // composition paths and can't stack. Rejected at the launcher rather than
+    // each CLI so both xt pi and xt claude enforce the same rule from one
+    // place. Bare mode is exempt: `sp render-task` takes the specialist name
+    // as a required positional, so there is no roleless render and --bead is
+    // metadata only (pane option + env + picker preview). A tag and a body
+    // don't conflict. xtrm-3xgs5.
+    if (roleName && bead && prompt) {
         console.error(kleur.red('\n  ✗ --bead and --prompt are mutually exclusive; pick one\n'));
         process.exit(1);
     }
@@ -994,8 +1078,18 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
                 }
                 untrustedBody = rawBody.slice(trustedSkillPrefix.length);
             }
-            const rawSlashCheck = checkPositionZeroSlash(untrustedBody, runtime, '');
-            if (!rawSlashCheck.ok) throw new Error(rawSlashCheck.error);
+            // Provenance, not path. A bead-derived body carries a bead title
+            // that any writer to the beads store can set, so a leading '/'
+            // there is an impersonation attempt and stays rejected. An
+            // operator-typed --prompt is the same trust level whether or not
+            // --role is present — it is argv the operator typed on their own
+            // terminal — so it is exempt here exactly as it is in bare mode.
+            // This replaces the uniform check with the rule it was always
+            // reaching for. xtrm-3xgs5 (see PR #439 for the bare half).
+            if (bead) {
+                const rawSlashCheck = checkPositionZeroSlash(untrustedBody, runtime, '');
+                if (!rawSlashCheck.ok) throw new Error(rawSlashCheck.error);
+            }
             composedTurn1Body = trustedSkillPrefix + untrustedBody;
 
             // Claude explicit --skill delivery is launcher-owned but still
@@ -1006,10 +1100,16 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
                 trustedPrefix = explicitPrefix + trustedPrefix;
             }
 
-            // Reject before worktree creation unless byte zero is ordinary
-            // text or the exact trusted prefix assembled above.
-            const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
-            if (!slashCheck.ok) throw new Error(slashCheck.error);
+            // Composition integrity: when a trusted prefix was assembled, the
+            // composed body must start with exactly it — that assertion is
+            // worth making whatever the body's provenance. With no trusted
+            // prefix the check degenerates to the leading-'/' rule, which
+            // only an untrusted bead-derived body needs. Both fire before
+            // worktree creation.
+            if (trustedPrefix || bead) {
+                const slashCheck = checkPositionZeroSlash(composedTurn1Body, runtime, trustedPrefix);
+                if (!slashCheck.ok) throw new Error(slashCheck.error);
+            }
 
             // Literal prompts keep the conservative 50KB policy. Rendered
             // beads use the larger per-runtime-argument boundary so their full
@@ -1026,11 +1126,6 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             process.exit(1);
         }
     } else {
-        if (bead || (opts.passthrough && opts.passthrough.length > 0)) {
-            console.error(kleur.red('\n  ✗ --bead / -- passthrough require --role\n'));
-            process.exit(1);
-        }
-
         try {
             explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
             composedTurn1Body = prompt ?? '';
@@ -1045,11 +1140,13 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             // Bare-mode turn-1 body is entirely trusted at composition:
             // opts.prompt is operator-typed argv on their own terminal, and
             // trustedPrefix is launcher-generated from validated, discoverable
-            // --skill args. No untrusted composition source exists here, so a
-            // leading '/' in --prompt (e.g. '/multiplexing ...') is the sanctioned
-            // way to load a skill on turn 1 and must not trip checkPositionZeroSlash.
-            // The role/bead path (:997, :1011) keeps the guard against untrusted
-            // bead-title impersonation. xtrm-8zsi1 follow-up.
+            // --skill args. --bead does not compose anything here (no roleless
+            // `sp render-task`), so bare has no untrusted body source *by
+            // construction* rather than by accident — which is what makes the
+            // absent slash guard safe. A leading '/' in --prompt (e.g.
+            // '/multiplexing ...') is the sanctioned way to load a skill on
+            // turn 1. The role path keeps the guard on bead-derived bodies.
+            // xtrm-8zsi1 follow-up; provenance rule finished in xtrm-3xgs5.
             const byteCheck = checkByteCeiling({
                 systemPrompt: '',
                 body: composedTurn1Body,
@@ -1066,7 +1163,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // Guard passthrough up-front — refuse xt-owned flags before we build any
     // worktree state. Skip-flags produce warnings but continue.
     let guardedPassthrough: string[] = [];
-    if (resolvedRole && opts.passthrough && opts.passthrough.length > 0) {
+    if (opts.passthrough && opts.passthrough.length > 0) {
         const guard = guardRolePassthrough(opts.passthrough);
         if (guard.guardedError) {
             console.error(kleur.red(`\n  ✗ ${guard.guardedError}\n`));
@@ -1232,28 +1329,40 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         await runPiLaunchPreflight(worktreePath, false);
     }
 
-    // Explicit launch options use the same tmux transport as role sessions.
-    // --no-attach also opts in so a plain detached runtime has a real TTY.
-    if (resolvedRole || prompt || model || thinking || explicitSkillPaths.length > 0 || !attach || opts.newSession) {
-        await launchRoleTmuxSession({
-            runtime,
-            role: resolvedRole ?? undefined,
-            sessionSlug: slug,
-            bead,
-            attach,
-            worktreePath,
-            modelOverride: model,
-            thinkingOverride: thinking,
-            renderedTask,
-            turn1Body: composedTurn1Body,
-            explicitSkillPaths,
-            passthrough: guardedPassthrough,
-            newSession: opts.newSession,
-            reuse: opts.reuse,
-            parent: opts.parent,
-            child: opts.child,
-        });
-        return; // launchRoleTmuxSession never returns (calls process.exit)
+    // One decision, taken once: a role launch always needs the tmux path
+    // (metadata, telemetry, buffered transport for the system prompt). A bare
+    // launch needs it only when something has to be carried into the pane —
+    // a turn-1 body, a runtime override, bead metadata, passthrough argv, or
+    // a detached/forced-new session. A plain `xt claude <name>` with none of
+    // those still gets a plain runtime in the current terminal. xtrm-3xgs5.
+    const common = {
+        runtime,
+        sessionSlug: slug,
+        bead,
+        attach,
+        worktreePath,
+        modelOverride: model,
+        thinkingOverride: thinking,
+        turn1Body: composedTurn1Body,
+        explicitSkillPaths,
+        passthrough: guardedPassthrough,
+        newSession: opts.newSession,
+        reuse: opts.reuse,
+        parent: opts.parent,
+        child: opts.child,
+    };
+
+    if (resolvedRole) {
+        await launchTmuxSession({ ...common, mode: 'role', role: resolvedRole, renderedTask });
+        return; // launchTmuxSession never returns (calls process.exit)
+    }
+
+    const carriesLaunchState = Boolean(prompt) || Boolean(bead) || Boolean(model)
+        || Boolean(thinking) || explicitSkillPaths.length > 0
+        || guardedPassthrough.length > 0 || !attach || Boolean(opts.newSession);
+    if (carriesLaunchState) {
+        await launchTmuxSession({ ...common, mode: 'bare' });
+        return;
     }
 
     // Launch the runtime in the worktree
@@ -1310,17 +1419,20 @@ function emitAgentRoleLaunched(fields: Record<string, string>): void {
     }
 }
 
-async function launchRoleTmuxSession(args: {
+/**
+ * Launch args. The role/bare distinction is carried in the type rather than
+ * in a nullable `role?` plus a pile of `role?.x` reads — a bare launch simply
+ * has no role to speak of, and the union makes that unrepresentable rather
+ * than merely undefined. xtrm-3xgs5.
+ */
+type TmuxLaunchArgs = {
     runtime: 'pi' | 'claude';
-    role?: ResolvedRole;
     sessionSlug: string;
     bead?: string;
     attach: boolean;
     worktreePath: string;
     modelOverride?: string;
     thinkingOverride?: string;
-    /** render-task metadata for telemetry only (composedTurn1Body owns the actual body). */
-    renderedTask?: RenderedRoleTask;
     /** Composed turn-1 positional body (sp prefix + user body). Empty = skills-only prime. */
     turn1Body: string;
     explicitSkillPaths?: string[];
@@ -1329,9 +1441,19 @@ async function launchRoleTmuxSession(args: {
     parent?: string;
     child?: boolean;
     reuse?: boolean;
-}): Promise<never> {
+} & (
+    | {
+        mode: 'role';
+        role: ResolvedRole;
+        /** render-task metadata for telemetry only (turn1Body owns the actual body). */
+        renderedTask?: RenderedRoleTask;
+    }
+    | { mode: 'bare' }
+);
+
+async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     const {
-        runtime, role, sessionSlug, bead, attach, worktreePath, modelOverride, thinkingOverride, renderedTask, turn1Body, explicitSkillPaths = [], passthrough,
+        runtime, sessionSlug, bead, attach, worktreePath, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
         newSession, parent, child, reuse,
     } = args;
 
@@ -1341,7 +1463,7 @@ async function launchRoleTmuxSession(args: {
     // role, launch it in this pane and that's that." Outside $TMUX the only
     // sensible thing is still `tmux new-session`, so mode collapses to
     // new-session there regardless of --new-session. xtmux-1lb.5.1.
-    const currentPaneMode = insideTmux && !newSession && (Boolean(role) || attach);
+    const currentPaneMode = insideTmux && !newSession && (args.mode === 'role' || attach);
 
     // Guard: --no-attach only makes sense when we're actually creating a
     // session that could be attached-to later. In current-pane mode there IS
@@ -1374,28 +1496,25 @@ async function launchRoleTmuxSession(args: {
     }
 
     // Fileless transport within a trusted same-user control plane. Current-pane
-    // mode passes argv directly; new-session mode uses a transient tmux buffer.
+    // mode passes argv directly; the role new-session path uses a transient
+    // tmux buffer to keep a 50-1000KB system prompt off the command line.
     // Prompts/beads are not credential storage, and same-server tmux peers are
     // trusted to inspect or control the session.
 
-    const plan = buildRoleTmuxPlan({
-        runtime,
-        role,
-        sessionSlug,
-        bead,
-        parentSessionId,
-        turn1Body,
-        modelOverride,
-        thinkingOverride,
-        explicitSkillPaths,
-        passthrough,
-    });
+    const planCommon = {
+        runtime, bead, parentSessionId, turn1Body,
+        modelOverride, thinkingOverride, explicitSkillPaths, passthrough,
+    };
+    const plan = args.mode === 'role'
+        ? buildRoleTmuxPlan({ ...planCommon, role: args.role })
+        : buildBareTmuxPlan({ ...planCommon, sessionSlug });
 
-    const agentEnv = role
-        ? buildAgentEnv({ bead, role: role.name, parentSessionId })
+    const agentEnv = args.mode === 'role'
+        ? buildAgentEnv({ bead, role: args.role.name, parentSessionId })
         : {
             XTMUX_AGENT_TASK: `session:${sessionSlug}`,
             XTMUX_AGENT_PARENT_SESSION: parentSessionId,
+            ...(bead ? { XTMUX_AGENT_BEAD: bead } : {}),
         };
 
     if (currentPaneMode) {
@@ -1415,17 +1534,17 @@ async function launchRoleTmuxSession(args: {
             spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
         }
 
-        if (role) {
+        if (args.mode === 'role') {
             emitAgentRoleLaunched({
                 pane: paneId,
                 session: currentTmuxSessionId(),
                 bead: bead ?? '',
-                role: role.name,
+                role: args.role.name,
                 parent: parentSessionId,
                 worktree: worktreePath,
-                task_prompt_renderer: renderedTask ? 'success' : 'not_requested',
-                task_prompt_hash: renderedTask?.promptHash ?? '',
-                task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : '',
+                task_prompt_renderer: args.renderedTask ? 'success' : 'not_requested',
+                task_prompt_hash: args.renderedTask?.promptHash ?? '',
+                task_prompt_components: args.renderedTask ? JSON.stringify(args.renderedTask.components) : '',
             });
         }
 
@@ -1495,9 +1614,19 @@ async function launchRoleTmuxSession(args: {
         envArgs.push('-e', `${k}=${v}`);
     }
 
-    const runtimeBuffer = createRuntimeBufferName();
+    // Transport. The buffered handshake exists so a 50-1000KB role system
+    // prompt never has to fit on a command line: tmux starts a consumer
+    // wrapper, we hand it the payload through a transient buffer, and it
+    // execs the runtime. A bare launch has no system prompt at all and its
+    // turn-1 body is already bounded by the 50KB literal ceiling
+    // (checkByteCeiling source:'prompt') — the very constant tmux's own
+    // command-length limit motivated. So bare hands tmux the shell-quoted
+    // command line directly, exactly as current-pane mode already hands argv
+    // to spawnSync, and skips four sync-points and a wrapper subprocess.
+    // xtrm-3xgs5.
+    let runtimeBuffer: string | null = null;
     const cleanupOnSignal = (): void => {
-        deleteRuntimeBuffer(runtimeBuffer);
+        if (runtimeBuffer) deleteRuntimeBuffer(runtimeBuffer);
         spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
         process.exit(1);
     };
@@ -1505,52 +1634,65 @@ async function launchRoleTmuxSession(args: {
     process.once('SIGTERM', cleanupOnSignal);
     process.once('SIGHUP', cleanupOnSignal);
 
-    const newSess = spawnSync('tmux', [
-        'new-session', '-d',
-        '-s', plan.sessionName,
-        '-c', worktreePath,
-        ...envArgs,
-        buildBufferedRuntimeCommand(runtimeBuffer),
-    ], { stdio: 'pipe', encoding: 'utf8' });
-    if (newSess.status !== 0) {
-        deleteRuntimeBuffer(runtimeBuffer);
-        const stderr = (newSess.stderr ?? '').trim() || 'unknown error';
-        process.stderr.write(kleur.red(`\n  ✗ tmux new-session failed: ${stderr}\n`));
+    const failNewSession = (stderr: string): never => {
+        if (runtimeBuffer) deleteRuntimeBuffer(runtimeBuffer);
+        process.stderr.write(kleur.red(`\n  ✗ tmux new-session failed: ${stderr || 'unknown error'}\n`));
         process.exit(1);
-    }
+    };
 
-    const consumerReady = spawnSync('tmux', ['wait-for', `${runtimeBuffer}-consumer-ready`], {
-        stdio: 'pipe',
-        encoding: 'utf8',
-        timeout: TMUX_CONSUMER_READY_TIMEOUT_MS,
-        killSignal: 'SIGTERM',
-    });
-    if (consumerReady.status !== 0) {
-        deleteRuntimeBuffer(runtimeBuffer);
-        spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
-        const stderr = (consumerReady.stderr ?? consumerReady.error?.message ?? '').trim() || 'consumer readiness timed out';
-        process.stderr.write(kleur.red(`\n  ✗ tmux prompt consumer failed to become ready: ${stderr}\n`));
-        process.exit(1);
-    }
+    if (args.mode === 'bare') {
+        const newSess = spawnSync('tmux', [
+            'new-session', '-d',
+            '-s', plan.sessionName,
+            '-c', worktreePath,
+            ...envArgs,
+            plan.runtimeCmdString,
+        ], { stdio: 'pipe', encoding: 'utf8' });
+        if (newSess.status !== 0) failNewSession((newSess.stderr ?? '').trim());
+    } else {
+        runtimeBuffer = createRuntimeBufferName();
+        const newSess = spawnSync('tmux', [
+            'new-session', '-d',
+            '-s', plan.sessionName,
+            '-c', worktreePath,
+            ...envArgs,
+            buildBufferedRuntimeCommand(runtimeBuffer),
+        ], { stdio: 'pipe', encoding: 'utf8' });
+        if (newSess.status !== 0) failNewSession((newSess.stderr ?? '').trim());
 
-    const bufferedPayload = JSON.stringify({
-        runtimeCmd: plan.runtimeCmd,
-        runtimeArgs: plan.runtimeArgs,
-    });
-    const loaded = spawnSync('tmux', ['load-buffer', '-b', runtimeBuffer, '-'], {
-        input: bufferedPayload,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        encoding: 'utf8',
-    });
-    const signaled = loaded.status === 0
-        ? spawnSync('tmux', ['wait-for', '-S', `${runtimeBuffer}-ready`], { stdio: 'pipe', encoding: 'utf8' })
-        : null;
-    if (loaded.status !== 0 || signaled?.status !== 0) {
-        deleteRuntimeBuffer(runtimeBuffer);
-        spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
-        const stderr = ((loaded.stderr ?? signaled?.stderr) as string | undefined)?.trim() || 'unknown error';
-        process.stderr.write(kleur.red(`\n  ✗ tmux prompt transport failed: ${stderr}\n`));
-        process.exit(1);
+        const consumerReady = spawnSync('tmux', ['wait-for', `${runtimeBuffer}-consumer-ready`], {
+            stdio: 'pipe',
+            encoding: 'utf8',
+            timeout: TMUX_CONSUMER_READY_TIMEOUT_MS,
+            killSignal: 'SIGTERM',
+        });
+        if (consumerReady.status !== 0) {
+            deleteRuntimeBuffer(runtimeBuffer);
+            spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
+            const stderr = (consumerReady.stderr ?? consumerReady.error?.message ?? '').trim() || 'consumer readiness timed out';
+            process.stderr.write(kleur.red(`\n  ✗ tmux prompt consumer failed to become ready: ${stderr}\n`));
+            process.exit(1);
+        }
+
+        const bufferedPayload = JSON.stringify({
+            runtimeCmd: plan.runtimeCmd,
+            runtimeArgs: plan.runtimeArgs,
+        });
+        const loaded = spawnSync('tmux', ['load-buffer', '-b', runtimeBuffer, '-'], {
+            input: bufferedPayload,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            encoding: 'utf8',
+        });
+        const signaled = loaded.status === 0
+            ? spawnSync('tmux', ['wait-for', '-S', `${runtimeBuffer}-ready`], { stdio: 'pipe', encoding: 'utf8' })
+            : null;
+        if (loaded.status !== 0 || signaled?.status !== 0) {
+            deleteRuntimeBuffer(runtimeBuffer);
+            spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
+            const stderr = ((loaded.stderr ?? signaled?.stderr) as string | undefined)?.trim() || 'unknown error';
+            process.stderr.write(kleur.red(`\n  ✗ tmux prompt transport failed: ${stderr}\n`));
+            process.exit(1);
+        }
     }
 
     const paneQuery = spawnSync('tmux', [
@@ -1558,7 +1700,7 @@ async function launchRoleTmuxSession(args: {
     ], { stdio: 'pipe', encoding: 'utf8' });
     const paneId = (paneQuery.stdout ?? '').trim().split('\n')[0] ?? '';
     if (!paneId) {
-        deleteRuntimeBuffer(runtimeBuffer);
+        if (runtimeBuffer) deleteRuntimeBuffer(runtimeBuffer);
         spawnSync('tmux', ['kill-session', '-t', plan.sessionName], { stdio: 'ignore' });
         process.stderr.write(kleur.red('\n  ✗ Could not resolve pane id for new session\n'));
         process.exit(1);
@@ -1572,17 +1714,17 @@ async function launchRoleTmuxSession(args: {
         spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
     }
 
-    if (role) {
+    if (args.mode === 'role') {
         emitAgentRoleLaunched({
             pane: paneId,
             session: plan.sessionName,
             bead: bead ?? '',
-            role: role.name,
+            role: args.role.name,
             parent: parentSessionId,
             worktree: worktreePath,
-            task_prompt_renderer: renderedTask ? 'success' : 'not_requested',
-            task_prompt_hash: renderedTask?.promptHash ?? '',
-            task_prompt_components: renderedTask ? JSON.stringify(renderedTask.components) : '',
+            task_prompt_renderer: args.renderedTask ? 'success' : 'not_requested',
+            task_prompt_hash: args.renderedTask?.promptHash ?? '',
+            task_prompt_components: args.renderedTask ? JSON.stringify(args.renderedTask.components) : '',
         });
     }
 
