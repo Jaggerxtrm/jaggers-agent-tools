@@ -1,0 +1,335 @@
+#!/usr/bin/env node
+// Find and (opt-in) remove per-project Claude hook registrations that the
+// global xtrm install already covers.
+//
+// Rationale: the global migration wrote an xt hook block into
+// ~/.claude/settings.json (tagged `_source: "xtrm-global"`, commands pointing
+// at ~/.xtrm/hooks/*) but never removed the pre-migration block from each
+// consumer project's <repo>/.claude/settings.json (commands pointing at
+// <repo>/.xtrm/hooks/*). Claude Code merges user-scope and project-scope
+// settings, so every xt hook fires twice — observed as the beads memory gate
+// running twice on a single Stop.
+//
+// Safety contract: an entry is only ever planned for removal when the SAME
+// (event, matcher, command) exists in the global settings once the project's
+// .xtrm/hooks path is normalised to the global one, AND — for commands that
+// reference a project hook file — that file is byte-identical to its global
+// counterpart. Everything else is preserved and reported. Dry-run is the
+// default; --apply is opt-in and always writes a backup first.
+
+import { readFile, writeFile, readdir, stat, mkdir, copyFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import os from 'node:os';
+
+const __filename = fileURLToPath(import.meta.url);
+
+const HOME = os.homedir();
+const GLOBAL_XTRM = path.join(HOME, '.xtrm');
+const GLOBAL_HOOKS = path.join(GLOBAL_XTRM, 'hooks');
+const GLOBAL_SETTINGS = path.join(HOME, '.claude', 'settings.json');
+const BACKUP_ROOT = path.join(GLOBAL_XTRM, 'migration-backups');
+const DEFAULT_ROOTS = [path.join(HOME, 'dev'), path.join(HOME, 'projects')];
+
+// Join key fields with a byte that cannot occur in an event, matcher or command.
+const SEP = '\u0000';
+
+// A project is xt-installed if it carries any of these.
+const CONSUMER_MARKERS = ['.xtrm/registry.json', '.xtrm/hooks', '.xtrm/config'];
+
+function parseArgs(argv) {
+  const opts = { apply: false, json: false, roots: [], projects: [] };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--apply') opts.apply = true;
+    else if (arg === '--json') opts.json = true;
+    else if (arg === '--root') opts.roots.push(path.resolve(argv[++i]));
+    else if (arg === '--project') opts.projects.push(path.resolve(argv[++i]));
+    else if (arg === '--help' || arg === '-h') opts.help = true;
+    else throw new Error(`unknown argument: ${arg}`);
+  }
+  if (opts.roots.length === 0) opts.roots = DEFAULT_ROOTS;
+  return opts;
+}
+
+const USAGE = `Usage: node scripts/dedupe-legacy-hooks.mjs [options]
+
+  (default)            dry-run: report what would be removed, change nothing
+  --apply              write the changes, after backing up each settings.json
+  --json               emit a machine-readable ReconciliationOutcome
+  --root <dir>         scan <dir> for consumer projects (repeatable)
+                       default: ~/dev ~/projects
+  --project <dir>      audit exactly this project (repeatable, skips scanning)
+`;
+
+async function readJson(file) {
+  try {
+    return JSON.parse(await readFile(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+async function sha256(file) {
+  try {
+    return createHash('sha256').update(await readFile(file)).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
+async function isDir(p) {
+  return stat(p).then((s) => s.isDirectory()).catch(() => false);
+}
+
+async function discoverProjects(roots, explicit) {
+  if (explicit.length > 0) return explicit;
+  const found = [];
+  for (const root of roots) {
+    const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dir = path.join(root, entry.name);
+      for (const marker of CONSUMER_MARKERS) {
+        // stat() rather than isDir(): registry.json is a file, the others dirs
+        if (await stat(path.join(dir, marker)).then(() => true).catch(() => false)) {
+          found.push(dir);
+          break;
+        }
+      }
+    }
+  }
+  return found.sort();
+}
+
+// Rewrite a project-scoped hook path to its global equivalent so project and
+// global registrations can be compared as strings.
+function normaliseCommand(command, projectDir) {
+  return command.split(path.join(projectDir, '.xtrm', 'hooks')).join(GLOBAL_HOOKS);
+}
+
+// The project hook file a command invokes, if any. Used for the hash check.
+// Commands look like: node "/repo/.xtrm/hooks/gitnexus/gitnexus-hook.cjs"
+function referencedHookFile(command, projectDir) {
+  const prefix = `${path.join(projectDir, '.xtrm', 'hooks')}${path.sep}`;
+  const start = command.indexOf(prefix);
+  if (start === -1) return null;
+  const rest = command.slice(start + prefix.length);
+  const end = rest.search(/["'\s]/);
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+function indexGlobal(settings) {
+  const index = new Map();
+  for (const [event, entries] of Object.entries(settings?.hooks ?? {})) {
+    for (const entry of entries ?? []) {
+      for (const hook of entry.hooks ?? []) {
+        index.set(`${event}${SEP}${entry.matcher ?? ''}${SEP}${hook.command ?? ''}`, true);
+      }
+    }
+  }
+  return index;
+}
+
+async function auditProject(projectDir, globalIndex) {
+  const settingsFile = path.join(projectDir, '.claude', 'settings.json');
+  const settings = await readJson(settingsFile);
+  const result = {
+    project: projectDir,
+    settingsFile,
+    planned: [],
+    preserved: [],
+    failed: [],
+  };
+  if (!settings) {
+    if (await stat(settingsFile).then(() => true).catch(() => false)) {
+      result.failed.push({ reason: 'unparseable .claude/settings.json' });
+    }
+    return result;
+  }
+
+  for (const [event, entries] of Object.entries(settings.hooks ?? {})) {
+    for (const entry of entries ?? []) {
+      for (const hook of entry.hooks ?? []) {
+        const command = hook.command ?? '';
+        const matcher = entry.matcher ?? '';
+        const item = { event, matcher, command };
+        const normalised = normaliseCommand(command, projectDir);
+        const coveredGlobally = globalIndex.has(`${event}${SEP}${matcher}${SEP}${normalised}`);
+
+        if (!coveredGlobally) {
+          const isProjectXtrm = normalised !== command;
+          result.preserved.push({
+            ...item,
+            classification: isProjectXtrm ? 'xt-owned-uncovered' : 'foreign',
+            reason: isProjectXtrm
+              ? 'references project .xtrm/hooks but the global install has no equivalent — needs migration, not deletion'
+              : 'not an xtrm-managed registration',
+          });
+          continue;
+        }
+
+        // Covered globally. If it names a project hook file, that file must be
+        // byte-identical to the global one before we call it a safe duplicate.
+        const hookFile = referencedHookFile(command, projectDir);
+        if (hookFile) {
+          const [projectHash, globalHash] = await Promise.all([
+            sha256(path.join(projectDir, '.xtrm', 'hooks', hookFile)),
+            sha256(path.join(GLOBAL_HOOKS, hookFile)),
+          ]);
+          if (projectHash === null || globalHash === null || projectHash !== globalHash) {
+            result.preserved.push({
+              ...item,
+              classification: 'xt-owned-drift',
+              reason: `project hook ${hookFile} does not match the global copy — resolve the drift before deduping`,
+            });
+            continue;
+          }
+        }
+
+        result.planned.push({ ...item, classification: 'duplicate-of-global' });
+      }
+    }
+  }
+  return result;
+}
+
+// Rebuild the hooks object without the planned commands, dropping entries and
+// events that end up empty. Anything not in `remove` is copied through as-is.
+function pruneSettings(settings, planned) {
+  const remove = new Set(planned.map((p) => `${p.event}${SEP}${p.matcher}${SEP}${p.command}`));
+  const hooks = {};
+  for (const [event, entries] of Object.entries(settings.hooks ?? {})) {
+    const keptEntries = [];
+    for (const entry of entries ?? []) {
+      const keptHooks = (entry.hooks ?? []).filter(
+        (hook) => !remove.has(`${event}${SEP}${entry.matcher ?? ''}${SEP}${hook.command ?? ''}`),
+      );
+      if (keptHooks.length > 0) keptEntries.push({ ...entry, hooks: keptHooks });
+    }
+    if (keptEntries.length > 0) hooks[event] = keptEntries;
+  }
+  const next = { ...settings };
+  if (Object.keys(hooks).length > 0) next.hooks = hooks;
+  else delete next.hooks;
+  return next;
+}
+
+async function applyProject(result, stamp) {
+  const settings = await readJson(result.settingsFile);
+  if (!settings) {
+    result.failed.push({ reason: 'settings.json vanished or became unparseable before apply' });
+    return;
+  }
+  await mkdir(BACKUP_ROOT, { recursive: true });
+  const backup = path.join(
+    BACKUP_ROOT,
+    `${path.basename(result.project)}-claude-settings-${stamp}.json`,
+  );
+  await copyFile(result.settingsFile, backup);
+  const next = pruneSettings(settings, result.planned);
+  await writeFile(result.settingsFile, `${JSON.stringify(next, null, 2)}\n`);
+  result.backup = backup;
+}
+
+function report(outcome) {
+  const verb = outcome.applied ? 'Removed' : 'Would remove';
+  for (const project of outcome.projects) {
+    const rel = project.project.replace(HOME, '~');
+    if (project.planned.length === 0 && project.failed.length === 0) {
+      console.log(`${rel}: clean (${project.preserved.length} registrations preserved)`);
+      continue;
+    }
+    console.log(`\n${rel}`);
+    console.log(`  ${verb} ${project.planned.length} duplicate registration(s):`);
+    for (const item of project.planned) {
+      console.log(`    - ${item.event} [${item.matcher || '*'}] ${item.command}`);
+    }
+    const flagged = project.preserved.filter((p) => p.classification !== 'foreign');
+    for (const item of flagged) {
+      console.log(`  preserved (${item.classification}): ${item.event} ${item.command}`);
+      console.log(`    ${item.reason}`);
+    }
+    for (const failure of project.failed) console.log(`  FAILED: ${failure.reason}`);
+    if (project.backup) console.log(`  backup: ${project.backup}`);
+  }
+  console.log(
+    `\n${outcome.projects.length} project(s), ${outcome.totals.planned} duplicate registration(s) ` +
+      `${outcome.applied ? 'removed' : 'found'}, ${outcome.totals.preserved} preserved, ` +
+      `${outcome.totals.failed} failed.`,
+  );
+  if (!outcome.applied && outcome.totals.planned > 0) {
+    console.log('Re-run with --apply to write the changes (a backup is taken per project).');
+  }
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  if (opts.help) {
+    console.log(USAGE);
+    return;
+  }
+
+  const globalSettings = await readJson(GLOBAL_SETTINGS);
+  if (!globalSettings) {
+    console.error(`Cannot read ${GLOBAL_SETTINGS} — refusing to dedupe without the global baseline.`);
+    process.exit(2);
+  }
+  if (!(await isDir(GLOBAL_HOOKS))) {
+    console.error(`${GLOBAL_HOOKS} is missing — the global install is incomplete, refusing to dedupe.`);
+    process.exit(2);
+  }
+
+  const globalIndex = indexGlobal(globalSettings);
+  const projects = await discoverProjects(opts.roots, opts.projects);
+  const results = [];
+  for (const project of projects) {
+    results.push(await auditProject(project, globalIndex));
+  }
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  if (opts.apply) {
+    for (const result of results) {
+      if (result.planned.length > 0) await applyProject(result, stamp);
+    }
+  }
+
+  // ReconciliationOutcome per docs/architecture/repair-transaction.md: planned
+  // is what we would do, applied is empty unless --apply, preserved is what we
+  // deliberately left alone.
+  for (const result of results) {
+    result.changed = opts.apply && result.planned.length > 0;
+    result.applied = opts.apply ? result.planned : [];
+  }
+  const totals = {
+    projects: results.length,
+    planned: results.reduce((n, r) => n + r.planned.length, 0),
+    applied: results.reduce((n, r) => n + r.applied.length, 0),
+    preserved: results.reduce((n, r) => n + r.preserved.length, 0),
+    failed: results.reduce((n, r) => n + r.failed.length, 0),
+  };
+  const outcome = {
+    schema: 'ReconciliationOutcome/1',
+    generatedAt: new Date().toISOString(),
+    changed: results.some((r) => r.changed),
+    applied: opts.apply,
+    globalSettings: GLOBAL_SETTINGS,
+    totals,
+    projects: results,
+  };
+
+  if (opts.json) console.log(JSON.stringify(outcome, null, 2));
+  else report(outcome);
+
+  process.exit(outcome.totals.failed > 0 ? 1 : 0);
+}
+
+export { normaliseCommand, indexGlobal, pruneSettings, auditProject };
+
+if (process.argv[1] === __filename) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(2);
+  });
+}
