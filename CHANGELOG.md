@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.11.2] — 2026-07-22
+
 ### Changed
 
 - **Slim Pi custom-footer and beads hot paths (xtrm-64pl0)** — `custom-footer` is now a pure cache
