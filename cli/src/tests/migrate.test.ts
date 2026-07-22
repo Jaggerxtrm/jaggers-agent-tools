@@ -285,6 +285,59 @@ describe('xt migrate command', () => {
     expect(secondRun.stdout).toContain('already migrated');
   });
 
+  it('prunes empty managed tiers left behind in an already-migrated repo', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+    const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
+
+    runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+    // Re-scaffolded by any later skills-state write — the residue this prunes.
+    await fs.ensureDir(path.join(skillsRoot, 'default'));
+    await fs.ensureDir(path.join(skillsRoot, 'optional', 'nested'));
+
+    const secondRun = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    expect(secondRun.exitCode).toBe(0);
+    expect(secondRun.stdout).toContain('removed empty');
+    expect(await fs.pathExists(path.join(skillsRoot, 'default'))).toBe(false);
+    expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(false);
+  });
+
+  it('keeps a non-empty managed tier and never prunes local-legacy', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+    const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
+
+    runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+    await fs.outputFile(path.join(skillsRoot, 'default', 'kept', 'SKILL.md'), 'still here');
+    await fs.outputFile(path.join(skillsRoot, 'local-legacy', 'project-authored.md'), 'needs triage');
+
+    const secondRun = runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    expect(secondRun.exitCode).toBe(0);
+    expect(secondRun.stdout).toContain('needs per-entry triage');
+    expect(await fs.readFile(path.join(skillsRoot, 'default', 'kept', 'SKILL.md'), 'utf8')).toBe('still here');
+    expect(await fs.readFile(path.join(skillsRoot, 'local-legacy', 'project-authored.md'), 'utf8')).toBe('needs triage');
+  });
+
+  it('dry-run reports empty managed tiers without removing them', async () => {
+    const repoDir = await createFakeRepo(tmpHome);
+    await createGlobalSkillsRoot(tmpHome);
+    await createGlobalHooksRoot(tmpHome);
+    const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
+
+    runCli(['migrate', 'skills', '--apply', '--yes', '--repo', repoDir], repoDir);
+    await fs.ensureDir(path.join(skillsRoot, 'default'));
+
+    const dryRun = runCli(['migrate', 'skills', '--dry-run', '--repo', repoDir], repoDir);
+
+    expect(dryRun.exitCode).toBe(0);
+    expect(dryRun.stdout).toContain('would remove empty');
+    expect(await fs.pathExists(path.join(skillsRoot, 'default'))).toBe(true);
+  });
+
   it('preserves diverged files as override', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     const globalSkillsRoot = await createGlobalSkillsRoot(tmpHome);

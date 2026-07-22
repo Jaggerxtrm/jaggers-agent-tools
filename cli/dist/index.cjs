@@ -75733,12 +75733,36 @@ async function migrateSkillsLayout(repoPath, opts) {
     console.log(kleur_default.green(`  skills-layout: removed dangling ${import_node_path52.default.relative(repoPath, runtimeDir)} symlink`));
   }
 }
+async function containsAnyFile(dir) {
+  for (const entry of await import_fs_extra59.default.readdir(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) return true;
+    if (await containsAnyFile(import_node_path52.default.join(dir, entry.name))) return true;
+  }
+  return false;
+}
+async function pruneRetiredManagedTiers(repoSkillsRoot, opts) {
+  for (const tierRoot of [resolveDefaultTierRoot(repoSkillsRoot), resolveOptionalTierRoot(repoSkillsRoot)]) {
+    if (!await import_fs_extra59.default.pathExists(tierRoot)) continue;
+    if (await containsAnyFile(tierRoot)) continue;
+    if (opts.dryRun || !opts.apply) {
+      console.log(kleur_default.cyan(`  skills: would remove empty ${tierRoot}`));
+      continue;
+    }
+    await import_fs_extra59.default.remove(tierRoot);
+    console.log(kleur_default.green(`  skills: removed empty ${tierRoot}`));
+  }
+  const legacyRoot = import_node_path52.default.join(repoSkillsRoot, "local-legacy");
+  if (await import_fs_extra59.default.pathExists(legacyRoot) && await containsAnyFile(legacyRoot)) {
+    console.log(kleur_default.yellow(`  skills: ${legacyRoot} still holds unattributed skills \u2014 needs per-entry triage (left in place)`));
+  }
+}
 async function migrateSkills(repoPath, opts) {
   const repoSkillsRoot = import_node_path52.default.join(repoPath, ".xtrm", "skills");
   const divergedFiles = [];
   const alreadyMigrated = await isRepoMigrated(repoPath, { skills: true });
   if (alreadyMigrated) {
     console.log(kleur_default.dim("  skills: already migrated"));
+    await pruneRetiredManagedTiers(repoSkillsRoot, opts);
     return { migrated: false, backupPath: void 0, divergedFiles: [] };
   }
   const defaultVerification = await verifySkillsIdentity(repoSkillsRoot, "default");
