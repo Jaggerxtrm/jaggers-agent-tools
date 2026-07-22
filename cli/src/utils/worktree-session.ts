@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlink
 import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { runPiLaunchPreflight } from '../core/pi-runtime.js';
+import { runtimeCompatibilityError } from '../core/runtime-compat.js';
 
 /**
  * Hard ceiling for the turn-1 shell command length. tmux new-session refuses
@@ -1213,6 +1214,25 @@ function currentPaneRole(): string {
 export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promise<void> {
     const { runtime, name, role: roleName, bead, prompt, model, thinking } = opts;
     const cwd = process.cwd();
+
+    // Runtime compatibility preflight (audit P1-06). First thing in the
+    // launcher: reject an incompatible Core/Specialists/xtmux trio before any
+    // worktree, branch or tmux session exists, and before `sp` — possibly the
+    // incompatible half — is consulted at all. Repair commands (`xt update`,
+    // `xt doctor`) are deliberately not gated, so a drifted install stays
+    // fixable. Absence of a sibling is not an incompatibility; see
+    // runtime-compat.ts.
+    const compatError = runtimeCompatibilityError();
+    if (compatError) {
+        console.error(kleur.red(`\n  ✗ ${compatError}\n`));
+        console.error(kleur.dim('  Refusing to create an interactive worktree against a runtime Core does not support.'));
+        console.error(kleur.dim('\n  Remediation:'));
+        console.error(kleur.dim('    1) upgrade the flagged package(s) to a version inside the range'));
+        console.error(kleur.dim('    2) or upgrade xtrm-tools, if this Core predates them'));
+        console.error(kleur.dim('    3) xt doctor — inspect the installed runtime'));
+        console.error(kleur.dim('\n  Override (at your own risk): XTRM_SKIP_RUNTIME_COMPAT=1\n'));
+        process.exit(1);
+    }
 
     // Expand --subordinate before anything else so the rest of the launcher
     // only ever sees ordinary newSession/attach/parent flags.
