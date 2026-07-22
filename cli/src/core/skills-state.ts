@@ -1,9 +1,11 @@
 import fs from 'fs-extra';
+import path from 'node:path';
 import { z } from 'zod';
 import {
   SKILLS_STATE_SCHEMA_VERSION,
   type SkillsRuntime,
   resolveDefaultTierRoot,
+  resolveGlobalSkillsRoot,
   resolveOptionalTierRoot,
   resolveStateFilePath,
   resolveUserPacksRoot,
@@ -71,6 +73,12 @@ export function createDefaultSkillsState(): SkillsState {
 }
 
 export async function ensureSkillsTreeStructure(skillsRoot: string): Promise<void> {
+  await fs.ensureDir(skillsRoot);
+  // xtrm-vtqlg.5: per-repo default//optional/ are retired by the global-SSOT
+  // migration, so scaffolding them on every state write silently undid
+  // `xt migrate skills --apply`'s prune (xtrm-agxxs). Only the global root still
+  // owns the managed tiers — repo scope gets the state file and nothing else.
+  if (path.resolve(skillsRoot) !== path.resolve(resolveGlobalSkillsRoot())) return;
   await fs.ensureDir(resolveDefaultTierRoot(skillsRoot));
   await fs.ensureDir(resolveOptionalTierRoot(skillsRoot));
 }
