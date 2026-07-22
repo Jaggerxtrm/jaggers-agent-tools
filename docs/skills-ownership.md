@@ -27,15 +27,16 @@ Contract derived in `xtrm-kvsrd.4`, asserted by Suite A step 20b
 | Location | Why |
 |---|---|
 | `~/.xtrm/skills/default/**` | Repaired from the package payload by `scaffoldSkillsDefaultFromPackage()`; `pruneRetiredManagedSkills()` then removes every entry the registry manifest does not declare. |
+| `~/.xtrm/skills/optional/**` | Package-managed too. `global-skills-bootstrap.ts` `copyTier()` runs `fs.remove(targetRoot)` and re-copies from the payload, for **both** tiers. `optional/` is the *shipped optional packs* tier, not a user-content tier. |
 | `~/.claude/skills` | A symlink to `~/.xtrm/skills/default`, so it shares that tree's fate exactly. |
-| `~/.xtrm/skills/optional/**` | ⚠️ See the caveat below — currently registry-owned in practice, despite being documented as a user-content tier. |
 | Runtime-view symlinks that are simultaneously recorded in `state.managedLinks[runtime]`, resolve **inside** a managed root, and are no longer desired. All three conditions are required. |
 
 ### Preserved — safe for user content
 
 | Location | Why |
 |---|---|
-| Project packs `.xtrm/skills/<pack>/` | Discovered, never payload-repaired. |
+| Global user packs `~/.xtrm/skills/<pack>/` | What `xt skills create-pack --global` writes (`createUserPack` → `resolveRepoPackRoot`). Discovered as the `user` tier, never payload-repaired. **This is the supported home for a user-authored skill that must survive update.** |
+| Project packs `.xtrm/skills/<pack>/` | Same mechanism at project scope. Discovered, never payload-repaired. |
 | A real directory at `.claude/skills/<name>` or `.pi/skills/<name>` | The removal loop only iterates managed entries, so an untracked one is never considered. |
 | A runtime-view symlink pointing **outside** the managed roots | Removal additionally requires the resolved target to be inside a managed root. |
 | The runtime directory itself when it is a symlink | Refused loudly: `Refusing to replace user-owned runtime directory`. |
@@ -44,11 +45,16 @@ Contract derived in `xtrm-kvsrd.4`, asserted by Suite A step 20b
 If a user-owned name collides with a managed skill name, reconcile **fails
 loudly** rather than overwriting: `Cannot enable skill '<name>': <path> is user-owned`.
 
-### Caveat: `~/.xtrm/skills/optional/` is not currently safe
+### Do not put user content in `optional/`
 
-`global-skills-bootstrap.ts` `copyTier()` runs `fs.remove(targetRoot)` before
-copying, for **both** `default/` and `optional/`. Any xtrm-tools version bump
-therefore wipes user content under `~/.xtrm/skills/optional/` wholesale, even
-though `pruneRetiredManagedSkills()` targets `default/` alone. Until that is
-resolved, keep user-authored skills in a **project pack** (`.xtrm/skills/<pack>/`)
-or a real directory in the runtime view. Tracked as `xtrm-vtqlg.8`.
+`xtrm-kvsrd.4` described `~/.xtrm/skills/optional/**` as the supported home for
+user-authored skills. That is wrong, and Suite A demonstrates it: the derivation
+inspected `pruneRetiredManagedSkills()` (which does target `default/` alone) but
+not `copyTier()`, which removes and re-copies **both** tiers from the package
+payload on every version bump. Anything you leave in `optional/` is gone at the
+next upgrade.
+
+Use `xt skills create-pack --global <name>` (→ `~/.xtrm/skills/<name>/`) or
+`xt skills create-pack --local <name>` (→ `.xtrm/skills/<name>/`) instead. Pack
+names are validated against `RESERVED_PACK_NAMES`, so `default`, `optional`,
+`user`, `active` and `local-legacy` cannot be claimed as user packs.

@@ -117,26 +117,30 @@ try {
   writeFileSync(path.join(userNativeSkill, 'SKILL.md'), '# user native skill\n');
 
   // ── Seed the user-owned skill LOCATION contract (xtrm-vtqlg.7) ─────────────
-  // xtrm-kvsrd.4 established that survival across `xt update --apply` is decided
-  // by LOCATION, not by a marker: `default/` is the registry's tree and is
-  // repaired + pruned from the package payload, while `optional/`, project packs
-  // and foreign runtime entries are only ever DISCOVERED. Step 20 used to observe
-  // just the negative half, so a regression that started eating `optional/` or
-  // untracked runtime entries would have passed. Seed both halves here.
+  // Survival across `xt update --apply` is decided by LOCATION, not by a marker
+  // (xtrm-kvsrd.4). `default/` and `optional/` are both package-managed — bootstrap
+  // repairs them from the payload — while user packs, project packs and foreign
+  // runtime entries are only ever DISCOVERED. Step 20 used to observe just the
+  // negative half, so a regression that started eating user packs or untracked
+  // runtime entries would have passed. Seed both halves here.
+  //
+  // The global user-pack location is the FLAT `~/.xtrm/skills/<pack>/`, which
+  // `xt skills create-pack --global` writes and `discoverTierPacks(root, 'user')`
+  // discovers — NOT `optional/`, which bootstrap's copyTier removes and re-copies.
   const globalSkills = path.join(env.HOME, '.xtrm', 'skills');
-  const optionalPack = path.join(globalSkills, 'optional', 'p201-user-pack');
-  const optionalPackSkill = path.join(optionalPack, 'p201-optional-skill');
+  const globalUserPack = path.join(globalSkills, 'p201-user-pack');
+  const globalUserPackSkill = path.join(globalUserPack, 'p201-user-skill');
   const managedDefaultIntruder = path.join(globalSkills, 'default', 'p201-not-in-manifest');
   const projectClaudeSkills = path.join(project, '.claude', 'skills');
   const projectForeignSkill = path.join(projectClaudeSkills, 'p201-project-owned');
   const outsideRoot = path.join(box.root, 'outside-managed-roots', 'p201-external-skill');
   const foreignRuntimeLink = path.join(projectClaudeSkills, 'p201-external-link');
 
-  for (const dir of [optionalPackSkill, managedDefaultIntruder, projectForeignSkill, outsideRoot]) {
+  for (const dir of [globalUserPackSkill, managedDefaultIntruder, projectForeignSkill, outsideRoot]) {
     mkdirSync(dir, { recursive: true });
   }
-  writeFileSync(path.join(optionalPack, 'PACK.json'), JSON.stringify({ name: 'p201-user-pack' }, null, 2));
-  writeFileSync(path.join(optionalPackSkill, 'SKILL.md'), '# optional-tier user skill\n');
+  writeFileSync(path.join(globalUserPack, 'PACK.json'), JSON.stringify({ name: 'p201-user-pack' }, null, 2));
+  writeFileSync(path.join(globalUserPackSkill, 'SKILL.md'), '# global user-pack skill\n');
   writeFileSync(path.join(managedDefaultIntruder, 'SKILL.md'), '# dropped into the registry-owned default tree\n');
   writeFileSync(path.join(projectForeignSkill, 'SKILL.md'), '# project runtime entry, never in managedLinks\n');
   writeFileSync(path.join(outsideRoot, 'SKILL.md'), '# lives outside every managed root\n');
@@ -174,7 +178,11 @@ try {
   // ASSERTED, both halves. Enforcement lives in registry-scaffold.ts:188
   // (pruneRetiredManagedSkills) and skills-runtime-reconcile.ts:157-167/:176.
 
-  // PRESERVED — foreign locations the update path only ever discovers.
+  // PRESERVED — locations the update path only ever discovers.
+  assert.ok(
+    existsSync(path.join(globalUserPackSkill, 'SKILL.md')),
+    'global user pack removed by update (~/.xtrm/skills/<pack> is the supported user-pack home)',
+  );
   assert.ok(
     existsSync(path.join(projectForeignSkill, 'SKILL.md')),
     'untracked real dir in project .claude/skills removed by update',
@@ -193,21 +201,7 @@ try {
   );
   r.ok(
     'step 20b: user-owned skill location contract',
-    'project runtime entry + outside-root symlink preserved; non-manifest default/ entry pruned',
-  );
-
-  // CONTRACT VIOLATION, reported rather than asserted. xtrm-kvsrd.4 and CLAUDE.md
-  // both name ~/.xtrm/skills/optional/ as the supported home for a user-authored
-  // skill that must survive update — that derivation only inspected
-  // pruneRetiredManagedSkills, which does indeed target default/ alone. But
-  // global-skills-bootstrap.ts copyTier() runs `fs.remove(targetRoot)` before
-  // copying, for BOTH tiers, so any xtrm-tools version bump wipes user content in
-  // optional/ wholesale. Asserting survival here would be red; asserting the
-  // wipe would cement a data-loss path. Reported until xtrm-vtqlg.8 rules.
-  const optionalSurvived = existsSync(path.join(optionalPackSkill, 'SKILL.md'));
-  r.blocked(
-    'step 20b (optional/ half): user skill in ~/.xtrm/skills/optional',
-    `${optionalSurvived ? 'PRESERVED' : 'WIPED'} by update — global-skills-bootstrap copyTier removes the tier root before copy; contradicts the documented contract`,
+    'global user pack + project runtime entry + outside-root symlink preserved; non-manifest default/ entry pruned',
   );
 
   // ~/.claude/skills is the GLOBAL runtime projection of that same registry-owned
