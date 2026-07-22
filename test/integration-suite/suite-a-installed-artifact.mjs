@@ -11,7 +11,7 @@
 // omitted; run pack-artifacts.mjs first to produce them locally.
 
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SECRET, assertNoSecret, assertSuccess, combined, makeSandbox, reporter, run } from './lib/harness.mjs';
@@ -111,6 +111,32 @@ try {
   writeFileSync(path.join(userExt, 'index.mjs'), `// user extension ${SECRET}\n`);
   writeFileSync(path.join(userNativeSkill, 'SKILL.md'), '# user native skill\n');
 
+  // ── Seed the user-owned skill LOCATION contract (xtrm-vtqlg.7) ─────────────
+  // xtrm-kvsrd.4 established that survival across `xt update --apply` is decided
+  // by LOCATION, not by a marker: `default/` is the registry's tree and is
+  // repaired + pruned from the package payload, while `optional/`, project packs
+  // and foreign runtime entries are only ever DISCOVERED. Step 20 used to observe
+  // just the negative half, so a regression that started eating `optional/` or
+  // untracked runtime entries would have passed. Seed both halves here.
+  const globalSkills = path.join(env.HOME, '.xtrm', 'skills');
+  const optionalPack = path.join(globalSkills, 'optional', 'p201-user-pack');
+  const optionalPackSkill = path.join(optionalPack, 'p201-optional-skill');
+  const managedDefaultIntruder = path.join(globalSkills, 'default', 'p201-not-in-manifest');
+  const projectClaudeSkills = path.join(project, '.claude', 'skills');
+  const projectForeignSkill = path.join(projectClaudeSkills, 'p201-project-owned');
+  const outsideRoot = path.join(box.root, 'outside-managed-roots', 'p201-external-skill');
+  const foreignRuntimeLink = path.join(projectClaudeSkills, 'p201-external-link');
+
+  for (const dir of [optionalPackSkill, managedDefaultIntruder, projectForeignSkill, outsideRoot]) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(path.join(optionalPack, 'PACK.json'), JSON.stringify({ name: 'p201-user-pack' }, null, 2));
+  writeFileSync(path.join(optionalPackSkill, 'SKILL.md'), '# optional-tier user skill\n');
+  writeFileSync(path.join(managedDefaultIntruder, 'SKILL.md'), '# dropped into the registry-owned default tree\n');
+  writeFileSync(path.join(projectForeignSkill, 'SKILL.md'), '# project runtime entry, never in managedLinks\n');
+  writeFileSync(path.join(outsideRoot, 'SKILL.md'), '# lives outside every managed root\n');
+  symlinkSync(outsideRoot, foreignRuntimeLink);
+
   // Stale xtrm-managed Pi pointer: an outdated project .pi state that update must
   // reconcile without touching the user-owned artifacts above.
   const staleProjectPi = path.join(project, '.pi', 'settings.json');
@@ -139,15 +165,52 @@ try {
   assert.ok(existsSync(path.join(userExt, 'index.mjs')), 'user-owned extension removed by update');
   r.ok('step 20: user-owned hooks + extensions preserved', 'both present with body intact after update');
 
-  // OBSERVED (not a pass/fail gate) — a bare, unmarked user skill dropped into a
-  // managed skills projection (~/.claude/skills) is NOT preserved across
-  // `update --apply`; the managed tree is repaired from package payload. Genuine
-  // user-skill preservation relies on the "user-owned runtime directory" path in
-  // skills-runtime-reconcile.ts, whose trigger conditions this hermetic run does
-  // not reproduce. Surfaced as a finding for the owner rather than asserted.
+  // ── STEP 20b: user-owned skill LOCATION contract (xtrm-vtqlg.7) ────────────
+  // ASSERTED, both halves. Enforcement lives in registry-scaffold.ts:188
+  // (pruneRetiredManagedSkills) and skills-runtime-reconcile.ts:157-167/:176.
+
+  // PRESERVED — foreign locations the update path only ever discovers.
+  assert.ok(
+    existsSync(path.join(projectForeignSkill, 'SKILL.md')),
+    'untracked real dir in project .claude/skills removed by update',
+  );
+  assert.ok(lstatSync(foreignRuntimeLink).isSymbolicLink(), 'foreign runtime symlink replaced by update');
+  assert.ok(
+    existsSync(path.join(foreignRuntimeLink, 'SKILL.md')),
+    'foreign runtime symlink no longer resolves after update (target outside managed roots must be left alone)',
+  );
+
+  // PRUNED — the registry owns default/ outright, so anything the manifest does
+  // not declare is delete-on-update. This is the half step 20 only observed.
+  assert.ok(
+    !existsSync(managedDefaultIntruder),
+    'non-manifest skill survived in the registry-owned ~/.xtrm/skills/default tree',
+  );
+  r.ok(
+    'step 20b: user-owned skill location contract',
+    'project runtime entry + outside-root symlink preserved; non-manifest default/ entry pruned',
+  );
+
+  // CONTRACT VIOLATION, reported rather than asserted. xtrm-kvsrd.4 and CLAUDE.md
+  // both name ~/.xtrm/skills/optional/ as the supported home for a user-authored
+  // skill that must survive update — that derivation only inspected
+  // pruneRetiredManagedSkills, which does indeed target default/ alone. But
+  // global-skills-bootstrap.ts copyTier() runs `fs.remove(targetRoot)` before
+  // copying, for BOTH tiers, so any xtrm-tools version bump wipes user content in
+  // optional/ wholesale. Asserting survival here would be red; asserting the
+  // wipe would cement a data-loss path. Reported until xtrm-vtqlg.8 rules.
+  const optionalSurvived = existsSync(path.join(optionalPackSkill, 'SKILL.md'));
+  r.blocked(
+    'step 20b (optional/ half): user skill in ~/.xtrm/skills/optional',
+    `${optionalSurvived ? 'PRESERVED' : 'WIPED'} by update — global-skills-bootstrap copyTier removes the tier root before copy; contradicts the documented contract`,
+  );
+
+  // ~/.claude/skills is the GLOBAL runtime projection of that same registry-owned
+  // default tree, which is why the bare skill seeded there above shares the
+  // default/ fate rather than the foreign-preserved one.
   const nativeSkillKept = existsSync(path.join(userNativeSkill, 'SKILL.md'));
-  console.log(`  [OBSERVE] step 20 skills: unmarked ~/.claude/skills user skill ${nativeSkillKept ? 'PRESERVED' : 'REPAIRED-AWAY'} by update`);
-  console.log('            → see bd notes: skills preservation contract needs an owner-confirmed marker; tracked as follow-up.');
+  assert.ok(!nativeSkillKept, 'bare ~/.claude/skills entry survived — managed projection must be repaired from payload');
+  r.ok('step 20c: ~/.claude/skills is registry-owned', 'bare unmarked entry repaired away, per docs/skills-ownership.md');
 
   r.summary();
   console.log('suite-a: PASS');
