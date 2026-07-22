@@ -355,6 +355,48 @@ export async function migrateSkillsLayout(
   }
 }
 
+/** Recursive, no exclusions — a tier holding only ignored junk is still not empty. */
+async function containsAnyFile(dir: string): Promise<boolean> {
+  for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) return true;
+    if (await containsAnyFile(path.join(dir, entry.name))) return true;
+  }
+  return false;
+}
+
+// xtrm-agxxs: migration removes default/ and optional/, but a repo that migrated
+// under an earlier build — or that has since run any skills-state write, which
+// re-scaffolds both tiers (skills-state.ts ensureSkillsTreeStructure) — is left
+// with empty managed dirs. They are cosmetic, but they make it impossible to tell
+// at a glance whether a repo has migrated. Remove them only when they hold no
+// files: a tier with content is either the source repo or an incomplete migration,
+// and neither is ours to delete.
+//
+// local-legacy is deliberately NOT pruned. It is the holding pen for skills that
+// could not be attributed to the global SSOT and routinely holds project-authored
+// content (console alone has 240 files), so it needs per-entry triage rather than
+// a blanket rm. Report it instead, so the operator knows cleanup is still pending.
+async function pruneRetiredManagedTiers(
+  repoSkillsRoot: string,
+  opts: { dryRun: boolean; apply: boolean },
+): Promise<void> {
+  for (const tierRoot of [resolveDefaultTierRoot(repoSkillsRoot), resolveOptionalTierRoot(repoSkillsRoot)]) {
+    if (!(await fs.pathExists(tierRoot))) continue;
+    if (await containsAnyFile(tierRoot)) continue;
+    if (opts.dryRun || !opts.apply) {
+      console.log(kleur.cyan(`  skills: would remove empty ${tierRoot}`));
+      continue;
+    }
+    await fs.remove(tierRoot);
+    console.log(kleur.green(`  skills: removed empty ${tierRoot}`));
+  }
+
+  const legacyRoot = path.join(repoSkillsRoot, 'local-legacy');
+  if (await fs.pathExists(legacyRoot) && await containsAnyFile(legacyRoot)) {
+    console.log(kleur.yellow(`  skills: ${legacyRoot} still holds unattributed skills — needs per-entry triage (left in place)`));
+  }
+}
+
 async function migrateSkills(
   repoPath: string,
   opts: { dryRun: boolean; apply: boolean },
@@ -365,6 +407,8 @@ async function migrateSkills(
   const alreadyMigrated = await isRepoMigrated(repoPath, { skills: true });
   if (alreadyMigrated) {
     console.log(kleur.dim('  skills: already migrated'));
+    // The only path the already-migrated repos take, so residue cleanup lives here.
+    await pruneRetiredManagedTiers(repoSkillsRoot, opts);
     return { migrated: false, backupPath: undefined, divergedFiles: [] };
   }
 
