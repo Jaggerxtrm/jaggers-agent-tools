@@ -10,6 +10,20 @@ if ! command -v osv-scanner >/dev/null; then
     exit 0
 fi
 
+# Git exports GIT_DIR (and friends) into the hook environment. This script later
+# `cd`s into an extracted baseline tree that is NOT a repo — with GIT_DIR
+# inherited, any git lookup made there silently resolves against the INVOKING
+# worktree instead (xtrm-6reex; same hazard that produced the semgrep detach in
+# xtrm-bjbdf). Drop the inherited vars so every git call resolves from cwd.
+# No-op when unset, and skipped if the repo isn't discoverable without them.
+# Third consumer? Extract this into scripts/lib rather than copying it again.
+GIT_HOOK_ENV="GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX GIT_QUARANTINE_PATH"
+# shellcheck disable=SC2086
+if (unset $GIT_HOOK_ENV; git rev-parse --show-toplevel >/dev/null 2>&1); then
+    # shellcheck disable=SC2086
+    unset $GIT_HOOK_ENV
+fi
+
 HEAD_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
 HEAD_SHA=$(git rev-parse HEAD)
 
