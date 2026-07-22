@@ -1,0 +1,79 @@
+name: Installer surface smoke
+
+# Audit P0-02 close-out (xtrm-xnf7g).
+#
+# scripts/install-update-ux-smoke.mjs already gates publishing: it runs in
+# pre-publish-readiness and in publish.yml. That is too late to be cheap — a
+# regression in the installer surface is found at release time, on a branch that
+# has already accumulated everything else.
+#
+# This runs the same smoke on the PR that introduces the change, and ONLY on
+# those PRs. The paths filter below is deliberately tight: a docs, skill or test
+# PR must not pay for a full pack + install cycle.
+#
+# NOT a required status check. A paths-filtered workflow that is marked required
+# never reports on the PRs it skips, which blocks them forever. If it is ever
+# promoted to required, it needs the usual always-run companion job first.
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      # Install/update/runtime sync engine — the smoke's actual subject.
+      - 'cli/src/core/**'
+      # The three commands that write into a consumer project.
+      - 'cli/src/commands/init.ts'
+      - 'cli/src/commands/update.ts'
+      - 'cli/src/commands/migrate.ts'
+      # Pi runtime payload shipped by the pack and resolved post-install.
+      - 'packages/pi-extensions/**'
+      # Hook/policy wiring: policies/*.json is the source, .xtrm/config and
+      # .xtrm/hooks are the generated payload that lands in a project. A PR that
+      # regenerates the payload without touching the source still counts.
+      - 'policies/*.json'
+      - '.xtrm/config/**'
+      - '.xtrm/hooks/**'
+      # The gate's own moving parts, so changes to them are exercised too.
+      - 'scripts/install-update-ux-smoke.mjs'
+      - '.github/workflows/installer-surface-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-surface-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci && cd cli && npm ci
+
+      # cli/dist is tracked, but packing it as committed would smoke the PREVIOUS
+      # build. Build first so the tarball carries this PR's source.
+      - name: Build
+        run: npm run build
+
+      - name: Pack the tarball under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --json > /tmp/xtrm-pack.json
+          cp "$(jq -r '.[0].filename' /tmp/xtrm-pack.json)" /tmp/xtrm-tools.tgz
+          echo "Packed $(jq -r '.[0].filename' /tmp/xtrm-pack.json)"
+
+      - name: Install-update UX smoke on packed tarball
+        run: node scripts/install-update-ux-smoke.mjs /tmp/xtrm-tools.tgz
