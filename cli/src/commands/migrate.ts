@@ -365,9 +365,10 @@ async function containsAnyFile(dir: string): Promise<boolean> {
 }
 
 // xtrm-agxxs: migration removes default/ and optional/, but a repo that migrated
-// under an earlier build — or that has since run any skills-state write, which
-// re-scaffolds both tiers (skills-state.ts ensureSkillsTreeStructure) — is left
-// with empty managed dirs. They are cosmetic, but they make it impossible to tell
+// under an earlier build is left with empty managed dirs. (Skills-state writes no
+// longer re-scaffold them at repo scope — see xtrm-vtqlg.5 in
+// skills-state.ts ensureSkillsTreeStructure.)
+// They are cosmetic, but they make it impossible to tell
 // at a glance whether a repo has migrated. Remove them only when they hold no
 // files: a tier with content is either the source repo or an incomplete migration,
 // and neither is ours to delete.

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { rmSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
+import { resolveGlobalSkillsRoot } from '../core/skills-layout.js';
 import {
   createDefaultSkillsState,
   isSafeRuntimeLinkName,
@@ -19,8 +20,11 @@ interface RuntimePackCase {
 }
 
 const tempDirs: string[] = [];
+const realHome = process.env.HOME;
 
 afterEach(() => {
+  if (realHome === undefined) delete process.env.HOME;
+  else process.env.HOME = realHome;
   for (const tempDir of tempDirs.splice(0)) {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -66,8 +70,32 @@ describe('skills-state', () => {
     expect(state).toEqual(createDefaultSkillsState());
     expect(await fs.pathExists(path.join(skillsRoot, 'state.json'))).toBe(true);
     expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
-    expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(true);
     expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(false);
+  });
+
+  // xtrm-vtqlg.5: repo scope must not re-mint the tiers the global-SSOT
+  // migration retires, or `xt migrate skills --apply` is undone by the next write.
+  it('does not scaffold retired managed tiers at repo scope', async () => {
+    const skillsRoot = await createTempSkillsRoot();
+
+    await setRuntimeEnabledPacks(skillsRoot, 'claude', ['alpha']);
+
+    expect(await fs.pathExists(path.join(skillsRoot, 'state.json'))).toBe(true);
+    expect(await fs.pathExists(path.join(skillsRoot, 'default'))).toBe(false);
+    expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(false);
+  });
+
+  it('still scaffolds both managed tiers at global scope', async () => {
+    const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-skills-state-home-'));
+    tempDirs.push(tempHome);
+    process.env.HOME = tempHome;
+    const globalSkillsRoot = resolveGlobalSkillsRoot();
+    expect(globalSkillsRoot).toBe(path.join(tempHome, '.xtrm', 'skills'));
+
+    await readSkillsState(globalSkillsRoot);
+
+    expect(await fs.pathExists(path.join(globalSkillsRoot, 'default'))).toBe(true);
+    expect(await fs.pathExists(path.join(globalSkillsRoot, 'optional'))).toBe(true);
   });
 
   it('accepts forward-compatible unknown state keys', async () => {
