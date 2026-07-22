@@ -17,6 +17,9 @@ filter_unconventional = false
 split_commits = false
 # Generic type grouping. Add repo-specific SCOPE parsers above these — see the P0 bead.
 commit_parsers = [
+  # Meta-commits that just refresh CHANGELOG.md don't belong IN the changelog —
+  # otherwise every regen adds a new commit which requires another regen, forever.
+  { message = "^chore\\(changelog\\)", skip = true },
   { message = "^feat", group = "Added" },
   { message = "^fix", group = "Fixed" },
   { message = "^perf", group = "Performance" },
