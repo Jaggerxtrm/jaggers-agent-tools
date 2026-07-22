@@ -78,7 +78,10 @@ function expectedCommand(commandTemplate: string, hooksRoot: string): string {
   return commandTemplate.replace(/\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/([^\s"]+)/g, `"${hooksRoot}/$1"`);
 }
 
-describe('runtime maintenance integration', () => {
+// Every case here drives the real installer against a /tmp scaffold, so wall-clock
+// is load-dependent rather than logic-dependent — the 30s global default in
+// cli/vitest.config.ts is a machine-load tripwire, not a regression signal (xtrm-5tw31).
+describe('runtime maintenance integration', { timeout: 120_000 }, () => {
   it('fresh install scaffolds .xtrm and writes absolute hook commands to settings.json', async () => {
     await runInstallCli(['--yes']);
 
