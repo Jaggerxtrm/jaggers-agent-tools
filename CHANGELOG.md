@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Project maintenance
+
+- **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check + skip meta commits (xtrm-reyem.12)** ([9d2b08e](https://github.com/xtrm-dev/core/commit/9d2b08e283e6dc2aa033559f01b1adbbd4cdc484)) — 2026-07-22 22:52
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
