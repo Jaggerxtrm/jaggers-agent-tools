@@ -199,4 +199,26 @@ describe('reconcileRuntimeLinks', () => {
     await fs.writeFile(path.join(projectRoot, '.claude', 'skills', 'hand-linked'), 'user');
     expect(await fs.readFile(path.join(projectRoot, '.claude', 'skills', 'hand-linked'), 'utf8')).toBe('user');
   });
+
+  // xtrm-vtqlg.7: the two loud refusals are the enforcement half of the
+  // user-owned LOCATION contract (xtrm-kvsrd.4) and had no coverage anywhere.
+  it('refuses to replace a runtime directory that is itself a user symlink', async () => {
+    const userOwned = path.join(root, 'user-runtime-dir');
+    await fs.ensureDir(userOwned);
+    await fs.ensureDir(path.join(projectRoot, '.claude'));
+    await fs.symlink(userOwned, path.join(projectRoot, '.claude', 'skills'));
+
+    await expect(run()).rejects.toThrow(/Refusing to replace user-owned runtime directory/);
+    expect((await fs.lstat(path.join(projectRoot, '.claude', 'skills'))).isSymbolicLink()).toBe(true);
+  });
+
+  it('refuses to overwrite an untracked real dir whose name collides with a managed skill', async () => {
+    const userDir = path.join(projectRoot, '.claude', 'skills', 'local-skill');
+    await fs.ensureDir(userDir);
+    await fs.writeFile(path.join(userDir, 'SKILL.md'), '---\nname: local-skill\n---\nuser content\n');
+
+    await expect(run()).rejects.toThrow(/Cannot enable skill 'local-skill'.*is user-owned/);
+    expect((await fs.lstat(userDir)).isDirectory()).toBe(true);
+    expect(await fs.readFile(path.join(userDir, 'SKILL.md'), 'utf8')).toContain('user content');
+  });
 });
