@@ -39,8 +39,9 @@ describe('skills-state', () => {
 
     expect(state).toEqual(createDefaultSkillsState());
     expect(await fs.pathExists(path.join(skillsRoot, 'state.json'))).toBe(true);
-    expect(await fs.pathExists(path.join(skillsRoot, 'default'))).toBe(true);
-    expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(true);
+    // xtrm-vtqlg.5: repo scope no longer mints the retired managed tiers.
+    expect(await fs.pathExists(path.join(skillsRoot, 'default'))).toBe(false);
+    expect(await fs.pathExists(path.join(skillsRoot, 'optional'))).toBe(false);
     expect(await fs.pathExists(path.join(skillsRoot, 'user', 'packs'))).toBe(false);
     expect(await fs.pathExists(path.join(skillsRoot, 'active'))).toBe(false);
   });

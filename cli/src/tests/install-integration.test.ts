@@ -192,8 +192,11 @@ describe('runtime maintenance integration', { timeout: 120_000 }, () => {
 
     await runInstallCli(['--yes']);
 
-    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'default'))).toBe(true);
-    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'optional'))).toBe(true);
+    // xtrm-vtqlg.5: per-repo managed tiers are retired — install scaffolds the
+    // state file and the GLOBAL tiers, never repo-local default//optional/.
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'state.json'))).toBe(true);
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'default'))).toBe(false);
+    expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'optional'))).toBe(false);
     expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'user', 'packs'))).toBe(false);
     expect(fs.pathExistsSync(path.join(tmpDir, '.xtrm', 'skills', 'active'))).toBe(false);
     expect(fs.pathExistsSync(path.join(process.env.HOME!, '.xtrm', 'skills', 'default'))).toBe(true);
