@@ -49,6 +49,11 @@ const r = reporter('suite-a');
 const box = makeSandbox('xtrm-p201-a-');
 const { env, project, installPrefix } = box;
 
+// process.exit() inside the try block skips the finally, so exiting there leaked
+// the whole ~615MB sandbox per run and eventually filled /tmp. Record the code,
+// let finally clean up, exit last.
+let exitCode = 0;
+
 try {
   // ── STEP 1: install Core, Specialists and xtmux release candidates ─────────
   const installed = run('npm', [
@@ -214,15 +219,16 @@ try {
 
   r.summary();
   console.log('suite-a: PASS');
-  process.exit(0);
 } catch (err) {
   r.summary();
   console.error('suite-a: FAIL');
   console.error(err?.message || err);
-  process.exit(1);
+  exitCode = 1;
 } finally {
   box.cleanup();
 }
+
+process.exit(exitCode);
 
 function walk(dir) {
   if (!existsSync(dir)) return [];

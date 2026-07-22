@@ -41,6 +41,10 @@ if (!TMUX || !XTMUX) {
   process.exit(0);
 }
 
+// process.exit() inside the try block skips the finally, stranding the sandbox.
+// Record the code, let finally clean up, exit last. (Suite C already does this.)
+let exitCode = 0;
+
 const box = makeSandbox('xtrm-p201-b-');
 const tmuxTmp = box.tmuxTmp;
 const stateEnv = { ...box.env, TMUX_TMPDIR: tmuxTmp };
@@ -178,13 +182,14 @@ try {
   tmux('kill-server');
   r.summary();
   console.log('suite-b: PASS');
-  process.exit(0);
 } catch (err) {
   try { tmux('kill-server'); } catch { /* best effort */ }
   r.summary();
   console.error('suite-b: FAIL');
   console.error(err?.message || err);
-  process.exit(1);
+  exitCode = 1;
 } finally {
   box.cleanup();
 }
+
+process.exit(exitCode);
