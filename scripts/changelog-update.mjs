@@ -18,6 +18,7 @@
 //     --tag vX.Y.Z  promote unreleased commits into a versioned section
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const CHANGELOG = 'CHANGELOG.md';
 const CONFIG = 'changelog/cliff.toml';
@@ -44,9 +45,13 @@ if (!/^# /m.test(header)) {
   );
 }
 
-const cliffArgs = ['--config', CONFIG, '--unreleased'];
+// Resolve git-cliff via npm exec (falls back to fetching if not installed).
+// More robust than import.meta.resolve across CI setups where node's ESM
+// resolver disagrees with npm about where the workspace installed the dep.
+// Requires git-cliff as a devDependency.
+const cliffArgs = ['--yes', 'git-cliff', '--config', CONFIG, '--unreleased'];
 if (tag) cliffArgs.push('--tag', tag);
-const generated = execFileSync('git-cliff', cliffArgs, {
+const generated = execFileSync('npx', cliffArgs, {
   encoding: 'utf8',
   maxBuffer: 32 * 1024 * 1024,
 }).trim();

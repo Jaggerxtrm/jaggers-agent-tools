@@ -20,6 +20,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0   # git-cliff needs full history for CHANGELOG.md [Unreleased] check
 
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4

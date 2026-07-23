@@ -121,5 +121,8 @@
       "vite": "8.0.16",
       "esbuild": "0.28.1"
     }
+  },
+  "devDependencies": {
+    "git-cliff": "2.13.1"
   }
 }
