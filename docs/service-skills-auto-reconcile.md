@@ -1,7 +1,8 @@
-# Service-skills auto-reconcile (Phase B)
+# Service-skills auto-reconcile (Phases A–C)
 
 Per-repo enablement guide for the post-merge auto-reconcile pipeline that keeps
-`SKILL.md` documentation in sync with implementation drift.
+`SKILL.md` documentation in sync with implementation drift and detects compose
+services missing from the service-skills registry.
 
 ## What it is
 
@@ -189,9 +190,41 @@ the auto-reconcile job is skipped via this guard — no loop.
 | reconcile job 401/403 from nano-gpt | Wrong / revoked API key | Rotate `NANO_GPT_API_KEY` repo secret |
 | Workflow queued forever | Another run in same concurrency group still active | Wait or cancel the head run |
 
+## Phase C: orphan detection
+
+Drift scanning only covers registered services. The reusable
+`service-skills-orphan-nightly.yml` workflow separately compares
+`docker-compose.yml` service keys with every pack registry and reports new,
+unregistered services. Its verdict comes from the deterministic
+`service_skill_orphan_scan.py`; it never scaffolds or reconciles skills.
+
+Consumer repositories call it on an offset nightly schedule:
+
+```yaml
+name: Service-skills orphan scan
+on:
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  orphan-scan:
+    uses: xtrm-dev/core/.github/workflows/service-skills-orphan-nightly.yml@main
+    permissions:
+      contents: write
+      pull-requests: write
+```
+
+The scan always reports its JSON result. A checklist PR opens only when the
+repository variable `ARCHON_ALLOW_SERVICE_SKILL_PR` equals `1` **and** the
+`protected` GitHub environment grants approval. Leave the variable unset for
+report-only operation.
+
 ## Refs
 
-- Workflow: `xtrm-dev/core/.github/workflows/service-skills-drift-sweep.yml`
+- Drift workflow: `xtrm-dev/core/.github/workflows/service-skills-drift-sweep.yml`
+- Orphan workflow: `xtrm-dev/core/.github/workflows/service-skills-orphan-nightly.yml`
 - Reconcile script: `~/.xtrm/skills/default/service-skills/scripts/reconcile.py`
+- Orphan detector: `~/.xtrm/skills/default/service-skills/scripts/service_skill_orphan_scan.py`
 - Bead epic: `xtrm-lwpcn`
 - Bead: `xtrm-pm5d8`
