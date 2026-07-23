@@ -5,7 +5,7 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group }}
 {% for commit in commits %}
-- **{{ commit.message | split(pat="\n") | first | trim | upper_first }}** ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/xtrm-dev/core/commit/{{ commit.id }})) — {{ commit.author.timestamp | date(format="%Y-%m-%d %H:%M") }}
+- **{{ commit.message | split(pat="\n") | first | trim | upper_first }}** ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/xtrm-dev/core/commit/{{ commit.id }})) — {{ commit.author.timestamp | date(format="%Y-%m-%d %H:%M", timezone="UTC") }}
 {% endfor %}{% endfor %}
 """
 trim = false
