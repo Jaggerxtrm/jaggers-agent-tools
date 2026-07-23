@@ -18,6 +18,7 @@
 //     --tag vX.Y.Z  promote unreleased commits into a versioned section
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const CHANGELOG = 'CHANGELOG.md';
 const CONFIG = 'changelog/cliff.toml';
@@ -44,9 +45,13 @@ if (!/^# /m.test(header)) {
   );
 }
 
-const cliffArgs = ['--config', CONFIG, '--unreleased'];
+// Resolve git-cliff via node's module resolver — works whether or not the
+// binary is on PATH. Same pattern as xtmux/scripts/changelog.mjs. Requires
+// git-cliff as a devDependency of this repo.
+const cliffCli = fileURLToPath(import.meta.resolve('git-cliff/cli'));
+const cliffArgs = [cliffCli, '--config', CONFIG, '--unreleased'];
 if (tag) cliffArgs.push('--tag', tag);
-const generated = execFileSync('git-cliff', cliffArgs, {
+const generated = execFileSync(process.execPath, cliffArgs, {
   encoding: 'utf8',
   maxBuffer: 32 * 1024 * 1024,
 }).trim();
