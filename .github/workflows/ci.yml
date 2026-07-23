@@ -40,6 +40,11 @@ jobs:
     - name: Check package metadata
       run: npm run check:package
 
+    - name: CHANGELOG.md [Unreleased] fresh
+      # Guard: [Unreleased] must reflect the current git log. See /setup-git-cliff.
+      # Fix locally with: npm run changelog:update
+      run: npm run changelog:check
+
     # cli consumes @xtrm/contracts, whose package.json entry points resolve to
     # ./dist. That directory is gitignored, so it must be built before anything
     # imports the package or resolution fails.
