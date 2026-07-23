@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Use npx to resolve git-cliff (workspace-hoisting-safe)** ([54bd5d5](https://github.com/xtrm-dev/core/commit/54bd5d56bd8d805f2b7fc6d3e6182b925f1459ae)) — 2026-07-23 05:04
 
+- **Render commit timestamps in UTC so local == CI regen** ([d7a8aab](https://github.com/xtrm-dev/core/commit/d7a8aab6e628aca8a970429ee845fc4ca874ce5f)) — 2026-07-23 05:09
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
