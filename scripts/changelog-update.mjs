@@ -45,13 +45,13 @@ if (!/^# /m.test(header)) {
   );
 }
 
-// Resolve git-cliff via node's module resolver — works whether or not the
-// binary is on PATH. Same pattern as xtmux/scripts/changelog.mjs. Requires
-// git-cliff as a devDependency of this repo.
-const cliffCli = fileURLToPath(import.meta.resolve('git-cliff/cli'));
-const cliffArgs = [cliffCli, '--config', CONFIG, '--unreleased'];
+// Resolve git-cliff via npm exec (falls back to fetching if not installed).
+// More robust than import.meta.resolve across CI setups where node's ESM
+// resolver disagrees with npm about where the workspace installed the dep.
+// Requires git-cliff as a devDependency.
+const cliffArgs = ['--yes', 'git-cliff', '--config', CONFIG, '--unreleased'];
 if (tag) cliffArgs.push('--tag', tag);
-const generated = execFileSync(process.execPath, cliffArgs, {
+const generated = execFileSync('npx', cliffArgs, {
   encoding: 'utf8',
   maxBuffer: 32 * 1024 * 1024,
 }).trim();
