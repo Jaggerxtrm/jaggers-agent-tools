@@ -837,6 +837,10 @@
           "hash": "735416ab8c1198ea2ed9941732b4c1b23de02de9883e1bd7ca0511edd30a3da0",
           "version": "0.11.1"
         },
+        "service-skills/scripts/service_skill_orphan_scan.py": {
+          "hash": "4688e08dfb6becb64f53289865162da72d2b257299c4a093a3d86de5a8bbabaf",
+          "version": "0.11.2"
+        },
         "service-skills/scripts/scaffolder.py": {
           "hash": "07071c8a14b5dd493e095dbba3db70e93a4aa73ff9180811f91480d33c47a384",
           "version": "0.11.1"
