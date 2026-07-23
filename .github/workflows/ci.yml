@@ -40,25 +40,10 @@ jobs:
     - name: Check package metadata
       run: npm run check:package
 
-    - name: DEBUG changelog divergence (xtrm-reyem.13)
-      # Prints git-cliff version, cliff output, current CHANGELOG.md Unreleased
-      # slice, and the diff. Compare against the same on your local machine.
-      run: |
-        echo "== git-cliff version =="
-        npx --yes git-cliff --version || true
-        echo ""
-        echo "== git log --oneline v0.11.2..HEAD (last 20) =="
-        git log v0.11.2..HEAD --oneline | head -20
-        echo ""
-        echo "== git-cliff --unreleased output =="
-        npx --yes git-cliff --config changelog/cliff.toml --unreleased > /tmp/cliff-generated.txt
-        cat /tmp/cliff-generated.txt
-        echo ""
-        echo "== current CHANGELOG.md [Unreleased] slice =="
-        awk '/^## \[Unreleased\]/{f=1} /^## \[v/{if(f){f=0}} f' CHANGELOG.md
-        echo ""
-        echo "== changelog:check outcome =="
-        npm run --silent changelog:check || echo "(check failed as expected — inspect above)"
+    - name: CHANGELOG.md [Unreleased] fresh
+      # Guard: [Unreleased] must reflect the current git log. See /setup-git-cliff.
+      # Fix locally with: npm run changelog:update
+      run: npm run changelog:check
 
     # cli consumes @xtrm/contracts, whose package.json entry points resolve to
     # ./dist. That directory is gitignored, so it must be built before anything

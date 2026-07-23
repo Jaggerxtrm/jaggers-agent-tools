@@ -15,8 +15,14 @@ footer = ""
 conventional_commits = true
 filter_unconventional = false
 split_commits = false
+# Merge commits (from actions/checkout on pull_request → refs/pull/N/merge)
+# are skipped via a parser below — see the "^Merge " entry. This keeps CI's
+# cliff output identical to local's.
 # Generic type grouping. Add repo-specific SCOPE parsers above these — see the P0 bead.
 commit_parsers = [
+  # Merge commits (GH Actions synthesizes refs/pull/N/merge on pull_request events).
+  # Skipping them keeps CI's cliff output identical to local's. See xtrm-reyem.13.
+  { message = "^Merge ", skip = true },
   # Meta-commits that just refresh CHANGELOG.md don't belong IN the changelog —
   # otherwise every regen adds a new commit which requires another regen, forever.
   { message = "^chore\\(changelog\\)", skip = true },
