@@ -9,17 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **Skip merge commits so CI == local (xtrm-reyem.13)** ([26de5cf](https://github.com/xtrm-dev/core/commit/26de5cf69ade9b3567397e356a784cd6a3c8919d)) — 2026-07-23 13:34
-
 ### Other changes
 
-- **CI diagnostic dump for changelog divergence** ([01ff65c](https://github.com/xtrm-dev/core/commit/01ff65ca6698849989570404d51bf91e609eb6ee)) — 2026-07-23 13:29
+- **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
 
 ### Project maintenance
 
 - **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check (xtrm-reyem.12) (#488)** ([6e7040d](https://github.com/xtrm-dev/core/commit/6e7040df7ecb9dafd0fc6a732f98e4a9897b3be1)) — 2026-07-23 05:18
+
+- **Detect orphaned compose services [infra-wtd1]** ([115abfe](https://github.com/xtrm-dev/core/commit/115abfe8b1a25af63e9dfba54e33a1e6459200dc)) — 2026-07-23 15:57
 
 ## [v0.11.2] — 2026-07-22
 
