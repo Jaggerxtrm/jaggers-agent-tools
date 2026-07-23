@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Resolve git-cliff via import.meta.resolve (PATH-independent)** ([3baa2fe](https://github.com/xtrm-dev/core/commit/3baa2fe0082577499c48b4a79f36370940036f6c)) — 2026-07-23 04:58
 
+- **Use npx to resolve git-cliff (workspace-hoisting-safe)** ([54bd5d5](https://github.com/xtrm-dev/core/commit/54bd5d56bd8d805f2b7fc6d3e6182b925f1459ae)) — 2026-07-23 05:04
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
