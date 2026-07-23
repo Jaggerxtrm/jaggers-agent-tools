@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Fetch-depth: 0 so git-cliff can enumerate history** ([2ffc628](https://github.com/xtrm-dev/core/commit/2ffc6285b936bf2d0c34dc55171ff20402395e26)) — 2026-07-23 04:48
 
+- **Add git-cliff devDep so CI has the binary via npm run** ([d687f7d](https://github.com/xtrm-dev/core/commit/d687f7dd67f624d993a1a389423bae9a4e5d7929)) — 2026-07-23 04:53
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
