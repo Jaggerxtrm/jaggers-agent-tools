@@ -9,21 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Other changes
+
+- **CI diagnostic dump for changelog divergence** ([01ff65c](https://github.com/xtrm-dev/core/commit/01ff65ca6698849989570404d51bf91e609eb6ee)) — 2026-07-23 13:29
+
 ### Project maintenance
 
-- **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check + skip meta commits (xtrm-reyem.12)** ([9d2b08e](https://github.com/xtrm-dev/core/commit/9d2b08e283e6dc2aa033559f01b1adbbd4cdc484)) — 2026-07-22 22:52
-
-- **Fetch-depth: 0 so git-cliff can enumerate history** ([2ffc628](https://github.com/xtrm-dev/core/commit/2ffc6285b936bf2d0c34dc55171ff20402395e26)) — 2026-07-23 04:48
-
-- **Add git-cliff devDep so CI has the binary via npm run** ([d687f7d](https://github.com/xtrm-dev/core/commit/d687f7dd67f624d993a1a389423bae9a4e5d7929)) — 2026-07-23 04:53
-
-- **Resolve git-cliff via import.meta.resolve (PATH-independent)** ([3baa2fe](https://github.com/xtrm-dev/core/commit/3baa2fe0082577499c48b4a79f36370940036f6c)) — 2026-07-23 04:58
-
-- **Use npx to resolve git-cliff (workspace-hoisting-safe)** ([54bd5d5](https://github.com/xtrm-dev/core/commit/54bd5d56bd8d805f2b7fc6d3e6182b925f1459ae)) — 2026-07-23 05:04
-
-- **Render commit timestamps in UTC so local == CI regen** ([d7a8aab](https://github.com/xtrm-dev/core/commit/d7a8aab6e628aca8a970429ee845fc4ca874ce5f)) — 2026-07-23 05:09
-
-- **Drop CHANGELOG CI check — CI git-cliff output diverges from local (tracked in follow-up)** ([854f705](https://github.com/xtrm-dev/core/commit/854f7054ea2170a205f52c7a0e0e7fe9b7eac495)) — 2026-07-23 05:14
+- **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check (xtrm-reyem.12) (#488)** ([6e7040d](https://github.com/xtrm-dev/core/commit/6e7040df7ecb9dafd0fc6a732f98e4a9897b3be1)) — 2026-07-23 05:18
 
 ## [v0.11.2] — 2026-07-22
 
