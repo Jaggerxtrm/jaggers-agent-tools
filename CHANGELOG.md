@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Render commit timestamps in UTC so local == CI regen** ([d7a8aab](https://github.com/xtrm-dev/core/commit/d7a8aab6e628aca8a970429ee845fc4ca874ce5f)) — 2026-07-23 05:09
 
+- **Drop CHANGELOG CI check — CI git-cliff output diverges from local (tracked in follow-up)** ([854f705](https://github.com/xtrm-dev/core/commit/854f7054ea2170a205f52c7a0e0e7fe9b7eac495)) — 2026-07-23 05:14
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
