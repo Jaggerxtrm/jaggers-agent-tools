@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check + skip meta commits (xtrm-reyem.12)** ([9d2b08e](https://github.com/xtrm-dev/core/commit/9d2b08e283e6dc2aa033559f01b1adbbd4cdc484)) — 2026-07-22 22:52
 
+- **Fetch-depth: 0 so git-cliff can enumerate history** ([2ffc628](https://github.com/xtrm-dev/core/commit/2ffc6285b936bf2d0c34dc55171ff20402395e26)) — 2026-07-23 04:48
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
