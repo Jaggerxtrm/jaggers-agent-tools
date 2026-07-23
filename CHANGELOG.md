@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Detect orphaned compose services [infra-wtd1]** ([115abfe](https://github.com/xtrm-dev/core/commit/115abfe8b1a25af63e9dfba54e33a1e6459200dc)) — 2026-07-23 15:57
 
+- **Register orphan detector payload** ([31b71a9](https://github.com/xtrm-dev/core/commit/31b71a99f7de674231a88c94e411e8ca581a8652)) — 2026-07-23 16:05
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
