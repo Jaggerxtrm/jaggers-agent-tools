@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Skip merge commits so CI == local (xtrm-reyem.13)** ([909f091](https://github.com/xtrm-dev/core/commit/909f0915adb51d80ba4a2c2c185a364e204f45d1)) — 2026-07-23 13:34
+- **Skip merge commits so CI == local (xtrm-reyem.13)** ([26de5cf](https://github.com/xtrm-dev/core/commit/26de5cf69ade9b3567397e356a784cd6a3c8919d)) — 2026-07-23 13:34
 
 ### Other changes
 
