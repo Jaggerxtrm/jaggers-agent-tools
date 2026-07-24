@@ -1,0 +1,402 @@
+#!/usr/bin/env bash
+# board-audit — one-shot bd + merged-PR export + ChatGPT-web audit prompt.
+#
+# Detects repo from cwd. Writes /tmp/board-audit-<repo>/{beads.jsonl,prs.md,audit-prompt.md}
+# plus a single self-contained audit-bundle-<date>.md ready to upload.
+#
+# Usage: cd <any git repo with bd + gh set up>; board-audit [--no-pr]
+#
+# Flags:
+#   --no-pr    Skip merged-PR export entirely. Bundle contains bd corpus only.
+#              Bucket-B ("silently shipped") detection degrades — the auditor is
+#              told to rely on GitHub tool use for that pass.
+
+set -euo pipefail
+
+# ── Arg parse ───────────────────────────────────────────────────────────
+NO_PR=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-pr) NO_PR=1 ;;
+    -h|--help)
+      sed -n '2,13p' "$0" | sed 's|^# \{0,1\}||'
+      exit 0
+      ;;
+    *) echo "error: unknown arg '$arg' (only --no-pr / --help supported)" >&2; exit 2 ;;
+  esac
+done
+
+# ── Repo detection ──────────────────────────────────────────────────────
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "error: not inside a git working tree" >&2
+  exit 1
+fi
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+GH_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
+REPO_SLUG="$(basename "$REPO_ROOT")"
+[ -n "$GH_REPO" ] || GH_REPO="$REPO_SLUG"
+
+# ── Dep checks ──────────────────────────────────────────────────────────
+for cmd in bd gh python3; do
+  command -v "$cmd" >/dev/null || { echo "error: '$cmd' not on PATH" >&2; exit 1; }
+done
+
+# ── Output dir ──────────────────────────────────────────────────────────
+OUTDIR="${TMPDIR:-/tmp}/board-audit-${REPO_SLUG}"
+mkdir -p "$OUTDIR"
+BD_OUT="$OUTDIR/beads.jsonl"
+PR_OUT="$OUTDIR/prs.md"
+PROMPT_OUT="$OUTDIR/audit-prompt.md"
+STATE_OUT="$OUTDIR/current-state.md"
+BUNDLE_OUT="$OUTDIR/audit-bundle-$(date +%Y%m%d).md"
+
+TODAY="$(date +%Y-%m-%d)"
+
+# ── 1. Export non-closed beads ──────────────────────────────────────────
+echo "→ exporting beads..."
+bd list --json --limit 5000 2>/dev/null \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=d if isinstance(d,list) else d.get("issues",[]); [print(json.dumps(r,separators=(",",":"))) for r in rows]' \
+  > "$BD_OUT"
+BEAD_COUNT=$(wc -l < "$BD_OUT" | tr -d ' ')
+
+# ── 2. Export merged PRs (oldest → newest) with FULL body + commits ────
+# Per-PR loop because `gh pr list --json commits` hits GraphQL cardinality
+# ceiling above ~50 PRs. Loop is slower (~500ms/PR) but complete.
+#
+# Auto-window: PRs pulled are scoped to the oldest open bead's creation date
+# minus 7d (buffer for same-week ships). Older PRs can't have shipped scope
+# for beads that didn't exist yet. Cap at BOARD_AUDIT_PR_LIMIT (default 500)
+# as a safety net; override the SINCE via BOARD_AUDIT_PR_SINCE=YYYY-MM-DD.
+#
+# Skipped entirely when --no-pr is set.
+PR_LIMIT="${BOARD_AUDIT_PR_LIMIT:-500}"
+
+if [ "$NO_PR" -eq 1 ]; then
+  echo "→ --no-pr: skipping PR export"
+  PR_COUNT=0
+  PR_SINCE="n/a (--no-pr)"
+  PR_WINDOW_SOURCE="skipped via --no-pr"
+  : > "$PR_OUT"
+else
+
+if [ -n "${BOARD_AUDIT_PR_SINCE:-}" ]; then
+  PR_SINCE="$BOARD_AUDIT_PR_SINCE"
+  PR_WINDOW_SOURCE="env override"
+else
+  # Read min(created) from beads.jsonl; subtract 7d buffer.
+  # Falls back to 90d-ago if the board is empty (no beads to anchor to).
+  PR_SINCE="$(python3 -c "
+import json, sys
+from datetime import date, datetime, timedelta
+oldest = None
+try:
+  with open('${BD_OUT}') as f:
+    for line in f:
+      if not line.strip(): continue
+      row = json.loads(line)
+      c = row.get('created') or row.get('created_at')
+      if not c: continue
+      d = datetime.fromisoformat(c.replace('Z','+00:00')).date()
+      if oldest is None or d < oldest: oldest = d
+except FileNotFoundError:
+  pass
+if oldest is None:
+  # Empty board — default to 90d ago
+  print((date.today() - timedelta(days=90)).isoformat())
+else:
+  print((oldest - timedelta(days=7)).isoformat())
+")"
+  PR_WINDOW_SOURCE="oldest bead ($PR_SINCE) minus 7d buffer"
+fi
+
+echo "→ exporting merged PRs since ${PR_SINCE} (${PR_WINDOW_SOURCE}; cap ${PR_LIMIT})..."
+
+# Cheap first pass: get PR numbers, oldest → newest, within the window.
+# gh search is more reliable than gh pr list for date filters on large repos.
+mapfile -t PR_NUMBERS < <(
+  gh pr list --state=merged --limit "$PR_LIMIT" \
+    --search "merged:>=${PR_SINCE} sort:updated-asc" \
+    --json number,mergedAt \
+    --jq 'sort_by(.mergedAt) | .[] | .number' 2>/dev/null
+)
+PR_COUNT="${#PR_NUMBERS[@]}"
+
+if [ "$PR_COUNT" -eq 0 ]; then
+  echo "warning: 0 merged PRs since ${PR_SINCE}; is the search filter right?" >&2
+fi
+if [ "$PR_COUNT" -eq "$PR_LIMIT" ]; then
+  echo "warning: hit ${PR_LIMIT} PR cap; older PRs in window were dropped. Raise via BOARD_AUDIT_PR_LIMIT=N." >&2
+fi
+
+# Rich per-PR fetch. Format each PR as a markdown section so newlines survive.
+: > "$PR_OUT"
+PR_IDX=0
+for N in "${PR_NUMBERS[@]}"; do
+  PR_IDX=$((PR_IDX + 1))
+  # Progress heartbeat every 25 PRs
+  if [ $((PR_IDX % 25)) -eq 0 ] || [ "$PR_IDX" -eq 1 ] || [ "$PR_IDX" -eq "$PR_COUNT" ]; then
+    printf "  ...%d/%d\r" "$PR_IDX" "$PR_COUNT" >&2
+  fi
+
+  gh pr view "$N" \
+    --json number,mergedAt,title,body,files,commits,author,url \
+    --template '## PR #{{.number}} — {{.title}}
+
+- **merged:** {{.mergedAt}}
+- **author:** @{{.author.login}}
+- **url:** {{.url}}
+- **files ({{len .files}}):** {{range $i, $f := .files}}{{if $i}}, {{end}}`{{$f.path}}` (+{{$f.additions}}/-{{$f.deletions}}){{end}}
+
+### Body
+{{.body}}
+
+### Commits ({{len .commits}})
+{{range .commits}}- `{{slice .oid 0 8}}` {{.messageHeadline}}
+{{end}}
+
+---
+
+' >> "$PR_OUT" 2>/dev/null || echo "warning: gh pr view $N failed" >&2
+done
+echo >&2
+echo "  exported $PR_COUNT PRs" >&2
+fi  # end --no-pr guard
+
+# ── 3. Snapshot bd stats + closed count for the prompt header ──────────
+BD_STATS="$(bd stats 2>/dev/null | grep -v Warning || true)"
+
+cat > "$STATE_OUT" <<EOF
+# Board state — ${GH_REPO} @ ${TODAY}
+
+\`\`\`
+${BD_STATS}
+\`\`\`
+
+Non-closed beads exported: ${BEAD_COUNT}
+Merged PRs exported: ${PR_COUNT}
+EOF
+
+# ── 4. Write the ChatGPT audit prompt ──────────────────────────────────
+echo "→ writing audit prompt..."
+cat > "$PROMPT_OUT" <<'PROMPT_EOF'
+# Board audit — %REPO%
+
+Audit date: %DATE%
+
+## Inputs (attach both files)
+
+- **beads.jsonl** — %BEAD_COUNT% non-closed beads on `%REPO%`, one JSON object per line. Full fields: `id`, `title`, `description`, `type`, `status`, `priority` (0-4, 0=highest), `created`, `updated`, `notes`, `parents`, `deps` (dependency edges by type), `discovered_from`, `owner`, `assignee`, `tags`.
+- **prs.md** — merged PRs on `%REPO%` since `%PR_SINCE%` (oldest open bead's creation date minus 7d — covers the full silent-ship detection window; cap %PR_LIMIT%). **May be empty or absent when the operator ran with `--no-pr`** — in that case, bucket-B ("silently shipped") detection relies on GitHub tool use rather than the corpus. Oldest → newest, each as a markdown section with:
+  - PR number, title, mergedAt, author, URL, files-changed list (with +/- line counts)
+  - **Full body** (not truncated)
+  - **All commits** with short SHA + headline
+
+  Use this to verify silent supersedes, drift, and to cite specific commits in your findings.
+
+## Tools you have
+
+- **Web search** — use freely for external best practices, package/library discovery, verification.
+- **GitHub** — inspect any PR / commit / file / issue via my session for verification (referenced files still exist? functions still defined? PR merged vs closed?).
+- **Jira** — my `mercuryintel` cloud is accessible. Cross-check bd beads referenced in Jira and vice versa (project key `ISSUE`).
+- **Prometheus / Grafana MCP** if available in your session — for metric-emission verification (does the metric named in a bead actually exist and emit today?).
+
+## What "bd" is
+
+`bd` (beads) is a project-scoped issue tracker. Beads have:
+- **status**: `open`, `in_progress`, `blocked`, `closed`
+- **type**: `task`, `bug`, `feature`, `epic`, `chore`, `decision`
+- **priority**: 0-4 (0=critical, 1=high, 2=medium, 3=low, 4=backlog)
+- **dependency types**:
+  - `parent-child` — epic/subtask
+  - `blocks` — hard blocker
+  - `discovered-from` — this bead came out of that one (soft provenance)
+  - `related` — non-blocking association
+
+## Your job — 6 buckets + 13 additional passes
+
+Take your time. Use all attached inputs, plus the tools above, before classifying. **Verify with the tools whenever a claim is testable** (PR state, file existence, metric emission, Jira state). Do NOT infer; if unverifiable, put it in bucket F rather than close.
+
+### Six-bucket classification (every open bead lands in exactly one)
+
+- **A. Live & relevant** — real ongoing scope, keep open.
+- **B. Silently shipped** — a merged PR (found in prs.md, or — when prs.md is absent/empty — via GitHub search) already delivered this bead's ask; close with `--reason="shipped via PR #N (date): <what shipped>"`.
+- **C. Superseded** — a newer bead absorbs this one's scope; `bd supersede <old> --with <new>` (fallback: `bd close` with reason referencing the new bead).
+- **D. Stale premise** — the reason this was filed no longer exists (underlying alert retired, feature deleted, dated handoff, incident non-recurring); close with `stale: <why>`.
+- **E. Blocked-in-fact** — blocked on something specific and dated; keep open but add a note like `blocked on <X> since <date>`.
+- **F. Ambiguous — needs human** — you can't verify one way or the other; propose one crisp question the operator must answer.
+
+### 13 additional passes (each is a separate report section)
+
+For each pass, report items concretely: bead ID, what you found, what you propose (specific `bd` command where applicable).
+
+1. **Description criticism (ponytail scope + YAGNI)** — for each open bead, judge if the description:
+   - Solves a real current problem (vs speculative future need — YAGNI, drop)
+   - Reuses stuff that already exists (see pass 13)
+   - Names the minimum change (vs over-designed abstraction, one-impl interface, factory-for-one)
+   - Is scoped tight (single concern) or bloated (multiple concerns → propose split)
+   - Speaks in specifics (what file, what function, what test) or vague ("improve X")
+
+   Flag over-engineering, YAGNI, scope creep. **Propose lazier reformulations.** Rewriting the bead description IS a valid recommendation.
+
+2. **Dependency rewiring** — inspect the `parents`, `deps`, `discovered_from` fields across all beads:
+   - **Orphans** with no chain that logically should chain (e.g., `[followup] X` with no `discovered-from`)
+   - **Missing edges** — bead A clearly depends on bead B, no edge
+   - **Cycles** — A blocks B blocks A
+   - **Priority inversions** — a P3 blocking a P0
+   - **Wrong direction** — child epic-parenting a sibling
+   - **Redundant edges** — same dep declared twice or as both blocks + related
+
+   Propose specific `bd dep add`, `bd dep relate`, or `bd dep remove` commands.
+
+3. **Codebase drift verification** — for every bead that names a file path, function, class, PR number, or command, verify via GitHub or web search that the reference still exists. Flag drift with the current truth (file renamed to X, function removed in PR #Y, PR merged not closed).
+
+4. **Metric-emission verification** — for every bead that names a metric (e.g., `mercury_something_total`), verify via the Prometheus MCP (or by grepping the repo for the metric name) whether it's currently emitted. If a bead asks to add a metric that already exists, that's a silent-ship candidate (bucket B).
+
+5. **Jira ↔ bd cross-check** — for every Jira ISSUE-* reference in bead bodies/notes/commits, verify Jira state matches bd state (e.g., Jira says `Da completare` but all referenced beads closed → Jira needs update; Jira closed but referenced bead still open → bd needs update). Same in reverse: search Jira for beads referenced there and check they exist.
+
+6. **Sister-repo relocation candidates** — beads filed on infra-side but whose actual work belongs in a sister repo (`mercury-market-data`, `darth-feedor`, `treasury-cb`, `economic-data`, `specialists`, `barchart-scraper`, `xtrm-tools`, `xtrm-dev/core`). Flag with proposed target repo.
+
+7. **Silent supersedes** — a merged PR whose title/body/files clearly solve bead X's problem, but bead X was never notified/closed. Different from B: here the PR *incidentally* fixes the bead. Cite PR + reasoning.
+
+8. **Zombie epics** — epics whose entire child set is closed but the epic itself is still open. List with child counts.
+
+9. **Stale-tone sweep** — open >45d + no notes update since creation + no PR trail + no discovered-from → candidates to close, downgrade to P4, or refresh. Propose per bead.
+
+10. **Follow-ups gap** — for each *closed* epic mentioned in the PR bodies or bead close-reasons, check if its close reason names "residuals", "followups", "TODO", "deferred", "next" without matching `discovered-from` beads existing. Propose beads to file.
+
+11. **Duplicate / adjacent detection** — beads with heavily overlapping scope. Propose merge (`bd supersede`) or `bd dep relate` link, whichever fits.
+
+12. **Hard validation / no-regression** — for each bead proposing a change, judge whether the description includes:
+    - a **validation step** — what command/query/observation proves the change works? (e.g., "promtool check rules", "mercury_execute_query returns X", "gh pr checks 100 all green")
+    - a **no-regression definition** — what does "not broken" mean here? which existing behavior/metric/dashboard/test must still pass after the change?
+    - a **rollback envelope** — how do we back out if it goes wrong?
+
+    Flag beads missing any of these; propose concrete additions (specific `promtool`/`amtool`/`mcpq`/`docker compose config` invocations, specific metrics to watch).
+
+13. **Existing-library / helper reuse** — for each bead proposing new code, search:
+    - **This repo** — is there an in-repo helper, script, class, or pattern that already does this? (Grep for adjacent names.)
+    - **Sister Mercury repos** — has one of them solved this shape? (Cross-reference.)
+    - **Stdlib / installed dependencies** — does Python/Node/shell stdlib or an already-installed dep cover it? (Check `pyproject.toml`, `package.json`, `requirements.txt`.)
+    - **Well-maintained public package** — is there a small, boring, popular package (>1k stars, active) that would obsolete the bead?
+
+    Ponytail rule: reuse > new code. Propose the specific reuse path with the file/import/command.
+
+## Cross-cutting reports (separate final section)
+
+After the 6 buckets + 13 passes, produce:
+
+- **Themes silently addressed** — table of PR → beads it satisfies (bucket B evidence)
+- **Priority skew** — P0/P1 items open >30 days, disposition per bead
+- **Orphan beads** — no parent/dep/discovered-from (may be intentional for root epics; flag actionable orphans)
+- **Board hygiene summary** — one paragraph on overall board health, next-most-important action
+
+## Output format
+
+Structured markdown, sections in this order:
+
+1. Executive summary (bucket counts, most alarming defect, single next action)
+2. Bucket A / B / C / D / E / F tables (id, age, priority, title, evidence, recommended action)
+3. Pass 1-13 sections
+4. Cross-cutting reports (themes / priority skew / orphans / hygiene)
+5. Recommended batch actions — a code block of `bd` commands the operator can paste to execute the audit's mechanical recommendations:
+
+```bash
+# --- B. Silently shipped ---
+bd close infra-XXX --reason="shipped via PR #N (date): ..."
+
+# --- C. Superseded ---
+bd supersede infra-OLD --with infra-NEW --reason="..."
+# fallback: bd dep relate infra-OLD infra-NEW; bd close infra-OLD --reason="superseded by infra-NEW"
+
+# --- D. Stale ---
+bd close infra-XXX --reason="stale: <why>"
+
+# --- E. Blocker notes ---
+bd update infra-XXX --notes "blocked on <X> since <date>"
+
+# --- Rewires ---
+bd dep add infra-A infra-B                       # A depends on B
+bd dep relate infra-A infra-B                    # non-blocking link
+# (bd has no dep remove in some builds; if needed, note manually)
+
+# --- Priority updates ---
+bd update infra-XXX --priority 4
+
+# --- Description criticism suggestions ---
+# For each bead with a reformulation, print the suggested new description as a comment,
+# so the operator can review before applying via: bd update <id> --description "..."
+```
+
+## Rules
+
+- If evidence is not conclusive, place the bead in bucket F, not B/C/D.
+- Do NOT propose closing a bead solely because "a PR touched the same area" — the PR body/files must clearly deliver the ask.
+- Do NOT modify the board yourself — this is a read-only audit; the operator applies decisions.
+- Cite specific PR numbers, file paths, or Jira keys for every non-trivial claim.
+- Use the tools. Better one verified answer than three inferences.
+- Take your time. Comprehensive > fast.
+PROMPT_EOF
+
+# Substitute placeholders
+sed -i \
+  -e "s|%REPO%|${GH_REPO}|g" \
+  -e "s|%DATE%|${TODAY}|g" \
+  -e "s|%BEAD_COUNT%|${BEAD_COUNT}|g" \
+  -e "s|%PR_LIMIT%|${PR_LIMIT}|g" \
+  -e "s|%PR_SINCE%|${PR_SINCE}|g" \
+  "$PROMPT_OUT"
+
+# ── 5. Concatenate prompt + data into a single self-contained bundle ──
+echo "→ bundling into single file..."
+{
+  cat "$PROMPT_OUT"
+  echo
+  echo "---"
+  echo
+  echo "## Attached data (embedded — no separate uploads needed)"
+  echo
+  echo "### beads.jsonl (${BEAD_COUNT} non-closed beads, one JSON per line)"
+  echo
+  echo '```jsonl'
+  cat "$BD_OUT"
+  echo '```'
+  echo
+  if [ "$NO_PR" -eq 1 ]; then
+    echo "### prs.md — SKIPPED (--no-pr flag was set at export time)"
+    echo
+    echo "The operator ran \`board-audit --no-pr\`. There is no PR corpus attached."
+    echo "For bucket-B (\"silently shipped\") pass, verify claims via GitHub tool use rather than the missing corpus."
+  else
+    echo "### prs.md (${PR_COUNT} merged PRs, oldest→newest; each PR has full body + all commits with short SHA + files list)"
+    echo
+    cat "$PR_OUT"
+  fi
+} > "$BUNDLE_OUT"
+
+BUNDLE_SIZE="$(du -h "$BUNDLE_OUT" | cut -f1)"
+
+# ── 6. Print paste-ready summary ────────────────────────────────────────
+cat <<EOF
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  Board audit bundle ready                                         ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+Repo:    ${GH_REPO}
+Date:    ${TODAY}
+Beads:   ${BEAD_COUNT} non-closed
+PRs:     ${PR_COUNT} merged since ${PR_SINCE} (${PR_WINDOW_SOURCE})
+Bundle:  ${BUNDLE_OUT} (${BUNDLE_SIZE})
+
+Next steps:
+  1. Open ChatGPT web (a Pro model with browsing + tool use)
+  2. Attach the single bundle file:  ${BUNDLE_OUT}
+  3. Say "run the audit"
+  4. Paste result back here (or wherever coordinator lives)
+
+Intermediate files kept in ${OUTDIR}/ (audit-prompt.md, beads.jsonl, prs.md) —
+useful if you want to iterate on the prompt alone without re-exporting data.
+
+EOF
