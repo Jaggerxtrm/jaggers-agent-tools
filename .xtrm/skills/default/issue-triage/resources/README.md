@@ -43,10 +43,19 @@ bd stats
 
 ```bash
 cd <any-mercury-repo>       # git working tree with bd + gh set up
-board-audit
+board-audit                            # whole board + merged PRs
+board-audit --no-pr                    # bd corpus only (skip PR pull)
+board-audit --epic <epic-id>           # scope to one epic + descendants (with notes)
+board-audit --epic <epic-id> --no-pr   # scoped bd corpus only
 ```
 
 Takes ~2 min for a ~200-PR repo. Overwrites the bundle on re-run.
+
+**`--epic` details:** BFS-walks the tree rooted at `<epic-id>` (uses `bd list --parent`
+recursively) and hydrates each bead via `bd show --json` so `notes` are preserved
+(unlike `bd list --json`, which omits them). The audit prompt gets a scope note so
+buckets C/D/silent-supersede stay within the subtree. PR window (when PRs are on) is
+anchored to the oldest bead in the subset, not the whole board.
 
 ## Output
 
