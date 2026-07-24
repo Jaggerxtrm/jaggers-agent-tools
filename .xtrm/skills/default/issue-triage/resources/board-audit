@@ -4,25 +4,33 @@
 # Detects repo from cwd. Writes /tmp/board-audit-<repo>/{beads.jsonl,prs.md,audit-prompt.md}
 # plus a single self-contained audit-bundle-<date>.md ready to upload.
 #
-# Usage: cd <any git repo with bd + gh set up>; board-audit [--no-pr]
+# Usage: cd <any git repo with bd + gh set up>; board-audit [--no-pr] [--epic <id>]
 #
 # Flags:
-#   --no-pr    Skip merged-PR export entirely. Bundle contains bd corpus only.
-#              Bucket-B ("silently shipped") detection degrades — the auditor is
-#              told to rely on GitHub tool use for that pass.
+#   --no-pr        Skip merged-PR export entirely. Bundle contains bd corpus only.
+#                  Bucket-B ("silently shipped") detection degrades — the auditor is
+#                  told to rely on GitHub tool use for that pass.
+#   --epic <id>    Scope the bd export to <id> + all its descendants (BFS via
+#                  bd list --parent, hydrated with bd show --json so notes are
+#                  preserved). Prompt is scoped accordingly. Compatible with --no-pr.
 
 set -euo pipefail
 
 # ── Arg parse ───────────────────────────────────────────────────────────
 NO_PR=0
-for arg in "$@"; do
-  case "$arg" in
-    --no-pr) NO_PR=1 ;;
+EPIC=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-pr) NO_PR=1; shift ;;
+    --epic)
+      [ $# -ge 2 ] || { echo "error: --epic needs a bead id" >&2; exit 2; }
+      EPIC="$2"; shift 2 ;;
+    --epic=*) EPIC="${1#--epic=}"; shift ;;
     -h|--help)
-      sed -n '2,13p' "$0" | sed 's|^# \{0,1\}||'
+      sed -n '2,15p' "$0" | sed 's|^# \{0,1\}||'
       exit 0
       ;;
-    *) echo "error: unknown arg '$arg' (only --no-pr / --help supported)" >&2; exit 2 ;;
+    *) echo "error: unknown arg '$1' (only --no-pr / --epic <id> / --help supported)" >&2; exit 2 ;;
   esac
 done
 
@@ -54,11 +62,30 @@ BUNDLE_OUT="$OUTDIR/audit-bundle-$(date +%Y%m%d).md"
 
 TODAY="$(date +%Y-%m-%d)"
 
-# ── 1. Export non-closed beads ──────────────────────────────────────────
-echo "→ exporting beads..."
-bd list --json --limit 5000 2>/dev/null \
-  | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=d if isinstance(d,list) else d.get("issues",[]); [print(json.dumps(r,separators=(",",":"))) for r in rows]' \
-  > "$BD_OUT"
+# ── 1. Export beads (whole board OR epic subtree) ──────────────────────
+if [ -n "$EPIC" ]; then
+  echo "→ exporting beads under epic $EPIC (BFS + notes via bd show)..."
+  # Verify the root exists
+  bd show "$EPIC" --json >/dev/null 2>&1 || { echo "error: epic '$EPIC' not found" >&2; exit 1; }
+  # BFS walk — collect IDs
+  _walk() {
+    local id="$1"
+    echo "$id"
+    bd list --parent "$id" --json --all 2>/dev/null \
+      | python3 -c 'import sys,json; d=json.load(sys.stdin); rows=d if isinstance(d,list) else d.get("issues",[]); [print(i["id"]) for i in rows]' \
+      | while read -r child; do _walk "$child"; done
+  }
+  # Hydrate each via bd show --json (notes preserved), one JSON per line
+  _walk "$EPIC" | sort -u | while read -r id; do
+    bd show "$id" --json 2>/dev/null \
+      | python3 -c 'import sys,json; d=json.load(sys.stdin); r=d[0] if isinstance(d,list) else d; print(json.dumps(r,separators=(",",":")))'
+  done > "$BD_OUT"
+else
+  echo "→ exporting beads (whole board)..."
+  bd list --json --limit 5000 2>/dev/null \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=d if isinstance(d,list) else d.get("issues",[]); [print(json.dumps(r,separators=(",",":"))) for r in rows]' \
+    > "$BD_OUT"
+fi
 BEAD_COUNT=$(wc -l < "$BD_OUT" | tr -d ' ')
 
 # ── 2. Export merged PRs (oldest → newest) with FULL body + commits ────
@@ -184,6 +211,7 @@ cat > "$PROMPT_OUT" <<'PROMPT_EOF'
 # Board audit — %REPO%
 
 Audit date: %DATE%
+%EPIC_SCOPE%
 
 ## Inputs (attach both files)
 
@@ -340,13 +368,27 @@ bd update infra-XXX --priority 4
 PROMPT_EOF
 
 # Substitute placeholders
-sed -i \
-  -e "s|%REPO%|${GH_REPO}|g" \
-  -e "s|%DATE%|${TODAY}|g" \
-  -e "s|%BEAD_COUNT%|${BEAD_COUNT}|g" \
-  -e "s|%PR_LIMIT%|${PR_LIMIT}|g" \
-  -e "s|%PR_SINCE%|${PR_SINCE}|g" \
-  "$PROMPT_OUT"
+if [ -n "$EPIC" ]; then
+  EPIC_SCOPE=$'\n**Scope:** epic `'"$EPIC"$'` and all descendants (BFS from the umbrella). Bucket C/D/silent-supersede analysis stays within this subtree. Sister-repo relocations still allowed (they cross-repo).\n'
+else
+  EPIC_SCOPE=""
+fi
+# Write EPIC_SCOPE to a temp file to avoid sed quoting hell with newlines
+ESCOPE_FILE="$OUTDIR/.epic-scope"
+printf '%s' "$EPIC_SCOPE" > "$ESCOPE_FILE"
+
+python3 - <<PY
+import re
+with open("$PROMPT_OUT") as f: t = f.read()
+with open("$ESCOPE_FILE") as f: scope = f.read()
+t = t.replace("%REPO%", "$GH_REPO")
+t = t.replace("%DATE%", "$TODAY")
+t = t.replace("%BEAD_COUNT%", "$BEAD_COUNT")
+t = t.replace("%PR_LIMIT%", "$PR_LIMIT")
+t = t.replace("%PR_SINCE%", "$PR_SINCE")
+t = t.replace("%EPIC_SCOPE%", scope)
+with open("$PROMPT_OUT","w") as f: f.write(t)
+PY
 
 # ── 5. Concatenate prompt + data into a single self-contained bundle ──
 echo "→ bundling into single file..."
@@ -386,7 +428,8 @@ cat <<EOF
 
 Repo:    ${GH_REPO}
 Date:    ${TODAY}
-Beads:   ${BEAD_COUNT} non-closed
+Scope:   ${EPIC:+epic $EPIC + descendants}${EPIC:-whole board}
+Beads:   ${BEAD_COUNT}${EPIC:+ under $EPIC (with notes)}${EPIC:-  non-closed}
 PRs:     ${PR_COUNT} merged since ${PR_SINCE} (${PR_WINDOW_SOURCE})
 Bundle:  ${BUNDLE_OUT} (${BUNDLE_SIZE})
 

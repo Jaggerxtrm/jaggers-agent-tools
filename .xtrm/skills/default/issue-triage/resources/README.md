@@ -10,31 +10,18 @@ A one-shot script that exports the local `bd` board + relevant merged PRs into a
 
 Prereqs: `bd` (beads), `gh` (GitHub CLI, authenticated), `python3`.
 
-**Recommended — symlink to the repo file** so future edits (upstream PRs, local
-tweaks) apply immediately with no re-install step:
-
 ```bash
-# Run from inside a checkout of xtrm-dev/core (or wherever the script lives).
-mkdir -p ~/bin ~/.local/bin
-SRC="$(git rev-parse --show-toplevel)/.xtrm/skills/default/issue-triage/resources/board-audit"
-ln -sf "$SRC" ~/bin/board-audit
-ln -sf ~/bin/board-audit ~/.local/bin/board-audit   # ~/.local/bin is usually on PATH
-```
-
-**Fallback — frozen copy** (only if you deliberately want a snapshot pinned to
-the current script version and won't pick up future fixes automatically):
-
-```bash
-mkdir -p ~/bin ~/.local/bin
-SRC="$(git rev-parse --show-toplevel)/.xtrm/skills/default/issue-triage/resources/board-audit"
-cp "$SRC" ~/bin/board-audit
+# 1. Drop the script somewhere on PATH.
+mkdir -p ~/bin
+cp board-audit ~/bin/board-audit
 chmod +x ~/bin/board-audit
+
+# 2. If ~/bin is not on your interactive PATH (typical on Fedora zsh without
+#    ~/.zshrc PATH tweaks), symlink into ~/.local/bin which usually is:
+mkdir -p ~/.local/bin
 ln -sf ~/bin/board-audit ~/.local/bin/board-audit
-```
 
-Sanity-check either path:
-
-```bash
+# 3. Sanity-check.
 which board-audit
 board-audit --help
 ```
@@ -56,10 +43,19 @@ bd stats
 
 ```bash
 cd <any-mercury-repo>       # git working tree with bd + gh set up
-board-audit
+board-audit                            # whole board + merged PRs
+board-audit --no-pr                    # bd corpus only (skip PR pull)
+board-audit --epic <epic-id>           # scope to one epic + descendants (with notes)
+board-audit --epic <epic-id> --no-pr   # scoped bd corpus only
 ```
 
 Takes ~2 min for a ~200-PR repo. Overwrites the bundle on re-run.
+
+**`--epic` details:** BFS-walks the tree rooted at `<epic-id>` (uses `bd list --parent`
+recursively) and hydrates each bead via `bd show --json` so `notes` are preserved
+(unlike `bd list --json`, which omits them). The audit prompt gets a scope note so
+buckets C/D/silent-supersede stay within the subtree. PR window (when PRs are on) is
+anchored to the oldest bead in the subset, not the whole board.
 
 ## Output
 
