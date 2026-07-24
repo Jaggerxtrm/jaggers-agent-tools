@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Retire vendored service-skills from core [xtrm-56flm.6] (#493)** ([c2c7edc](https://github.com/xtrm-dev/core/commit/c2c7edca6034c98599b06419b0bcc269c4d8f9a3)) — 2026-07-24 15:03
 
+- **Rename /prd-to-plan → /spec-dispatch** ([44260ce](https://github.com/xtrm-dev/core/commit/44260cee6dde751e20d49ec19e55ae0b7c657edb)) — 2026-07-24 12:20
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
