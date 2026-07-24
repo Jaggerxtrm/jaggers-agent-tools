@@ -296,6 +296,7 @@ async function planProjectOperations(repoRoot: string): Promise<CleanupOperation
   const claudeSettingsPath = path.join(repoRoot, '.claude', 'settings.json');
   operations.push(...await planMissingHookRows({
     scope: 'project',
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     filePath: path.join(repoRoot, '.xtrm', 'config', 'hooks.json'),
   }));
   operations.push(...await planMissingHookRows({
