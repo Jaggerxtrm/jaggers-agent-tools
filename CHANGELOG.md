@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Track companion README + refresh --help hint (per Codex on #496)** ([579625c](https://github.com/xtrm-dev/core/commit/579625c92074ac4b4edbe9bcae6aa504d3ab84b7)) — 2026-07-24 20:26
 
+- **Kick check-run refresh to clear stale pr-review-gate failure** ([21a5e3b](https://github.com/xtrm-dev/core/commit/21a5e3ba5cc56b286a86928e4423a0950305f44c)) — 2026-07-24 20:34
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
