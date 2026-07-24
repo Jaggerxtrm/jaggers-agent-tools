@@ -13,11 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **/prd-to-plan skill for spec → runnable bd board** ([7e8c105](https://github.com/xtrm-dev/core/commit/7e8c10589b6d93bc32f29c9ce2c2da119cf891a9)) — 2026-07-24 05:32
 
-- **--no-pr flag + fix stale prs.tsv prompt refs (xtrm-129oc)** ([c2f9e79](https://github.com/xtrm-dev/core/commit/c2f9e7940c120a821b033ae647eb85588b328720)) — 2026-07-24 19:41
-
-- **--epic <id> scoped export with notes (xtrm-ipf4n)** ([bc4068f](https://github.com/xtrm-dev/core/commit/bc4068f8e470a10517a1173cbedab1d06cf828f6)) — 2026-07-24 21:25
-
 - **--no-pr flag + fix stale prs.tsv prompt refs (#496)** ([0b5ec71](https://github.com/xtrm-dev/core/commit/0b5ec71d8533a3b74853b95942760813e66baae3)) — 2026-07-24 20:36
+
+- **--epic <id> scoped export with notes (xtrm-ipf4n) (#498)** ([a20d52e](https://github.com/xtrm-dev/core/commit/a20d52e5052b089d1c344330cc1a09e91cc80e7d)) — 2026-07-24 21:30
+
+### Fixed
+
+- **Summary lines double-print epic id (xtrm-5swny)** ([bc91a98](https://github.com/xtrm-dev/core/commit/bc91a9825e2a875df7002c58e59dff541acb958d)) — 2026-07-24 21:34
 
 ### Other changes
 
@@ -46,10 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rename /prd-to-plan → /spec-dispatch (#494)** ([fa6e2be](https://github.com/xtrm-dev/core/commit/fa6e2be25fa6fa8e7f76bbe9016fd3fc1c0ce7f3)) — 2026-07-24 17:33
 
 - **Tighten to Bot __typename + paginate threads/reviews (per Codex P2s on #495)** ([9ee9682](https://github.com/xtrm-dev/core/commit/9ee968208de5fbfe75d0a0f310b5804a74b0b7f8)) — 2026-07-24 17:53
-
-- **Track companion README + refresh --help hint (per Codex on #496)** ([579625c](https://github.com/xtrm-dev/core/commit/579625c92074ac4b4edbe9bcae6aa504d3ab84b7)) — 2026-07-24 20:26
-
-- **Kick check-run refresh to clear stale pr-review-gate failure** ([21a5e3b](https://github.com/xtrm-dev/core/commit/21a5e3ba5cc56b286a86928e4423a0950305f44c)) — 2026-07-24 20:34
 
 - **Recommend symlink install over cp (xtrm-81c64) (#497)** ([e642412](https://github.com/xtrm-dev/core/commit/e64241266a01e0d19e2a363f30a8c597135fa5ac)) — 2026-07-24 20:53
 
