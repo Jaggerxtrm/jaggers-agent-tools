@@ -64818,10 +64818,6 @@ async function planProjectOperations(repoRoot) {
     // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     filePath: import_path9.default.join(repoRoot, ".xtrm", "config", "hooks.json")
   }));
-  operations.push(...await planMissingHookRows({
-    scope: "project",
-    filePath: claudeSettingsPath
-  }));
   if (await hasJsonMapEntries(claudeSettingsPath, SETTINGS_MAP_ENTRY_DELETES)) {
     operations.push({
       scope: "project",
