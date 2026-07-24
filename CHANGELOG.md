@@ -13,11 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **/prd-to-plan skill for spec → runnable bd board** ([7e8c105](https://github.com/xtrm-dev/core/commit/7e8c10589b6d93bc32f29c9ce2c2da119cf891a9)) — 2026-07-24 05:32
 
+- **--no-pr flag + fix stale prs.tsv prompt refs (xtrm-129oc)** ([c2f9e79](https://github.com/xtrm-dev/core/commit/c2f9e7940c120a821b033ae647eb85588b328720)) — 2026-07-24 19:41
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
 
-- **Canonicalize pr-review-gate template + refresh review-skill docs (xtrm-54zwl.2 + .4)** ([0681860](https://github.com/xtrm-dev/core/commit/0681860caaf452b9b110b5be4666dd749c522199)) — 2026-07-24 17:38
+- **Canonicalize pr-review-gate template + refresh review-skill docs (xtrm-54zwl.2 + .4)** ([ccf3a1a](https://github.com/xtrm-dev/core/commit/ccf3a1a9a1d49de400a5a3a0c86d7edf271b6ae6)) — 2026-07-24 17:38
 
 ### Project maintenance
 
@@ -39,7 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Rename /prd-to-plan → /spec-dispatch (#494)** ([fa6e2be](https://github.com/xtrm-dev/core/commit/fa6e2be25fa6fa8e7f76bbe9016fd3fc1c0ce7f3)) — 2026-07-24 17:33
 
-- **Tighten to Bot __typename + paginate threads/reviews (per Codex P2s on #495)** ([69d5dbe](https://github.com/xtrm-dev/core/commit/69d5dbe38e33e8a9455d4bd5cf1c41e71f7e8b48)) — 2026-07-24 17:53
+- **Tighten to Bot __typename + paginate threads/reviews (per Codex P2s on #495)** ([9ee9682](https://github.com/xtrm-dev/core/commit/9ee968208de5fbfe75d0a0f310b5804a74b0b7f8)) — 2026-07-24 17:53
+
+- **Track companion README + refresh --help hint (per Codex on #496)** ([579625c](https://github.com/xtrm-dev/core/commit/579625c92074ac4b4edbe9bcae6aa504d3ab84b7)) — 2026-07-24 20:26
+
+- **Kick check-run refresh to clear stale pr-review-gate failure** ([21a5e3b](https://github.com/xtrm-dev/core/commit/21a5e3ba5cc56b286a86928e4423a0950305f44c)) — 2026-07-24 20:34
 
 ## [v0.11.2] — 2026-07-22
 

@@ -361,6 +361,14 @@
           "hash": "861e5134c41aba3504374cbb522d225b8bdbf065e352009fea11a89593e0040e",
           "version": "0.11.2"
         },
+        "issue-triage/resources/board-audit": {
+          "hash": "d197f0b4e4773384b4c898c0de12856ce8c04ecb4b9471cda2acee7b1f3804fe",
+          "version": "0.11.2"
+        },
+        "issue-triage/resources/README.md": {
+          "hash": "226be587556bd087bc270a69448a25b6995ff2f9595da44c4918c14816baf628",
+          "version": "0.11.2"
+        },
         "issue-triage/SKILL.md": {
           "hash": "73e69f9611bd5b4cc11c68a27de0cf5c37f49ed769c3d0ad32ed3fa6aa6299da",
           "version": "0.11.2"
