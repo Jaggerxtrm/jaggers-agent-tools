@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Remove stale service-skills wiring** ([417e6c4](https://github.com/xtrm-dev/core/commit/417e6c4f9395fe0ce18c2884d63618dda34c9a16)) — 2026-07-24 22:26
 
+- **Preserve unowned registry rows** ([3e5e918](https://github.com/xtrm-dev/core/commit/3e5e918ef641287014a4cf2f2e07c78f2705f37f)) — 2026-07-24 22:34
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
