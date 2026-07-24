@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runPluginEraCleanup } from '../core/plugin-era-cleanup.js';
 
 let tmpDir = '';
@@ -91,6 +91,17 @@ async function seedPluginEraArtifacts(params: { projectRoot: string; homeDir: st
   await fs.writeJson(path.join(projectRoot, '.xtrm', 'config', 'hooks.json'), { hooks: {} }, { spaces: 2 });
 
   await fs.ensureDir(path.join(projectRoot, '.xtrm', 'skills', 'default', 'clean-code'));
+
+  const validHookPath = path.join(projectRoot, '.xtrm', 'hooks', 'valid.mjs');
+  await fs.writeFile(validHookPath, '// valid\n');
+  await fs.writeJson(path.join(projectRoot, '.xtrm', 'config', 'hooks.json'), {
+    hooks: {
+      PreToolUse: [
+        { name: 'stale-hook', scriptPath: path.join(projectRoot, '.xtrm', 'hooks', 'missing.mjs') },
+        { name: 'valid-hook', scriptPath: validHookPath },
+      ],
+    },
+  }, { spaces: 2 });
 }
 
 describe('runPluginEraCleanup', () => {
@@ -110,7 +121,9 @@ describe('runPluginEraCleanup', () => {
     expect(globalSettings.extraKnownMarketplaces).toBeTruthy();
   });
 
-  it('removes only plugin-era artifacts in prune mode and preserves custom entries', async () => {
+  it('prunes hook rows whose scripts are missing and preserves valid rows', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
     await runPluginEraCleanup({
       dryRun: false,
       yes: true,
@@ -155,5 +168,11 @@ describe('runPluginEraCleanup', () => {
 
     expect(await fs.pathExists(path.join(projectRoot, '.claude', 'hooks', 'quality-check.cjs'))).toBe(false);
     expect(await fs.pathExists(path.join(projectRoot, '.claude', 'hooks', 'specialists-complete.mjs'))).toBe(true);
+
+    const hooksConfig = await fs.readJson(path.join(projectRoot, '.xtrm', 'config', 'hooks.json')) as { hooks: { PreToolUse: Array<{ name: string }> } };
+    expect(hooksConfig.hooks.PreToolUse).toEqual([{ name: 'valid-hook', scriptPath: path.join(projectRoot, '.xtrm', 'hooks', 'valid.mjs') }]);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('stale-hook'));
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining(path.join(projectRoot, '.xtrm', 'hooks', 'missing.mjs')));
+    warning.mockRestore();
   });
 });
