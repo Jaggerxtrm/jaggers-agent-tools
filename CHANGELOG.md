@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **--no-pr flag + fix stale prs.tsv prompt refs (xtrm-129oc)** ([c2f9e79](https://github.com/xtrm-dev/core/commit/c2f9e7940c120a821b033ae647eb85588b328720)) — 2026-07-24 19:41
 
+- **--epic <id> scoped export with notes (xtrm-ipf4n)** ([bc4068f](https://github.com/xtrm-dev/core/commit/bc4068f8e470a10517a1173cbedab1d06cf828f6)) — 2026-07-24 21:25
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
