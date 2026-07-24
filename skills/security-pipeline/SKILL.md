@@ -18,14 +18,15 @@ project-agnostic — adapt the allowlists and dependabot ecosystems per repo.
 Do NOT use this skill if the repo already has a working `dependabot.yml` AND
 all three workflows (`osv-scanner.yml`, `semgrep.yml`, `gitleaks.yml`).
 
-## Architecture (4 layers)
+## Architecture (5 layers)
 
 ```
-git commit  ──► pre-commit  (gitleaks staged, ruff, hygiene)        ~1s
-git push    ──► pre-push    (semgrep diff-only, osv, anti-main)     ~30s
-PR opened   ──► CI          (osv-scanner, semgrep, gitleaks)        ~1m
-PR review   ──► Codex       (semantic AI review, optional)          ~2m
-PR merged   ──► Dependabot  (continuous vuln + version PRs)         async
+git commit  ──► pre-commit    (gitleaks staged, ruff, hygiene)          ~1s
+git push    ──► pre-push      (semgrep diff-only, osv, anti-main)       ~30s
+PR opened   ──► CI            (osv-scanner, semgrep, gitleaks)          ~1m
+PR review   ──► Codex         (semantic AI review, optional)            ~2m
+PR merge    ──► pr-review-gate (blocks while any LLM-bot thread unresolved)  ~5s
+PR merged   ──► Dependabot    (continuous vuln + version PRs)           async
 ```
 
 Pre-existing debt is NEVER blocked by the push gate — only NEW findings vs
@@ -67,9 +68,42 @@ The script CAN'T do these — operator walks them per target repo:
 
 1. **Codex Connector** (optional) — install at https://chatgpt.com/codex/cloud/settings/general
 2. **Branch protection rule** — Settings → Branches → classic rule for `main`
-   - Required checks: `OSV scan`, `Semgrep scan`, `Gitleaks scan`
+   - Required checks: `OSV scan`, `Semgrep scan`, `Gitleaks scan`, `pr-review-gate`
    - On free private repos rules don't enforce server-side; the pre-push hook fills the gap
+   - If the repo uses the newer **rulesets** API instead of classic protection, add
+     the same contexts as a `required_status_checks` rule on the default-branch ruleset.
+     One `gh api` PUT does it — see the "Enabling the gate (one-time, per repo)" section.
 3. **`make install-hooks`** in the target clone (or run `git config core.hooksPath .githooks`)
+
+## Enabling the gate (one-time, per repo)
+
+`pr-review-gate.yml` runs on every PR after bootstrap, but the check does NOT
+block merges until it's added to the required-checks list. Two paths depending
+on which protection model the repo uses:
+
+**Classic branch protection** (Settings → Branches → main → Require status checks):
+add context `pr-review-gate`. Or via API:
+
+```bash
+gh api -X POST /repos/OWNER/REPO/branches/main/protection/required_status_checks/contexts \
+  -f 'contexts[]=pr-review-gate'
+```
+
+**Rulesets** (Settings → Rules → Rulesets → the ruleset that targets your
+default branch): edit and add a `required_status_checks` rule with context
+`pr-review-gate`. Or via API — fetch the ruleset, append the rule, PUT it
+back (see xtrm-54zwl.6 bead notes for a scripted example).
+
+Bot detection defaults to `codex|coderabbit|claude` (case-insensitive) and is
+overridable via the `PR_REVIEW_GATE_BOT_RE` repo variable. To manually refresh
+the gate after resolving a thread (`pull_request_review_thread` isn't accepted
+by GitHub Actions despite the docs listing it):
+
+```bash
+gh workflow run pr-review-gate.yml -F pr=<n>
+```
+
+or click "re-request check-suite" in the PR checks tab, or push any commit.
 
 ## Files in `templates/`
 
@@ -78,6 +112,7 @@ The script CAN'T do these — operator walks them per target repo:
 | `.github/workflows/osv-scanner.yml` | same path | Vuln scan via OSV.dev |
 | `.github/workflows/semgrep.yml` | same path | SAST (replaces CodeQL) |
 | `.github/workflows/gitleaks.yml` | same path | Secret scan |
+| `.github/workflows/pr-review-gate.yml` | same path | Blocks merge on unresolved LLM-bot review threads |
 | `.gitleaks.toml` | same path | **Allowlist — adapt per project** (see below) |
 | `.semgrepignore` | same path | **Excludes — adapt per project** (see below) |
 | `.pre-commit-config.yaml` | same path | Two-stage local gate |

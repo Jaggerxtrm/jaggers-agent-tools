@@ -136,6 +136,12 @@ If they differ, the green result is from before the rebase — wait for the new 
 Wait for all checks to pass. If CI is still running, tell the user and pause — don't
 merge a PR with pending or failing checks.
 
+**`pr-review-gate` specifically** must be `success`, not just present — it fails when
+any LLM-bot review thread is unresolved. If it's failing, address or resolve the
+Codex/CodeRabbit threads before merging (or manually re-trigger via
+`gh workflow run pr-review-gate.yml -F pr=<n>` after resolution — a resolved
+thread emits no event that would auto-refresh the gate).
+
 If CI is failing:
 - Show the failing check names and link to the run
 - Do NOT proceed with the merge

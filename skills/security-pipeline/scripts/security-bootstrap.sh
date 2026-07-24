@@ -86,6 +86,7 @@ echo "── Copying baseline files ──"
 copy_file .github/workflows/osv-scanner.yml
 copy_file .github/workflows/semgrep.yml
 copy_file .github/workflows/gitleaks.yml
+copy_file .github/workflows/pr-review-gate.yml
 copy_file .gitleaks.toml
 copy_file .semgrepignore
 copy_file .pre-commit-config.yaml
