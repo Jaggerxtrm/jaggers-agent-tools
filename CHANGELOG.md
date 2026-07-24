@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **--no-pr flag + fix stale prs.tsv prompt refs (xtrm-129oc)** ([c2f9e79](https://github.com/xtrm-dev/core/commit/c2f9e7940c120a821b033ae647eb85588b328720)) — 2026-07-24 19:41
 
+- **--no-pr flag + fix stale prs.tsv prompt refs (#496)** ([0b5ec71](https://github.com/xtrm-dev/core/commit/0b5ec71d8533a3b74853b95942760813e66baae3)) — 2026-07-24 20:36
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
@@ -46,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Track companion README + refresh --help hint (per Codex on #496)** ([579625c](https://github.com/xtrm-dev/core/commit/579625c92074ac4b4edbe9bcae6aa504d3ab84b7)) — 2026-07-24 20:26
 
 - **Kick check-run refresh to clear stale pr-review-gate failure** ([21a5e3b](https://github.com/xtrm-dev/core/commit/21a5e3ba5cc56b286a86928e4423a0950305f44c)) — 2026-07-24 20:34
+
+- **Recommend symlink install over cp for auto-updates (xtrm-81c64)** ([1af2c83](https://github.com/xtrm-dev/core/commit/1af2c83c38d180b60c437bb0c777e83807f0b8ec)) — 2026-07-24 20:42
+
+- **Kick workflow triggers** ([1063bc0](https://github.com/xtrm-dev/core/commit/1063bc0c0c9a07d890091e7077f2a7d202902b1b)) — 2026-07-24 20:45
+
+- **Fix fallback cp to use $SRC path (per Codex on #497)** ([503e88e](https://github.com/xtrm-dev/core/commit/503e88e2d6b9c4eb7f438985558b39d6cd266199)) — 2026-07-24 20:48
 
 ## [v0.11.2] — 2026-07-22
 

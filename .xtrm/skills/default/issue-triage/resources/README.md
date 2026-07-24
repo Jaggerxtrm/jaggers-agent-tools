@@ -10,18 +10,31 @@ A one-shot script that exports the local `bd` board + relevant merged PRs into a
 
 Prereqs: `bd` (beads), `gh` (GitHub CLI, authenticated), `python3`.
 
+**Recommended — symlink to the repo file** so future edits (upstream PRs, local
+tweaks) apply immediately with no re-install step:
+
 ```bash
-# 1. Drop the script somewhere on PATH.
-mkdir -p ~/bin
-cp board-audit ~/bin/board-audit
+# Run from inside a checkout of xtrm-dev/core (or wherever the script lives).
+mkdir -p ~/bin ~/.local/bin
+SRC="$(git rev-parse --show-toplevel)/.xtrm/skills/default/issue-triage/resources/board-audit"
+ln -sf "$SRC" ~/bin/board-audit
+ln -sf ~/bin/board-audit ~/.local/bin/board-audit   # ~/.local/bin is usually on PATH
+```
+
+**Fallback — frozen copy** (only if you deliberately want a snapshot pinned to
+the current script version and won't pick up future fixes automatically):
+
+```bash
+mkdir -p ~/bin ~/.local/bin
+SRC="$(git rev-parse --show-toplevel)/.xtrm/skills/default/issue-triage/resources/board-audit"
+cp "$SRC" ~/bin/board-audit
 chmod +x ~/bin/board-audit
-
-# 2. If ~/bin is not on your interactive PATH (typical on Fedora zsh without
-#    ~/.zshrc PATH tweaks), symlink into ~/.local/bin which usually is:
-mkdir -p ~/.local/bin
 ln -sf ~/bin/board-audit ~/.local/bin/board-audit
+```
 
-# 3. Sanity-check.
+Sanity-check either path:
+
+```bash
 which board-audit
 board-audit --help
 ```
