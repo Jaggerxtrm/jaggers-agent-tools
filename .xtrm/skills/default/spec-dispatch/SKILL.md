@@ -1,23 +1,23 @@
 ---
-name: prd-to-plan
+name: spec-dispatch
 description: >
   Turn a spec, PRD, or vague ambition into a runnable bd issue board with sprints,
   fan-out, cross-repo gates, and specialist orchestration — without over-engineering
   the plan itself. Ponytail-first: the plan is only as big as it has to be. Use when
-  the user says "plan this", "prd-to-plan", pastes a PRD/roadmap, links a design
+  the user says "plan this", "spec-dispatch", "prd-to-plan", pastes a PRD/roadmap, links a design
   doc, or when a new audit/report/spec lands and needs decomposition across one or
   more xtrm repos. Also use when a task spans ≥2 repos, ≥3 sprints, or would benefit
   from parallel lanes but the user hasn't yet decided the shape.
 priority: normal
 ---
 
-# /prd-to-plan — spec → runnable board
+# /spec-dispatch — spec → runnable board
 
 You just got a PRD, plan, audit report, roadmap, or vague ambition. Turn it into a bd board that a coordinator + 3 panes can execute — without invalidating ponytail by writing a giant plan document.
 
 ## When this fires
 
-- `/prd-to-plan` — user typed it explicitly
+- `/spec-dispatch` — user typed it explicitly
 - User pastes a spec / PRD / audit report / design doc
 - User says "plan this", "break this down", "how do we ship this", "let's plan the X epic"
 - New markdown at `docs/design/*.md` or `docs/plans/*.md` lands and user wants it decomposed
