@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Set explicit job name for readable required-check context** ([6dfb7ea](https://github.com/xtrm-dev/core/commit/6dfb7eaae4b189bc01f7084783bcf8fec0312bd3)) — 2026-07-24 12:29
 
-- **Set explicit job name + drop unsupported pull_request_review_thread trigger** ([4bf642e](https://github.com/xtrm-dev/core/commit/4bf642e0321ccd2c405e920ef6112a6c00c675fc)) — 2026-07-24 12:29
+- **Set explicit job name + drop unsupported pull_request_review_thread trigger** ([feb3bf3](https://github.com/xtrm-dev/core/commit/feb3bf3a748a11a882be06aeb648267e4c14694f)) — 2026-07-24 12:29
 
 ## [v0.11.2] — 2026-07-22
 
