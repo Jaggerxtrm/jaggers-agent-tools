@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Audit-reconcile v0724 program plan + consolidated determinism report** ([be2acc8](https://github.com/xtrm-dev/core/commit/be2acc8d4cc287c3d26486f195a0cde198da9427)) — 2026-07-24 05:31
 
-- **Add pr-review-gate required-status-check workflow (xtrm-54zwl.1)** ([83d6eea](https://github.com/xtrm-dev/core/commit/83d6eea7bee6b5bf54dd95fb8c9c03d751409133)) — 2026-07-24 07:50
+- **Add pr-review-gate required-status-check workflow (xtrm-54zwl.1)** ([1693029](https://github.com/xtrm-dev/core/commit/169302900448648bc557be23a7d3cd8b28a00eb8)) — 2026-07-24 07:50
 
 ## [v0.11.2] — 2026-07-22
 
