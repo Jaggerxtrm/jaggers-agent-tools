@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Document validated registry path** ([48dfc27](https://github.com/xtrm-dev/core/commit/48dfc270d9aba6350f83a763f8ede552f2cd3965)) — 2026-07-24 22:28
 
+- **Refresh generated bundle** ([534dd92](https://github.com/xtrm-dev/core/commit/534dd927b84817fb2fc598a27e281d0918febc20)) — 2026-07-24 22:31
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
