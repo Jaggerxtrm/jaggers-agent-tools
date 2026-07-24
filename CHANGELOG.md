@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Set explicit job name + drop unsupported pull_request_review_thread trigger** ([feb3bf3](https://github.com/xtrm-dev/core/commit/feb3bf3a748a11a882be06aeb648267e4c14694f)) — 2026-07-24 12:29
 
-- **Use JS-native regex flag ('i') instead of Perl-style (?i)** ([62a2e6f](https://github.com/xtrm-dev/core/commit/62a2e6f674e72677d28a1f702bbf083797f88da0)) — 2026-07-24 12:41
+- **Use JS-native regex flag ('i') instead of Perl-style (?i)** ([f6be0d4](https://github.com/xtrm-dev/core/commit/f6be0d4543c1d80c314d46ce329d13426092dfe0)) — 2026-07-24 12:41
 
 ## [v0.11.2] — 2026-07-22
 
