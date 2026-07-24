@@ -19,7 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Summary lines double-print epic id (xtrm-5swny)** ([bc91a98](https://github.com/xtrm-dev/core/commit/bc91a9825e2a875df7002c58e59dff541acb958d)) — 2026-07-24 21:34
+- **Summary lines double-print epic id (xtrm-5swny) (#499)** ([87fc6b8](https://github.com/xtrm-dev/core/commit/87fc6b80b1acae51d431507104e6566071b94e32)) — 2026-07-24 21:34
+
+- **Remove stale service-skills wiring** ([417e6c4](https://github.com/xtrm-dev/core/commit/417e6c4f9395fe0ce18c2884d63618dda34c9a16)) — 2026-07-24 22:26
+
+- **Preserve unowned registry rows** ([3e5e918](https://github.com/xtrm-dev/core/commit/3e5e918ef641287014a4cf2f2e07c78f2705f37f)) — 2026-07-24 22:34
 
 ### Other changes
 
@@ -50,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tighten to Bot __typename + paginate threads/reviews (per Codex P2s on #495)** ([9ee9682](https://github.com/xtrm-dev/core/commit/9ee968208de5fbfe75d0a0f310b5804a74b0b7f8)) — 2026-07-24 17:53
 
 - **Recommend symlink install over cp (xtrm-81c64) (#497)** ([e642412](https://github.com/xtrm-dev/core/commit/e64241266a01e0d19e2a363f30a8c597135fa5ac)) — 2026-07-24 20:53
+
+- **Document validated registry path** ([48dfc27](https://github.com/xtrm-dev/core/commit/48dfc270d9aba6350f83a763f8ede552f2cd3965)) — 2026-07-24 22:28
+
+- **Refresh generated bundle** ([534dd92](https://github.com/xtrm-dev/core/commit/534dd927b84817fb2fc598a27e281d0918febc20)) — 2026-07-24 22:31
 
 ## [v0.11.2] — 2026-07-22
 

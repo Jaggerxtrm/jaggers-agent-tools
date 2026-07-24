@@ -437,12 +437,13 @@ function isOwnedWrapper(wrapper: HookWrapper, canonicalHashes: Set<string>): boo
 
 // Substrings that mark a command as xtrm-managed regardless of exact path shape.
 // Covers: project .xtrm/hooks (rewritten from ${CLAUDE_PLUGIN_ROOT}), global ~/.xtrm/hooks,
-// the v0.10.5 service-skills sh -c fail-open wrappers, and unrewritten plugin-root forms
-// (both ${CLAUDE_PLUGIN_ROOT}/ and $CLAUDE_PLUGIN_ROOT/ — bare `CLAUDE_PLUGIN_ROOT`
+// retired service-skills paths, and unrewritten plugin-root forms (both
+// ${CLAUDE_PLUGIN_ROOT}/ and $CLAUDE_PLUGIN_ROOT/ — bare `CLAUDE_PLUGIN_ROOT`
 // substring matches both, since the token only appears in xtrm-managed contexts).
 const XTRM_MANAGED_COMMAND_MARKERS = [
     '/.xtrm/hooks/',
     '/.xtrm/skills/default/service-skills/scripts/',
+    '/.claude/skills/service-skills/scripts/',
     'CLAUDE_PLUGIN_ROOT',
 ];
 

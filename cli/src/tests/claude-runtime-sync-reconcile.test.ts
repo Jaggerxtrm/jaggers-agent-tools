@@ -52,11 +52,10 @@ describe('reconcileProjectClaudeHooks', () => {
     expect(written.model).toBe('claude-opus-4-8');
     // Hooks section now populated from canonical
     expect(Object.keys(written.hooks).length).toBeGreaterThan(0);
-    // Regression guard for xtrm-0p7bp: the service-skills hooks must be present.
     const allCommands = JSON.stringify(written.hooks);
-    expect(allCommands).toContain('skill_activator');
-    expect(allCommands).toContain('cataloger');
-    expect(allCommands).toContain('drift_detector');
+    expect(allCommands).not.toContain('skill_activator');
+    expect(allCommands).not.toContain('cataloger');
+    expect(allCommands).not.toContain('drift_detector');
   });
 
   it('is idempotent: a second run reports no change', async () => {
@@ -107,17 +106,17 @@ describe('reconcileProjectClaudeHooks', () => {
     expect(thirdPartyCommand).toContain('node /home/dawid/dev/xtmux/bin/auto-monitor.mjs');
     // Canonical xtrm hooks still present alongside.
     const allCommands = JSON.stringify(written.hooks);
-    expect(allCommands).toContain('skill_activator');
+    expect(allCommands).not.toContain('skill_activator');
   });
 
   it('drops a stale xtrm-managed wrapper whose hash no longer matches canonical (xtrm-61cdl)', async () => {
     const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
     fs.ensureDirSync(path.dirname(settingsPath));
-    // Simulate an obsolete xtrm-managed hook — matches a canonical PATH prefix but
-    // carries an old command shape. Must NOT survive the merge; canonical replaces it.
+    // Simulate the retired service-skills PreToolUse hook. It must not survive
+    // reconciliation after the Claude policy is removed.
     const stale = {
-      matcher: 'Read|Write',
-      hooks: [{ type: 'command', command: 'node "$HOME/.xtrm/hooks/obsolete-old-hook.mjs"' }],
+      matcher: 'Read|Write|Edit|Glob|Grep|Bash',
+      hooks: [{ type: 'command', command: 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/skill_activator.py"' }],
     };
     fs.writeJsonSync(settingsPath, { hooks: { PreToolUse: [stale] } });
 
@@ -125,8 +124,7 @@ describe('reconcileProjectClaudeHooks', () => {
 
     const written = fs.readJsonSync(settingsPath);
     const allCommands = JSON.stringify(written.hooks);
-    expect(allCommands).not.toContain('obsolete-old-hook.mjs');
-    expect(allCommands).toContain('skill_activator');
+    expect(allCommands).not.toContain('skill_activator');
   });
 });
 

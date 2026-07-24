@@ -1,16 +1,25 @@
 import kleur from 'kleur';
 import fs from 'fs-extra';
+import { existsSync } from 'node:fs';
 import os from 'os';
 import path from 'path';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
+import { resolveGlobalHooksConfigPath } from './global-hooks-bootstrap.js';
 
 export type CleanupScope = 'global' | 'project' | 'all';
 
-type CleanupOperationType = 'delete-path' | 'delete-json-map-entries';
+type CleanupOperationType = 'delete-path' | 'delete-json-map-entries' | 'prune-hook-rows';
 
 interface JsonMapEntryDelete {
   parentKey: string;
   entryKey: string;
+}
+
+interface HookRowDelete {
+  eventName: string;
+  index: number;
+  hookName: string;
+  scriptPath: string;
 }
 
 interface CleanupOperation {
@@ -19,6 +28,7 @@ interface CleanupOperation {
   targetPath: string;
   label: string;
   mapEntryDeletes?: readonly JsonMapEntryDelete[];
+  hookRowDeletes?: readonly HookRowDelete[];
 }
 
 export interface RunPluginEraCleanupOptions {
@@ -151,6 +161,13 @@ export async function runPluginEraCleanup(opts: RunPluginEraCleanupOptions = {})
         }
         updatedSettings.push(operation.targetPath);
       }
+
+      if (operation.type === 'prune-hook-rows') {
+        if (!dryRun) {
+          await pruneHookRows(operation.targetPath, operation.hookRowDeletes ?? []);
+        }
+        updatedSettings.push(operation.targetPath);
+      }
     }
   }
 
@@ -257,6 +274,11 @@ async function planGlobalOperations(managedAgentSkills: ReadonlySet<string>): Pr
     });
   }
 
+  operations.push(...await planMissingHookRows({
+    scope: 'global',
+    filePath: resolveGlobalHooksConfigPath(),
+  }));
+
   const piExtensionsDir = path.join(os.homedir(), '.pi', 'agent', 'extensions');
   operations.push(...await planManagedDirectoryEntryDeletes({
     scope: 'global',
@@ -272,6 +294,12 @@ async function planProjectOperations(repoRoot: string): Promise<CleanupOperation
   const operations: CleanupOperation[] = [];
 
   const claudeSettingsPath = path.join(repoRoot, '.claude', 'settings.json');
+  operations.push(...await planMissingHookRows({
+    scope: 'project',
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    filePath: path.join(repoRoot, '.xtrm', 'config', 'hooks.json'),
+  }));
+
   if (await hasJsonMapEntries(claudeSettingsPath, SETTINGS_MAP_ENTRY_DELETES)) {
     operations.push({
       scope: 'project',
@@ -344,7 +372,9 @@ function printCleanupPlan(operations: CleanupOperation[], dryRun: boolean): void
 
     console.log(kleur.cyan(`  ${scopeName}:`));
     for (const operation of scopeOps) {
-      const action = operation.type === 'delete-json-map-entries' ? 'update' : 'delete';
+      const action = operation.type === 'delete-json-map-entries'
+        ? 'update'
+        : operation.type === 'prune-hook-rows' ? 'prune' : 'delete';
       const prefix = dryRun ? '[DRY RUN] would' : 'will';
       console.log(kleur.dim(`    • ${prefix} ${action} ${operation.label}`));
     }
@@ -372,6 +402,80 @@ function hasJsonMapEntry(record: Record<string, unknown>, parentKey: string, ent
   }
 
   return entryKey in (parent as Record<string, unknown>);
+}
+
+async function planMissingHookRows(params: {
+  scope: Exclude<CleanupScope, 'all'>;
+  filePath: string;
+}): Promise<CleanupOperation[]> {
+  const record = await readJsonObject(params.filePath);
+  if (!record || !record.hooks || typeof record.hooks !== 'object' || Array.isArray(record.hooks)) {
+    return [];
+  }
+
+  const hookRowDeletes: HookRowDelete[] = [];
+  for (const [eventName, rows] of Object.entries(record.hooks as Record<string, unknown>)) {
+    if (!Array.isArray(rows)) {
+      continue;
+    }
+
+    rows.forEach((row, index) => {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) {
+        return;
+      }
+
+      const scriptPath = (row as Record<string, unknown>).scriptPath;
+      if (typeof scriptPath !== 'string' || existsSync(scriptPath)) {
+        return;
+      }
+
+      const hookName = typeof (row as Record<string, unknown>).name === 'string'
+        ? (row as Record<string, unknown>).name as string
+        : eventName;
+      console.warn(`WARN: pruning hook ${hookName}; missing script ${scriptPath}`);
+      hookRowDeletes.push({ eventName, index, hookName, scriptPath });
+    });
+  }
+
+  if (hookRowDeletes.length === 0) {
+    return [];
+  }
+
+  return [{
+    scope: params.scope,
+    type: 'prune-hook-rows',
+    targetPath: params.filePath,
+    label: `${params.filePath}: ${hookRowDeletes.length} missing hook script(s)`,
+    hookRowDeletes,
+  }];
+}
+
+async function pruneHookRows(filePath: string, deletes: readonly HookRowDelete[]): Promise<void> {
+  const record = await readJsonObject(filePath);
+  if (!record || !record.hooks || typeof record.hooks !== 'object' || Array.isArray(record.hooks)) {
+    return;
+  }
+
+  const rowsByEvent = new Map<string, Set<number>>();
+  for (const deletion of deletes) {
+    const indexes = rowsByEvent.get(deletion.eventName) ?? new Set<number>();
+    indexes.add(deletion.index);
+    rowsByEvent.set(deletion.eventName, indexes);
+  }
+
+  const hooks = record.hooks as Record<string, unknown>;
+  for (const [eventName, indexes] of rowsByEvent) {
+    const rows = hooks[eventName];
+    if (!Array.isArray(rows)) {
+      continue;
+    }
+    hooks[eventName] = rows.filter((_row, index) => !indexes.has(index));
+    if ((hooks[eventName] as unknown[]).length === 0) {
+      delete hooks[eventName];
+    }
+  }
+
+  await fs.writeJson(filePath, record, { spaces: 2 });
 }
 
 async function deleteJsonMapEntries(filePath: string, deletes: readonly JsonMapEntryDelete[]): Promise<void> {

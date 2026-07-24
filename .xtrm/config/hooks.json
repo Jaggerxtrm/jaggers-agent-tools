@@ -20,10 +20,6 @@
           },
           {
             "type": "command",
-            "command": "sh -c 'p=\"$HOME/.xtrm/skills/default/service-skills/scripts/cataloger.py\"; [ -f \"$p\" ] && python3 \"$p\"; exit 0'"
-          },
-          {
-            "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/xtrm-session-logger.mjs",
             "timeout": 3000
           }
@@ -65,15 +61,6 @@
             "timeout": 5000
           }
         ]
-      },
-      {
-        "matcher": "Read|Write|Edit|Glob|Grep|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh -c 'p=\"$HOME/.xtrm/skills/default/service-skills/scripts/skill_activator.py\"; [ -f \"$p\" ] && python3 \"$p\"; exit 0'"
-          }
-        ]
       }
     ],
     "PostToolUse": [
@@ -108,16 +95,6 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/gitnexus/gitnexus-hook.cjs",
-            "timeout": 10000
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh -c 'p=\"$HOME/.xtrm/skills/default/service-skills/scripts/drift_detector.py\"; [ -f \"$p\" ] && python3 \"$p\" check-hook; exit 0'",
             "timeout": 10000
           }
         ]
