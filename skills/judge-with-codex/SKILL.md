@@ -36,7 +36,9 @@ Ambiguity resolution: when torn between `PASS_WITH_NOTES` and `NEEDS_CHANGES`, a
 
 ## Codex integration — mandatory read on every PR
 
-Codex (`openai-codex[bot]` / `openai/codex`) leaves inline review comments on PRs automatically. Treat these as **high-signal, non-authoritative**: you verify every claim against the diff, and you never merge on Codex's word alone. The 82wh regression sat in production for over a month; the standard of review is now higher.
+Codex (login matches `/codex/i` — currently `chatgpt-codex-connector[bot]`, historically `openai-codex[bot]`) leaves inline review comments on PRs automatically. Treat these as **high-signal, non-authoritative**: you verify every claim against the diff, and you never merge on Codex's word alone. The 82wh regression sat in production for over a month; the standard of review is now higher.
+
+**Merge blocking now lives in CI.** The `pr-review-gate` GitHub Actions workflow (installed by the `security-pipeline` skill) is a required status check on `main`/`master` across xtrm-managed repos. It blocks merge while any LLM-bot-authored review thread is unresolved. This skill writes the human/agent-side verdict — per-finding rationale, AGREED/REJECTED/OWN sets, disagreement justification. The CI check is what actually blocks the merge.
 
 ### Fetching what Codex left
 

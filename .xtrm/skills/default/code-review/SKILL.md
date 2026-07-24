@@ -13,7 +13,7 @@ If you are on Claude Code and the plugin slash-command resolves, prefer it — i
 
 - The Judge in a multiplexed sprint (`/judge-with-codex`) needs to run a review on a PR from a pi/Codex pane.
 - Any pane needs a structured PR review and the Claude Code plugin is not resolvable.
-- Any operator wants a review that specifically weighs `openai-codex[bot]` comments and threads.
+- Any operator wants a review that specifically weighs Codex bot comments and threads (login matches `/codex/i` — currently `chatgpt-codex-connector[bot]`).
 
 ## When NOT to use
 
@@ -99,7 +99,7 @@ gh api repos/<owner>/<repo>/pulls/<N>/reviews \
   --jq '.[] | {user:.user.login, state, body}'
 ```
 
-Filter for Codex (`openai-codex[bot]` / `openai/codex`) — those are the highest-signal, non-authoritative findings. Human reviewer comments matter too but you already know how to weigh those.
+Filter for Codex (login matches `/codex/i` — currently `chatgpt-codex-connector[bot]`, historically `openai-codex[bot]`) — those are the highest-signal, non-authoritative findings. Human reviewer comments matter too but you already know how to weigh those.
 
 ### 5. Cross-check Codex against the diff
 
