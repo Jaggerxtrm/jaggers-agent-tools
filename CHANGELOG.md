@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **/prd-to-plan skill for spec → runnable bd board** ([695006e](https://github.com/xtrm-dev/core/commit/695006e2041315c876ebac142a7bc9d9f266a2dd)) — 2026-07-24 05:32
+- **/prd-to-plan skill for spec → runnable bd board** ([7e8c105](https://github.com/xtrm-dev/core/commit/7e8c10589b6d93bc32f29c9ce2c2da119cf891a9)) — 2026-07-24 05:32
 
 ### Other changes
 
@@ -21,9 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check (xtrm-reyem.12) (#488)** ([6e7040d](https://github.com/xtrm-dev/core/commit/6e7040df7ecb9dafd0fc6a732f98e4a9897b3be1)) — 2026-07-23 05:18
 
-- **Audit-reconcile v0724 program plan + consolidated determinism report** ([be2acc8](https://github.com/xtrm-dev/core/commit/be2acc8d4cc287c3d26486f195a0cde198da9427)) — 2026-07-24 05:31
+- **Audit-reconcile v0724 program plan + consolidated determinism report** ([48f6e7c](https://github.com/xtrm-dev/core/commit/48f6e7c8443eb8b2654ecd9415ce60d5ee6647fc)) — 2026-07-24 05:31
 
-- **Add pr-review-gate required-status-check workflow (xtrm-54zwl.1)** ([1693029](https://github.com/xtrm-dev/core/commit/169302900448648bc557be23a7d3cd8b28a00eb8)) — 2026-07-24 07:50
+- **Add pr-review-gate required-status-check workflow (xtrm-54zwl.1)** ([6a6c19e](https://github.com/xtrm-dev/core/commit/6a6c19ec230c48590bfa289bff6ba57711c7d510)) — 2026-07-24 07:50
+
+- **Set explicit job name for readable required-check context** ([6dfb7ea](https://github.com/xtrm-dev/core/commit/6dfb7eaae4b189bc01f7084783bcf8fec0312bd3)) — 2026-07-24 12:29
+
+- **Set explicit job name + drop unsupported pull_request_review_thread trigger** ([4bf642e](https://github.com/xtrm-dev/core/commit/4bf642e0321ccd2c405e920ef6112a6c00c675fc)) — 2026-07-24 12:29
 
 ## [v0.11.2] — 2026-07-22
 
