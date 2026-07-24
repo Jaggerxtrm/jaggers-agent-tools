@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Kick check-run refresh to clear stale pr-review-gate failure** ([21a5e3b](https://github.com/xtrm-dev/core/commit/21a5e3ba5cc56b286a86928e4423a0950305f44c)) — 2026-07-24 20:34
 
+- **Recommend symlink install over cp for auto-updates (xtrm-81c64)** ([1af2c83](https://github.com/xtrm-dev/core/commit/1af2c83c38d180b60c437bb0c777e83807f0b8ec)) — 2026-07-24 20:42
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
