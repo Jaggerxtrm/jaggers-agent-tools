@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Tighten to Bot __typename + paginate threads/reviews (per Codex P2s on #495)** ([9ee9682](https://github.com/xtrm-dev/core/commit/9ee968208de5fbfe75d0a0f310b5804a74b0b7f8)) — 2026-07-24 17:53
 
+- **Track companion README + refresh --help hint (per Codex on #496)** ([579625c](https://github.com/xtrm-dev/core/commit/579625c92074ac4b4edbe9bcae6aa504d3ab84b7)) — 2026-07-24 20:26
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
