@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Recommend symlink install over cp for auto-updates (xtrm-81c64)** ([1af2c83](https://github.com/xtrm-dev/core/commit/1af2c83c38d180b60c437bb0c777e83807f0b8ec)) — 2026-07-24 20:42
 
+- **Kick workflow triggers** ([1063bc0](https://github.com/xtrm-dev/core/commit/1063bc0c0c9a07d890091e7077f2a7d202902b1b)) — 2026-07-24 20:45
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
