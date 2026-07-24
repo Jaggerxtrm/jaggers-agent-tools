@@ -9,17 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- **Skip merge commits so CI == local (xtrm-reyem.13)** ([26de5cf](https://github.com/xtrm-dev/core/commit/26de5cf69ade9b3567397e356a784cd6a3c8919d)) — 2026-07-23 13:34
+- **/prd-to-plan skill for spec → runnable bd board** ([695006e](https://github.com/xtrm-dev/core/commit/695006e2041315c876ebac142a7bc9d9f266a2dd)) — 2026-07-24 05:32
 
 ### Other changes
 
-- **CI diagnostic dump for changelog divergence** ([01ff65c](https://github.com/xtrm-dev/core/commit/01ff65ca6698849989570404d51bf91e609eb6ee)) — 2026-07-23 13:29
+- **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
 
 ### Project maintenance
 
 - **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check (xtrm-reyem.12) (#488)** ([6e7040d](https://github.com/xtrm-dev/core/commit/6e7040df7ecb9dafd0fc6a732f98e4a9897b3be1)) — 2026-07-23 05:18
+
+- **Audit-reconcile v0724 program plan + consolidated determinism report** ([be2acc8](https://github.com/xtrm-dev/core/commit/be2acc8d4cc287c3d26486f195a0cde198da9427)) — 2026-07-24 05:31
+
+- **Add pr-review-gate required-status-check workflow (xtrm-54zwl.1)** ([83d6eea](https://github.com/xtrm-dev/core/commit/83d6eea7bee6b5bf54dd95fb8c9c03d751409133)) — 2026-07-24 07:50
 
 ## [v0.11.2] — 2026-07-22
 
