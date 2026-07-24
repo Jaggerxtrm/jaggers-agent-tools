@@ -1,5 +1,12 @@
 name: pr-review-gate
 
+# Limitation: GitHub Actions rejects `pull_request_review_thread` even though
+# the docs list it, so resolving a thread emits no event this workflow listens
+# on. Refresh options after resolving a bot thread:
+#   - re-request the failed check-suite from the PR checks tab (one click)
+#   - `gh workflow run pr-review-gate.yml -F pr=<n>` (workflow_dispatch)
+#   - push any commit (or an empty one) to the PR branch
+
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -7,11 +14,17 @@ on:
     types: [submitted, dismissed]
   issue_comment:
     types: [created, edited, deleted]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to re-check
+        required: true
+        type: string
 
 jobs:
   gate:
     name: pr-review-gate
-    if: github.event.pull_request || github.event.issue.pull_request
+    if: github.event.pull_request || github.event.issue.pull_request || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
@@ -23,7 +36,8 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request?.number
-                    ?? context.payload.issue?.number;
+                    ?? context.payload.issue?.number
+                    ?? Number(context.payload.inputs?.pr);
             if (!pr) { core.info('no PR context; skipping'); return; }
             const { owner, repo } = context.repo;
             // Strip Python/Perl-style inline flag if present; JS regex doesn't support it.
