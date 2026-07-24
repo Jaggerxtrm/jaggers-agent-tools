@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Use JS-native regex flag ('i') instead of Perl-style (?i)** ([f6be0d4](https://github.com/xtrm-dev/core/commit/f6be0d4543c1d80c314d46ce329d13426092dfe0)) — 2026-07-24 12:41
 
-- **Restore pull_request_review_thread trigger to verify GH parses it** ([8301732](https://github.com/xtrm-dev/core/commit/83017322a42f7e06798b4f5878cefe4ccd426c38)) — 2026-07-24 12:44
+- **Add workflow_dispatch for post-resolve manual refresh** ([4f3cab4](https://github.com/xtrm-dev/core/commit/4f3cab48ed4dd98a3d4b155706e66e331f1f791b)) — 2026-07-24 12:46
 
 ## [v0.11.2] — 2026-07-22
 
