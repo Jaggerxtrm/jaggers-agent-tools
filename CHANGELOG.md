@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Kick workflow triggers** ([1063bc0](https://github.com/xtrm-dev/core/commit/1063bc0c0c9a07d890091e7077f2a7d202902b1b)) — 2026-07-24 20:45
 
+- **Fix fallback cp to use $SRC path (per Codex on #497)** ([503e88e](https://github.com/xtrm-dev/core/commit/503e88e2d6b9c4eb7f438985558b39d6cd266199)) — 2026-07-24 20:48
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
