@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Add workflow_dispatch for post-resolve manual refresh** ([dc7021f](https://github.com/xtrm-dev/core/commit/dc7021fda3b08e0238e6c08d8717abff2220f994)) — 2026-07-24 12:46
 
-- **Rename /prd-to-plan → /spec-dispatch** ([254b24f](https://github.com/xtrm-dev/core/commit/254b24f3f576fa814a49f05defc039114442f6c9)) — 2026-07-24 12:20
+- **Rename /prd-to-plan → /spec-dispatch** ([af90a60](https://github.com/xtrm-dev/core/commit/af90a6087124bb26947db1869c5215041064c940)) — 2026-07-24 12:20
 
 ## [v0.11.2] — 2026-07-22
 
