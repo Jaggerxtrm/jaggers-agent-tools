@@ -53,6 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Recommend symlink install over cp (xtrm-81c64) (#497)** ([e642412](https://github.com/xtrm-dev/core/commit/e64241266a01e0d19e2a363f30a8c597135fa5ac)) — 2026-07-24 20:53
 
+- **Document validated registry path** ([48dfc27](https://github.com/xtrm-dev/core/commit/48dfc270d9aba6350f83a763f8ede552f2cd3965)) — 2026-07-24 22:28
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
