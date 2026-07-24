@@ -419,6 +419,14 @@ echo "→ bundling into single file..."
 
 BUNDLE_SIZE="$(du -h "$BUNDLE_OUT" | cut -f1)"
 
+if [ -n "$EPIC" ]; then
+  SCOPE_LINE="epic $EPIC + descendants"
+  BEAD_LINE="$BEAD_COUNT under $EPIC (with notes)"
+else
+  SCOPE_LINE="whole board"
+  BEAD_LINE="$BEAD_COUNT non-closed"
+fi
+
 # ── 6. Print paste-ready summary ────────────────────────────────────────
 cat <<EOF
 
@@ -428,8 +436,8 @@ cat <<EOF
 
 Repo:    ${GH_REPO}
 Date:    ${TODAY}
-Scope:   ${EPIC:+epic $EPIC + descendants}${EPIC:-whole board}
-Beads:   ${BEAD_COUNT}${EPIC:+ under $EPIC (with notes)}${EPIC:-  non-closed}
+Scope:   ${SCOPE_LINE}
+Beads:   ${BEAD_LINE}
 PRs:     ${PR_COUNT} merged since ${PR_SINCE} (${PR_WINDOW_SOURCE})
 Bundle:  ${BUNDLE_OUT} (${BUNDLE_SIZE})
 
