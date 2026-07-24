@@ -26,7 +26,8 @@ the current script version and won't pick up future fixes automatically):
 
 ```bash
 mkdir -p ~/bin ~/.local/bin
-cp board-audit ~/bin/board-audit
+SRC="$(git rev-parse --show-toplevel)/.xtrm/skills/default/issue-triage/resources/board-audit"
+cp "$SRC" ~/bin/board-audit
 chmod +x ~/bin/board-audit
 ln -sf ~/bin/board-audit ~/.local/bin/board-audit
 ```
