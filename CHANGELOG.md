@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
 
+- **Canonicalize pr-review-gate template + refresh review-skill docs (xtrm-54zwl.2 + .4)** ([0681860](https://github.com/xtrm-dev/core/commit/0681860caaf452b9b110b5be4666dd749c522199)) — 2026-07-24 17:38
+
 ### Project maintenance
 
 - **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check (xtrm-reyem.12) (#488)** ([6e7040d](https://github.com/xtrm-dev/core/commit/6e7040df7ecb9dafd0fc6a732f98e4a9897b3be1)) — 2026-07-23 05:18
@@ -35,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Retire vendored service-skills from core [xtrm-56flm.6] (#493)** ([c2c7edc](https://github.com/xtrm-dev/core/commit/c2c7edca6034c98599b06419b0bcc269c4d8f9a3)) — 2026-07-24 15:03
 
-- **Rename /prd-to-plan → /spec-dispatch** ([44260ce](https://github.com/xtrm-dev/core/commit/44260cee6dde751e20d49ec19e55ae0b7c657edb)) — 2026-07-24 12:20
+- **Rename /prd-to-plan → /spec-dispatch (#494)** ([fa6e2be](https://github.com/xtrm-dev/core/commit/fa6e2be25fa6fa8e7f76bbe9016fd3fc1c0ce7f3)) — 2026-07-24 17:33
 
 ## [v0.11.2] — 2026-07-22
 
