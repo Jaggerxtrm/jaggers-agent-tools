@@ -25,13 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Add pr-review-gate required-status-check workflow (xtrm-54zwl.1)** ([6a6c19e](https://github.com/xtrm-dev/core/commit/6a6c19ec230c48590bfa289bff6ba57711c7d510)) — 2026-07-24 07:50
 
-- **Set explicit job name for readable required-check context** ([6dfb7ea](https://github.com/xtrm-dev/core/commit/6dfb7eaae4b189bc01f7084783bcf8fec0312bd3)) — 2026-07-24 12:29
+- **Rename /prd-to-plan → /spec-dispatch** ([731b3df](https://github.com/xtrm-dev/core/commit/731b3dfcd3660aaaa3aa9a3bb1e590ba095c0968)) — 2026-07-24 12:20
 
-- **Set explicit job name + drop unsupported pull_request_review_thread trigger** ([feb3bf3](https://github.com/xtrm-dev/core/commit/feb3bf3a748a11a882be06aeb648267e4c14694f)) — 2026-07-24 12:29
+- **Retire vendored service-skills from core (PR0 invert vendor pipeline)** ([2176b31](https://github.com/xtrm-dev/core/commit/2176b31b5b038c9b880dd8667b77ddbd5eda8b4b)) — 2026-07-24 12:23
 
-- **Use JS-native regex flag ('i') instead of Perl-style (?i)** ([f6be0d4](https://github.com/xtrm-dev/core/commit/f6be0d4543c1d80c314d46ce329d13426092dfe0)) — 2026-07-24 12:41
+- **Set explicit job name for readable required-check context** ([b12cdd0](https://github.com/xtrm-dev/core/commit/b12cdd0dcf50d8e2ce9d461c365e76bf3af86b36)) — 2026-07-24 12:29
 
-- **Add workflow_dispatch for post-resolve manual refresh** ([4f3cab4](https://github.com/xtrm-dev/core/commit/4f3cab48ed4dd98a3d4b155706e66e331f1f791b)) — 2026-07-24 12:46
+- **Set explicit job name + drop unsupported pull_request_review_thread trigger** ([217048b](https://github.com/xtrm-dev/core/commit/217048b00497a37d4e07aa327ea52d780ffbcb8d)) — 2026-07-24 12:29
+
+- **Use JS-native regex flag ('i') instead of Perl-style (?i)** ([9c0c73d](https://github.com/xtrm-dev/core/commit/9c0c73d75910b2cadf24eaef1ad85a538841ca52)) — 2026-07-24 12:41
+
+- **Add workflow_dispatch for post-resolve manual refresh** ([dc7021f](https://github.com/xtrm-dev/core/commit/dc7021fda3b08e0238e6c08d8717abff2220f994)) — 2026-07-24 12:46
 
 ## [v0.11.2] — 2026-07-22
 
