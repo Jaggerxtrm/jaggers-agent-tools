@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **/prd-to-plan skill for spec → runnable bd board** ([7e8c105](https://github.com/xtrm-dev/core/commit/7e8c10589b6d93bc32f29c9ce2c2da119cf891a9)) — 2026-07-24 05:32
 
+- **Deterministic claim verifier foundations (advisory only) [xtrm-56flm.1]** ([12d3df4](https://github.com/xtrm-dev/core/commit/12d3df4b9626144609ade097a6c412e48af67d6f)) — 2026-07-24 15:38
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
