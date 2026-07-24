@@ -941,6 +941,10 @@
           "hash": "ba8bebb2c085444120743af8dc859dd7c2592d6290e93aa5e1c08403109bdce7",
           "version": "0.11.2"
         },
+        "spec-dispatch/SKILL.md": {
+          "hash": "d9cbf714d250f11b5c6616a417c7c70ab11a4a8387f65f285f41a408cd188187",
+          "version": "0.11.2"
+        },
         "specialists-creator/scripts/audit-spec-uniformity.mjs": {
           "hash": "0ada06784cfd5c3adfa9c9908a9cd23380e8278fb57329fc616a83140a47fb33",
           "version": "0.11.2"
