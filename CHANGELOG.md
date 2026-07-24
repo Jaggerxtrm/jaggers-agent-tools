@@ -19,7 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Summary lines double-print epic id (xtrm-5swny)** ([bc91a98](https://github.com/xtrm-dev/core/commit/bc91a9825e2a875df7002c58e59dff541acb958d)) — 2026-07-24 21:34
+- **Summary lines double-print epic id (xtrm-5swny) (#499)** ([87fc6b8](https://github.com/xtrm-dev/core/commit/87fc6b80b1acae51d431507104e6566071b94e32)) — 2026-07-24 21:34
+
+- **Remove stale service-skills wiring** ([417e6c4](https://github.com/xtrm-dev/core/commit/417e6c4f9395fe0ce18c2884d63618dda34c9a16)) — 2026-07-24 22:26
 
 ### Other changes
 
