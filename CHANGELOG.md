@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Rename /prd-to-plan → /spec-dispatch (#494)** ([fa6e2be](https://github.com/xtrm-dev/core/commit/fa6e2be25fa6fa8e7f76bbe9016fd3fc1c0ce7f3)) — 2026-07-24 17:33
 
+- **Tighten to Bot __typename + paginate threads/reviews (per Codex P2s on #495)** ([69d5dbe](https://github.com/xtrm-dev/core/commit/69d5dbe38e33e8a9455d4bd5cf1c41e71f7e8b48)) — 2026-07-24 17:53
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
