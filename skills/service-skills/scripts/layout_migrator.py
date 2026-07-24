@@ -44,6 +44,31 @@ from bootstrap import (  # noqa: E402  # type: ignore[import-not-found]
 )
 from umbrella_generator import write_umbrella  # noqa: E402  # type: ignore[import-not-found]
 
+# --- service-skills retirement (PR0: invert vendor pipeline) -----------------
+# The service-skills machinery has been elevated to a first-class xtrm package:
+#   ~/dev/xtrm/packages/service-knowledge  (CLI: `service-knowledge`)
+# core no longer vendors service-skills into consumer repos via `xt update --apply`.
+# This flat->umbrella migrator still runs for legacy flat repos during the
+# backward-compat window, but operators migrating to the new package should use
+# `service-knowledge migrate` instead. See docs/devops/service-knowledge.md.
+SERVICE_SKILLS_RETIREMENT = {
+    "retired": True,
+    "successor_package": "service-knowledge",
+    "successor_cli": "service-knowledge install|update|status|migrate|remove",
+    "note": "service-skills vendoring retired from core; install service-knowledge via its own CLI",
+}
+
+
+def print_retirement_notice() -> None:
+    """Surface the service-skills -> service-knowledge retirement on `xt migrate`."""
+    print(
+        "notice: service-skills is retired in core. Service-host repos should adopt "
+        "the service-knowledge package (`service-knowledge migrate`). "
+        "This flat->umbrella migrator still runs for legacy flat repos during the "
+        "backward-compat window.",
+        file=sys.stderr,
+    )
+
 
 class MigrationRefused(Exception):
     """Raised when migrating a service would overwrite divergent target content."""
@@ -222,6 +247,7 @@ def demote_shadowing_registries(project_root: Path) -> list[str]:
 
 
 def main() -> None:
+    print_retirement_notice()
     args = sys.argv[1:]
     project_root_str = os.environ.get("CLAUDE_PROJECT_DIR")
     if not project_root_str:
