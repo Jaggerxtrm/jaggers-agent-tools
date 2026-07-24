@@ -25,10 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Add pr-review-gate required-status-check workflow (xtrm-54zwl.1)** ([6a6c19e](https://github.com/xtrm-dev/core/commit/6a6c19ec230c48590bfa289bff6ba57711c7d510)) — 2026-07-24 07:50
 
-- **Rename /prd-to-plan → /spec-dispatch** ([731b3df](https://github.com/xtrm-dev/core/commit/731b3dfcd3660aaaa3aa9a3bb1e590ba095c0968)) — 2026-07-24 12:20
-
-- **Retire vendored service-skills from core (PR0 invert vendor pipeline)** ([2176b31](https://github.com/xtrm-dev/core/commit/2176b31b5b038c9b880dd8667b77ddbd5eda8b4b)) — 2026-07-24 12:23
-
 - **Set explicit job name for readable required-check context** ([b12cdd0](https://github.com/xtrm-dev/core/commit/b12cdd0dcf50d8e2ce9d461c365e76bf3af86b36)) — 2026-07-24 12:29
 
 - **Set explicit job name + drop unsupported pull_request_review_thread trigger** ([217048b](https://github.com/xtrm-dev/core/commit/217048b00497a37d4e07aa327ea52d780ffbcb8d)) — 2026-07-24 12:29
@@ -36,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Use JS-native regex flag ('i') instead of Perl-style (?i)** ([9c0c73d](https://github.com/xtrm-dev/core/commit/9c0c73d75910b2cadf24eaef1ad85a538841ca52)) — 2026-07-24 12:41
 
 - **Add workflow_dispatch for post-resolve manual refresh** ([dc7021f](https://github.com/xtrm-dev/core/commit/dc7021fda3b08e0238e6c08d8717abff2220f994)) — 2026-07-24 12:46
+
+- **Retire vendored service-skills from core [xtrm-56flm.6] (#493)** ([c2c7edc](https://github.com/xtrm-dev/core/commit/c2c7edca6034c98599b06419b0bcc269c4d8f9a3)) — 2026-07-24 15:03
+
+- **Rename /prd-to-plan → /spec-dispatch** ([44260ce](https://github.com/xtrm-dev/core/commit/44260cee6dde751e20d49ec19e55ae0b7c657edb)) — 2026-07-24 12:20
 
 ## [v0.11.2] — 2026-07-22
 
