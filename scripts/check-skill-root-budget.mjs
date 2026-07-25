@@ -11,7 +11,9 @@ const skillsDir = path.join(repoRoot, '.xtrm', 'skills', 'default');
 const BUDGETS = {
   multiplexing:       { max: 160 },
   'multiplexing-team':{ max: 140 },
-  'using-specialists':{ max: 150 },
+  // 'using-specialists' is specialists-owned and vendored via specialists-source.json.
+  // Its slim must land in the specialists repo first, then re-vendor here. Re-add
+  // with { max: 150 } once that lands.
   'deploy-monitor':   { max: 180 },
   'pr-reviewer':      { max: 160 },
 };
