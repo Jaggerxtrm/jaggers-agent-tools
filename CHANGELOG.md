@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Record changelog refresh** ([e415d4d](https://github.com/xtrm-dev/core/commit/e415d4d2726b7bf4a388159fd1367552480e7bad)) — 2026-07-25 13:45
 
+- **Update changelog** ([3e9ae60](https://github.com/xtrm-dev/core/commit/3e9ae607e12f10ce22de43fc8c68aa1c758ae4e6)) — 2026-07-25 13:47
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
