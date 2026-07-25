@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Remove stale service-skills wiring (#500)** ([efa5f11](https://github.com/xtrm-dev/core/commit/efa5f11ab80df85296e3dc86bebcbcbe91db8584)) — 2026-07-24 22:37
 
+- **Address Codex findings on #504 + rebuild dist (xtrm-wiy5n.1.1)** ([2e13e64](https://github.com/xtrm-dev/core/commit/2e13e640f2ad9a61469528e5ca80871ec3c880db)) — 2026-07-25 12:21
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
