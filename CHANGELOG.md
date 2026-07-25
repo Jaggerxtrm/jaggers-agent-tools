@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Remove stale service-skills wiring (#500)** ([efa5f11](https://github.com/xtrm-dev/core/commit/efa5f11ab80df85296e3dc86bebcbcbe91db8584)) — 2026-07-24 22:37
 
-- **Address Codex findings on #504 + rebuild dist (xtrm-wiy5n.1.1)** ([2e13e64](https://github.com/xtrm-dev/core/commit/2e13e640f2ad9a61469528e5ca80871ec3c880db)) — 2026-07-25 12:21
+- **Close topology and reuse P1 gaps** ([1a48f01](https://github.com/xtrm-dev/core/commit/1a48f0130818498160b56d3122bd3933a234dafc)) — 2026-07-25 13:44
+
+- **Preserve topology PR evidence** ([13d17f7](https://github.com/xtrm-dev/core/commit/13d17f7c428ff763251ad7c70f2d0db585f7a6f4)) — 2026-07-25 13:58
 
 ### Other changes
 
@@ -32,8 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Canonicalize pr-review-gate template + refresh review-skill docs (xtrm-54zwl.2 + .4)** ([ccf3a1a](https://github.com/xtrm-dev/core/commit/ccf3a1a9a1d49de400a5a3a0c86d7edf271b6ae6)) — 2026-07-24 17:38
 
 - **Nudge to use service-knowledge on ambiguous incidents (#503)** ([6c0d1fa](https://github.com/xtrm-dev/core/commit/6c0d1fa7907b4a9aeec0a72ad6951ec1ac1fe46f)) — 2026-07-25 12:01
-
-- **Restore using-specialists/SKILL.md — vendored, moves to xtrm-wiy5n.6** ([8b25f03](https://github.com/xtrm-dev/core/commit/8b25f030d7e2aaec04db23777b58ee96ec3cd6bc)) — 2026-07-25 12:30
 
 ### Project maintenance
 
@@ -63,11 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Reconcile SKILL.md + CLAUDE.md with pr-review-gate wave-2 reality (xtrm-54zwl.8)** ([2ff4e42](https://github.com/xtrm-dev/core/commit/2ff4e42aa49001fe7a40918d09636e594c79ca78)) — 2026-07-25 11:25
 
-- **Slim 5 orchestration roots + retire MSG-06 rows + budget check (xtrm-wiy5n.1.1)** ([7092d41](https://github.com/xtrm-dev/core/commit/7092d4147abc8910bafd632f425b9dbaf9554016)) — 2026-07-25 11:42
+- **Slim 4 orchestration roots + retire MSG-06 rows + budget check (xtrm-wiy5n.1.1) (#504)** ([4ca674e](https://github.com/xtrm-dev/core/commit/4ca674ef066b724b2640cb028123d6bdfc575eb1)) — 2026-07-25 12:38
 
-- **Pin CLI --help as authority + restore pi/claude slash gotcha (xtrm-wiy5n.1.1)** ([58c6b31](https://github.com/xtrm-dev/core/commit/58c6b31f0cfa3b971444bd3e6fa733a17f2f029c)) — 2026-07-25 12:01
+- **Refresh changelog** ([2bc4b9a](https://github.com/xtrm-dev/core/commit/2bc4b9ae5287ca126fda0b8534b2eb5f843fd35e)) — 2026-07-25 13:44
 
-- **Rebuild dist against clean npm ci install (xtrm-wiy5n.1.1)** ([1070c2c](https://github.com/xtrm-dev/core/commit/1070c2c6ed513b2038b80e728f676cceb89dacbd)) — 2026-07-25 12:26
+- **Record changelog refresh** ([e415d4d](https://github.com/xtrm-dev/core/commit/e415d4d2726b7bf4a388159fd1367552480e7bad)) — 2026-07-25 13:45
+
+- **Update changelog** ([3e9ae60](https://github.com/xtrm-dev/core/commit/3e9ae607e12f10ce22de43fc8c68aa1c758ae4e6)) — 2026-07-25 13:47
 
 ## [v0.11.2] — 2026-07-22
 

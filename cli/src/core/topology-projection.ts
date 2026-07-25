@@ -360,6 +360,28 @@ export function parsePullRequests(stdout: string): Map<string, TopologyPullReque
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
 
+function mergeWorktreeReads(reads: SourceRead<TopologyWorktree[]>[]): SourceRead<TopologyWorktree[]> {
+    const trees = new Map<string, TopologyWorktree>();
+    for (const read of reads) {
+        for (const tree of read.data ?? []) trees.set(tree.path, tree);
+    }
+
+    const failures = reads.filter((read) => read.entry.status !== 'ok');
+    const relevantFailures = failures.filter((read) => !/not a git repository/i.test(read.entry.reason ?? ''));
+    const allUnavailable = relevantFailures.length === reads.length && relevantFailures.every((read) => read.entry.status === 'unavailable');
+    return {
+        entry: {
+            name: 'git',
+            status: relevantFailures.length === 0 ? 'ok' : allUnavailable ? 'unavailable' : 'error',
+            reason: relevantFailures.length === 0
+                ? null
+                : relevantFailures.map((read) => read.entry.reason).filter(Boolean).join('; '),
+            duration_ms: reads.reduce((total, read) => total + read.entry.duration_ms, 0),
+        },
+        data: trees.size > 0 || relevantFailures.length < reads.length ? [...trees.values()] : null,
+    };
+}
+
 // ── the join ────────────────────────────────────────────────────────────────
 
 /** Longest-prefix match: the most specific worktree containing this path. */
@@ -381,10 +403,12 @@ export async function collectProjection(options: CollectOptions = {}): Promise<T
     const includeGithub = options.includeGithub ?? true;
     const ctx = { runner, cwd, now };
 
-    // Sources are independent, so they are queried concurrently: wall time is
-    // the slowest source, not the sum. Promise.all is safe because readSource
-    // never rejects — a failure is a ledger entry, not an exception.
-    const [xtmuxRead, paneRead, jobRead, beadRead, treeRead, prRead] = await Promise.all([
+    // The pane list is server-wide, so first read it alongside the other
+    // independent sources. Git worktrees are then queried from the invocation
+    // repository and from any pane path outside that initial inventory; this
+    // keeps the common case to one git call while making cross-repo panes
+    // visible instead of silently treating their worktrees as missing.
+    const [xtmuxRead, paneRead, jobRead, beadRead, initialTreeRead, prRead] = await Promise.all([
         readSource('xtmux', parseXtmuxHost, ctx),
         readSource('tmux', parsePanes, ctx),
         readSource('specialists', parseJobs, ctx),
@@ -399,10 +423,24 @@ export async function collectProjection(options: CollectOptions = {}): Promise<T
     ]);
 
     const rawPanes = paneRead.data ?? [];
-    const jobs = jobRead.data ?? [];
+    const knownTrees = initialTreeRead.data ?? [];
+    const extraRepoPaths = [...new Set(rawPanes.flatMap((pane) => [
+        pane.current_path,
+        pane.agent?.worktree,
+    ].filter((candidate): candidate is string => Boolean(candidate))))]
+        .filter((candidate) => !worktreeForPath(knownTrees, candidate));
+    const extraTreeReads = await Promise.all(extraRepoPaths.map((repoPath) =>
+        readSource('git', parseWorktrees, { ...ctx, cwd: repoPath })));
+    const treeRead = mergeWorktreeReads([initialTreeRead, ...extraTreeReads]);
+
+    const rawJobs = jobRead.data ?? [];
     const beads = beadRead.data ?? new Map<string, TopologyBead>();
     const worktrees = treeRead.data ?? [];
     const prs = prRead.data ?? new Map<string, TopologyPullRequest>();
+    const jobs = rawJobs.map((job) => {
+        const pull_request = job.branch ? prs.get(job.branch) : undefined;
+        return pull_request ? { ...job, pull_request } : job;
+    });
 
     // Worktree collisions: every pane whose cwd resolves into a worktree. Length
     // > 1 is the shared-checkout hazard the multiplexing doctrine warns about.

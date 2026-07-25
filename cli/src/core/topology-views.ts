@@ -28,6 +28,7 @@ import type {
     TopologyJob,
     TopologyPane,
     TopologyProjectionV1,
+    TopologyPullRequest,
 } from '@xtrm/contracts';
 
 export const VIEW_NAMES = [
@@ -196,11 +197,13 @@ function viewCollisions(p: TopologyProjectionV1): string[] {
 }
 
 function viewIntegration(p: TopologyProjectionV1): string[] {
-    const out = [kleur.bold(`${pad('JOB', 8)} ${pad('SPECIALIST', 16)} ${pad('SOURCE BRANCH', 28)} ${pad('TARGET', 24)} STATUS`)];
+    const out = [kleur.bold(`${pad('JOB', 8)} ${pad('SPECIALIST', 16)} ${pad('SOURCE BRANCH', 28)} ${pad('TARGET', 24)} ${pad('PR', 14)} STATUS`)];
     const jobs = [...p.panes.flatMap((x) => x.jobs), ...p.orphans.jobs];
     if (jobs.length === 0) out.push(NONE);
     for (const j of jobs) {
-        out.push(`${pad(j.job_id, 8)} ${pad(j.specialist, 16)} ${pad(j.branch, 28)} ${pad(j.integration_target_branch, 24)} ${j.status}`);
+        const pr = (j as TopologyJob & { pull_request?: TopologyPullRequest | null }).pull_request;
+        const prState = pr ? `#${pr.number} ${pr.state.toLowerCase()}` : '-';
+        out.push(`${pad(j.job_id, 8)} ${pad(j.specialist, 16)} ${pad(j.branch, 28)} ${pad(j.integration_target_branch, 24)} ${pad(prState, 14)} ${j.status}`);
     }
     const withPr = p.panes.filter((x) => x.pull_request);
     if (withPr.length > 0) {
@@ -248,8 +251,10 @@ function viewPrs(p: TopologyProjectionV1): string[] {
  * the useful thing a projection can add.
  */
 function viewRoutes(p: TopologyProjectionV1): string[] {
-    const agentPane = p.panes.find((x) => x.agent)?.pane_id ?? '<%pane-id>';
-    const worktree = p.panes.find((x) => x.worktree)?.worktree?.path ?? '<worktree>';
+    const selectedPane = p.panes.find((x) => x.agent) ?? p.panes[0];
+    const selectedPaneId = selectedPane?.pane_id ?? '<%pane-id>';
+    const worktree = selectedPane?.worktree?.path ?? '<worktree>';
+
     const bead = p.panes.find((x) => x.bead)?.bead?.id;
     return [
         'These live/diagnostic surfaces are owned by xtmux and git. This viewer routes',
@@ -258,11 +263,11 @@ function viewRoutes(p: TopologyProjectionV1): string[] {
         `  ${kleur.bold('live journal feed')}`,
         `    xtmux log follow --after-id <n>${bead ? `        # or: xtmux log query --bead ${bead}` : ''}`,
         `  ${kleur.bold('reply obligations')}`,
-        '    xtmux obligations list --pane "$(tmux display-message -p \'#{pane_id}\')" --json',
+        `    xtmux obligations list --pane ${selectedPaneId} --json`,
         `  ${kleur.bold('monitors and wakes')}`,
         '    xtmux monitor-list --json',
         `  ${kleur.bold('pane preview')}   ${dim('(diagnostic only — never journalled or persisted)')}`,
-        `    xtmux pane capture --pane ${agentPane} --lines 40`,
+        `    xtmux pane capture --pane ${selectedPaneId} --lines 40`,
         `  ${kleur.bold('git diff')}`,
         `    git -C ${worktree} diff`,
         '',

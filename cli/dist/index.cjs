@@ -62733,6 +62733,28 @@ async function launchWorktreeSession(opts) {
   }
   const cwdBasename = import_node_path12.default.basename(mainRepoRoot);
   const slug = name ?? randomSlug(4);
+  const reuseRequested = Boolean(opts.reuse) && (Boolean(newSession) || !process.env.TMUX);
+  if (reuseRequested) {
+    const roleSlug = resolvedRole ? slugifyForSession(resolvedRole.name) : null;
+    const sessionName = roleSlug ? `role-${runtime}-${roleSlug}${bead ? `-${slugifyForSession(bead)}` : ""}` : `${runtime}-${slugifyForSession(slug)}`;
+    const sessionExists = (0, import_node_child_process.spawnSync)("tmux", ["has-session", "-t", `=${sessionName}`], { stdio: "pipe" }).status === 0;
+    if (sessionExists) {
+      const paneQuery = (0, import_node_child_process.spawnSync)("tmux", ["list-panes", "-t", sessionName, "-F", "#{pane_id}"], {
+        stdio: "pipe",
+        encoding: "utf8"
+      });
+      const existingPane = (paneQuery.stdout ?? "").trim().split("\n")[0] ?? "";
+      if (!attach) {
+        process.stdout.write(`${sessionName}:${existingPane}
+`);
+        process.exit(0);
+      }
+      const attachResult = (0, import_node_child_process.spawnSync)("tmux", chooseAttachCommand(sessionName, Boolean(process.env.TMUX)), {
+        stdio: "inherit"
+      });
+      process.exit(attachResult.status ?? 0);
+    }
+  }
   const worktreeName = `${cwdBasename}-xt-${runtime}-${slug}`;
   const worktreePath = import_node_path12.default.join(mainRepoRoot, ".xtrm", "worktrees", worktreeName);
   const branchName = `xt/${slug}`;
@@ -76668,6 +76690,24 @@ function parsePullRequests(stdout) {
   return byBranch;
 }
 var str = (v) => typeof v === "string" && v.length > 0 ? v : null;
+function mergeWorktreeReads(reads) {
+  const trees = /* @__PURE__ */ new Map();
+  for (const read of reads) {
+    for (const tree of read.data ?? []) trees.set(tree.path, tree);
+  }
+  const failures = reads.filter((read) => read.entry.status !== "ok");
+  const relevantFailures = failures.filter((read) => !/not a git repository/i.test(read.entry.reason ?? ""));
+  const allUnavailable = relevantFailures.length === reads.length && relevantFailures.every((read) => read.entry.status === "unavailable");
+  return {
+    entry: {
+      name: "git",
+      status: relevantFailures.length === 0 ? "ok" : allUnavailable ? "unavailable" : "error",
+      reason: relevantFailures.length === 0 ? null : relevantFailures.map((read) => read.entry.reason).filter(Boolean).join("; "),
+      duration_ms: reads.reduce((total, read) => total + read.entry.duration_ms, 0)
+    },
+    data: trees.size > 0 || relevantFailures.length < reads.length ? [...trees.values()] : null
+  };
+}
 function worktreeForPath(trees, target) {
   if (!target) return null;
   let best = null;
@@ -76684,7 +76724,7 @@ async function collectProjection(options = {}) {
   const cwd = options.cwd ?? process.cwd();
   const includeGithub = options.includeGithub ?? true;
   const ctx = { runner, cwd, now };
-  const [xtmuxRead, paneRead, jobRead, beadRead, treeRead, prRead] = await Promise.all([
+  const [xtmuxRead, paneRead, jobRead, beadRead, initialTreeRead, prRead] = await Promise.all([
     readSource("xtmux", parseXtmuxHost, ctx),
     readSource("tmux", parsePanes, ctx),
     readSource("specialists", parseJobs, ctx),
@@ -76696,10 +76736,21 @@ async function collectProjection(options = {}) {
     })
   ]);
   const rawPanes = paneRead.data ?? [];
-  const jobs = jobRead.data ?? [];
+  const knownTrees = initialTreeRead.data ?? [];
+  const extraRepoPaths = [...new Set(rawPanes.flatMap((pane) => [
+    pane.current_path,
+    pane.agent?.worktree
+  ].filter((candidate) => Boolean(candidate))))].filter((candidate) => !worktreeForPath(knownTrees, candidate));
+  const extraTreeReads = await Promise.all(extraRepoPaths.map((repoPath) => readSource("git", parseWorktrees, { ...ctx, cwd: repoPath })));
+  const treeRead = mergeWorktreeReads([initialTreeRead, ...extraTreeReads]);
+  const rawJobs = jobRead.data ?? [];
   const beads = beadRead.data ?? /* @__PURE__ */ new Map();
   const worktrees = treeRead.data ?? [];
   const prs = prRead.data ?? /* @__PURE__ */ new Map();
+  const jobs = rawJobs.map((job) => {
+    const pull_request = job.branch ? prs.get(job.branch) : void 0;
+    return pull_request ? { ...job, pull_request } : job;
+  });
   for (const pane of rawPanes) {
     const tree = worktreeForPath(worktrees, pane.current_path);
     if (tree) tree.shared_by_pane_ids = [...tree.shared_by_pane_ids ?? [], pane.pane_id];
@@ -76902,11 +76953,13 @@ function viewCollisions(p) {
   return [...out, ...degradationNotice(p, ["git", "tmux"])];
 }
 function viewIntegration(p) {
-  const out = [kleur_default.bold(`${pad("JOB", 8)} ${pad("SPECIALIST", 16)} ${pad("SOURCE BRANCH", 28)} ${pad("TARGET", 24)} STATUS`)];
+  const out = [kleur_default.bold(`${pad("JOB", 8)} ${pad("SPECIALIST", 16)} ${pad("SOURCE BRANCH", 28)} ${pad("TARGET", 24)} ${pad("PR", 14)} STATUS`)];
   const jobs = [...p.panes.flatMap((x) => x.jobs), ...p.orphans.jobs];
   if (jobs.length === 0) out.push(NONE2);
   for (const j of jobs) {
-    out.push(`${pad(j.job_id, 8)} ${pad(j.specialist, 16)} ${pad(j.branch, 28)} ${pad(j.integration_target_branch, 24)} ${j.status}`);
+    const pr = j.pull_request;
+    const prState = pr ? `#${pr.number} ${pr.state.toLowerCase()}` : "-";
+    out.push(`${pad(j.job_id, 8)} ${pad(j.specialist, 16)} ${pad(j.branch, 28)} ${pad(j.integration_target_branch, 24)} ${pad(prState, 14)} ${j.status}`);
   }
   const withPr = p.panes.filter((x) => x.pull_request);
   if (withPr.length > 0) {
@@ -76941,8 +76994,9 @@ function viewPrs(p) {
   return [...out, ...degradationNotice(p, ["github"])];
 }
 function viewRoutes(p) {
-  const agentPane = p.panes.find((x) => x.agent)?.pane_id ?? "<%pane-id>";
-  const worktree = p.panes.find((x) => x.worktree)?.worktree?.path ?? "<worktree>";
+  const selectedPane = p.panes.find((x) => x.agent) ?? p.panes[0];
+  const selectedPaneId = selectedPane?.pane_id ?? "<%pane-id>";
+  const worktree = selectedPane?.worktree?.path ?? "<worktree>";
   const bead = p.panes.find((x) => x.bead)?.bead?.id;
   return [
     "These live/diagnostic surfaces are owned by xtmux and git. This viewer routes",
@@ -76951,11 +77005,11 @@ function viewRoutes(p) {
     `  ${kleur_default.bold("live journal feed")}`,
     `    xtmux log follow --after-id <n>${bead ? `        # or: xtmux log query --bead ${bead}` : ""}`,
     `  ${kleur_default.bold("reply obligations")}`,
-    `    xtmux obligations list --pane "$(tmux display-message -p '#{pane_id}')" --json`,
+    `    xtmux obligations list --pane ${selectedPaneId} --json`,
     `  ${kleur_default.bold("monitors and wakes")}`,
     "    xtmux monitor-list --json",
     `  ${kleur_default.bold("pane preview")}   ${dim("(diagnostic only \u2014 never journalled or persisted)")}`,
-    `    xtmux pane capture --pane ${agentPane} --lines 40`,
+    `    xtmux pane capture --pane ${selectedPaneId} --lines 40`,
     `  ${kleur_default.bold("git diff")}`,
     `    git -C ${worktree} diff`,
     "",

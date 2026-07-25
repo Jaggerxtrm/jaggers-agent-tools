@@ -95,7 +95,9 @@ if [ "$HEAD_REF_AFTER" != "$HEAD_REF" ] || [ "$HEAD_SHA_AFTER" != "$HEAD_SHA" ];
     else
         git update-ref --no-deref HEAD "$HEAD_SHA"
     fi
-    git reset --quiet --mixed
+    if [ "$HEAD_SHA_AFTER" != "$HEAD_SHA" ]; then
+        git reset --quiet --mixed
+    fi
     git worktree prune >/dev/null 2>&1 || true
     echo "[semgrep-diff] HEAD restored to ${HEAD_REF:-$HEAD_SHA}; working tree untouched. Aborting push." >&2
     exit 1

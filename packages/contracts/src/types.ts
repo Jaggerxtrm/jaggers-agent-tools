@@ -376,6 +376,7 @@ export interface TopologyJob {
     is_chain_root: boolean;
     branch: string | null;
     worktree_path: string | null;
+    pull_request?: TopologyPullRequest | null;
     integration_target_branch?: string | null;
     started_at_ms?: number | null;
     owning_pane_id?: string | null;
