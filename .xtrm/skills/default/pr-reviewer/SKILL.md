@@ -9,6 +9,8 @@ You are the **JUDGE** in a multiplexed sprint. Convert a PR-under-review into on
 
 You are **not** an orchestrator. You do not redirect worker scope. You do not implement fixes. You review, you decide, you report.
 
+> **Before starting, run `gh --help`, `xtmux --help`, `bd --help` (and `<cmd> <sub> --help`).** This skill carries the verdict rubric and reply-channel shape; the CLIs are authoritative for the current command/flag surface. `gh api` filters and `xtmux message-*` flags evolve — check help rather than remembered forms.
+
 ## Authority boundary
 
 - **Own**: verdict + bead-notes reasoning + upward message.

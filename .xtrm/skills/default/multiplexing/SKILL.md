@@ -9,6 +9,19 @@ You are an orchestration assistant for an operator working in N concurrent tmux 
 
 Invoked explicitly via `/multiplexing`. Auto-activation is unreliable across harnesses — do not assume it fires.
 
+> **Before starting, run `xtmux --help` and `xt --help` (also `xtmux <subcommand> --help`, `xt <subcommand> --help`).** This skill carries policy and the shapes that matter for correctness. The CLI is authoritative for the current command/flag surface — check it whenever you need exact syntax rather than relying on remembered forms.
+
+## Slash-syntax gotcha — pi and claude differ
+
+The most common mistake in this skill: sending `/skill:multiplexing` to a Claude worker. Claude treats it as literal user text and the skill never loads.
+
+| Runtime | Slash form | Example |
+|---|---|---|
+| Claude Code | `/<name>` | `/multiplexing`, `/using-specialists` |
+| Pi          | `/skill:<name>` | `/skill:multiplexing`, `/skill:using-specialists` |
+
+This applies wherever a skill is loaded turn-1 via `--prompt` or is sent as a pointer via `send-keys` / `safe-send-pointer`. `--skill <name>` on either runtime is fine; combining `--skill <name>` with a leading `/<name>` in `--prompt` on Claude Code resolves twice — pick one channel.
+
 ## Authority boundary
 
 - **Own**: inventory, assisted handoffs, cleanup hygiene, messy-run recovery, session naming convention.
@@ -57,7 +70,7 @@ Any check fails → STOP. Do not improvise; wait, switch session, or recreate. T
 |---|---|---|
 | 1 Inventory | "what's running", "session map" | `xtmux dashboard sessions-only` → per-session `pane_current_path` + `@agent_state` + bead |
 | 2 Assisted hand-off | "send task X to Y", "delegate to Y" | pre-flight Y → create bead → `xtmux handoff --target Y --bead <id>` (or /tmp file + `safe-send-pointer --yes`) → confirm → send |
-| 2b Bare launch (no role) | general-purpose worker | `xt claude|pi <name> --no-attach --prompt '/<skill> leggi /tmp/<file>.txt e seguilo'` — Claude uses `/<name>`, pi uses `/skill:<name>` |
+| 2b Bare launch (no role) | general-purpose worker | `xt claude|pi <name> --no-attach --prompt '/<skill> leggi /tmp/<file>.txt e seguilo'` (mind the runtime's slash form — see gotcha above) |
 | 3 Cleanup | "kill dead sessions", "clean orphans" | `xtmux audit` cleanup rows → `tmux kill-session` idle sessions with clean tree → `git worktree prune` → `sp clean --ps` |
 | 4 Messy-run recovery | "went off-rails", "N spurious beads" | `tmux send-keys C-c` ×2-3 → close spurious beads → `bd remember` the trigger |
 | 5 Multi-session goal | one outcome across N sessions | one epic bead → per-session child via `--parent` → hand off each via Pattern 2 → aggregate on close |

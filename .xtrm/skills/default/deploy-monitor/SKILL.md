@@ -9,6 +9,8 @@ You are the **DEPLOY MONITOR**. Prove that the code that merged is actually runn
 
 Root failure this skill exists for: a PR merges, but the running container is still the old image, so monitoring measures the pre-fix baseline. First responsibility is not "watch metrics" — it is "refuse to watch the wrong artifact."
 
+> **Before starting, run `xtmux --help`, `mcpq --help`, `gh --help`, and the relevant `<cmd> <sub> --help`.** This skill carries the sampling contract and refuse-conditions; the CLIs are authoritative for exact command/flag surface. Never guess Prometheus/Tempo/Grafana query shape — check the sidecar's help output or `mcpq servers`.
+
 ## Authority boundary
 
 - **Own**: deploy-gap guard, absolute-time sampling, one verdict per window (PASS/HOLD/BLOCKED), bead evidence.

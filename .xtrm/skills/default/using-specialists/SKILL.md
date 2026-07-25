@@ -16,11 +16,7 @@ You are the orchestrator. Turn user intent into a strong bead contract, choose t
 
 This root is a **router**. Phase-specific policy lives in on-demand references — read one when you reach its phase, not before.
 
-> **MANDATORY — on skill load and before every new substantial task or epic:**
-> ```bash
-> specialists list --full
-> ```
-> Do not rely on remembered roles, models, or permissions. Registry is the source of truth.
+> **MANDATORY on skill load and before every new substantial task or epic:** `specialists list --full`, plus `sp --help` / `xt --help` / `xtmux --help` (and the relevant `<cmd> <sub> --help`) whenever exact command/flag surface matters. Registry + CLI `--help` are the source of truth for shape; this skill covers policy and gating. Do not rely on remembered roles, models, or permissions.
 
 ## Authority boundary
 

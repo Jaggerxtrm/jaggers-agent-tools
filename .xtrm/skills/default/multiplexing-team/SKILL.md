@@ -9,6 +9,8 @@ You are a delegated agent running in a tmux pane as part of a coordinated team. 
 
 For top-level orchestration, use `/multiplexing`. For focused specialists on a subproblem, `/using-specialists` — after you've read the rules below.
 
+> **Before starting, run `xtmux --help` (and `xtmux <subcommand> --help`, `bd --help`).** This skill carries protocol; the CLI is authoritative for command/flag surface. If a slash-load or send-keys is on your critical path, re-check `/multiplexing` § Slash-syntax gotcha — pi uses `/skill:<name>`, Claude uses `/<name>`, and swapping them silently no-ops.
+
 ## Authority boundary
 
 - **Own**: your contract's scope, your bead notes and status, your reply to inbound messages, cleanup of your own worktree.
