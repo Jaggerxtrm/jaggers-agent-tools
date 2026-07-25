@@ -1,11 +1,11 @@
 ---
 name: security-pipeline
-description: Bootstrap a complete security pipeline (Dependabot + OSV + Semgrep + gitleaks + pre-commit hooks + Codex review) on any GitHub repo. Designed for free user-private repos where GitHub Advanced Security is unavailable. Reusable across Python/TypeScript/Go/Rust stacks.
+description: Bootstrap a complete security pipeline (Dependabot + OSV + Semgrep + gitleaks + pre-commit hooks + Codex review + pr-review-gate) on any GitHub repo. Designed for free user-private repos where GitHub Advanced Security is unavailable. Reusable across Python/TypeScript/Go/Rust stacks.
 ---
 
 # Security Pipeline
 
-Wires a 4-layer security baseline onto any GitHub repo. Originally proven on
+Wires a 5-layer security baseline onto any GitHub repo. Originally proven on
 the Mercury infra stack but the templates and bootstrap script are
 project-agnostic — adapt the allowlists and dependabot ecosystems per repo.
 
@@ -95,15 +95,34 @@ default branch): edit and add a `required_status_checks` rule with context
 back (see xtrm-54zwl.6 bead notes for a scripted example).
 
 Bot detection defaults to `codex|coderabbit|claude` (case-insensitive) and is
-overridable via the `PR_REVIEW_GATE_BOT_RE` repo variable. To manually refresh
-the gate after resolving a thread (`pull_request_review_thread` isn't accepted
-by GitHub Actions despite the docs listing it):
+overridable via the `PR_REVIEW_GATE_BOT_RE` repo variable. Matches only accounts
+whose GraphQL `__typename == 'Bot'` AND login matches the regex, so a human
+reviewer whose login happens to contain "claude" or "codex" can't trip the gate.
+Paginates `reviewThreads` and `reviews` up to 2000 entries each (fails closed
+beyond that). Preserves an active `CHANGES_REQUESTED` verdict per bot until the
+same bot submits `APPROVED` or `DISMISSED` — later `COMMENTED` reviews do NOT
+clear a CR, matching GitHub's native branch-protection semantics.
+
+To manually refresh the gate after resolving a thread (`pull_request_review_thread`
+isn't accepted by GitHub Actions despite the docs listing it):
 
 ```bash
 gh workflow run pr-review-gate.yml -F pr=<n>
 ```
 
 or click "re-request check-suite" in the PR checks tab, or push any commit.
+
+### Keeping consumer copies in sync
+
+The workflow file is COPIED into each consumer repo by `security-bootstrap.sh`
+at install time — there is no auto-sync. When the canonical template in this
+repo changes, every consumer needs a manual re-fanout PR. The wave-1 (`xtrm-7cjkv`)
+and wave-2 (`xtrm-54zwl.7`) beads document the batch scripts under
+`~/.claude/…/scratchpad/` that handle this: worktree per repo, `SKIP=osv-scanner
+git push` (osv-scanner chokes on `.git` being a file in worktrees),
+`gh pr create --head <branch>` (never rely on cwd inference across repos),
+`--admin` merge for ruleset-protected repos with `required_approving_review_count>=1`.
+Budget ~30 min operator-driven wall time per fanout wave across ~16 repos.
 
 ## Files in `templates/`
 
