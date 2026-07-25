@@ -84,8 +84,6 @@ const LEGACY_PROJECT_HOOK_FILES: Array<{ legacyFile: string; duplicatePath: stri
   { legacyFile: 'hook-config.json', duplicatePath: path.join('.xtrm', 'config', 'hooks.json') },
   { legacyFile: 'quality-check.cjs', duplicatePath: path.join('.xtrm', 'hooks', 'quality-check.cjs') },
   { legacyFile: 'quality-check.py', duplicatePath: path.join('.xtrm', 'hooks', 'quality-check.py') },
-  { legacyFile: 'specialists-complete.mjs', duplicatePath: path.join('.xtrm', 'hooks', 'specialists-complete.mjs') },
-  { legacyFile: 'specialists-session-start.mjs', duplicatePath: path.join('.xtrm', 'hooks', 'specialists-session-start.mjs') },
 ];
 
 export const PLUGIN_ERA_ARTIFACTS = {

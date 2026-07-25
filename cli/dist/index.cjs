@@ -64638,9 +64638,7 @@ var XTRM_MANAGED_PI_EXTENSIONS = /* @__PURE__ */ new Set([
 var LEGACY_PROJECT_HOOK_FILES = [
   { legacyFile: "hook-config.json", duplicatePath: import_path9.default.join(".xtrm", "config", "hooks.json") },
   { legacyFile: "quality-check.cjs", duplicatePath: import_path9.default.join(".xtrm", "hooks", "quality-check.cjs") },
-  { legacyFile: "quality-check.py", duplicatePath: import_path9.default.join(".xtrm", "hooks", "quality-check.py") },
-  { legacyFile: "specialists-complete.mjs", duplicatePath: import_path9.default.join(".xtrm", "hooks", "specialists-complete.mjs") },
-  { legacyFile: "specialists-session-start.mjs", duplicatePath: import_path9.default.join(".xtrm", "hooks", "specialists-session-start.mjs") }
+  { legacyFile: "quality-check.py", duplicatePath: import_path9.default.join(".xtrm", "hooks", "quality-check.py") }
 ];
 var PLUGIN_ERA_ARTIFACTS = {
   settingsMapEntryDeletes: SETTINGS_MAP_ENTRY_DELETES,

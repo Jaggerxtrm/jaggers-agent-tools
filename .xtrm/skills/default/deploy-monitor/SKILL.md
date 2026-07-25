@@ -1,263 +1,164 @@
 ---
 name: deploy-monitor
-description: Post-merge deploy verification helper for multiplexed sprints and production releases. Use whenever a PR has been merged, a service/container has been rebuilt or redeployed, or an orchestrator asks for a 30-60 minute observability window. Enforces the deploy-gap guard (running artifact must be newer than the merge), samples Tempo/Prometheus/Grafana or mcpq evidence on an absolute schedule, pages on the first HOLD, writes bead/file evidence, and emits PASS/HOLD/BLOCKED without acting as judge or orchestrator.
+description: Post-merge deploy verification helper. Use whenever a PR has been merged, a service/container has been rebuilt or redeployed, or an orchestrator asks for a 30-60 minute observability window. Enforces the deploy-gap guard (running artifact must be newer than the merge), samples Tempo/Prometheus/Grafana or mcpq evidence on an absolute UTC schedule, pages on the first HOLD, writes bead evidence, emits PASS/HOLD/BLOCKED. Not the orchestrator, not the PR judge, not the implementer.
 ---
 
 # Deploy Monitor
 
-You are the **DEPLOY MONITOR** in a multiplexed sprint or production release. Your job is to prove that the code that merged is actually running and healthy. You are not the orchestrator, not the PR judge, and not the implementer.
+You are the **DEPLOY MONITOR**. Prove that the code that merged is actually running and healthy.
 
-This skill exists because a multi-pane sprint reproduced the same failure class it was fixing: a PR merged, but the Docker container still ran the old image, so monitoring measured the pre-fix baseline. The first responsibility of a deploy monitor is therefore not “watch metrics”; it is “refuse to watch the wrong artifact.”
+Root failure this skill exists for: a PR merges, but the running container is still the old image, so monitoring measures the pre-fix baseline. First responsibility is not "watch metrics" — it is "refuse to watch the wrong artifact."
+
+> **Before starting, run `xtmux --help`, `mcpq --help`, `gh --help`, and the relevant `<cmd> <sub> --help`.** This skill carries the sampling contract and refuse-conditions; the CLIs are authoritative for exact command/flag surface. Never guess Prometheus/Tempo/Grafana query shape — check the sidecar's help output or `mcpq servers`.
+
+## Authority boundary
+
+- **Own**: deploy-gap guard, absolute-time sampling, one verdict per window (PASS/HOLD/BLOCKED), bead evidence.
+- **Do not own**: PR merge-readiness (that's `/pr-reviewer`), the merge itself, code edits, redeploy.
 
 ## Load order and fallbacks
 
-1. Consult `/multiplexing-team` for team-member identity, message, and bead-reporting protocol.
-2. Consult `/sre-triage` when available for service-specific Prometheus/Grafana/Tempo patterns.
-3. If `/sre-triage` is unavailable in a Codex/pi pane, continue with direct `mcpq` / CLI queries. Record the fallback in your notes; do not block only because a skill registry is missing.
+1. `/multiplexing-team` — team-member identity, message, bead-reporting protocol.
+2. `/sre-triage` when available — service-specific Prometheus/Grafana/Tempo patterns.
+3. Fallback to direct `mcpq` / CLI queries in Codex/pi panes; record the fallback in notes — do not block on skill-registry plumbing.
 
-Useful first checks:
+First-turn checks:
 
 ```bash
 tmux display-message -p '#S #{pane_id} #{pane_current_path}' 2>/dev/null || true
 tmux show-options -p -qv @agent_bead 2>/dev/null || true
-tmux show-options -p -qv @agent_prompt_file 2>/dev/null || true
 tmux show-options -p -qv @agent_parent_session 2>/dev/null || true
 mcpq servers 2>/dev/null || true
 ```
 
-Send a one-line ready signal after loading context:
-
-_[xtmux-3xs]_ For pure FYI status pings ("deploy monitor ready", "T+15m sample OK") add `--expects-reply=false` so a pi orchestrator does not register a reply obligation it never needs to satisfy. Reserve the default (expects-reply auto-true on `--bead`) for verdicts and HOLD/BLOCKED escalations that genuinely need a response. See `/multiplexing` § V2 SQLite runtime.
+Ready ping (FYI, no reply obligation):
 
 ```bash
-xtmux message-send --to <orchestrator> --bead <bead> --text "deploy monitor ready — awaiting deploy signal"
+xtmux message-send --to <orchestrator> --bead <bead> --expects-reply=false --json \
+  --text "deploy monitor ready — awaiting deploy signal"
 ```
 
-## Verdict vocabulary
-
-Use exactly one final verdict per monitoring window:
+## Verdict vocabulary — one per window
 
 | Verdict | Meaning |
 |---|---|
-| `PASS` | The intended artifact is running and all required samples were healthy. |
-| `HOLD` | The intended artifact is running, but a metric/trace/alert/data-flow check is abnormal or inconclusive. The merge pipeline should not advance. |
-| `BLOCKED` | You cannot open or complete the window because prerequisites are missing: no observability access, no target service, no deploy timestamp, no artifact proof, or stale/ambiguous deployment. |
+| `PASS` | Intended artifact running; all required samples healthy. |
+| `HOLD` | Intended artifact running; a metric/trace/alert/data-flow check is abnormal or inconclusive. Merge pipeline should not advance. |
+| `BLOCKED` | Cannot open/complete the window: no observability access, no target service, no deploy timestamp, no artifact proof, or stale/ambiguous deployment. |
 
-For a transient abnormal sample, use `HOLD` for that sample, page immediately, re-sample quickly, and only end with `PASS` if the remaining evidence justifies it.
+A single transient flap → `HOLD` for that sample, page immediately, re-sample quickly; only end `PASS` if the remaining evidence justifies it. This vocabulary is intentionally distinct from `/pr-reviewer`'s — do not conflate.
 
-## Pre-window intake — know what to watch
+## Non-negotiable rules
 
-Before opening a monitoring window, read enough to identify the blast radius. You are using the PR narrative to choose signals; you are not re-reviewing code.
+1. **Refuse the window if `StartedAt` / rollout revision is older than `mergedAt`.** `BLOCKED`, ask the orchestrator to (re)deploy, do not open.
+2. **Absolute UTC scheduling.** Never relative-time ("post-deploy sampling starting now") — schedule explicit UTC ticks.
+3. **First abnormal sample pages immediately**, then re-sample after ~30s. Do not silently wait for the next 5-min tick.
+4. **Public edge probes are mandatory every sample** (check #6 below) — a service-scoped deploy can still cascade the reverse proxy.
+5. **Store raw query output in files**; only summaries into bead notes / tmux messages.
+6. **Do not close the anchor bead** unless the orchestrator explicitly assigned closure authority.
 
-```bash
-gh pr view <N> --repo <owner>/<repo> --json number,title,body,mergedAt,mergeCommit,headRefOid,statusCheckRollup
-gh pr diff <N> --repo <owner>/<repo>
-gh api repos/<owner>/<repo>/pulls/<N>/comments --paginate \
-  --jq '.[] | {user:.user.login, path, line, body}'
-gh api repos/<owner>/<repo>/pulls/<N>/reviews \
-  --jq '.[] | {user:.user.login, state, body}'
-```
+## Deploy-gap guard — before the first sample
 
-Extract and write to your sample log:
-
-- PR number, merge commit, `mergedAt`, deploy command or GitOps revision.
-- Target service/container(s), host/cluster, compose file or deployment name.
-- Expected healthy signals: span names, latency/cycle-time targets, freshness gauges, alert names, DB checks, data-flow invariants.
-- Known risky areas from the PR body, Judge notes, and Codex comments.
-
-## Deploy-gap guard — refuse stale artifacts
-
-Do this before the first sample. A monitoring window against an old image is worse than no window because it can create false confidence or false regression claims.
-
-### Helper script (preferred)
-
-The `/multiplexing` skill ships `scripts/verify-deploy-applied.sh` (shipped upstream in xtrm-dev/core PR #369, nsur ship 2026-07-09) — a single-command wrapper around the checks below with well-defined exit codes:
+Prefer the shipped helper when on PATH:
 
 ```bash
 verify-deploy-applied <container> <pr-number> <owner/repo>
-# exit 0 → deploy applied (StartedAt > mergedAt), safe to open window
-# exit 1 → deploy NOT applied, orchestrator must rebuild+restart, verdict BLOCKED
-# exit 2 → usage / dependency error (bad args, gh/docker/jq missing, container not found)
+# 0 → applied (StartedAt > mergedAt), safe to open window
+# 1 → NOT applied → orchestrator must rebuild+restart → verdict BLOCKED
+# 2 → usage/dep error
 ```
 
-If the helper is on `PATH` (multiplexing skill loaded), prefer it. Fall back to the inline recipes below when the helper is unavailable or when the deploy target isn't a Docker container (Kubernetes, systemd, bare-metal — see subsections below).
-
-For Docker Compose / container deploys:
+Fallbacks:
 
 ```bash
-merged_at="<PR mergedAt UTC>"
+# Docker
 docker inspect --format '{{.Name}} {{.State.StartedAt}} {{.Image}}' <container>
-# PASS only if StartedAt is later than merged_at and the image/revision matches the deploy.
-```
+# PASS the guard only if StartedAt > mergedAt AND image matches the deploy.
 
-For GitOps/Kubernetes:
-
-```bash
+# GitOps / Kubernetes
 kubectl rollout status deployment/<name> --timeout=10m
-kubectl get deploy <name> -o jsonpath='{.metadata.annotations}{"\n"}{.status.conditions}{"\n"}'
-# PASS only if observed generation/revision advanced after merged_at or matches the merge SHA.
+# PASS the guard only if observed generation/revision > mergedAt or matches merge SHA.
 ```
 
-Rules:
+**docker-compose `.env` trap** — a fresh `StartedAt` isn't proof of a healthy deploy. `docker compose up` from a CWD without `.env` (worktrees, cron scripts) silently interpolates `${VAR}` refs to empty strings. Reject:
 
-- If `StartedAt` / rollout revision is older than `mergedAt`, verdict is `BLOCKED`: ask the orchestrator to deploy/redeploy, do not open the window.
-- If timestamps are close, run `date -u` and compare absolute UTC times. Do not rely on “five minutes from now” phrasing.
-- If you cannot inspect the running artifact, verdict is `BLOCKED` unless the orchestrator explicitly supplies another trustworthy artifact proof.
+- `docker compose up -d <svc>` from `.xtrm/worktrees/*` (worktrees are gitignored → no `.env`).
+- `docker compose --project-directory <path> up ...` (that flag does NOT auto-load `.env`; only `cd` or `--env-file` does).
 
-**Env-loading trap — mandatory check for docker-compose deploys.** Even a fresh `StartedAt` is not proof of a healthy deploy: if `docker compose up` was invoked from a CWD without `.env` (worktrees, cron scripts, other repos), Compose silently interpolates `${VAR}` refs to empty strings and bakes them into the container. One observed incident: empty `${ADMIN_CIDR}` in a `traefik/dynamic/middlewares.yml` produced YAML-invalid dynamic config, ALL routes 404-ed for 7h, container stayed "healthy". Before you attest a Compose deploy, ask the orchestrator (or check the shell history) for the exact invocation. Reject anything of the form:
-
-- `docker compose up -d <svc>` from a `.xtrm/worktrees/*` path (worktrees are gitignored → no `.env`).
-- `docker compose --project-directory <path> up ...` (that flag does NOT auto-load `.env` from the target dir; only `cd` or explicit `--env-file` does).
-
-Safe patterns:
-
-```bash
-cd /path/to/infra && docker compose up -d --force-recreate <svc>
-# OR
-docker compose \
-  -f /path/to/infra/docker-compose.yml \
-  --env-file /path/to/infra/.env \
-  up -d --force-recreate <svc>
-```
-
-If the infra repo ships a `make preflight-env` guard that greps `.env` for required vars — and you can confirm the operator ran it (or a wrapping `make reload` / `make up`) — that is your evidence. Otherwise verify by shelling into the deployed container: `docker exec <svc> env | grep -E '<REQUIRED_VAR_1>|<REQUIRED_VAR_2>'` — any of those empty is `BLOCKED`.
+Safe: `cd /path/to/infra && docker compose up -d --force-recreate <svc>` OR pass `--env-file` explicitly. If unsure: `docker exec <svc> env | grep -E '<REQUIRED_VAR>'` — any expected-set var empty → `BLOCKED`.
 
 ## Absolute-time sampling plan
 
-Default window: **60 minutes, 12 scheduled health samples, every 5 minutes, from T+5 through T+60**. You may also take a T+0 artifact/baseline sample immediately after the deploy-gap guard, but do not count it as the full 60-minute window. The orchestrator can choose a shorter window for low-risk changes, but it must be explicit.
+Default: **60 minutes, 12 scheduled health samples, every 5 minutes, T+5 → T+60**. Optional T+0 baseline immediately after the deploy-gap guard passes.
 
-At window start, write absolute UTC schedule into the log:
+Write the absolute UTC schedule into the log at window start:
 
 ```text
 Window start: 2026-07-03T12:15:00Z
-Optional T+0 artifact/baseline sample: 12:15Z
-Scheduled health samples: 12
-Cadence: 5m
-Sample times: 12:20Z, 12:25Z, ... 13:15Z
+Scheduled samples (5m cadence): 12:20Z, 12:25Z ... 13:15Z
 Window end no earlier than: 2026-07-03T13:15:00Z
 ```
 
-Before each sample:
-
-```bash
-date -u +%Y-%m-%dT%H:%M:%SZ
-```
-
-If the current time is before the scheduled sample time, wait. This prevents the relative-time paradox observed in past sprints, where a pane began “post-deploy” sampling before the deploy had happened.
+Before each sample: `date -u +%Y-%m-%dT%H:%M:%SZ`. If the current time is before the scheduled tick, wait.
 
 ## What each sample checks
 
-Use the PR-specific signal list first, then the generic order below. Prefer commands that print compact summaries and store raw output in a file.
+Use the PR-specific signal list first; then the generic order:
 
-1. **Tempo / traces** — service spans present, no new error spans, latency/cycle p50/p95 within target, expected marker spans still emitted. If your reverse proxy (Traefik) is itself an OTel producer emitting a root `EntryPoint` span per edge request with `service.name=traefik` and `http.status_code`, then `mcpq opentelemetry-mcp call find_errors` filtered to `service.name=traefik` is a trace-side complement to the check #6 curl probes for detecting edge 4xx spikes during the window.
+1. **Tempo / traces** — service spans present, no new error spans, p50/p95 within target. Producer presence check: `docker exec <prom> wget -qO- 'http://tempo:3200/api/search/tag/service.name/values' | jq .tagValues`. Do NOT trust `list_services` — it lags reality by minutes.
+2. **Prometheus / alerts** — no firing alerts for target, error rate steady, gauges within baseline.
+3. **Grafana dashboards** — panel URL / screenshot when human review helps.
+4. **Direct API health** — `/health`, freshness, source-specific sanity.
+5. **Direct DB queries** — last resort, scoped, read-only.
+6. **Public edge probes** (mandatory every sample). Read hosts from `$XTRM_EDGE_PROBES` (colon-separated), then `~/.xtrm/config/edge-probes.txt`, then `.xtrm/edge-probes.txt`. For each: `curl -sS -o /dev/null -w '%{http_code}' https://$host/`. Compare against per-host baseline (`# expected: 200` comments in the config). **Any subdomain returning an unexpected code — especially all-404 across the board — is edge-wide and HOLDs immediately.** Traefik dynamic-config regression: target-service metrics look green because no request reaches the target.
 
-    **Producer presence check — use Tempo direct, NOT `list_services`.** `mcpq opentelemetry-mcp call list_services` returns a cached/windowed view that lags reality by minutes; a new producer that started emitting seconds ago will show as absent even when spans are landing. Authoritative check for "is service `X` emitting spans right now":
-
-    ```bash
-    docker exec <prometheus-container> wget -qO- 'http://tempo:3200/api/search/tag/service.name/values' | jq .tagValues
-    ```
-
-    If the target service appears in `tagValues`, spans are landing; if `list_services` disagrees, trust Tempo. Cost of confusing them can be ~30 minutes of false-negative diagnosis.
-2. **Prometheus / alerts** — no firing alerts for target service, error rate steady, p95/DB wait/cycle-time gauges within baseline, freshness advancing.
-3. **Grafana dashboards** — screenshot or panel URL when useful for human review.
-4. **Direct API health** — `/health`, freshness endpoints, source-specific sanity checks.
-5. **Direct DB queries** — last resort, scoped and read-only.
-6. **Public edge probes** — MANDATORY every sample regardless of target service. A deploy that ships one service can still cascade-break the reverse proxy (env var missing, dynamic config regression, cert renewal failure) and leave the target service's own metrics looking clean while every external request 404s. The probe host list comes from an edge-probe config surface — read from `$XTRM_EDGE_PROBES` (colon-separated), else `~/.xtrm/config/edge-probes.txt` (one host per line), else the repo-local `.xtrm/edge-probes.txt`. If none are configured, log a warning and skip this check (do not silently pass):
-
-    ```bash
-    : "${XTRM_EDGE_PROBES:=$(cat ~/.xtrm/config/edge-probes.txt \
-      .xtrm/edge-probes.txt 2>/dev/null | tr '\n' ':' )}"
-    if [ -z "${XTRM_EDGE_PROBES}" ]; then
-      echo "WARN: no edge-probe hosts configured; skipping check #6"
-    else
-      IFS=: read -r -a hosts <<<"${XTRM_EDGE_PROBES}"
-      for host in "${hosts[@]}"; do
-        [ -z "$host" ] && continue
-        printf "%-45s %s\n" "$host" "$(curl -sS -o /dev/null -w '%{http_code}' https://$host/)"
-      done
-    fi
-    ```
-
-    Interpret against your per-stack baseline (e.g. `root=200`, `dashboards behind auth=403`, `APIs=401`). Record the expected code per host in the same config file as a comment (`host  # expected: 200`). **Any subdomain returning an unexpected code — especially all-404 across the board — is an edge-wide regression and HOLDs the window immediately**, regardless of what the target-service metrics say. See "HOLD policy" below.
-
-Example direct `mcpq` fallback shape:
-
-```bash
-mcpq opentelemetry-mcp tempo-query --service <service> --span <span> --window 15m --quantile p95
-mcpq prometheus query 'ALERTS{alertstate="firing",service="<service>"}'
-mcpq prometheus query '<service_specific_metric>{service="<service>"}'
-```
-
-If local Prometheus/Tempo ports are unreachable, check whether the service lives on a remote host/VPS and whether `mcpq` sidecars are configured. If no path to observability exists, `BLOCKED` is the honest verdict.
+If observability paths are unreachable, `BLOCKED` is the honest verdict.
 
 ## HOLD policy — page on the first abnormal sample
 
-On any abnormal sample:
-
-1. Append a `HOLD` line to the log and bead notes with the symptom and evidence.
+1. Append `HOLD` line to log + bead notes with symptom and evidence path.
 2. Immediately message the orchestrator and Judge.
-3. Re-sample the failing signal after ~30 seconds to distinguish transient flap from sustained regression.
-4. Continue or abort according to orchestrator direction and risk. Do not silently wait until the next 5-minute tick before reporting.
+3. Re-sample failing signal after ~30s to distinguish transient flap from sustained regression.
+4. Continue or abort per orchestrator direction — do not silently wait for the next tick.
 
-Special case — **edge-wide 4xx blackout** (from the check #6 public probes): treat as `HOLD` on the very first sample and page the orchestrator with symptom `"edge blackout"` and the row of subdomain → HTTP codes. Do not wait for a second sample; a Traefik dynamic-config regression starts on container-restart and does not self-heal. The Traefik container itself will report healthy, `up==0` will be empty, and target-service metrics will look identical to a legitimate quiet window — because no request ever reaches the target service. This is the failure mode from bead `infra-cewa` (2026-07-08, 7h edge blackout during multiplexed sprints).
+Special case — **edge-wide 4xx blackout** (check #6): first sample HOLD, page symptom `"edge blackout"` with subdomain → HTTP code table. Do not wait for a second sample.
 
 ```bash
 bd update <bead> --notes "DEPLOY SAMPLE T+25m HOLD: <symptom>; evidence: <query-or-log-path>"
 xtmux message-send --to <orchestrator> --bead <bead> --text "HOLD at T+25m: <symptom>"
-xtmux message-send --to <judge> --bead <bead> --text "deploy HOLD at T+25m: <symptom>"
+xtmux message-send --to <judge>        --bead <bead> --text "deploy HOLD at T+25m: <symptom>"
 ```
-
-A single flap can still end in `PASS`, but the final report must say it happened, when it cleared, and why it is acceptable.
 
 ## Evidence and reporting
 
-Keep a sample log in the affected repo when possible:
+Sample log path: `.xtrm/deploy-monitor/<bead-or-service>-pr<N>-<sha>.md`
 
-```text
-.xtrm/deploy-monitor/<bead-or-service>-pr<N>-<sha>.md
-```
+Line shape: `T+15m OK — artifact <StartedAt>; alerts=0; p95=<v>; freshness=<v>; evidence=<query/log/panel>`
 
-Each sample line should fit this shape:
-
-```text
-T+15m OK — artifact <container StartedAt>; alerts=0; p95=<value>; freshness=<value>; evidence=<query/log/panel>
-T+25m HOLD — ServiceDown ext-multi-source:8005; cleared on 30s resample; evidence=<query/log/panel>
-```
-
-Bead notes get compact status, not raw logs:
+Final:
 
 ```bash
-bd update <bead> --notes "DEPLOY SAMPLE T+15m OK: alerts=0 p95=<value> evidence=<path-or-url>"
-bd update <bead> --notes "DEPLOY VERDICT: PASS — 12 scheduled samples through T+60, artifact StartedAt > mergedAt, no sustained alerts; log <path>"
-xtmux message-send --to <orchestrator> --bead <bead> --text "deploy verdict PR <N>: PASS — see bead/log"
+bd update <bead> --notes "DEPLOY VERDICT: PASS — 12 samples through T+60, artifact StartedAt > mergedAt, no sustained alerts; log <path>"
+xtmux message-send --to <orchestrator> --bead <bead> --expects-reply=false --json \
+  --text "deploy verdict PR <N>: PASS — see bead/log"
 ```
 
-Do not close the anchor bead unless the orchestrator explicitly assigned closure authority. Usually the orchestrator closes after Judge + Deploy Monitor evidence are both present.
+## Retrieval hierarchy
 
-## Context management
+Prefer durable sources over live scraping:
 
-Observability tools can return kilobytes per query. Protect the pane's context window:
+- `xtmux message-get <messageKey> --json` — the message that anchored a reply obligation.
+- `xtmux agent-last <pane_id> --json` — last completed turn on a pane.
+- `sp result <job-id> --json` — final specialist output.
+- `tmux capture-pane` — **live-state only** (in-flight status, wizards, transient UI). Never as final-result protocol.
 
-- Store raw query output in files; paste only summaries into bead notes.
-- Use scripts or `ctx_execute`-style summarizers when output may exceed a screenful.
-- Prefer a background sampler (`process` / `xtmux monitor-agent` / a repo script) over hand-polling in chat.
-- If context usage climbs during a long window, run `/compact` between samples after writing the current state to the log and bead notes.
-- For high-risk 60-minute windows, prefer a larger-context model or split roles: a thin sampler writes logs, a verdict pane reads summaries.
+## Failure / escalation trigger
 
-## What not to do
+Escalate to orchestrator (not silently HOLD longer) when: pane context climbs past ~60% during a long window (run `/compact` between samples first), Codex/observability tool returns kilobytes per query and the summarizer fails, or `verify-deploy-applied` returns 2 (dependency error) — a `BLOCKED` verdict with the specific dep missing lets the orchestrator fix and reissue.
 
-- Do not review the PR for merge-readiness; that is the Judge.
-- Do not merge, revert, redeploy, or edit code unless explicitly reassigned by the orchestrator.
-- Do not open a green window against a stale artifact.
-- Do not treat missing observability as success.
-- Do not bury raw logs in tmux messages; messages are one-line pointers.
+## When NOT to use this skill
 
-## Provenance
-
-Extracted from a multi-pane sprint deploy-monitor protocol and eval findings:
-
-- EVAL-21: DM pane context ran hot on long windows.
-- EVAL-22: stale running container measured as post-deploy; deploy-gap guard required.
-- EVAL-23: relative-time sampling started too early; absolute UTC schedule required.
-- EVAL-14: first HOLD sample should page immediately, then re-sample quickly.
-- Edge-wide 404 blackout during a multiplexed sprint went undetected for 7h because every DM check was service-scoped. Public-edge probes (check #6) added as a mandatory per-sample step so a reverse-proxy dynamic-config regression cannot hide behind a green target-service dashboard.
+- Reviewing the PR itself → `/pr-reviewer` owns merge-readiness; this skill owns "safe to have merged".
+- Merging / reverting / redeploying → orchestrator authority; escalate.
+- Missing observability treated as success → `BLOCKED`, always.
+- Burying raw logs in tmux messages — messages are one-line pointers.

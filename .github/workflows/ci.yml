@@ -96,6 +96,9 @@ jobs:
     - name: Flat active skills layout guard
       run: npm run check:layout-guards
 
+    - name: Skill root budget guard
+      run: npm run check:skill-root-budget
+
     - name: Run Tests
       run: |
         npm test --prefix cli
