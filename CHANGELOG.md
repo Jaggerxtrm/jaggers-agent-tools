@@ -69,6 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Refresh unreleased entries** ([ae9bd54](https://github.com/xtrm-dev/core/commit/ae9bd54b690ed58f9ce9e8771293c4dfa5f7f594)) — 2026-07-25 15:46
 
+- **Drop dead legacy hook wiring** ([2a5487e](https://github.com/xtrm-dev/core/commit/2a5487e5ec8bbeca404b4b995cb8b0bbcd26e0ad)) — 2026-07-25 16:01
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
