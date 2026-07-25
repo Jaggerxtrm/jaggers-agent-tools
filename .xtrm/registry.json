@@ -174,7 +174,7 @@
           "version": "0.11.2"
         },
         "deploy-monitor/SKILL.md": {
-          "hash": "cb0f523edb1d4b6394ab991b6ce8aa88cf0687656bc6a3f85b65dadf66cf1e78",
+          "hash": "b243b021043bac5c5473b0d616517b05ac829d2ea6e0c6312d06ff9bc4d56e8c",
           "version": "0.11.2"
         },
         "documenting/CHANGELOG.md": {
@@ -638,7 +638,7 @@
           "version": "0.11.2"
         },
         "multiplexing-team/SKILL.md": {
-          "hash": "efe2c3a9bbff08f408d9577cee3d9ae2151ac8a6c9ab4ab0bf9ea6b47c3824c5",
+          "hash": "e355207b4be709090c311e78f18511223fe0a3cccca526e162fc18a5d2a002cf",
           "version": "0.11.2"
         },
         "multiplexing/scripts/verify-deploy-applied.sh": {
@@ -646,7 +646,7 @@
           "version": "0.11.2"
         },
         "multiplexing/SKILL.md": {
-          "hash": "9cf91e44a7ecdae5ed1b57a2042e951d40bb0f6a8e15011447be5bfc9d369ccc",
+          "hash": "da494fc58f5fa82d6f45d30310f7c62dc96b2c899f8dfb10b06a493a091f5f23",
           "version": "0.11.2"
         },
         "planning/SKILL.md": {
@@ -654,7 +654,7 @@
           "version": "0.11.2"
         },
         "pr-reviewer/SKILL.md": {
-          "hash": "4a56d9bb089ac7fb05cbf60e9b526550bbfa1dfb074d72d2f1f84cb9dfcc0f8b",
+          "hash": "092b98c411912495ae6ec6bf44f4c9b87cc5d3f343b27822943ca2389b1ac1e3",
           "version": "0.11.2"
         },
         "premortem/SKILL.md": {
@@ -1006,7 +1006,7 @@
           "version": "0.11.2"
         },
         "using-specialists/SKILL.md": {
-          "hash": "af5725c1e034dd9181452704abdaf5eaa0e0476e2f1c54d9734e3a50e49fbdb7",
+          "hash": "d0f126d1a4fdc2cde0048a85d8bf4d1e9bb16e9d3401c4807bf7933e23461796",
           "version": "0.11.2"
         },
         "using-tdd/SKILL.md": {
