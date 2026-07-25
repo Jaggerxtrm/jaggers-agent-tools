@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **--epic <id> scoped export with notes (xtrm-ipf4n) (#498)** ([a20d52e](https://github.com/xtrm-dev/core/commit/a20d52e5052b089d1c344330cc1a09e91cc80e7d)) — 2026-07-24 21:30
 
-- **Assign beaded sessions from runtime origin** ([94c7d7d](https://github.com/xtrm-dev/core/commit/94c7d7dca0495c78be7a8b5ae89fd1fd8039c13b)) — 2026-07-25 15:56
+- **Assign beaded sessions from runtime origin (#508)** ([2fdcef8](https://github.com/xtrm-dev/core/commit/2fdcef84933664a908d06e301b164625afe93fe4)) — 2026-07-25 18:21
 
 ### Fixed
 
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Close topology and reuse P1 gaps (#506)** ([bee5f42](https://github.com/xtrm-dev/core/commit/bee5f42b53943cd5e36476988e4ccb29a3ae54a9)) — 2026-07-25 14:03
 
-- **Resolve assignee from launched pane** ([a5c91e5](https://github.com/xtrm-dev/core/commit/a5c91e5bd2e99e1c4b9a5cd741dad7d29fda20ef)) — 2026-07-25 16:13
+- **Retire dead specialists hooks** ([d37d8d7](https://github.com/xtrm-dev/core/commit/d37d8d7d9ee090a5170a5b2c3253741515c2802b)) — 2026-07-25 19:16
 
 ### Other changes
 
@@ -66,8 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reconcile SKILL.md + CLAUDE.md with pr-review-gate wave-2 reality (xtrm-54zwl.8)** ([2ff4e42](https://github.com/xtrm-dev/core/commit/2ff4e42aa49001fe7a40918d09636e594c79ca78)) — 2026-07-25 11:25
 
 - **Slim 4 orchestration roots + retire MSG-06 rows + budget check (xtrm-wiy5n.1.1) (#504)** ([4ca674e](https://github.com/xtrm-dev/core/commit/4ca674ef066b724b2640cb028123d6bdfc575eb1)) — 2026-07-25 12:38
-
-- **Refresh changelog** ([2eb29ce](https://github.com/xtrm-dev/core/commit/2eb29ce1c5743f204ac34bc995c7950306d08d92)) — 2026-07-25 15:57
 
 - **Align xtmux communication contracts (#507)** ([362db69](https://github.com/xtrm-dev/core/commit/362db69aa09936f4498927bbc6685bc0fd1fd27a)) — 2026-07-25 16:08
 
