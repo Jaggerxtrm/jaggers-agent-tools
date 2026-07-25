@@ -65,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Pin CLI --help as authority + restore pi/claude slash gotcha (xtrm-wiy5n.1.1)** ([58c6b31](https://github.com/xtrm-dev/core/commit/58c6b31f0cfa3b971444bd3e6fa733a17f2f029c)) — 2026-07-25 12:01
 
+- **Rebuild dist against clean npm ci install (xtrm-wiy5n.1.1)** ([1070c2c](https://github.com/xtrm-dev/core/commit/1070c2c6ed513b2038b80e728f676cceb89dacbd)) — 2026-07-25 12:26
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
