@@ -33,14 +33,13 @@ if (args[0] === 'update') {
 }
 process.exit(2);
 `);
-    writeFileSync(path.join(bin, 'xtmux'), `#!/usr/bin/env node
-process.stdout.write(JSON.stringify({
-  schema_version: 'xtrm.runtime-origin.v1',
-  agent_instance_id: process.env.TEST_RUNTIME_INSTANCE || undefined,
-}));
+    writeFileSync(path.join(bin, 'tmux'), `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (!args.includes('%7') || !args.includes('@agent_instance_id')) process.exit(2);
+process.stdout.write(process.env.TEST_RUNTIME_INSTANCE || '');
 `);
     chmodSync(path.join(bin, 'bd'), 0o755);
-    chmodSync(path.join(bin, 'xtmux'), 0o755);
+    chmodSync(path.join(bin, 'tmux'), 0o755);
 
     const previous = {
         path: process.env.PATH,
@@ -94,7 +93,7 @@ describe('assignBeadToRuntime', () => {
         ['claude' as const, '9y3mn-origin', 'claude/9y3mn'],
     ])('updates %s bead ownership from runtime-origin', async (runtime, instanceId, expected) => {
         await withFakeCommands({ instanceId }, async (capture) => {
-            assignBeadToRuntime('xtrm-test', runtime, process.cwd());
+            await assignBeadToRuntime('xtrm-test', runtime, '%7', process.cwd());
             const args = JSON.parse(readFileSync(capture, 'utf8').trim());
             expect(args).toEqual(['update', 'xtrm-test', `--assignee=${expected}`, '--json']);
         });
@@ -102,14 +101,14 @@ describe('assignBeadToRuntime', () => {
 
     it('updates a prior runtime assignee on restart', async () => {
         await withFakeCommands({ assignee: 'pi/old12', instanceId: 'new34-origin' }, async (capture) => {
-            assignBeadToRuntime('xtrm-test', 'pi', process.cwd());
+            await assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd());
             expect(readFileSync(capture, 'utf8')).toContain('--assignee=pi/new34');
         });
     });
 
     it('preserves an operator assignee override', async () => {
         await withFakeCommands({ assignee: 'operator', instanceId: 'new34-origin' }, async (capture) => {
-            assignBeadToRuntime('xtrm-test', 'pi', process.cwd());
+            await assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd());
             expect(() => readFileSync(capture, 'utf8')).toThrow();
         });
     });
@@ -117,7 +116,7 @@ describe('assignBeadToRuntime', () => {
     it('warns but does not abort when bd update fails', async () => {
         const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         await withFakeCommands({ instanceId: '4h2xk-origin', updateFails: true }, async () => {
-            expect(() => assignBeadToRuntime('xtrm-test', 'pi', process.cwd())).not.toThrow();
+            await expect(assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd())).resolves.toBeUndefined();
         });
         expect(error).toHaveBeenCalledWith(expect.stringContaining('session launch continues'));
     });

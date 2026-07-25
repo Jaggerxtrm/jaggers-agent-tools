@@ -61913,6 +61913,7 @@ var RUNTIME_ARG_BYTE_CEILING = 128 * 1024 - 1;
 var TMUX_CONSUMER_READY_TIMEOUT_MS = 5e3;
 var TMUX_PAYLOAD_READY_TIMEOUT_MS = 5e3;
 var RUNTIME_ORIGIN_SLUG_LENGTH = 5;
+var RUNTIME_ORIGIN_WAIT_ATTEMPTS = 50;
 var AUTO_ASSIGNEE_RE = /^(?:pi|claude)\/[a-z0-9]{5}$/;
 function runtimeAssigneeFromOrigin(runtime, runtimeOriginId) {
   const tail = runtimeOriginId.trim().split(/[/:]/).filter(Boolean).at(-1);
@@ -61922,7 +61923,7 @@ function runtimeAssigneeFromOrigin(runtime, runtimeOriginId) {
 function shouldAutoAssignBead(assignee) {
   return !assignee || AUTO_ASSIGNEE_RE.test(assignee);
 }
-function assignBeadToRuntime(bead, runtime, cwd) {
+async function assignBeadToRuntime(bead, runtime, paneId, cwd, previousInstanceId = "") {
   const warn2 = (message) => console.error(kleur_default.yellow(`  \u26A0 bead assignee: ${message}`));
   const show = (0, import_node_child_process.spawnSync)("bd", ["show", bead, "--json"], { cwd, encoding: "utf8", stdio: "pipe" });
   if (show.status !== 0) {
@@ -61937,20 +61938,27 @@ function assignBeadToRuntime(bead, runtime, cwd) {
     warn2(`invalid bd show output for ${bead}; session launch continues`);
     return;
   }
-  const context = (0, import_node_child_process.spawnSync)("xtmux", ["context", "--current", "--json"], { encoding: "utf8", stdio: "pipe" });
-  try {
-    const origin = JSON.parse(context.stdout ?? "");
-    const assignee = runtimeAssigneeFromOrigin(runtime, origin.agent_instance_id ?? "");
-    if (context.status !== 0 || !assignee) throw new Error("runtime-origin unavailable");
-    const update = (0, import_node_child_process.spawnSync)("bd", ["update", bead, `--assignee=${assignee}`, "--json"], {
-      cwd,
+  let instanceId = "";
+  for (let attempt = 0; attempt < RUNTIME_ORIGIN_WAIT_ATTEMPTS; attempt++) {
+    const context = (0, import_node_child_process.spawnSync)("tmux", ["show-options", "-p", "-t", paneId, "-qv", "@agent_instance_id"], {
       encoding: "utf8",
       stdio: "pipe"
     });
-    if (update.status !== 0) warn2(`could not set ${bead} to ${assignee}; session launch continues`);
-  } catch {
-    warn2(`runtime-origin unavailable for ${bead}; session launch continues`);
+    instanceId = context.status === 0 ? (context.stdout ?? "").trim() : "";
+    if (instanceId && instanceId !== previousInstanceId) break;
+    await new Promise((resolve5) => setTimeout(resolve5, 100));
   }
+  const assignee = runtimeAssigneeFromOrigin(runtime, instanceId);
+  if (!assignee) {
+    warn2(`runtime-origin unavailable for ${bead}; session launch continues`);
+    return;
+  }
+  const update = (0, import_node_child_process.spawnSync)("bd", ["update", bead, `--assignee=${assignee}`, "--json"], {
+    cwd,
+    encoding: "utf8",
+    stdio: "pipe"
+  });
+  if (update.status !== 0) warn2(`could not set ${bead} to ${assignee}; session launch continues`);
 }
 function worktreeHasProjectUserPacks(worktreePath) {
   const userPacksRoot = import_node_path12.default.join(worktreePath, ".xtrm", "skills", "user", "packs");
@@ -63018,6 +63026,10 @@ async function launchTmuxSession(args) {
       process.stderr.write(kleur_default.red("\n  \u2717 Could not resolve current pane id\n"));
       process.exit(1);
     }
+    const previousInstanceId = bead ? ((0, import_node_child_process.spawnSync)("tmux", ["show-options", "-p", "-t", paneId2, "-qv", "@agent_instance_id"], {
+      encoding: "utf8",
+      stdio: "pipe"
+    }).stdout ?? "").trim() : "";
     for (const { key, value } of plan.paneOptions) {
       (0, import_node_child_process.spawnSync)("tmux", ["set-option", "-p", "-t", paneId2, key, value], { stdio: "pipe" });
     }
@@ -63035,13 +63047,25 @@ async function launchTmuxSession(args) {
         task_prompt_components: args.renderedTask ? JSON.stringify(args.renderedTask.components) : ""
       });
     }
-    if (bead) assignBeadToRuntime(bead, runtime, worktreePath);
-    const runtimeResult = (0, import_node_child_process.spawnSync)(plan.runtimeCmd, plan.runtimeArgs, {
+    if (!bead) {
+      const runtimeResult = (0, import_node_child_process.spawnSync)(plan.runtimeCmd, plan.runtimeArgs, {
+        cwd: worktreePath,
+        stdio: "inherit",
+        env: { ...process.env, ...agentEnv }
+      });
+      process.exit(runtimeResult.status ?? 0);
+    }
+    const runtimeProcess = (0, import_node_child_process.spawn)(plan.runtimeCmd, plan.runtimeArgs, {
       cwd: worktreePath,
       stdio: "inherit",
       env: { ...process.env, ...agentEnv }
     });
-    process.exit(runtimeResult.status ?? 0);
+    const runtimeExit = new Promise((resolve5) => {
+      runtimeProcess.once("error", () => resolve5(1));
+      runtimeProcess.once("exit", (code) => resolve5(code ?? 1));
+    });
+    await assignBeadToRuntime(bead, runtime, paneId2, worktreePath, previousInstanceId);
+    process.exit(await runtimeExit);
   }
   const sessionExists = (name) => {
     const r = (0, import_node_child_process.spawnSync)("tmux", ["has-session", "-t", `=${name}`], { stdio: "pipe" });
@@ -63186,7 +63210,7 @@ async function launchTmuxSession(args) {
   for (const { key, value } of plan.paneOptions) {
     (0, import_node_child_process.spawnSync)("tmux", ["set-option", "-p", "-t", paneId, key, value], { stdio: "pipe" });
   }
-  if (bead) assignBeadToRuntime(bead, runtime, worktreePath);
+  if (bead) await assignBeadToRuntime(bead, runtime, paneId, worktreePath);
   if (args.mode === "role") {
     emitAgentRoleLaunched({
       pane: paneId,
