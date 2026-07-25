@@ -258,7 +258,7 @@ Policies in `policies/` are the single source of truth for all enforcement rules
 | `quality-gates.json` | both | Linting/typechecking on file edits |
 | `quality-gates-env.json` | both | Warns if tsc/ruff/eslint missing at session start |
 | `gitnexus.json` | claude | Knowledge graph enrichment |
-| `using-xtrm.json` | claude | Injects session manual at SessionStart |
+| `using-xtrm.json` | pi | Injects project memory through the xtrm-loader extension |
 | `worktree-boundary.json` | claude | Blocks edits outside active worktree |
 | `service-skills.json` | pi | Territory-based skill activation |
 

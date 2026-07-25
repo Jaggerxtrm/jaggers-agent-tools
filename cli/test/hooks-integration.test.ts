@@ -59,66 +59,6 @@ function createFakeWhich(scriptBody: string): string {
   return binDir;
 }
 
-describe('using-xtrm-reminder.mjs integration', () => {
-  it('injects SKILL.md content end-to-end without CLAUDE_PLUGIN_ROOT', () => {
-    const projectDir = createTempProject('xtrm-hook-using-');
-    const skillDir = path.join(projectDir, '.xtrm', 'skills', 'default', 'using-xtrm');
-
-    mkdirSync(skillDir, { recursive: true });
-    writeFileSync(
-      path.join(skillDir, 'SKILL.md'),
-      ['---', 'title: Using XTRM', '---', '', 'Always run bd prime first.'].join('\n'),
-      'utf8',
-    );
-
-    try {
-      const result = invokeHook('using-xtrm-reminder.mjs', { cwd: projectDir }, { CLAUDE_PLUGIN_ROOT: undefined });
-      expect(result.exitCode).toBe(0);
-
-      const output = parseHookOutput(result.stdout);
-      expect(output.hookSpecificOutput).toBeDefined();
-      expect(String(output.hookSpecificOutput.additionalSystemPrompt)).toContain('Always run bd prime first.');
-      expect(String(output.hookSpecificOutput.additionalSystemPrompt)).not.toContain('title: Using XTRM');
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true });
-    }
-  });
-
-  it('fails open (exit 0, no output) when .xtrm/skills/default is missing', () => {
-    const projectDir = createTempProject('xtrm-hook-using-missing-');
-
-    try {
-      const result = invokeHook('using-xtrm-reminder.mjs', { cwd: projectDir }, { CLAUDE_PLUGIN_ROOT: undefined });
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout.trim()).toBe('');
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true });
-    }
-  });
-
-  it('appends .xtrm/memory.md after SKILL.md content', () => {
-    const projectDir = createTempProject('xtrm-hook-using-memory-');
-    const skillDir = path.join(projectDir, '.xtrm', 'skills', 'default', 'using-xtrm');
-
-    mkdirSync(skillDir, { recursive: true });
-    writeFileSync(path.join(skillDir, 'SKILL.md'), 'Primary skill content.', 'utf8');
-    writeFileSync(path.join(projectDir, '.xtrm', 'memory.md'), 'Memory appendix.', 'utf8');
-
-    try {
-      const result = invokeHook('using-xtrm-reminder.mjs', { cwd: projectDir }, { CLAUDE_PLUGIN_ROOT: undefined });
-      expect(result.exitCode).toBe(0);
-
-      const output = parseHookOutput(result.stdout);
-      const prompt = String(output.hookSpecificOutput.additionalSystemPrompt);
-      expect(prompt).toContain('Primary skill content.');
-      expect(prompt).toContain('Memory appendix.');
-      expect(prompt.indexOf('Primary skill content.')).toBeLessThan(prompt.indexOf('Memory appendix.'));
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true });
-    }
-  });
-});
-
 describe('quality-check-env.mjs integration', () => {
   it('checks for tsc/eslint/ruff when quality-check hook is present', () => {
     const projectDir = createTempProject('xtrm-hook-qenv-present-');

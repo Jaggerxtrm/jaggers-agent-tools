@@ -58,7 +58,7 @@ Other event groups retain the standard wrapper shape without the `script` field.
 
 | Policy | Runtime | Description |
 |---|---|---|
-| `using-xtrm.json` | claude | Injects the using-xtrm operating manual at `SessionStart` |
+| `using-xtrm.json` | pi | Injects project memory through the xtrm-loader extension |
 | `worktree-boundary.json` | claude | Blocks write/edit tools outside active `.xtrm/worktrees/<name>` |
 | `session-flow.json` | both | Claim sync + stop gate + worktree session end workflow |
 | `beads.json` | both | Edit/commit/memory/compact enforcement. Includes `PreCompact` (save) and `SessionStart` (restore) hooks for beads-compact state persistence. |
