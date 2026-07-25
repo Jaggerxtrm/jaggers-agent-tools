@@ -209,6 +209,35 @@ describe('the join', () => {
         expect(p.panes[0].jobs.map((j) => j.job_id)).toEqual(['900']);
     });
 
+    it('enumerates worktrees for panes in another repository', async () => {
+        const otherPane = paneLine({
+            pane_id: '%77', session_id: '$7', current_path: '/other/.worktrees/reviewer',
+        });
+        const otherGit = [
+            'worktree /other', 'HEAD 111111', 'branch refs/heads/main', '',
+            'worktree /other/.worktrees/reviewer', 'HEAD 222222', 'branch refs/heads/sp/reviewer-901', '',
+        ].join('\n');
+        const calls: Array<{ bin: string; cwd?: string }> = [];
+        const runner: CommandRunner = async (bin, args, opts) => {
+            calls.push({ bin, cwd: opts.cwd });
+            if (bin === 'git') return OK(opts.cwd?.startsWith('/other') ? otherGit : GIT_PORCELAIN);
+            if (bin === 'tmux') return OK(`${COORD_PANE}\n${SHELL_PANE}\n${otherPane}\n`);
+            return healthyResponses[bin as keyof typeof healthyResponses] ?? { kind: 'missing' };
+        };
+        const p = await collectProjection({
+            runner,
+            now: () => 1_000,
+            cwd: '/repo',
+            includeGithub: true,
+        });
+
+        expect(p.panes.find((pane) => pane.pane_id === '%77')?.worktree).toMatchObject({
+            path: '/other/.worktrees/reviewer',
+            branch: 'sp/reviewer-901',
+        });
+        expect(calls.filter((call) => call.bin === 'git').map((call) => call.cwd)).toEqual(['/repo', '/other/.worktrees/reviewer']);
+    });
+
     it('records every pane sharing a worktree, which is the collision signal', async () => {
         const twin = paneLine({ pane_id: '%3', session_id: '$9', current_path: '/repo' });
         const { p } = await collect({ ...healthyResponses, tmux: OK(`${SHELL_PANE}\n${twin}\n`) });

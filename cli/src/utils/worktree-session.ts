@@ -1439,6 +1439,32 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // Resolve slug — shared by both branch and worktree path so they're linked
     const slug = name ?? randomSlug(4);
 
+    // Reuse is resolved before any worktree, branch, or runtime scaffolding is
+    // created. Otherwise a successful session reuse leaves the provisional
+    // checkout orphaned behind.
+    const reuseRequested = Boolean(opts.reuse) && (Boolean(newSession) || !process.env.TMUX);
+    if (reuseRequested) {
+        const roleSlug = resolvedRole ? slugifyForSession(resolvedRole.name) : null;
+        const sessionName = roleSlug
+            ? `role-${runtime}-${roleSlug}${bead ? `-${slugifyForSession(bead)}` : ''}`
+            : `${runtime}-${slugifyForSession(slug)}`;
+        const sessionExists = spawnSync('tmux', ['has-session', '-t', `=${sessionName}`], { stdio: 'pipe' }).status === 0;
+        if (sessionExists) {
+            const paneQuery = spawnSync('tmux', ['list-panes', '-t', sessionName, '-F', '#{pane_id}'], {
+                stdio: 'pipe', encoding: 'utf8',
+            });
+            const existingPane = (paneQuery.stdout ?? '').trim().split('\n')[0] ?? '';
+            if (!attach) {
+                process.stdout.write(`${sessionName}:${existingPane}\n`);
+                process.exit(0);
+            }
+            const attachResult = spawnSync('tmux', chooseAttachCommand(sessionName, Boolean(process.env.TMUX)), {
+                stdio: 'inherit',
+            });
+            process.exit(attachResult.status ?? 0);
+        }
+    }
+
     // Worktree path: inside repo under .xtrm/worktrees/
     const worktreeName = `${cwdBasename}-xt-${runtime}-${slug}`;
     const worktreePath = path.join(mainRepoRoot, '.xtrm', 'worktrees', worktreeName);

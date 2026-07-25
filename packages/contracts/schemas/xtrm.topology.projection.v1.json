@@ -21,6 +21,16 @@
         "sources": {
             "description": "Per-source outcome ledger. The projection's own observability surface, and the ONLY way a consumer can distinguish a degraded projection from an empty world: an absent `sp` and zero running jobs both yield an empty jobs array, and only this ledger separates them.",
             "type": "array",
+            "minItems": 6,
+            "uniqueItems": true,
+            "allOf": [
+                { "contains": { "type": "object", "properties": { "name": { "const": "xtmux" } }, "required": ["name"] } },
+                { "contains": { "type": "object", "properties": { "name": { "const": "tmux" } }, "required": ["name"] } },
+                { "contains": { "type": "object", "properties": { "name": { "const": "specialists" } }, "required": ["name"] } },
+                { "contains": { "type": "object", "properties": { "name": { "const": "beads" } }, "required": ["name"] } },
+                { "contains": { "type": "object", "properties": { "name": { "const": "git" } }, "required": ["name"] } },
+                { "contains": { "type": "object", "properties": { "name": { "const": "github" } }, "required": ["name"] } }
+            ],
             "items": {
                 "type": "object",
                 "required": ["name", "status", "reason", "duration_ms"],
