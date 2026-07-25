@@ -72,7 +72,7 @@ export function createPiCommand(): Command {
         .description('Launch a Pi session in a sandboxed worktree, or manage the Pi runtime')
         .argument('[name]', 'Optional session name — used as xt/<name> branch (random if omitted)')
         .option('--role <name>', 'Launch pi as a specialist role (resolved via `sp view <name>`); creates a named tmux session with @agent_task metadata')
-        .option('--bead <id>', 'Bind a bead to the session. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only — @agent_bead pane option + XTMUX_AGENT_BEAD — and combines freely with --prompt')
+        .option('--bead <id>', 'Bind a bead to the session and auto-populate its assignee as pi/<slug> from runtime-origin. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only — @agent_bead pane option + XTMUX_AGENT_BEAD — and combines freely with --prompt')
         .option('--prompt <text>', 'Use <text> as the initial user prompt. A leading /skill:<name> is the supported way to load a skill on turn 1')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
         .option('--model <name>', 'Forward `--model <name>` to pi; with --role, overrides specialist.execution.model')

@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **--epic <id> scoped export with notes (xtrm-ipf4n) (#498)** ([a20d52e](https://github.com/xtrm-dev/core/commit/a20d52e5052b089d1c344330cc1a09e91cc80e7d)) — 2026-07-24 21:30
 
+- **Assign beaded sessions from runtime origin** ([94c7d7d](https://github.com/xtrm-dev/core/commit/94c7d7dca0495c78be7a8b5ae89fd1fd8039c13b)) — 2026-07-25 15:56
+
 ### Fixed
 
 - **Summary lines double-print epic id (xtrm-5swny) (#499)** ([87fc6b8](https://github.com/xtrm-dev/core/commit/87fc6b80b1acae51d431507104e6566071b94e32)) — 2026-07-24 21:34
@@ -25,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Close topology and reuse P1 gaps (#506)** ([bee5f42](https://github.com/xtrm-dev/core/commit/bee5f42b53943cd5e36476988e4ccb29a3ae54a9)) — 2026-07-25 14:03
 
-- **Preserve Claude project memory injection** ([09ba4ee](https://github.com/xtrm-dev/core/commit/09ba4ee3f91a929abc540d3b9434a0e23616618e)) — 2026-07-25 15:59
+- **Resolve assignee from launched pane** ([a5c91e5](https://github.com/xtrm-dev/core/commit/a5c91e5bd2e99e1c4b9a5cd741dad7d29fda20ef)) — 2026-07-25 16:13
 
 ### Other changes
 
@@ -65,11 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Slim 4 orchestration roots + retire MSG-06 rows + budget check (xtrm-wiy5n.1.1) (#504)** ([4ca674e](https://github.com/xtrm-dev/core/commit/4ca674ef066b724b2640cb028123d6bdfc575eb1)) — 2026-07-25 12:38
 
-- **Align xtmux communication contracts** ([9884a3a](https://github.com/xtrm-dev/core/commit/9884a3a152364ed02807039c7d9f196206474a2d)) — 2026-07-25 15:44
+- **Refresh changelog** ([2eb29ce](https://github.com/xtrm-dev/core/commit/2eb29ce1c5743f204ac34bc995c7950306d08d92)) — 2026-07-25 15:57
 
-- **Refresh unreleased entries** ([ae9bd54](https://github.com/xtrm-dev/core/commit/ae9bd54b690ed58f9ce9e8771293c4dfa5f7f594)) — 2026-07-25 15:46
-
-- **Drop dead legacy hook wiring** ([2a5487e](https://github.com/xtrm-dev/core/commit/2a5487e5ec8bbeca404b4b995cb8b0bbcd26e0ad)) — 2026-07-25 16:01
+- **Align xtmux communication contracts (#507)** ([362db69](https://github.com/xtrm-dev/core/commit/362db69aa09936f4498927bbc6685bc0fd1fd27a)) — 2026-07-25 16:08
 
 ## [v0.11.2] — 2026-07-22
 
