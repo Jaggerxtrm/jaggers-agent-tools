@@ -190,6 +190,30 @@ describe('registry.json schema', () => {
   });
 });
 
+describe('managed specialists hook payload', () => {
+  it('ships only the live specialists hooks', async () => {
+    const repoRoot = path.resolve(process.cwd(), '..');
+    const registry = parseRegistryManifest(
+      JSON.parse(await fs.readFile(path.join(repoRoot, '.xtrm', 'registry.json'), 'utf8')),
+    );
+    const registeredHooks = Object.keys(registry.assets.hooks.files)
+      .filter(file => file === 'specialists-agent-guard.mjs' || file.startsWith('specialists/'))
+      .sort();
+    const shippedHooks = [
+      'specialists-agent-guard.mjs',
+      ...(await fs.readdir(path.join(repoRoot, '.xtrm', 'hooks', 'specialists')))
+        .filter(file => file.endsWith('.mjs'))
+        .map(file => `specialists/${file}`),
+    ].sort();
+
+    expect(shippedHooks).toEqual([
+      'specialists-agent-guard.mjs',
+      'specialists/specialists-memory-cache-sync.mjs',
+    ]);
+    expect(registeredHooks).toEqual(shippedHooks);
+  });
+});
+
 describe('gen-registry idempotence', () => {
   it('produces identical registry hash when run twice', async () => {
     const tempRoot = await createTempDir();

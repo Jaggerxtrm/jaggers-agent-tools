@@ -82,16 +82,8 @@
           "hash": "ef4755858eae64e8a0830d1dcbaa4e08962d9ae107729d4797154acad687621c",
           "version": "0.11.2"
         },
-        "specialists/specialists-complete.mjs": {
-          "hash": "bfb398987a2338836ddd4ecf5a590e357c7905a2e81c20bc4e4f6c15c2e7ee4a",
-          "version": "0.11.2"
-        },
         "specialists/specialists-memory-cache-sync.mjs": {
           "hash": "2c76e6dea71a0eaf3367656fcd9d0cd7aa5815e3cf87511e3dcee313f467f192",
-          "version": "0.11.2"
-        },
-        "specialists/specialists-session-start.mjs": {
-          "hash": "44293d88f2c997b70309170b33fc34fa5565910e1f35045163398150bb6e3b5d",
           "version": "0.11.2"
         },
         "statusline.mjs": {
