@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Nudge to use service-knowledge on ambiguous incidents (#503)** ([6c0d1fa](https://github.com/xtrm-dev/core/commit/6c0d1fa7907b4a9aeec0a72ad6951ec1ac1fe46f)) — 2026-07-25 12:01
 
+- **Restore using-specialists/SKILL.md — vendored, moves to xtrm-wiy5n.6** ([8b25f03](https://github.com/xtrm-dev/core/commit/8b25f030d7e2aaec04db23777b58ee96ec3cd6bc)) — 2026-07-25 12:30
+
 ### Project maintenance
 
 - **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check (xtrm-reyem.12) (#488)** ([6e7040d](https://github.com/xtrm-dev/core/commit/6e7040df7ecb9dafd0fc6a732f98e4a9897b3be1)) — 2026-07-23 05:18
