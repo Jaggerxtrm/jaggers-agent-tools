@@ -259,7 +259,31 @@ Read: .claude/skills/<service-id>/SKILL.md
 **Do not proceed to diagnosis until all affected skills are loaded.**
 Adopt the failure modes table, diagnostic scripts, and runbook from each skill.
 
-If the affected service has no registered skill:
+**When the symptom → service mapping is ambiguous** — the alert names a
+container that doesn't match a registered service directly, a stack trace
+points at a file whose owner is unclear, or two services are plausible
+candidates — reach for **service-knowledge** before falling back to grep:
+
+```bash
+# Route by touched paths (what the activator does internally).
+service-knowledge index query "<symptom text or metric name>"
+```
+
+Or from an MCP host:
+
+- `knowledge_evidence_for_files` with the paths the incident touches — returns
+  the service(s) whose territory covers them, plus a ranked evidence bundle
+  from the shipped SKILLs.
+- `knowledge_search` with a free-text query (alert name, error string, metric,
+  concept) — returns the same evidence-bundle shape ranked across every
+  registered service.
+
+Both surfaces read the per-repo FTS5 evidence index (`.xtrm/cache/service-knowledge.sqlite`,
+built by `service-knowledge install`) so latency is sub-10ms. They return
+evidence, never conclusions — use the ranked hits to pick which skill(s) to
+`Read` in this step, then proceed to Step 5 with the expert context loaded.
+
+If the affected service has no registered skill even after the search:
 1. Report: `"No registered skill for <service-id>."`
 2. Continue with general expert mode using docker logs and AGENT_MONITORING.md guidance.
 3. Offer: `"I can create a skill — use /creating-service-skills."`

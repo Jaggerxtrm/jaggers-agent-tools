@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Wave-2 — pull_request_review_comment trigger + preserve CR verdicts (xtrm-54zwl.7)** ([6651be3](https://github.com/xtrm-dev/core/commit/6651be380872f333a4c388e097cf1c9436d874ed)) — 2026-07-25 09:57
 
-- **Reconcile SKILL.md + CLAUDE.md with pr-review-gate wave-2 reality (xtrm-54zwl.8)** ([7c52937](https://github.com/xtrm-dev/core/commit/7c52937c8c43e5f4120ed2984b1438f0347347fc)) — 2026-07-25 11:25
+- **Reconcile SKILL.md + CLAUDE.md with pr-review-gate wave-2 reality (xtrm-54zwl.8)** ([2ff4e42](https://github.com/xtrm-dev/core/commit/2ff4e42aa49001fe7a40918d09636e594c79ca78)) — 2026-07-25 11:25
 
 ## [v0.11.2] — 2026-07-22
 
