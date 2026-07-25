@@ -24,7 +24,7 @@ If `/code-review` can't be loaded, record `code-review fallback used` in bead no
 
 ## Verdict vocabulary — fixed, not negotiable
 
-Every review produces **exactly one** of these four; no custom labels, no middle grounds. This verdict vocabulary is intentionally distinct from `/deploy-monitor`'s PASS/HOLD/BLOCKED — do not conflate the two.
+Every review produces **exactly one** of these four; no custom labels, no middle grounds. This sprint-judge vocabulary is intentionally distinct from `/deploy-monitor`'s `PASS`/`HOLD`/`BLOCKED` and the Specialists reviewer's `PASS`/`PARTIAL`/`FAIL` — do not treat the schemas as interchangeable.
 
 | Verdict | Meaning |
 |---|---|
@@ -34,6 +34,13 @@ Every review produces **exactly one** of these four; no custom labels, no middle
 | `BLOCKED` | Not ready, and the block is external (missing infra, upstream dep, other PR must land first). Includes what unblocks it. |
 
 Tie-break `PASS_WITH_NOTES` vs `NEEDS_CHANGES`: "would I let this land as-is if I were the sole reviewer today?" Yes → PASS_WITH_NOTES; No → NEEDS_CHANGES.
+
+| Verdict | Message contract |
+|---|---|
+| `PASS` | FYI, `--expects-reply=false --json` |
+| `PASS_WITH_NOTES` | FYI, `--expects-reply=false --json`, unless requesting a decision |
+| `NEEDS_CHANGES` | reply-required `--json` or correlated interactive steer |
+| `BLOCKED` | reply-required `--json` |
 
 ## Non-negotiable rules
 
@@ -79,18 +86,32 @@ Next action: <merge now | worker addresses findings | blocked on <thing>>"
 
 ## Reply channel — pane-addressed, JSON, message-key preserved
 
+PASS / PASS_WITH_NOTES FYI:
 ```bash
 xtmux message-send \
-  --from-pane $(tmux display-message -p '#{pane_id}') \
+  --from "$(tmux display-message -p '#{session_id}')" \
+  --from-pane "$(tmux display-message -p '#{pane_id}')" \
+  --to <orchestrator-session-id> \
+  --to-pane <orchestrator-pane-id> \
+  --bead <bead-id> \
+  --expects-reply=false \
+  --text "verdict on PR <N>: <state> — see bead" \
+  --json
+```
+
+NEEDS_CHANGES / BLOCKED reply-required verdict:
+```bash
+xtmux message-send \
+  --from "$(tmux display-message -p '#{session_id}')" \
+  --from-pane "$(tmux display-message -p '#{pane_id}')" \
+  --to <orchestrator-session-id> \
   --to-pane <orchestrator-pane-id> \
   --bead <bead-id> \
   --text "verdict on PR <N>: <state> — see bead" \
   --json
 ```
 
-`--from-pane`/`--to-pane` are pane IDs (e.g. `%1656`); do not fall back to `session:pane` string form — pane IDs are the addressing shape the reply infrastructure keys on. `--json` returns the `messageKey` you must preserve for any correlated reply.
-
-The `--bead` on the verdict message implicitly sets `--expects-reply=true` (V2 default). A pi orchestrator's inbox surfaces your verdict as a reply obligation and wakes itself — you do not also `safe-send-pointer` a nudge.
+Session and pane IDs are separate flags; never combine them into one value. A reply-required send returns the `messageKey` that must be preserved for correlated fulfilment. A pi orchestrator's inbox surfaces the obligation, so do not also send a `safe-send-pointer` nudge.
 
 ## Merge sequencing — when order matters
 

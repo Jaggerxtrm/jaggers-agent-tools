@@ -48,6 +48,17 @@ xtmux message-send --to <orchestrator> --bead <bead> --expects-reply=false --jso
 
 A single transient flap → `HOLD` for that sample, page immediately, re-sample quickly; only end `PASS` if the remaining evidence justifies it. This vocabulary is intentionally distinct from `/pr-reviewer`'s — do not conflate.
 
+## Message policy
+
+| Event | Message contract |
+|---|---|
+| ready | FYI, `--expects-reply=false --json` |
+| routine T+ sample OK | FYI, `--expects-reply=false --json` |
+| final PASS | FYI, `--expects-reply=false --json` |
+| HOLD | reply-required `--json` |
+| BLOCKED | reply-required `--json` |
+| irreversible decision | reply-required `--json` |
+
 ## Non-negotiable rules
 
 1. **Refuse the window if `StartedAt` / rollout revision is older than `mergedAt`.** `BLOCKED`, ask the orchestrator to (re)deploy, do not open.
@@ -125,8 +136,8 @@ Special case — **edge-wide 4xx blackout** (check #6): first sample HOLD, page 
 
 ```bash
 bd update <bead> --notes "DEPLOY SAMPLE T+25m HOLD: <symptom>; evidence: <query-or-log-path>"
-xtmux message-send --to <orchestrator> --bead <bead> --text "HOLD at T+25m: <symptom>"
-xtmux message-send --to <judge>        --bead <bead> --text "deploy HOLD at T+25m: <symptom>"
+xtmux message-send --to <orchestrator> --bead <bead> --json --text "HOLD at T+25m: <symptom>"
+xtmux message-send --to <judge>        --bead <bead> --json --text "deploy HOLD at T+25m: <symptom>"
 ```
 
 ## Evidence and reporting

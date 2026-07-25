@@ -31,11 +31,6 @@ export async function injectHookConfig(targetDir: string, repoRoot: string): Pro
                 path: path.join(targetDir, 'hooks', 'skill-suggestion.py'), // It's python!
                 events: ['userPromptSubmit'],
             },
-            {
-                name: 'using-xtrm-reminder',
-                path: path.join(targetDir, 'hooks', 'using-xtrm-reminder.mjs'),
-                events: ['sessionStart'],
-            },
         ];
 
         let modified = false;

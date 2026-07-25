@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/using-xtrm-reminder.mjs"
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/project-memory.mjs"
           },
           {
             "type": "command",
