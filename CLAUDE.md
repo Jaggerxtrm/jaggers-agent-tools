@@ -179,6 +179,7 @@ This project is indexed by GitNexus as **xtrm-tools**. Use the GitNexus MCP tool
 - Worktrees do not carry ignored dependencies (`node_modules`, `.venv`); run the repo bootstrap inside the worktree when needed.
 - `.xtrm/reports/` is gitignored; use `git add -f` only when a report should be committed.
 - Per-repo `default/` and `optional/` are deprecated; migrate with `xt migrate skills --apply`.
+- `pr-review-gate` GitHub Actions workflow is a required check on `main`/`master` across the 16 xtrm/mercuryintelligence/Jaggerxtrm-managed repos with real PR flow. Canonical template lives at `skills/security-pipeline/templates/.github/workflows/pr-review-gate.yml`; installed per-repo via `security-bootstrap.sh` and NOT auto-synced by `xt update --apply` — template changes require a manual fanout (see wave-1 `xtrm-7cjkv` + wave-2 `xtrm-54zwl.7` bead notes for the batch pattern).
 
 ## Quality gates
 
