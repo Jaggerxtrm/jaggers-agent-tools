@@ -65,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Align xtmux communication contracts** ([9884a3a](https://github.com/xtrm-dev/core/commit/9884a3a152364ed02807039c7d9f196206474a2d)) — 2026-07-25 15:44
 
+- **Refresh unreleased entries** ([ae9bd54](https://github.com/xtrm-dev/core/commit/ae9bd54b690ed58f9ce9e8771293c4dfa5f7f594)) — 2026-07-25 15:46
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
