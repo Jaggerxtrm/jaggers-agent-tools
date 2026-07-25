@@ -23,9 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Remove stale service-skills wiring (#500)** ([efa5f11](https://github.com/xtrm-dev/core/commit/efa5f11ab80df85296e3dc86bebcbcbe91db8584)) — 2026-07-24 22:37
 
-- **Close topology and reuse P1 gaps** ([1a48f01](https://github.com/xtrm-dev/core/commit/1a48f0130818498160b56d3122bd3933a234dafc)) — 2026-07-25 13:44
-
-- **Preserve topology PR evidence** ([13d17f7](https://github.com/xtrm-dev/core/commit/13d17f7c428ff763251ad7c70f2d0db585f7a6f4)) — 2026-07-25 13:58
+- **Close topology and reuse P1 gaps (#506)** ([bee5f42](https://github.com/xtrm-dev/core/commit/bee5f42b53943cd5e36476988e4ccb29a3ae54a9)) — 2026-07-25 14:03
 
 ### Other changes
 
@@ -65,11 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Slim 4 orchestration roots + retire MSG-06 rows + budget check (xtrm-wiy5n.1.1) (#504)** ([4ca674e](https://github.com/xtrm-dev/core/commit/4ca674ef066b724b2640cb028123d6bdfc575eb1)) — 2026-07-25 12:38
 
-- **Refresh changelog** ([2bc4b9a](https://github.com/xtrm-dev/core/commit/2bc4b9ae5287ca126fda0b8534b2eb5f843fd35e)) — 2026-07-25 13:44
-
-- **Record changelog refresh** ([e415d4d](https://github.com/xtrm-dev/core/commit/e415d4d2726b7bf4a388159fd1367552480e7bad)) — 2026-07-25 13:45
-
-- **Update changelog** ([3e9ae60](https://github.com/xtrm-dev/core/commit/3e9ae607e12f10ce22de43fc8c68aa1c758ae4e6)) — 2026-07-25 13:47
+- **Align xtmux communication contracts** ([9884a3a](https://github.com/xtrm-dev/core/commit/9884a3a152364ed02807039c7d9f196206474a2d)) — 2026-07-25 15:44
 
 ## [v0.11.2] — 2026-07-22
 
