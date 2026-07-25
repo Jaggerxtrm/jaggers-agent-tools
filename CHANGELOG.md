@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Close topology and reuse P1 gaps** ([1a48f01](https://github.com/xtrm-dev/core/commit/1a48f0130818498160b56d3122bd3933a234dafc)) — 2026-07-25 13:44
 
+- **Preserve topology PR evidence** ([13d17f7](https://github.com/xtrm-dev/core/commit/13d17f7c428ff763251ad7c70f2d0db585f7a6f4)) — 2026-07-25 13:58
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
