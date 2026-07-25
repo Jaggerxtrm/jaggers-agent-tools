@@ -126,6 +126,7 @@ Special case — **edge-wide 4xx blackout** (check #6): first sample HOLD, page 
 ```bash
 bd update <bead> --notes "DEPLOY SAMPLE T+25m HOLD: <symptom>; evidence: <query-or-log-path>"
 xtmux message-send --to <orchestrator> --bead <bead> --text "HOLD at T+25m: <symptom>"
+xtmux message-send --to <judge>        --bead <bead> --text "deploy HOLD at T+25m: <symptom>"
 ```
 
 ## Evidence and reporting
@@ -138,7 +139,8 @@ Final:
 
 ```bash
 bd update <bead> --notes "DEPLOY VERDICT: PASS — 12 samples through T+60, artifact StartedAt > mergedAt, no sustained alerts; log <path>"
-xtmux message-send --to <orchestrator> --bead <bead> --text "deploy verdict PR <N>: PASS — see bead/log"
+xtmux message-send --to <orchestrator> --bead <bead> --expects-reply=false --json \
+  --text "deploy verdict PR <N>: PASS — see bead/log"
 ```
 
 ## Retrieval hierarchy
