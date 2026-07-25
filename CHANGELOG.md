@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Canonicalize pr-review-gate template + refresh review-skill docs (xtrm-54zwl.2 + .4)** ([ccf3a1a](https://github.com/xtrm-dev/core/commit/ccf3a1a9a1d49de400a5a3a0c86d7edf271b6ae6)) — 2026-07-24 17:38
 
+- **Nudge to use service-knowledge on ambiguous incidents (#503)** ([6c0d1fa](https://github.com/xtrm-dev/core/commit/6c0d1fa7907b4a9aeec0a72ad6951ec1ac1fe46f)) — 2026-07-25 12:01
+
 ### Project maintenance
 
 - **Auto-refresh CHANGELOG.md — pre-push hook + PR CI check (xtrm-reyem.12) (#488)** ([6e7040d](https://github.com/xtrm-dev/core/commit/6e7040df7ecb9dafd0fc6a732f98e4a9897b3be1)) — 2026-07-23 05:18
@@ -56,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Wave-2 — pull_request_review_comment trigger + preserve CR verdicts (xtrm-54zwl.7)** ([6651be3](https://github.com/xtrm-dev/core/commit/6651be380872f333a4c388e097cf1c9436d874ed)) — 2026-07-25 09:57
 
 - **Reconcile SKILL.md + CLAUDE.md with pr-review-gate wave-2 reality (xtrm-54zwl.8)** ([2ff4e42](https://github.com/xtrm-dev/core/commit/2ff4e42aa49001fe7a40918d09636e594c79ca78)) — 2026-07-25 11:25
+
+- **Slim 5 orchestration roots + retire MSG-06 rows + budget check (xtrm-wiy5n.1.1)** ([7092d41](https://github.com/xtrm-dev/core/commit/7092d4147abc8910bafd632f425b9dbaf9554016)) — 2026-07-25 11:42
+
+- **Pin CLI --help as authority + restore pi/claude slash gotcha (xtrm-wiy5n.1.1)** ([58c6b31](https://github.com/xtrm-dev/core/commit/58c6b31f0cfa3b971444bd3e6fa733a17f2f029c)) — 2026-07-25 12:01
 
 ## [v0.11.2] — 2026-07-22
 
