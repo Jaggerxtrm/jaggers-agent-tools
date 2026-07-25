@@ -1,6 +1,6 @@
 {
   "id": "using-xtrm",
-  "description": "Inject using-xtrm session operating manual into system prompt at session start.",
+  "description": "Inject project memory without eagerly loading the using-xtrm skill.",
   "version": "1",
   "runtime": "both",
   "order": 5,
@@ -8,7 +8,7 @@
     "hooks": [
       {
         "event": "SessionStart",
-        "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/using-xtrm-reminder.mjs"
+        "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/project-memory.mjs"
       }
     ]
   },

@@ -150,7 +150,7 @@ Policies are the **single source of truth** for all enforcement rules.
 | `beads.json` | both | 20 | Issue tracking gates (edit/commit/memory/compact) |
 | `quality-gates.json` | both | 30 | Linting/typechecking |
 | `quality-gates-env.json` | both | 31 | Warns if tsc/ruff/eslint missing at session start |
-| `using-xtrm.json` | claude | 5 | Injects using-xtrm session manual at SessionStart |
+| `using-xtrm.json` | both | 5 | Injects project memory without eagerly loading the using-xtrm skill |
 | `gitnexus.json` | claude | 40 | Knowledge graph enrichment |
 | `worktree-boundary.json` | claude | 15 | Blocks edits outside worktree when in `.xtrm/worktrees` |
 | `service-skills.json` | pi | 40 | Territory-based skill activation |
