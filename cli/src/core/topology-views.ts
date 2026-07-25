@@ -28,6 +28,7 @@ import type {
     TopologyJob,
     TopologyPane,
     TopologyProjectionV1,
+    TopologyPullRequest,
 } from '@xtrm/contracts';
 
 export const VIEW_NAMES = [
@@ -198,12 +199,9 @@ function viewCollisions(p: TopologyProjectionV1): string[] {
 function viewIntegration(p: TopologyProjectionV1): string[] {
     const out = [kleur.bold(`${pad('JOB', 8)} ${pad('SPECIALIST', 16)} ${pad('SOURCE BRANCH', 28)} ${pad('TARGET', 24)} ${pad('PR', 14)} STATUS`)];
     const jobs = [...p.panes.flatMap((x) => x.jobs), ...p.orphans.jobs];
-    const prsByBranch = new Map(
-        p.panes.flatMap((pane) => pane.pull_request ? [[pane.pull_request.head_branch, pane.pull_request] as const] : []),
-    );
     if (jobs.length === 0) out.push(NONE);
     for (const j of jobs) {
-        const pr = j.branch ? prsByBranch.get(j.branch) : undefined;
+        const pr = (j as TopologyJob & { pull_request?: TopologyPullRequest | null }).pull_request;
         const prState = pr ? `#${pr.number} ${pr.state.toLowerCase()}` : '-';
         out.push(`${pad(j.job_id, 8)} ${pad(j.specialist, 16)} ${pad(j.branch, 28)} ${pad(j.integration_target_branch, 24)} ${pad(prState, 14)} ${j.status}`);
     }

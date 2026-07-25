@@ -367,17 +367,18 @@ function mergeWorktreeReads(reads: SourceRead<TopologyWorktree[]>[]): SourceRead
     }
 
     const failures = reads.filter((read) => read.entry.status !== 'ok');
-    const allUnavailable = failures.length === reads.length && failures.every((read) => read.entry.status === 'unavailable');
+    const relevantFailures = failures.filter((read) => !/not a git repository/i.test(read.entry.reason ?? ''));
+    const allUnavailable = relevantFailures.length === reads.length && relevantFailures.every((read) => read.entry.status === 'unavailable');
     return {
         entry: {
             name: 'git',
-            status: failures.length === 0 ? 'ok' : allUnavailable ? 'unavailable' : 'error',
-            reason: failures.length === 0
+            status: relevantFailures.length === 0 ? 'ok' : allUnavailable ? 'unavailable' : 'error',
+            reason: relevantFailures.length === 0
                 ? null
-                : failures.map((read) => read.entry.reason).filter(Boolean).join('; '),
+                : relevantFailures.map((read) => read.entry.reason).filter(Boolean).join('; '),
             duration_ms: reads.reduce((total, read) => total + read.entry.duration_ms, 0),
         },
-        data: trees.size > 0 || failures.length < reads.length ? [...trees.values()] : null,
+        data: trees.size > 0 || relevantFailures.length < reads.length ? [...trees.values()] : null,
     };
 }
 
@@ -407,11 +408,12 @@ export async function collectProjection(options: CollectOptions = {}): Promise<T
     // repository and from any pane path outside that initial inventory; this
     // keeps the common case to one git call while making cross-repo panes
     // visible instead of silently treating their worktrees as missing.
-    const [xtmuxRead, paneRead, jobRead, beadRead, prRead] = await Promise.all([
+    const [xtmuxRead, paneRead, jobRead, beadRead, initialTreeRead, prRead] = await Promise.all([
         readSource('xtmux', parseXtmuxHost, ctx),
         readSource('tmux', parsePanes, ctx),
         readSource('specialists', parseJobs, ctx),
         readSource('beads', parseBeads, ctx),
+        readSource('git', parseWorktrees, ctx),
         includeGithub
             ? readSource('github', parsePullRequests, ctx)
             : Promise.resolve<SourceRead<Map<string, TopologyPullRequest>>>({
@@ -421,7 +423,6 @@ export async function collectProjection(options: CollectOptions = {}): Promise<T
     ]);
 
     const rawPanes = paneRead.data ?? [];
-    const initialTreeRead = await readSource('git', parseWorktrees, ctx);
     const knownTrees = initialTreeRead.data ?? [];
     const extraRepoPaths = [...new Set(rawPanes.flatMap((pane) => [
         pane.current_path,
@@ -432,10 +433,14 @@ export async function collectProjection(options: CollectOptions = {}): Promise<T
         readSource('git', parseWorktrees, { ...ctx, cwd: repoPath })));
     const treeRead = mergeWorktreeReads([initialTreeRead, ...extraTreeReads]);
 
-    const jobs = jobRead.data ?? [];
+    const rawJobs = jobRead.data ?? [];
     const beads = beadRead.data ?? new Map<string, TopologyBead>();
     const worktrees = treeRead.data ?? [];
     const prs = prRead.data ?? new Map<string, TopologyPullRequest>();
+    const jobs = rawJobs.map((job) => {
+        const pull_request = job.branch ? prs.get(job.branch) : undefined;
+        return pull_request ? { ...job, pull_request } : job;
+    });
 
     // Worktree collisions: every pane whose cwd resolves into a worktree. Length
     // > 1 is the shared-checkout hazard the multiplexing doctrine warns about.
