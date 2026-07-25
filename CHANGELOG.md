@@ -63,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Slim 4 orchestration roots + retire MSG-06 rows + budget check (xtrm-wiy5n.1.1) (#504)** ([4ca674e](https://github.com/xtrm-dev/core/commit/4ca674ef066b724b2640cb028123d6bdfc575eb1)) — 2026-07-25 12:38
 
+- **Refresh changelog** ([2bc4b9a](https://github.com/xtrm-dev/core/commit/2bc4b9ae5287ca126fda0b8534b2eb5f843fd35e)) — 2026-07-25 13:44
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
