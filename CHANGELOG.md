@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Close topology and reuse P1 gaps (#506)** ([bee5f42](https://github.com/xtrm-dev/core/commit/bee5f42b53943cd5e36476988e4ccb29a3ae54a9)) — 2026-07-25 14:03
 
+- **Preserve Claude project memory injection** ([09ba4ee](https://github.com/xtrm-dev/core/commit/09ba4ee3f91a929abc540d3b9434a0e23616618e)) — 2026-07-25 15:59
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
