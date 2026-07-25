@@ -58,6 +58,10 @@
           "hash": "d0f88b78c6723d6b6a45dbbd85e37d935bea4461046fd286d658951b16f68680",
           "version": "0.11.2"
         },
+        "project-memory.mjs": {
+          "hash": "4f6094a53b1dca7650c90714497e0fd9be1ad2221a8952517f9c8765f520a442",
+          "version": "0.11.2"
+        },
         "quality-check-env.mjs": {
           "hash": "cb2c483ad0f23b48f5832c4abc62d3490d7e2d79a2ae0f880525952fbcbe3106",
           "version": "0.11.2"
@@ -1340,7 +1344,7 @@
           "version": "0.11.2"
         },
         "hooks.json": {
-          "hash": "0f2bfbd598ed6b167a04229aae754168f0c1cc09775fdacbf84a85b504adc987",
+          "hash": "364abbac015ce64cab57dc31b724f03e08bcab324b8079be1f553b3c541dd417",
           "version": "0.11.2"
         },
         "instructions/agents-top.md": {

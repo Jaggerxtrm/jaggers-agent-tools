@@ -59,6 +59,34 @@ function createFakeWhich(scriptBody: string): string {
   return binDir;
 }
 
+describe('project-memory.mjs integration', () => {
+  it('injects .xtrm/memory.md without the using-xtrm skill body', () => {
+    const projectDir = createTempProject('xtrm-hook-memory-');
+    const xtrmDir = path.join(projectDir, '.xtrm');
+    mkdirSync(xtrmDir, { recursive: true });
+    writeFileSync(path.join(xtrmDir, 'memory.md'), 'Project memory.', 'utf8');
+
+    try {
+      const result = invokeHook('project-memory.mjs', { cwd: projectDir });
+      expect(result.exitCode).toBe(0);
+      expect(String(parseHookOutput(result.stdout).hookSpecificOutput.additionalSystemPrompt)).toBe('Project memory.');
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails open when .xtrm/memory.md is missing', () => {
+    const projectDir = createTempProject('xtrm-hook-memory-missing-');
+    try {
+      const result = invokeHook('project-memory.mjs', { cwd: projectDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.trim()).toBe('');
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('quality-check-env.mjs integration', () => {
   it('checks for tsc/eslint/ruff when quality-check hook is present', () => {
     const projectDir = createTempProject('xtrm-hook-qenv-present-');
