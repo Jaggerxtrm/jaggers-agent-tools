@@ -3,15 +3,23 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  normaliseCommand,
-  indexGlobal,
-  pruneSettings,
-  auditProject,
-} from '../dedupe-legacy-hooks.mjs';
 
-const HOME = os.homedir();
+// The module resolves the global hooks dir from os.homedir() at load time, and the
+// audit hashes files inside it. Point HOME at a throwaway tree with a stand-in global
+// install so the test does not depend on the machine running it having xtrm installed
+// — it passed on a dev box and failed on a clean CI runner (ENOENT on
+// ~/.xtrm/hooks/beads-memory-gate.mjs). os.homedir() reads $HOME on POSIX, and the
+// import must be dynamic so it happens after the assignment.
+const HOME = await fs.mkdtemp(path.join(os.tmpdir(), 'dedupe-hooks-home-'));
+process.env.HOME = HOME;
 const GLOBAL_HOOKS = path.join(HOME, '.xtrm', 'hooks');
+await fs.mkdir(GLOBAL_HOOKS, { recursive: true });
+await fs.writeFile(path.join(GLOBAL_HOOKS, 'beads-memory-gate.mjs'), '// global beads-memory-gate\n');
+await fs.writeFile(path.join(GLOBAL_HOOKS, 'beads-stop-gate.mjs'), '// global beads-stop-gate\n');
+
+const { normaliseCommand, indexGlobal, pruneSettings, auditProject } = await import(
+  '../dedupe-legacy-hooks.mjs'
+);
 
 test('normalises project hook paths onto the global hooks dir', () => {
   const cmd = normaliseCommand('node "/repo/.xtrm/hooks/beads-memory-gate.mjs"', '/repo');
