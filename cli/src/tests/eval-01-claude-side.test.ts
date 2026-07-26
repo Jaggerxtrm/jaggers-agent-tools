@@ -398,14 +398,22 @@ describe('EVAL-01 Claude column', () => {
     const cyclePresent = pickerCalls(runtime).length;
 
     // The inbox reminder queries message-list with the exact pane-scoped
-    // argv the xtmux surface accepts, and prints the reply-required line
-    // to stderr. Stdout stays empty — Stop is not blocked.
-    const reminder = runHook(INBOX_REMINDER, STOP_INPUT, runtime, { TMUX_PANE: SELF_PANE });
-    expect(reminder.stdout.trim()).toBe('');
-    expect(reminder.stderr).toContain('Reply required:');
-    expect(reminder.stderr).toContain(PEER_SESSION);
-    expect(reminder.stderr).toContain('wiy5n-42');
+    // argv the xtmux surface accepts, and emits a `systemMessage` JSON
+    // envelope on STDOUT (Claude's Stop hook contract only surfaces stdout
+    // on exit 0; stderr is only surfaced on exit != 0 or block). Stop is
+    // not blocked. Codex #525 — the reminder text MUST include the
+    // messageKey so the suggested `xtmux message-reply --in-reply-to`
+    // command is executable as-is.
+    const reminder = runHook(INBOX_REMINDER, STOP_INPUT, runtime, { TMUX_PANE: SELF_PANE, TMUX_OPT_STORE: path.join(workDir, 'reminder-store.json') });
+    expect(reminder.stderr.trim()).toBe('');
     expect(reminder.status).toBe(0);
+    const envelope = JSON.parse(reminder.stdout);
+    expect(envelope).toHaveProperty('systemMessage');
+    expect(envelope.systemMessage).toContain('Reply required:');
+    expect(envelope.systemMessage).toContain(PEER_SESSION);
+    expect(envelope.systemMessage).toContain('wiy5n-42');
+    expect(envelope.systemMessage).toContain('msg-inbound-1');
+    expect(envelope.systemMessage).toContain('--in-reply-to msg-inbound-1');
     const reminderCalls = pickerCalls(runtime).slice(cyclePresent);
     expect(reminderCalls[0]).toEqual([
       'message-list', '--pane', SELF_PANE, '--unacked', '--expects-reply', '--json', '--limit', '5',
@@ -473,22 +481,66 @@ process.exit(0);
       TMUX_PANE: SELF_PANE,
       TMUX_OPT_STORE: optionStore,
     });
-    expect(first.stderr).toContain('Reply required:');
-    expect(first.stderr).toContain('still waiting');
-    // The messageKey MUST now be recorded so the next Stop can skip it.
+    // Reminder went out on STDOUT as a systemMessage envelope, and included
+    // the messageKey so the suggested reply command is executable as-is.
+    const firstEnv = JSON.parse(first.stdout);
+    expect(firstEnv.systemMessage).toContain('Reply required:');
+    expect(firstEnv.systemMessage).toContain('still waiting');
+    expect(firstEnv.systemMessage).toContain('msg-inbound-repeat');
+    // Anti-spin write-first ordering (Codex #525): the key MUST be recorded
+    // in the tmux option BEFORE the reminder is emitted. If persist ever
+    // fails, the hook aborts the reminder rather than re-fire forever.
     const stored = fs.readJsonSync(optionStore) as Record<string, Record<string, string>>;
     expect(stored[SELF_PANE]?.['@agent_inbox_reminded_keys'] ?? '').toContain('msg-inbound-repeat');
 
-    // Second Stop, same pending message: NO NEW REMINDER on stderr. The row
-    // is still surfaced by the query, but the anti-spin registry filters it.
+    // Second Stop, same pending message: NO NEW REMINDER on stdout OR stderr.
+    // The row is still surfaced by the query, but the anti-spin registry
+    // filters it before anything reaches the operator.
     const second = runHook(INBOX_REMINDER, STOP_INPUT, runtime, {
       TMUX_PANE: SELF_PANE,
       TMUX_OPT_STORE: optionStore,
     });
     expect(second.stdout.trim()).toBe('');
-    expect(second.stderr).not.toContain('Reply required:');
-    expect(second.stderr).not.toContain('still waiting');
+    expect(second.stderr.trim()).toBe('');
     expect(second.status).toBe(0);
+  });
+
+  // Codex #525 P2 (persistence failure). If the tmux registry write fails
+  // (pane gone between query and write, tmux server crash mid-write), the
+  // hook MUST abort the reminder — a message that isn't recorded would
+  // re-fire on every subsequent Stop and violate the anti-spin guarantee.
+  it('inbox reminder aborts silently when the anti-spin write fails (xtrm-wiy5n.4.24)', () => {
+    const inbound = {
+      messageKey: 'msg-persist-fail',
+      senderId: PEER_SESSION,
+      recipientId: SELF_SESSION,
+      beadId: 'wiy5n-x',
+      summary: 'persist should fail',
+      expectsReply: true,
+      replyStatus: 'pending',
+    };
+    const runtime = createRuntime({ 'message-list': json([inbound]) });
+
+    // A tmux shim that FAILS every set-option (exit 1) but succeeds
+    // show-options (returns empty) so readRemindedKeys sees no prior keys
+    // and the fresh set is non-empty.
+    const FAILING_TMUX = `#!/bin/sh
+case "$1" in
+  set-option) exit 1 ;;
+  show-options) exit 0 ;;
+  *) exit 0 ;;
+esac
+`;
+    fs.removeSync(path.join(binDir, 'tmux'));
+    fs.writeFileSync(path.join(binDir, 'tmux'), FAILING_TMUX, { mode: 0o755 });
+    fs.chmodSync(path.join(binDir, 'tmux'), 0o755);
+
+    const result = runHook(INBOX_REMINDER, STOP_INPUT, runtime, { TMUX_PANE: SELF_PANE });
+    expect(result.status).toBe(0);
+    // Reminder must not have escaped through EITHER channel — the write
+    // failure aborts the emit path entirely.
+    expect(result.stdout.trim()).toBe('');
+    expect(result.stderr.trim()).toBe('');
   });
 
   it('inbound FYI applies bounded policy, creates no duty, and is silent on the reply-required reminder (Pi/Claude parity, xtrm-wiy5n.4.24)', () => {
@@ -522,10 +574,12 @@ process.exit(0);
     const cyclePresent = pickerCalls(runtime).length;
 
     // The reply-required reminder MUST be silent for FYIs (they have no
-    // duty to remind about) and MUST NOT arm anything.
+    // duty to remind about) and MUST NOT arm anything.  Silence now means
+    // both stdout AND stderr are empty (Codex #525: reminder emits through
+    // stdout systemMessage; a silent path leaves both untouched).
     const reminder = runHook(INBOX_REMINDER, STOP_INPUT, runtime, { TMUX_PANE: SELF_PANE });
     expect(reminder.stdout.trim()).toBe('');
-    expect(reminder.stderr).not.toContain('Reply required:');
+    expect(reminder.stderr.trim()).toBe('');
     const reminderCalls = pickerCalls(runtime).slice(cyclePresent).map((call) => call[0]);
     expect(reminderCalls).toEqual(['message-list']);
 

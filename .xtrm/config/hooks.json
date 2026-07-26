@@ -121,6 +121,11 @@
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/beads-memory-gate.mjs",
             "timeout": 8000
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/inbox-reminder-stop.mjs",
+            "timeout": 5000
           }
         ]
       }
