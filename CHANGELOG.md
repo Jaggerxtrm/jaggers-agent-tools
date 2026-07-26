@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Assign beads from the runtime readiness handshake (xtrm-wiy5n.4.18) (#510)** ([359af43](https://github.com/xtrm-dev/core/commit/359af431f8c90d33044002525039cb39579dc388)) — 2026-07-26 16:06
 
+- **Invert the sp-run-background rule, which asserted a falsehood** ([a1a65de](https://github.com/xtrm-dev/core/commit/a1a65de03ca9aaca16ee05bace79efc9d7554b40)) — 2026-07-26 16:44
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
