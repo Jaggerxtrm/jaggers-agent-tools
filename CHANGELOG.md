@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Stop xt claude --role forwarding non-Claude models (xtrm-wiy5n.4.19)** ([56a1210](https://github.com/xtrm-dev/core/commit/56a1210425deec7edf6a0f2934b7b2c9de31ad51)) — 2026-07-26 16:20
 
-- **Validate only the effective --model, not every occurrence** ([173b6a0](https://github.com/xtrm-dev/core/commit/173b6a079035bdb438a46d5da38dbffd3de98c87)) — 2026-07-26 16:54
+- **Validate only the effective --model, not every occurrence** ([cdfc755](https://github.com/xtrm-dev/core/commit/cdfc755edb73f7e7575f6321b46492be5294e75f)) — 2026-07-26 16:54
 
 ### Other changes
 
