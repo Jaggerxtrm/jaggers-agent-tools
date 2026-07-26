@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Drift-lint gates for forbidden phrases and vendored specialists parity (xtrm-wiy5n.4.3) (#514)** ([a89f55d](https://github.com/xtrm-dev/core/commit/a89f55db0b7da94bebd3fa3c10ae78f987157863)) — 2026-07-26 16:25
 
+- **Add Alpine smoke-test container for the xtrm trio** ([05d89f0](https://github.com/xtrm-dev/core/commit/05d89f06cf090da3263cf229cebe13b086f60dbd)) — 2026-07-26 15:39
+
 ### Fixed
 
 - **Summary lines double-print epic id (xtrm-5swny) (#499)** ([87fc6b8](https://github.com/xtrm-dev/core/commit/87fc6b80b1acae51d431507104e6566071b94e32)) — 2026-07-24 21:34
@@ -33,9 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Assign beads from the runtime readiness handshake (xtrm-wiy5n.4.18) (#510)** ([359af43](https://github.com/xtrm-dev/core/commit/359af431f8c90d33044002525039cb39579dc388)) — 2026-07-26 16:06
 
-- **Stop xt claude --role forwarding non-Claude models (xtrm-wiy5n.4.19)** ([56a1210](https://github.com/xtrm-dev/core/commit/56a1210425deec7edf6a0f2934b7b2c9de31ad51)) — 2026-07-26 16:20
+- **Stop xt claude --role forwarding non-Claude models (xtrm-wiy5n.4.19) (#511)** ([50b1987](https://github.com/xtrm-dev/core/commit/50b19878aad623b4ff9c4dcd81fb3dc21cae30e7)) — 2026-07-26 18:58
 
-- **Validate only the effective --model, not every occurrence** ([cdfc755](https://github.com/xtrm-dev/core/commit/cdfc755edb73f7e7575f6321b46492be5294e75f)) — 2026-07-26 16:54
+- **Propagate smoke-stage failures and close SCOPE gaps** ([e6dfbe7](https://github.com/xtrm-dev/core/commit/e6dfbe7443191f6a3a14045a60a40a9514eff44f)) — 2026-07-26 16:19
+
+- **Honour --tag past stage 1 and select smoke artifacts by arch** ([d390fc8](https://github.com/xtrm-dev/core/commit/d390fc847ea280d0326a3157998f64901a871b90)) — 2026-07-26 16:40
 
 ### Other changes
 
