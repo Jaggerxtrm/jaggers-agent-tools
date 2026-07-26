@@ -271,11 +271,18 @@ git log <last-tag>..HEAD --oneline    # what is missing
 
 Decision tree:
 
+- **This repo runs the git-cliff pipeline** (`changelog/cliff.toml` +
+  `scripts/changelog-update.mjs` — see `/setup-git-cliff`): stop, do not touch
+  CHANGELOG.md. `[Unreleased]` is an empty placeholder on purpose and CI and
+  pre-push both reject entries in it — a per-branch block makes every merge
+  conflict every other open pull request. Your commit messages ARE the entries;
+  the release generates the section from the git log. Write conventional commit
+  subjects and check `npm run changelog:preview` if you want to see the result.
 - **A release was cut this session** (new tag, e.g. via `/releasing` or
   `changelog-keeper`): the new version section already exists. Verify it
   contains every user-facing change from the session and that
   `[Unreleased]` is empty. Stop — release flow owns CHANGELOG.
-- **No release was cut**: append every user-facing change from the session
+- **No release was cut, and no git-cliff pipeline**: append every user-facing change from the session
   to the existing `[Unreleased]` block at the top of CHANGELOG.md. Use
   Keep a Changelog categories: `### Added` / `### Changed` / `### Deprecated`
   / `### Removed` / `### Fixed` / `### Security`. One bullet per change,
