@@ -92,7 +92,11 @@ describe('npm-latest', () => {
     expect(existsSync(cacheFile)).toBe(false);
   });
 
-  it('no network + stale cache → falls back to cached latest (marked fromCache)', () => {
+  it('no network + expired cache → shows cached latest for info but state stays unknown (never asserts unverified freshness)', () => {
+    // Regression against a Codex-flagged bug: an expired cache combined with
+    // a failed npm lookup used to be reported as [ok] when the installed
+    // version happened to match the stale cached value. That claim is a lie —
+    // a newer release could have shipped in the meantime.
     writeFileSync(cacheFile, JSON.stringify(Object.fromEntries(XTRM_PACKAGES.map((p) => [p, { latest: '3.0.0', fetchedAt: fixedNow() - 48 * 60 * 60 * 1000 }]))));
     const statuses = checkXtrmUpdates({
       cacheFile,
@@ -102,7 +106,7 @@ describe('npm-latest', () => {
     });
     expect(statuses.every((s) => s.latest === '3.0.0')).toBe(true);
     expect(statuses.every((s) => s.fromCache)).toBe(true);
-    expect(statuses.every((s) => s.state === 'ok')).toBe(true);
+    expect(statuses.every((s) => s.state === 'unknown')).toBe(true);
   });
 
   it('dangling / unreadable installed version → state=not-installed, does not throw', () => {

@@ -73563,6 +73563,7 @@ function checkXtrmUpdates(opts = {}) {
     let latest;
     let fromCache;
     let cacheAgeMs;
+    let expiredCacheFallback = false;
     if (cacheFresh) {
       latest = cached2.latest;
       fromCache = true;
@@ -73578,11 +73579,13 @@ function checkXtrmUpdates(opts = {}) {
         latest = cached2.latest;
         fromCache = true;
         cacheAgeMs = now - cached2.fetchedAt;
+        expiredCacheFallback = true;
       } else {
         cacheAgeMs = null;
       }
     }
-    statuses.push({ pkg, installed, latest, state: classify(installed, latest), fromCache, cacheAgeMs });
+    const state = expiredCacheFallback ? installed === null ? "not-installed" : "unknown" : classify(installed, latest);
+    statuses.push({ pkg, installed, latest, state, fromCache, cacheAgeMs });
   }
   if (cacheDirty && !opts.noCache) writeCache2(cacheFile, nextCache);
   return statuses;

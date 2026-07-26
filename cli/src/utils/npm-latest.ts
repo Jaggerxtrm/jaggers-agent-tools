@@ -129,6 +129,7 @@ export function checkXtrmUpdates(opts: CheckOptions = {}): PackageStatus[] {
     let fromCache: boolean;
     let cacheAgeMs: number | null;
 
+    let expiredCacheFallback = false;
     if (cacheFresh) {
       latest = cached.latest;
       fromCache = true;
@@ -141,15 +142,21 @@ export function checkXtrmUpdates(opts: CheckOptions = {}): PackageStatus[] {
         cacheDirty = true;
         cacheAgeMs = 0;
       } else if (cached) {
+        // Expired cache + failed lookup: show the cached value for information,
+        // but do NOT let it flow into classify() as truth — we can't assert
+        // freshness we didn't verify. State stays 'unknown'; the row still
+        // renders the last-known latest so an operator sees "was 3.0.0, cache 48h old".
         latest = cached.latest;
         fromCache = true;
         cacheAgeMs = now - cached.fetchedAt;
+        expiredCacheFallback = true;
       } else {
         cacheAgeMs = null;
       }
     }
 
-    statuses.push({ pkg, installed, latest, state: classify(installed, latest), fromCache, cacheAgeMs });
+    const state: UpdateState = expiredCacheFallback ? (installed === null ? 'not-installed' : 'unknown') : classify(installed, latest);
+    statuses.push({ pkg, installed, latest, state, fromCache, cacheAgeMs });
   }
 
   if (cacheDirty && !opts.noCache) writeCache(cacheFile, nextCache);
