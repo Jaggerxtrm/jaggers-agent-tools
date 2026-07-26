@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Assign beaded sessions from runtime origin (#508)** ([2fdcef8](https://github.com/xtrm-dev/core/commit/2fdcef84933664a908d06e301b164625afe93fe4)) — 2026-07-25 18:21
 
+- **Drift-lint gates for forbidden phrases and vendored specialists parity** ([0ae3714](https://github.com/xtrm-dev/core/commit/0ae3714378b6ed780ddccd17b37919745719e77c)) — 2026-07-26 16:02
+
 ### Fixed
 
 - **Summary lines double-print epic id (xtrm-5swny) (#499)** ([87fc6b8](https://github.com/xtrm-dev/core/commit/87fc6b80b1acae51d431507104e6566071b94e32)) — 2026-07-24 21:34
@@ -29,9 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Retire dead Specialists hook payloads (#509)** ([75ee080](https://github.com/xtrm-dev/core/commit/75ee080ebedfacc86a55dd6d3af0f75cca9fd05b)) — 2026-07-25 20:13
 
-- **Assign beads from the runtime readiness handshake (xtrm-wiy5n.4.18)** ([76b704f](https://github.com/xtrm-dev/core/commit/76b704fc6e7bf1893257e8fe405e922b54c410dc)) — 2026-07-26 15:06
-
-- **Capture the readiness watermark before the runtime starts** ([16e1af2](https://github.com/xtrm-dev/core/commit/16e1af22bf211194ae98b1555328666ec0179f45)) — 2026-07-26 15:40
+- **Assign beads from the runtime readiness handshake (xtrm-wiy5n.4.18) (#510)** ([359af43](https://github.com/xtrm-dev/core/commit/359af431f8c90d33044002525039cb39579dc388)) — 2026-07-26 16:06
 
 ### Other changes
 
@@ -74,8 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Align xtmux communication contracts (#507)** ([362db69](https://github.com/xtrm-dev/core/commit/362db69aa09936f4498927bbc6685bc0fd1fd27a)) — 2026-07-25 16:08
 
 - **Claude-column contract matrix for the cross-runtime gate (#512)** ([c48b46b](https://github.com/xtrm-dev/core/commit/c48b46b1c66734c66f154451f85f3bb31f21745c)) — 2026-07-26 15:48
-
-- **Refresh [Unreleased] for xtrm-wiy5n.4.18** ([83658f2](https://github.com/xtrm-dev/core/commit/83658f2d3b538b002d03bc3808dc4b0643b68d43)) — 2026-07-26 15:07
 
 ## [v0.11.2] — 2026-07-22
 
