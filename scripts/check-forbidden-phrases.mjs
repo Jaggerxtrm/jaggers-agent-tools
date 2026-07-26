@@ -11,10 +11,11 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const vendored = new Set(JSON.parse(readFileSync(path.join(repoRoot, '.xtrm/specialists-source.json'), 'utf8')).skills);
 
 const RULES = [
-  // Deliberately not anchored to an `sp run` on the same line: both real occurrences this
-  // gate first caught sat on a continuation line of a multi-line dispatch.
-  { id: 'sp-run-background', why: '`sp run` has no --background flag; use shell `&` plus a log redirect',
-    test: (l) => /(^|\s)--background(\s|$)/.test(l) },
+  // `sp run --background` IS supported (specialists src/cli/run.ts:938-996, documented by
+  // specialists#228 with a help/flag parity test). The inverse is the real drift: a trailing
+  // `&` does not survive an agent bash tool, which reaps descendants on return or timeout.
+  { id: 'sp-run-ampersand-detach', why: 'a trailing `&` does not detach `sp run` from an agent pane; use --background',
+    test: (l) => /\bsp run\b/.test(l) && /(>|2>&1)?\s*&\s*$/.test(l) && !/--background/.test(l) },
   // Exemption must be the negative wording valid guidance uses — merely naming `final-result`
   // would let "use capture-pane as the final-result protocol" through.
   { id: 'capture-pane-as-result', why: 'capture-pane is live-state diagnosis only; terminal truth is `sp result` / `agent-last` / `message-get`',
