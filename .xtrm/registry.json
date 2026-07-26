@@ -630,7 +630,7 @@
           "version": "0.11.2"
         },
         "multiplexing-team/SKILL.md": {
-          "hash": "f20320da0e45c103663d1aac7d5270b56346bb2d22b10b9a6cce72b9fb634e4d",
+          "hash": "f4dce19e41b8109e80657bd29a3220844404edc9f6f8281e80691b695afc58d3",
           "version": "0.11.2"
         },
         "multiplexing/scripts/verify-deploy-applied.sh": {
