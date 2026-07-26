@@ -205,6 +205,25 @@ describe('ensureGlobalSkillsBootstrapped safe-delete (xtrm-wiy5n.4.37)', () => {
         expect(fs.existsSync(path.join(homeDir, '.xtrm', 'skills', 'default', 'shipped-b', 'SKILL.md'))).toBe(true);
     });
 
+    it('proof 5: a user file present BEFORE the first install survives the SECOND install (manifest must not adopt files it did not copy)', async () => {
+        // Every existing user upgrading to this version is in exactly this
+        // position: they have files under ~/.xtrm/skills/default before any
+        // manifest-aware bootstrap has ever run. Proof 1 catches the first
+        // install; this proof catches the second, where the earlier bug was
+        // that listFilesUnder(targetRoot) had adopted the user file into the
+        // manifest and the version-bump install then deleted it.
+        fs.ensureDirSync(path.dirname(userDefault()));
+        fs.writeFileSync(userDefault(), '# pre-existing user file, must survive TWO installs');
+
+        seedPkg('1.0.0', { default: { 'shipped-a/SKILL.md': '# shipped-a v1' } });
+        await bootstrap();
+
+        seedPkg('2.0.0', { default: { 'shipped-b/SKILL.md': '# shipped-b v2' } });
+        await bootstrap();
+
+        expect(fs.readFileSync(userDefault(), 'utf8')).toBe('# pre-existing user file, must survive TWO installs');
+    });
+
     it('proof 4: a user file dropped INSIDE a shipped skill dir survives that skill being removed', async () => {
         // Adversarial: user drops a file inside a directory that used to house
         // a shipped skill. Tracked-file removal must not sweep the user file
@@ -257,6 +276,21 @@ describe('ensureGlobalHooksBootstrapped safe-delete (xtrm-wiy5n.4.37)', () => {
 
         expect(fs.readFileSync(userHook(), 'utf8')).toBe('// user-authored hook, must survive');
         expect(fs.readFileSync(path.join(homeDir, '.xtrm', 'hooks', 'shipped-hook.mjs'), 'utf8')).toBe('// shipped v2 CHANGED');
+    });
+
+    it('proof 5 (hooks): a user hook present BEFORE the first bootstrap survives the SECOND bootstrap after a fingerprint change', async () => {
+        // Hooks equivalent of skills proof 5. The user hook exists before any
+        // bootstrap has ever run; the earlier bug adopted it into the manifest
+        // on install 1 and deleted it on install 2.
+        fs.writeFileSync(userHook(), '// pre-existing user hook, must survive TWO installs');
+
+        seedHooksPkg('1.0.0', { 'shipped-hook.mjs': '// shipped v1' });
+        await bootstrap();
+
+        seedHooksPkg('2.0.0', { 'shipped-hook.mjs': '// shipped v2 CHANGED' }, '{"hooks":{"v":2}}');
+        await bootstrap();
+
+        expect(fs.readFileSync(userHook(), 'utf8')).toBe('// pre-existing user hook, must survive TWO installs');
     });
 
     it('proof: dropping a shipped hook between versions cleans it without touching the user hook', async () => {

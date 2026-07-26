@@ -90,7 +90,12 @@ async function copyTier(
   await removeTrackedEntries(targetRoot, previousEntries);
   await pruneEmptyDirsUnder(targetRoot);
   await fs.copy(sourceRoot, targetRoot, { filter: COPY_FILTER, overwrite: true });
-  return listFilesUnder(targetRoot);
+  // Manifest lists ONLY what we just copied — derived from the source walk
+  // (same __pycache__ filter as COPY_FILTER), not from listFilesUnder(target).
+  // Walking the target would adopt pre-existing user files that were never
+  // ours, and the next install would then delete them (xtrm-wiy5n.4.37 hole
+  // caught by the review of the first commit on this PR).
+  return listFilesUnder(sourceRoot);
 }
 
 export async function ensureGlobalSkillsBootstrapped(pkgRoot: string, opts: BootstrapOptions = {}): Promise<BootstrapResult> {

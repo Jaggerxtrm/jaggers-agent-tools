@@ -45018,7 +45018,7 @@ async function ensureGlobalHooksBootstrapped(pkgRoot, opts = {}) {
     await import_fs_extra4.default.copy(sourceHooksRoot, targetHooksRoot, { filter: COPY_FILTER, overwrite: true });
     await import_fs_extra4.default.ensureDir(import_node_path3.default.dirname(targetHooksConfigPath));
     await import_fs_extra4.default.copy(sourceHooksConfigPath, targetHooksConfigPath, { overwrite: true });
-    const nextFiles = await listFilesUnder(targetHooksRoot);
+    const nextFiles = await listFilesUnder(sourceHooksRoot);
     await writeManifestJson(manifestPath, { files: nextFiles });
     await writeJsonAtomic(statePath, {
       installedVersion,
@@ -65350,7 +65350,7 @@ async function copyTier(sourceRoot, targetRoot, previousEntries) {
   await removeTrackedEntries(targetRoot, previousEntries);
   await pruneEmptyDirsUnder(targetRoot);
   await import_fs_extra20.default.copy(sourceRoot, targetRoot, { filter: COPY_FILTER2, overwrite: true });
-  return listFilesUnder(targetRoot);
+  return listFilesUnder(sourceRoot);
 }
 async function ensureGlobalSkillsBootstrapped(pkgRoot, opts = {}) {
   const pkgJsonPath = import_node_path17.default.join(pkgRoot, "package.json");

@@ -185,7 +185,11 @@ export async function ensureGlobalHooksBootstrapped(pkgRoot: string, opts: Globa
     await fs.copy(sourceHooksRoot, targetHooksRoot, { filter: COPY_FILTER, overwrite: true });
     await fs.ensureDir(path.dirname(targetHooksConfigPath));
     await fs.copy(sourceHooksConfigPath, targetHooksConfigPath, { overwrite: true });
-    const nextFiles = await listFilesUnder(targetHooksRoot);
+    // xtrm-wiy5n.4.37 — derive the manifest from the SOURCE walk (same
+    // __pycache__ filter as COPY_FILTER). Walking the target would adopt
+    // pre-existing user-authored hooks and the next fingerprint-change
+    // install would then delete them.
+    const nextFiles = await listFilesUnder(sourceHooksRoot);
     await writeManifestJson(manifestPath, { files: nextFiles });
     await writeJsonAtomic(statePath, {
       installedVersion,
