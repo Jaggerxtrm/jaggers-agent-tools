@@ -62019,6 +62019,70 @@ function verifyGlobalPointer() {
     throw new Error(`global skills pointer target missing: ${resolvedTarget}`);
   }
 }
+var FOREIGN_MODEL_PROVIDERS = /* @__PURE__ */ new Set([
+  "ant-ling",
+  "azure-openai-responses",
+  "cerebras",
+  "codex",
+  "copilot",
+  "deepseek",
+  "fireworks",
+  "gemini",
+  "gemini-cli",
+  "github-copilot",
+  "glm",
+  "google",
+  "grok",
+  "groq",
+  "huggingface",
+  "kimi",
+  "kimi-coding",
+  "llama",
+  "minimax",
+  "minimax-cn",
+  "mistral",
+  "moonshot",
+  "moonshotai",
+  "moonshotai-cn",
+  "nano-gpt",
+  "nvidia",
+  "ollama",
+  "openai",
+  "openai-codex",
+  "opencode",
+  "opencode-go",
+  "openrouter",
+  "perplexity",
+  "qwen",
+  "qwen-cli",
+  "qwen-token-plan",
+  "qwen-token-plan-cn",
+  "qwencloud",
+  "together",
+  "xai",
+  "xiaomi",
+  "xiaomi-token-plan-ams",
+  "xiaomi-token-plan-cn",
+  "xiaomi-token-plan-sgp",
+  "zai",
+  "zai-coding-cn"
+]);
+function isForeignProviderModel(model) {
+  const name = model.trim().toLowerCase();
+  const slash = name.indexOf("/");
+  if (slash <= 0) return false;
+  return FOREIGN_MODEL_PROVIDERS.has(name.slice(0, slash));
+}
+function passthroughModels(passthrough) {
+  const models = [];
+  for (let i = 0; i < passthrough.length; i++) {
+    const arg = passthrough[i];
+    if (arg === "--") break;
+    if (arg === "--model" && passthrough[i + 1] !== void 0) models.push(passthrough[i + 1]);
+    else if (arg.startsWith("--model=")) models.push(arg.slice("--model=".length));
+  }
+  return models;
+}
 var ROLE_GUARDED_PI_FLAGS = [
   "--session-dir",
   "--name",
@@ -62422,6 +62486,14 @@ function buildRoleTmuxPlan(args) {
   } else {
     runtimeArgs.push("--dangerously-skip-permissions");
   }
+  let model = modelOverride ?? role.model;
+  if (runtime === "claude" && !modelOverride && role.model && isForeignProviderModel(role.model)) {
+    process.stderr.write(kleur_default.yellow(
+      `  \u26A0 role '${role.name}': ignoring non-Claude model '${role.model}'; claude inherits the parent model. Declare execution.surface_models.claude on the specialist (or pass --model) to pin one.
+`
+    ));
+    model = void 0;
+  }
   return finalizeTmuxPlan({
     runtime,
     sessionName,
@@ -62433,8 +62505,7 @@ function buildRoleTmuxPlan(args) {
     worktreePath,
     branchName,
     turn1Body,
-    // CLI override wins over the specialist default.
-    model: modelOverride ?? role.model,
+    model,
     thinking: thinkingOverride ?? role.thinkingLevel,
     passthrough
   });
@@ -62704,6 +62775,15 @@ async function launchWorktreeSession(opts) {
   }
   if (roleName && bead && prompt) {
     console.error(kleur_default.red("\n  \u2717 --bead and --prompt are mutually exclusive; pick one\n"));
+    process.exit(1);
+  }
+  const requestedModels = [model, ...passthroughModels(opts.passthrough ?? [])];
+  const foreignModel = runtime === "claude" ? requestedModels.find((candidate) => candidate && isForeignProviderModel(candidate)) : void 0;
+  if (foreignModel) {
+    console.error(kleur_default.red(`
+  \u2717 --model '${foreignModel}' is a non-Anthropic provider model; claude would start and then die at turn 1
+`));
+    console.error(kleur_default.dim("  Use a Claude id or alias: opus, sonnet, haiku, claude-opus-5, \u2026\n"));
     process.exit(1);
   }
   let resolvedRole = null;

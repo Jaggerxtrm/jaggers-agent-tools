@@ -242,6 +242,67 @@ export interface ResolvedRole {
     interactive?: boolean;
 }
 
+// Specialist configs — and the operator's ~/.config/specialists/user.json
+// overrides — carry `provider/model` pairs for the pi/headless surface
+// (qwencloud/qwen3.8-max-preview, openai-codex/gpt-5.4), and
+// `sp view --surface claude` falls back to that generic execution.model whenever
+// no execution.surface_models.claude is declared. The launcher is therefore the
+// last place a foreign model can be caught: claude cannot run one, so forwarding
+// it spawns a live tmux session whose claude dies at turn 1 ("issue with the
+// selected model") — the worker never runs and an orchestrator waits forever.
+//
+// Detection is a denylist of *known* non-Anthropic vendors, deliberately not an
+// allowlist of Claude names. A valid Claude identifier need not contain "claude"
+// at all — Bedrock application-inference-profile ARNs, custom gateway ids — and
+// `xt … --model` is documented (docs/xt-pi-role.md) to accept custom-provider
+// identifiers, so anything unrecognised stays the operator's call. The vendor
+// names are enumerated verbatim from pi's provider registry, regional and plan
+// variants included — no suffix wildcard, so a Claude-compatible gateway that
+// merely starts with a vendor word (`openai-compatible/…`, `google-proxy/…`)
+// stays operator-controlled. Anthropic-capable hosts (anthropic, amazon-bedrock,
+// google-vertex, the ai-gateways) are deliberately absent.
+//
+// Only the OUTER provider decides: `openrouter/anthropic/claude-sonnet-4.6` is
+// an OpenRouter id that claude cannot run, whatever the nested model is named.
+// A bare foreign name with no provider prefix (`gpt-5.4`) still passes — sp
+// never emits one. xtrm-wiy5n.4.19.
+const FOREIGN_MODEL_PROVIDERS: ReadonlySet<string> = new Set([
+    'ant-ling', 'azure-openai-responses', 'cerebras', 'codex', 'copilot', 'deepseek',
+    'fireworks', 'gemini', 'gemini-cli', 'github-copilot', 'glm', 'google', 'grok',
+    'groq', 'huggingface', 'kimi', 'kimi-coding', 'llama', 'minimax', 'minimax-cn',
+    'mistral', 'moonshot', 'moonshotai', 'moonshotai-cn', 'nano-gpt', 'nvidia',
+    'ollama', 'openai', 'openai-codex', 'opencode', 'opencode-go', 'openrouter',
+    'perplexity', 'qwen', 'qwen-cli', 'qwen-token-plan', 'qwen-token-plan-cn',
+    'qwencloud', 'together', 'xai', 'xiaomi', 'xiaomi-token-plan-ams',
+    'xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'zai', 'zai-coding-cn',
+]);
+
+export function isForeignProviderModel(model: string): boolean {
+    const name = model.trim().toLowerCase();
+    const slash = name.indexOf('/');
+    if (slash <= 0) return false;
+    return FOREIGN_MODEL_PROVIDERS.has(name.slice(0, slash));
+}
+
+// `xt claude … -- --model <name>` reaches claude through the passthrough tail
+// instead of Commander, so the launcher's own --model preflight never sees it.
+// Same value, same dead session. Every occurrence is returned: the tail is
+// forwarded verbatim after the native --model, so a later one wins at the
+// runtime and a safe native flag must not mask it. Exported for unit testing.
+// xtrm-wiy5n.4.19.
+export function passthroughModels(passthrough: readonly string[]): string[] {
+    const models: string[] = [];
+    for (let i = 0; i < passthrough.length; i++) {
+        const arg = passthrough[i];
+        // The operator's own end-of-options marker: everything after it is
+        // positional text to the runtime, not a model selection.
+        if (arg === '--') break;
+        if (arg === '--model' && passthrough[i + 1] !== undefined) models.push(passthrough[i + 1]);
+        else if (arg.startsWith('--model=')) models.push(arg.slice('--model='.length));
+    }
+    return models;
+}
+
 // xt-owned flags a passthrough must not clobber. Reject with a clear error if
 // the user tries to pass any of these after `--`. Session naming, prompt, and
 // session-dir are set by the launcher and re-passing them silently would break
@@ -938,6 +999,18 @@ export function buildRoleTmuxPlan(args: CommonTmuxPlanArgs & {
         runtimeArgs.push('--dangerously-skip-permissions');
     }
 
+    // CLI override wins over the specialist default. On claude a cross-provider
+    // role default is unusable, so drop it and let claude inherit the parent
+    // runtime model instead of spawning a session that dies at turn 1.
+    let model = modelOverride ?? role.model;
+    if (runtime === 'claude' && !modelOverride && role.model && isForeignProviderModel(role.model)) {
+        process.stderr.write(kleur.yellow(
+            `  ⚠ role '${role.name}': ignoring non-Claude model '${role.model}'; claude inherits the parent model.`
+            + ` Declare execution.surface_models.claude on the specialist (or pass --model) to pin one.\n`,
+        ));
+        model = undefined;
+    }
+
     return finalizeTmuxPlan({
         runtime,
         sessionName,
@@ -949,8 +1022,7 @@ export function buildRoleTmuxPlan(args: CommonTmuxPlanArgs & {
         worktreePath,
         branchName,
         turn1Body,
-        // CLI override wins over the specialist default.
-        model: modelOverride ?? role.model,
+        model,
         thinking: thinkingOverride ?? role.thinkingLevel,
         passthrough,
     });
@@ -1420,6 +1492,21 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // don't conflict. xtrm-3xgs5.
     if (roleName && bead && prompt) {
         console.error(kleur.red('\n  ✗ --bead and --prompt are mutually exclusive; pick one\n'));
+        process.exit(1);
+    }
+
+    // An explicit --model is the operator's word — only a pi-surface
+    // `provider/model` pair is refused, because claude cannot run one and would
+    // start into a session that never takes turn 1. Fail loudly here, before a
+    // worktree exists. Role defaults are handled in buildRoleTmuxPlan (warn +
+    // inherit the parent model). xtrm-wiy5n.4.19.
+    const requestedModels = [model, ...passthroughModels(opts.passthrough ?? [])];
+    const foreignModel = runtime === 'claude'
+        ? requestedModels.find((candidate) => candidate && isForeignProviderModel(candidate))
+        : undefined;
+    if (foreignModel) {
+        console.error(kleur.red(`\n  ✗ --model '${foreignModel}' is a non-Anthropic provider model; claude would start and then die at turn 1\n`));
+        console.error(kleur.dim('  Use a Claude id or alias: opus, sonnet, haiku, claude-opus-5, …\n'));
         process.exit(1);
     }
 
