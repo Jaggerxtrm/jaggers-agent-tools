@@ -3,6 +3,7 @@ import { resolve, dirname, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { Command } from 'commander';
 import kleur from 'kleur';
+import { checkXtrmUpdates, defaultCacheFile, formatUpdateRows, type PackageStatus } from '../utils/npm-latest.js';
 
 // __dirname is available in CJS output (tsup target: cjs). Matches
 // the same pattern used at src/index.ts to resolve the shipped
@@ -109,11 +110,34 @@ function formatHuman(info: VersionInfo): string {
     ].join('\n');
 }
 
+function statusesToJson(statuses: PackageStatus[]) {
+    return statuses.map((s) => ({
+        package: s.pkg,
+        installed: s.installed,
+        latest: s.latest,
+        state: s.state,
+        from_cache: s.fromCache,
+        cache_age_ms: s.cacheAgeMs,
+    }));
+}
+
 export function createVersionCommand(): Command {
     return new Command('version')
         .description('Print xtrm-tools build identity (package, version, commit, source, node runtime)')
         .option('--json', 'Emit machine-readable JSON', false)
-        .action((opts: { json?: boolean }) => {
+        .option('--check-updates', 'Compare installed xtrm-tools/xtmux/specialists against npm latest (24h cache)', false)
+        .option('--no-cache', 'With --check-updates: bypass the 24h cache and re-query npm')
+        .action((opts: { json?: boolean; checkUpdates?: boolean; cache?: boolean }) => {
+            if (opts.checkUpdates) {
+                const statuses = checkXtrmUpdates({ noCache: opts.cache === false });
+                if (opts.json) {
+                    process.stdout.write(JSON.stringify({ updates: statusesToJson(statuses), cache_file: defaultCacheFile() }) + '\n');
+                } else {
+                    for (const row of formatUpdateRows(statuses)) process.stdout.write(row + '\n');
+                    process.stdout.write(kleur.dim(`cache: ${defaultCacheFile()}\n`));
+                }
+                return;
+            }
             const info = collectVersionInfo();
             if (opts.json) {
                 process.stdout.write(JSON.stringify(info) + '\n');
