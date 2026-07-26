@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Assign beaded sessions from runtime origin (#508)** ([2fdcef8](https://github.com/xtrm-dev/core/commit/2fdcef84933664a908d06e301b164625afe93fe4)) — 2026-07-25 18:21
 
-- **Drift-lint gates for forbidden phrases and vendored specialists parity** ([0ae3714](https://github.com/xtrm-dev/core/commit/0ae3714378b6ed780ddccd17b37919745719e77c)) — 2026-07-26 16:02
+- **Drift-lint gates for forbidden phrases and vendored specialists parity (xtrm-wiy5n.4.3) (#514)** ([a89f55d](https://github.com/xtrm-dev/core/commit/a89f55db0b7da94bebd3fa3c10ae78f987157863)) — 2026-07-26 16:25
 
 ### Fixed
 
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Assign beads from the runtime readiness handshake (xtrm-wiy5n.4.18) (#510)** ([359af43](https://github.com/xtrm-dev/core/commit/359af431f8c90d33044002525039cb39579dc388)) — 2026-07-26 16:06
 
-- **Tighten forbidden-phrase predicates per Codex review** ([06582f7](https://github.com/xtrm-dev/core/commit/06582f7379c601b25f80ebb9998da60a62436d04)) — 2026-07-26 16:20
+- **Invert the sp-run-background rule, which asserted a falsehood** ([a1a65de](https://github.com/xtrm-dev/core/commit/a1a65de03ca9aaca16ee05bace79efc9d7554b40)) — 2026-07-26 16:44
 
 ### Other changes
 
@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Align xtmux communication contracts (#507)** ([362db69](https://github.com/xtrm-dev/core/commit/362db69aa09936f4498927bbc6685bc0fd1fd27a)) — 2026-07-25 16:08
 
 - **Claude-column contract matrix for the cross-runtime gate (#512)** ([c48b46b](https://github.com/xtrm-dev/core/commit/c48b46b1c66734c66f154451f85f3bb31f21745c)) — 2026-07-26 15:48
+
+- **Re-vendor specialists skills at master ba8526cd** ([1ae4a49](https://github.com/xtrm-dev/core/commit/1ae4a499388dbb9cf2f47d5caf8de8abfa60961c)) — 2026-07-26 16:35
 
 ## [v0.11.2] — 2026-07-22
 
