@@ -40,20 +40,12 @@ jobs:
     - name: Check package metadata
       run: npm run check:package
 
-    - name: CHANGELOG.md [Unreleased] fresh
-      # Guard: [Unreleased] must reflect the current git log. See /setup-git-cliff.
-      # Fix locally with: npm run changelog:update
-      #
-      # PR-only by construction, not by preference: entries are keyed on commit id and
-      # author timestamp, and squash-merge replaces the branch commits an author
-      # regenerated from with one new id, timestamp and "(#N)" suffix. On push:main the
-      # committed [Unreleased] is therefore stale the instant the merge lands, and no
-      # author can pre-compute the value that would satisfy it — red on every commit
-      # from 2026-07-24 on. The gate is unchanged where it is satisfiable and
-      # actionable: every PR must still carry a fresh [Unreleased]. `npm version`
-      # regenerates from the full log, so this never reaches a released section.
-      # Making main verifiable too is a format question — bead xtrm-wiy5n.4.28.
-      if: github.event_name == 'pull_request'
+    - name: CHANGELOG.md [Unreleased] is an empty placeholder
+      # Guard: no branch commits generated [Unreleased] entries. They are produced from
+      # the git log at release time by `npm version`, so a branch that carries them adds
+      # nothing and conflicts every other open PR on the next merge (bead xtrm-wiy5n.4.28).
+      # Fix locally with: npm run changelog:update   (pending entries: npm run changelog:preview)
+      # Satisfiable on main and on a PR alike — the target state does not depend on commit ids.
       run: npm run changelog:check
 
     # cli consumes @xtrm/contracts, whose package.json entry points resolve to
@@ -121,3 +113,4 @@ jobs:
     - name: Run Tests
       run: |
         npm test --prefix cli
+        npm run test:scripts

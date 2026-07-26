@@ -714,7 +714,7 @@
           "version": "0.11.2"
         },
         "releasing/SKILL.md": {
-          "hash": "ba340a00c37843a8b9230a1f49650ad808028038c9da1f0b6172f68bb7859d45",
+          "hash": "1b96ef8e995e2722acb385def315c9613b0d742261a7073ea43e695cacc0f23d",
           "version": "0.11.2"
         },
         "security-pipeline/scripts/security-bootstrap.sh": {
@@ -762,7 +762,7 @@
           "version": "0.11.2"
         },
         "session-close-report/SKILL.md": {
-          "hash": "98c170dded2b9ec88e2f38da6cb99d07b40cda7c0df5cd9b8e176747231e9d2c",
+          "hash": "038e10b1eaeb6b8ddcc3ddf81fab780e96129a4d59edcfdcb163cc92fb7a8bfe",
           "version": "0.11.2"
         },
         "skill-creator/agents/analyzer.md": {

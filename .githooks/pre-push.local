@@ -9,14 +9,17 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$HOOK" ]; then
     python3 "$HOOK" || true
 fi
 
-# CHANGELOG.md [Unreleased] freshness — abort push if stale (see /setup-git-cliff).
+# CHANGELOG.md [Unreleased] must stay an empty placeholder — entries are generated
+# from the git log at release time. A branch that commits them conflicts every other
+# open pull request on the next merge (see /setup-git-cliff, bead xtrm-wiy5n.4.28).
 # Bypass with SKIP_CHANGELOG_CHECK=1 if you know what you're doing.
 if [ -z "${SKIP_CHANGELOG_CHECK:-}" ] && [ -f "$ROOT/package.json" ] && grep -q '"changelog:check"' "$ROOT/package.json"; then
     if ! (cd "$ROOT" && npm run --silent changelog:check); then
         echo ""
-        echo "  CHANGELOG.md [Unreleased] is out of date."
+        echo "  CHANGELOG.md [Unreleased] carries generated entries."
         echo "  Run: npm run changelog:update"
         echo "  Then re-stage CHANGELOG.md and re-push."
+        echo "  (See what is pending: npm run changelog:preview)"
         echo "  (Bypass one-off: SKIP_CHANGELOG_CHECK=1 git push ...)"
         exit 1
     fi
