@@ -1,9 +1,9 @@
 {
   "version": 1,
   "source": {
-    "kind": "ref",
-    "ref": "v3.21.0",
-    "resolved_sha": "22573c647715be526c02164e16745b1906d32b26",
+    "kind": "repo",
+    "ref": "master",
+    "resolved_sha": "ba8526cd867733b8c73ee56ed5142e01e36a09f8",
     "repo_path": "../specialists",
     "source_path": "config/skills"
   },
@@ -36,7 +36,7 @@
       "SKILL.md": "e87511d685eb7bc95c374641056194931a9da79434b624fdfb2805bd9dbac7b6"
     },
     "using-specialists": {
-      "evals/evals.json": "1a995301b27b35bef5e59bf8cf6a290c6c289639d6ce21a5aa8931fff1f80d18",
+      "evals/evals.json": "8fdca75958021860c95b35676f5ce3ca24aae7e046acffecdc259bbd993a4172",
       "evals/fixtures/qa-routing/bad-test-result.json": "20e0d3698809c87f9445ea533545998143ffc151a0c2774ea37415b5a984a011",
       "evals/fixtures/qa-routing/reviewer-input.json": "8c3bea5b93a55944aef036c498a090c3e2a6ae4a86c378d66cddfe7cda2aa093",
       "evals/fixtures/qa-routing/source-regression-result.json": "0f566ca2ad84458ce183a1ca4a925ef0b308c8d8cc61fa75b90dc14685d9e3bf",
@@ -44,12 +44,12 @@
       "evals/README.md": "c6c871a9e2a5ca8d9cea7b23f89033018791fd1fcdb8fec775b888fe88d4dfa9",
       "references/bead-contracts.md": "b2c3f08758e5a998d52b37c8b5239db81f496a5ea63d93b680a5f49dd0446db4",
       "references/chain-recipes.md": "c92e6447f8ec443db30a28b369d59bdec1f8438115803b9f4661437e97f88f75",
-      "references/content-migration-map.json": "32ec8787652b925b5c7dde04adff81baf129a5154decc5ffcd1034655da0bd5f",
+      "references/content-migration-map.json": "095dc0573b575521ca25cdc4f75d9d12239aad01ec924494819aa8e5ae2910eb",
       "references/dispatch-preconditions.md": "66c7f52379fe546e79fe3eac0c0d52c47df1fc8d1491f805531f48cf83a89dd8",
       "references/merge-and-integration.md": "7884a445b5ee7031fd0cf2b548a6f6bf4df8daa2ab1db5ec28f32c47cbc4d6dd",
-      "references/monitoring.md": "7b1aa2cec42756fb752467da14552d1e7233c892232abbc24d563abeb19cd537",
+      "references/monitoring.md": "4871fca2072cffd73ba0932ce0f4514ab2dcbab974ce7bd17e77dc73c1807465",
       "references/registry-and-locations.md": "d02cb1c2e68f59e14f57d8fda7e80e109fe5666bbd33cae4c0ab8f9b10814460",
-      "SKILL.md": "af5725c1e034dd9181452704abdaf5eaa0e0476e2f1c54d9734e3a50e49fbdb7"
+      "SKILL.md": "74fb9a29fdcb679c90b34e614c9e43645da5a12ad8cb1d44d10d9a723a2d792d"
     },
     "using-specialists-auto": {
       "SKILL.md": "0668f03dc701d3895defc1e3f3973fa41976355db5a1c38278b6272c95f145c4"

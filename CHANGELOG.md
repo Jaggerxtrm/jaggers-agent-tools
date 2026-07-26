@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Assign beaded sessions from runtime origin (#508)** ([2fdcef8](https://github.com/xtrm-dev/core/commit/2fdcef84933664a908d06e301b164625afe93fe4)) — 2026-07-25 18:21
 
-- **Drift-lint gates for forbidden phrases and vendored specialists parity** ([0ae3714](https://github.com/xtrm-dev/core/commit/0ae3714378b6ed780ddccd17b37919745719e77c)) — 2026-07-26 16:02
+- **Drift-lint gates for forbidden phrases and vendored specialists parity (xtrm-wiy5n.4.3) (#514)** ([a89f55d](https://github.com/xtrm-dev/core/commit/a89f55db0b7da94bebd3fa3c10ae78f987157863)) — 2026-07-26 16:25
 
 ### Fixed
 
@@ -32,8 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Retire dead Specialists hook payloads (#509)** ([75ee080](https://github.com/xtrm-dev/core/commit/75ee080ebedfacc86a55dd6d3af0f75cca9fd05b)) — 2026-07-25 20:13
 
 - **Assign beads from the runtime readiness handshake (xtrm-wiy5n.4.18) (#510)** ([359af43](https://github.com/xtrm-dev/core/commit/359af431f8c90d33044002525039cb39579dc388)) — 2026-07-26 16:06
-
-- **Tighten forbidden-phrase predicates per Codex review** ([06582f7](https://github.com/xtrm-dev/core/commit/06582f7379c601b25f80ebb9998da60a62436d04)) — 2026-07-26 16:20
 
 ### Other changes
 
