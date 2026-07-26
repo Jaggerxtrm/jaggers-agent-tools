@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Assign beads from the runtime readiness handshake (xtrm-wiy5n.4.18) (#510)** ([359af43](https://github.com/xtrm-dev/core/commit/359af431f8c90d33044002525039cb39579dc388)) — 2026-07-26 16:06
 
-- **Invert the sp-run-background rule, which asserted a falsehood** ([a1a65de](https://github.com/xtrm-dev/core/commit/a1a65de03ca9aaca16ee05bace79efc9d7554b40)) — 2026-07-26 16:44
+- **Stop xt claude --role forwarding non-Claude models (xtrm-wiy5n.4.19)** ([56a1210](https://github.com/xtrm-dev/core/commit/56a1210425deec7edf6a0f2934b7b2c9de31ad51)) — 2026-07-26 16:20
 
 ### Other changes
 
@@ -77,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Claude-column contract matrix for the cross-runtime gate (#512)** ([c48b46b](https://github.com/xtrm-dev/core/commit/c48b46b1c66734c66f154451f85f3bb31f21745c)) — 2026-07-26 15:48
 
-- **Re-vendor specialists skills at master ba8526cd** ([1ae4a49](https://github.com/xtrm-dev/core/commit/1ae4a499388dbb9cf2f47d5caf8de8abfa60961c)) — 2026-07-26 16:35
+- **Re-vendor specialists skills at master ba8526cd (#515)** ([53e4afe](https://github.com/xtrm-dev/core/commit/53e4afe451d73e7655cfc664297694fb45e7905b)) — 2026-07-26 18:02
 
 ## [v0.11.2] — 2026-07-22
 
