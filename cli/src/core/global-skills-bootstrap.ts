@@ -3,7 +3,27 @@ import fs from 'fs-extra';
 import path from 'node:path';
 import { resolveGlobalSkillsRoot, resolveStateFilePath, SKILLS_STATE_SCHEMA_VERSION } from './skills-layout.js';
 
+import {
+  INSTALLER_MANIFEST_FILENAME,
+  listFilesUnder,
+  pruneEmptyDirsUnder,
+  readManifestJson,
+  removeTrackedEntries,
+  writeManifestJson,
+} from './installer-manifest.js';
 import { readSkillsState } from './skills-state.js';
+
+// xtrm-wiy5n.4.37 — the manifest records every file the previous install wrote
+// under each tier. On the next install we remove ONLY those paths, then copy
+// the new payload. A file the installer never wrote is left alone.
+interface SkillsInstallerManifest {
+  default?: string[];
+  optional?: string[];
+}
+
+function resolveSkillsManifestPath(globalSkillsRoot: string): string {
+  return path.join(globalSkillsRoot, INSTALLER_MANIFEST_FILENAME);
+}
 
 interface BootstrapOptions {
   readonly force?: boolean;
@@ -61,33 +81,16 @@ export async function logBootstrapTrigger(params: {
   });
 }
 
-async function countCopiedFiles(root: string): Promise<number> {
-  const stat = await fs.lstat(root).catch(() => null);
-  if (!stat) {
-    return 0;
-  }
-
-  if (!stat.isDirectory()) {
-    return stat.isFile() ? 1 : 0;
-  }
-
-  let count = 0;
-  const entries = await fs.readdir(root, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name === '__pycache__') {
-      continue;
-    }
-
-    count += await countCopiedFiles(path.join(root, entry.name));
-  }
-
-  return count;
-}
-
-async function copyTier(sourceRoot: string, targetRoot: string): Promise<number> {
-  await fs.remove(targetRoot);
-  await fs.copy(sourceRoot, targetRoot, { filter: COPY_FILTER });
-  return countCopiedFiles(targetRoot);
+async function copyTier(
+  sourceRoot: string,
+  targetRoot: string,
+  previousEntries: readonly string[],
+): Promise<string[]> {
+  await fs.ensureDir(targetRoot);
+  await removeTrackedEntries(targetRoot, previousEntries);
+  await pruneEmptyDirsUnder(targetRoot);
+  await fs.copy(sourceRoot, targetRoot, { filter: COPY_FILTER, overwrite: true });
+  return listFilesUnder(targetRoot);
 }
 
 export async function ensureGlobalSkillsBootstrapped(pkgRoot: string, opts: BootstrapOptions = {}): Promise<BootstrapResult> {
@@ -134,13 +137,17 @@ export async function ensureGlobalSkillsBootstrapped(pkgRoot: string, opts: Boot
       return { installedVersion, changed: false };
     }
 
+    const manifestPath = resolveSkillsManifestPath(globalSkillsRoot);
+    const previousManifest = await readManifestJson<SkillsInstallerManifest>(manifestPath, {});
+    const nextManifest: SkillsInstallerManifest = {};
     let filesCopied = 0;
     for (const asset of ['default', 'optional'] as const) {
       const assetSource = path.join(sourceRoot, asset);
       const assetTarget = path.join(targetRoot, asset);
       const assetStartedAt = Date.now();
-      const copied = await copyTier(assetSource, assetTarget);
-      filesCopied += copied;
+      const entries = await copyTier(assetSource, assetTarget, previousManifest[asset] ?? []);
+      nextManifest[asset] = entries;
+      filesCopied += entries.length;
 
       await appendLog({
         timestamp: new Date().toISOString(),
@@ -149,12 +156,13 @@ export async function ensureGlobalSkillsBootstrapped(pkgRoot: string, opts: Boot
         pkgVersion: installedVersion,
         source: formatLogPath(assetSource),
         target: formatLogPath(assetTarget),
-        filesCopied: copied,
+        filesCopied: entries.length,
         durationMs: Date.now() - assetStartedAt,
         outcome: 'ok',
       });
     }
 
+    await writeManifestJson(manifestPath, nextManifest);
     await fs.remove(path.join(globalSkillsRoot, 'active'));
 
     const currentStateForMetadata = await readSkillsState(globalSkillsRoot);
