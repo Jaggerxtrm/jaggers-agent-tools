@@ -14,6 +14,12 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from '
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// xtrm-wiy5n.4.38 Codex P2 (isolation) — the compiler reads from POLICIES_DIR
+// and validates against HOOKS_PAYLOAD_DIR. Both default to the repo layout;
+// tests can override via env vars to spawn the script against a temp fixture
+// tree without touching the real `policies/` directory (which cli's parallel
+// test files also read).
+
 // Inlined from the former hooks/guard-rules.mjs (removed as dead hook)
 const WRITE_TOOLS = [
   'Edit',
@@ -28,8 +34,8 @@ const WRITE_TOOLS = [
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const POLICIES_DIR = join(ROOT, 'policies');
-const OUTPUT_FILE = join(ROOT, '.xtrm', 'config', 'hooks.json');
+const POLICIES_DIR = process.env.XTRM_POLICIES_DIR || join(ROOT, 'policies');
+const OUTPUT_FILE = process.env.XTRM_HOOKS_OUTPUT_FILE || join(ROOT, '.xtrm', 'config', 'hooks.json');
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
@@ -113,10 +119,25 @@ for (const [key, hookEntries] of eventGroups) {
 // ~/.claude/settings.json, so a mismatch here becomes a broken hook on every
 // session start that fires it. Fail loud instead — never emit a bad hook wire.
 const PLUGIN_ROOT_HOOK_RE = /\$\{?CLAUDE_PLUGIN_ROOT\}?\/hooks\/([A-Za-z0-9_\-./]+)/g;
-const HOOKS_PAYLOAD_DIR = join(ROOT, '.xtrm', 'hooks');
+const HOOKS_PAYLOAD_DIR = process.env.XTRM_HOOKS_PAYLOAD_DIR || join(ROOT, '.xtrm', 'hooks');
+
+// xtrm-wiy5n.4.38 Codex P2 (directories) — a command that accidentally omits
+// the filename and targets a directory (`${CLAUDE_PLUGIN_ROOT}/hooks/gitnexus`)
+// would pass `existsSync`, so the gate has to require a regular file. Missing
+// paths and non-file entries are both rejected as mismatches.
+function payloadEntryStatus(absPath) {
+  try {
+    const stat = statSync(absPath);
+    if (stat.isFile()) return 'ok';
+    return `not a regular file (${stat.isDirectory() ? 'directory' : 'other'})`;
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return 'missing';
+    throw err;
+  }
+}
 
 function collectReferencedHookFiles(policiesData) {
-  const missing = new Map(); // relpath -> array of {policyFile, event, command}
+  const missing = new Map(); // relpath -> array of {policyFile, event, command, reason}
   for (const policy of policiesData) {
     const runtime = policy.runtime ?? 'both';
     // Only Claude-side commands ship via .xtrm/hooks. Pi extensions live
@@ -130,9 +151,10 @@ function collectReferencedHookFiles(policiesData) {
       while ((match = PLUGIN_ROOT_HOOK_RE.exec(command)) !== null) {
         const rel = match[1];
         const absPath = join(HOOKS_PAYLOAD_DIR, rel);
-        if (existsSync(absPath)) continue;
+        const status = payloadEntryStatus(absPath);
+        if (status === 'ok') continue;
         if (!missing.has(rel)) missing.set(rel, []);
-        missing.get(rel).push({ policyFile: policy.file, event: hook.event, command });
+        missing.get(rel).push({ policyFile: policy.file, event: hook.event, command, reason: status });
       }
     }
   }
@@ -142,14 +164,17 @@ function collectReferencedHookFiles(policiesData) {
 function runPayloadWiringCheck(policiesData) {
   const missing = collectReferencedHookFiles(policiesData);
   if (missing.size === 0) return;
-  console.error('✗ Payload/wiring mismatch — the following hook files are referenced by policies but do not ship under .xtrm/hooks/:');
+  console.error('✗ Payload/wiring mismatch — the following hook paths referenced by policies are missing or are not regular files under .xtrm/hooks/:');
   for (const [rel, refs] of missing) {
-    console.error(`  - .xtrm/hooks/${rel} (missing)`);
+    // All refs for this rel share the same absolute path, so the reason is
+    // identical — pull it from the first ref.
+    const reason = refs[0]?.reason ?? 'missing';
+    console.error(`  - .xtrm/hooks/${rel} (${reason})`);
     for (const ref of refs) {
       console.error(`      referenced by ${ref.policyFile} (event=${ref.event}) → ${ref.command}`);
     }
   }
-  console.error('  Fix: restore the file under .xtrm/hooks/, or remove the hook entry from the policy.');
+  console.error('  Fix: ship a regular file at .xtrm/hooks/<name>, or remove the hook entry from the policy.');
   process.exit(1);
 }
 
