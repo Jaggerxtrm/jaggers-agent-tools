@@ -11,6 +11,7 @@ import { discoverDefaultSkills, type DiscoveredSkill } from '../core/skill-disco
 import { ensureBeadsSharedServerEnabled, hasBeadsDir, type SharedBeadsServerState } from '../core/beads-shared-server.js';
 import { findProjectRoot } from '../utils/repo-root.js';
 import { applySettingsFixes, auditSettings, type SettingsAuditOutcome, type SettingsFinding } from '../core/settings-audit.js';
+import { checkXtrmUpdates, defaultCacheFile, formatUpdateRows, updatesSummary, type PackageStatus } from '../utils/npm-latest.js';
 
 interface CheckJson {
   managed_sections: Array<{ name: string; version: string; canonical_version: string | null }>;
@@ -56,6 +57,10 @@ interface CatBJson {
 interface DoctorJson {
   catB: CatBJson;
   piPackages: XtManagedPiPackageDoctorReport;
+  updates: {
+    packages: Array<{ package: string; installed: string | null; latest: string | null; state: string; from_cache: boolean; cache_age_ms: number | null }>;
+    cache_file: string;
+  };
 }
 
 function ok(msg: string) { console.log(`  ${kleur.green('✓')} ${msg}`); }
@@ -478,7 +483,22 @@ export function createDoctorCommand(): Command {
         : 'not-applicable';
       const catB = await buildCatBJson(registry, cwd, drift, runtimeView, duplicates, sharedBeadsServerState);
       const piPackages = await getXtManagedPiPackageDoctorReport();
-      const doctorJson = { catB, piPackages };
+      const updateStatuses = checkXtrmUpdates();
+      const doctorJson: DoctorJson = {
+        catB,
+        piPackages,
+        updates: {
+          packages: updateStatuses.map((s: PackageStatus) => ({
+            package: s.pkg,
+            installed: s.installed,
+            latest: s.latest,
+            state: s.state,
+            from_cache: s.fromCache,
+            cache_age_ms: s.cacheAgeMs,
+          })),
+          cache_file: defaultCacheFile(),
+        },
+      };
 
       if (opts.json) {
         console.log(JSON.stringify(doctorJson, null, 2));
@@ -503,6 +523,15 @@ export function createDoctorCommand(): Command {
       const fragmentsOk = checkClaudeMdFragments(cwd);
       const piPackagesOk = renderXtManagedPiPackages(piPackages);
       renderCatB(catB);
+
+      section('Updates');
+      const summary = updatesSummary(updateStatuses);
+      for (const row of formatUpdateRows(updateStatuses)) console.log(`  ${row}`);
+      console.log(kleur.dim(`  cache: ${defaultCacheFile()}`));
+      if (summary.stale > 0) warn(`${summary.stale} stale package(s) — run: npm i -g <pkg>@latest`);
+      else if (summary.unknown > 0) warn(`${summary.unknown} package(s) could not be checked (offline or npm unreachable)`);
+      else if (summary.notInstalled > 0) warn(`${summary.notInstalled} package(s) not installed globally`);
+      else ok('xtrm-tools, xtmux, specialists all current');
 
       const failed = !fragmentsOk || !piPackagesOk || piPackages.hasIssues || hasCatBIssues(catB);
       if (failed) {

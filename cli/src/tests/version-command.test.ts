@@ -1,5 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { collectVersionInfo, createVersionCommand } from '../commands/version.js';
+
+vi.mock('../utils/npm-latest.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../utils/npm-latest.js')>();
+    return {
+        ...actual,
+        checkXtrmUpdates: () => ([
+            { pkg: 'xtrm-tools', installed: '0.11.2', latest: '0.11.2', state: 'ok', fromCache: false, cacheAgeMs: 0 },
+            { pkg: '@jaggerxtrm/xtmux', installed: '0.9.0', latest: '0.9.1', state: 'stale', fromCache: false, cacheAgeMs: 0 },
+            { pkg: '@jaggerxtrm/specialists', installed: null, latest: null, state: 'unknown', fromCache: false, cacheAgeMs: null },
+        ]),
+        defaultCacheFile: () => '/tmp/mock-npm-latest.json',
+    };
+});
 
 describe('xt version', () => {
     it('collectVersionInfo returns the required fields with correct shape', () => {
@@ -60,5 +73,48 @@ describe('xt version', () => {
         expect(output).toMatch(/xtrm-tools/);
         expect(output).toMatch(/node\s/);
         expect(output.split('\n').length).toBeGreaterThan(1);
+    });
+
+    it('--check-updates prints 3 rows and mentions the cache file (mocked npm; no network)', async () => {
+        const chunks: string[] = [];
+        const originalWrite = process.stdout.write.bind(process.stdout);
+        // @ts-ignore
+        process.stdout.write = (chunk: string) => { chunks.push(chunk); return true; };
+        try {
+            const cmd = createVersionCommand();
+            await cmd.parseAsync(['node', 'version', '--check-updates']);
+        } finally {
+            process.stdout.write = originalWrite;
+        }
+        const output = chunks.join('');
+        for (const pkg of ['xtrm-tools', '@jaggerxtrm/xtmux', '@jaggerxtrm/specialists']) {
+            expect(output).toContain(pkg);
+        }
+        expect(output).toContain('installed=0.11.2');
+        expect(output).toContain('[stale]');
+        expect(output).toContain('[unknown]');
+        expect(output).toMatch(/cache:/);
+    });
+
+    it('--check-updates --json emits a structured envelope with a package for each xtrm dep', async () => {
+        const chunks: string[] = [];
+        const originalWrite = process.stdout.write.bind(process.stdout);
+        // @ts-ignore
+        process.stdout.write = (chunk: string) => { chunks.push(chunk); return true; };
+        try {
+            const cmd = createVersionCommand();
+            await cmd.parseAsync(['node', 'version', '--check-updates', '--json']);
+        } finally {
+            process.stdout.write = originalWrite;
+        }
+        const parsed = JSON.parse(chunks.join(''));
+        expect(Array.isArray(parsed.updates)).toBe(true);
+        expect(parsed.updates.map((u: { package: string }) => u.package).sort()).toEqual(
+            ['@jaggerxtrm/specialists', '@jaggerxtrm/xtmux', 'xtrm-tools'],
+        );
+        for (const row of parsed.updates) {
+            expect(['ok', 'stale', 'unknown', 'not-installed']).toContain(row.state);
+        }
+        expect(typeof parsed.cache_file).toBe('string');
     });
 });
