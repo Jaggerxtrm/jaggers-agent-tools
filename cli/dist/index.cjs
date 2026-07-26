@@ -62083,6 +62083,9 @@ function passthroughModels(passthrough) {
   }
   return models;
 }
+function effectiveModel(model, passthrough) {
+  return [model, ...passthroughModels(passthrough)].filter((candidate) => Boolean(candidate)).at(-1);
+}
 var ROLE_GUARDED_PI_FLAGS = [
   "--session-dir",
   "--name",
@@ -62777,8 +62780,8 @@ async function launchWorktreeSession(opts) {
     console.error(kleur_default.red("\n  \u2717 --bead and --prompt are mutually exclusive; pick one\n"));
     process.exit(1);
   }
-  const requestedModels = [model, ...passthroughModels(opts.passthrough ?? [])];
-  const foreignModel = runtime === "claude" ? requestedModels.find((candidate) => candidate && isForeignProviderModel(candidate)) : void 0;
+  const selectedModel = effectiveModel(model, opts.passthrough ?? []);
+  const foreignModel = runtime === "claude" && selectedModel && isForeignProviderModel(selectedModel) ? selectedModel : void 0;
   if (foreignModel) {
     console.error(kleur_default.red(`
   \u2717 --model '${foreignModel}' is a non-Anthropic provider model; claude would start and then die at turn 1

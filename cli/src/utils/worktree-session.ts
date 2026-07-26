@@ -303,6 +303,14 @@ export function passthroughModels(passthrough: readonly string[]): string[] {
     return models;
 }
 
+// The value the runtime actually selects: last `--model` wins, and the tail is
+// appended after the native flag, so argv order is [native, ...passthrough].
+// Only this one is worth validating — an earlier, overridden foreign value
+// never reaches the model selection. xtrm-wiy5n.4.19.
+export function effectiveModel(model: string | undefined, passthrough: readonly string[]): string | undefined {
+    return [model, ...passthroughModels(passthrough)].filter((candidate): candidate is string => Boolean(candidate)).at(-1);
+}
+
 // xt-owned flags a passthrough must not clobber. Reject with a clear error if
 // the user tries to pass any of these after `--`. Session naming, prompt, and
 // session-dir are set by the launcher and re-passing them silently would break
@@ -1500,9 +1508,9 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // start into a session that never takes turn 1. Fail loudly here, before a
     // worktree exists. Role defaults are handled in buildRoleTmuxPlan (warn +
     // inherit the parent model). xtrm-wiy5n.4.19.
-    const requestedModels = [model, ...passthroughModels(opts.passthrough ?? [])];
-    const foreignModel = runtime === 'claude'
-        ? requestedModels.find((candidate) => candidate && isForeignProviderModel(candidate))
+    const selectedModel = effectiveModel(model, opts.passthrough ?? []);
+    const foreignModel = runtime === 'claude' && selectedModel && isForeignProviderModel(selectedModel)
+        ? selectedModel
         : undefined;
     if (foreignModel) {
         console.error(kleur.red(`\n  ✗ --model '${foreignModel}' is a non-Anthropic provider model; claude would start and then die at turn 1\n`));

@@ -15,6 +15,7 @@ import {
     checkPositionZeroSlash,
     chooseAttachCommand,
     createRuntimeBufferName,
+    effectiveModel,
     claudeExplicitSkillLines,
     guardRolePassthrough,
     isForeignProviderModel,
@@ -824,6 +825,21 @@ describe('passthroughModels', () => {
         [['--', '--model', 'qwencloud/qwen3.8-max-preview'], []],
     ])('reads %s', (passthrough, expected) => {
         expect(passthroughModels(passthrough as string[])).toEqual(expected);
+    });
+});
+
+// Last --model wins at the runtime; only that one is worth validating.
+describe('effectiveModel', () => {
+    it.each([
+        [undefined, [], undefined],
+        ['opus', [], 'opus'],
+        [undefined, ['--model', 'opus'], 'opus'],
+        // Tail overrides the native flag (Codex P2: safe native must not mask it).
+        ['opus', ['--model', 'qwencloud/qwen3.8-max-preview'], 'qwencloud/qwen3.8-max-preview'],
+        // ...and an overridden foreign value must not block a valid launch.
+        [undefined, ['--model', 'qwencloud/qwen3.8-max-preview', '--model', 'opus'], 'opus'],
+    ])('resolves (%s, %s)', (model, passthrough, expected) => {
+        expect(effectiveModel(model as string | undefined, passthrough as string[])).toBe(expected);
     });
 });
 
