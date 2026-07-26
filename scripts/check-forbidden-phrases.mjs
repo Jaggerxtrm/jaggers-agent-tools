@@ -11,14 +11,20 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const vendored = new Set(JSON.parse(readFileSync(path.join(repoRoot, '.xtrm/specialists-source.json'), 'utf8')).skills);
 
 const RULES = [
+  // Deliberately not anchored to an `sp run` on the same line: both real occurrences this
+  // gate first caught sat on a continuation line of a multi-line dispatch.
   { id: 'sp-run-background', why: '`sp run` has no --background flag; use shell `&` plus a log redirect',
-    test: (l) => l.includes('--background') },
+    test: (l) => /(^|\s)--background(\s|$)/.test(l) },
+  // Exemption must be the negative wording valid guidance uses — merely naming `final-result`
+  // would let "use capture-pane as the final-result protocol" through.
   { id: 'capture-pane-as-result', why: 'capture-pane is live-state diagnosis only; terminal truth is `sp result` / `agent-last` / `message-get`',
-    test: (l) => l.includes('capture-pane') && !/live[- ](state|ui)|final-result|diagnos/i.test(l) },
+    test: (l) => l.includes('capture-pane') && !/live[- ](state|ui)|never as (a )?final-result/i.test(l) },
   { id: 'job-status-spelling', why: 'specialist job statuses are starting|running|waiting|done|error|cancelled',
     test: (l) => /`(completed|queued|failed)`/.test(l) && /\b(sp |specialist|job)/i.test(l) },
+  // Pane component may be a literal, a <placeholder>, or a $variable — all teach the same
+  // unsupported combined target.
   { id: 'combined-session-pane', why: 'xtmux takes session and pane as separate flags; never a combined session:pane target',
-    test: (l) => /--(to|for|pane|target)[= ]+"?\$?[A-Za-z0-9_-]+:\d/.test(l) },
+    test: (l) => /--(to|for|pane|target)[= ]+["']?[<${]?[A-Za-z0-9_-]+[>}]?:[<${]?[A-Za-z0-9_-]/.test(l) },
 ];
 
 function walk(dir, out = []) {
