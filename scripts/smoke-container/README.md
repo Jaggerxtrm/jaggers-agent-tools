@@ -37,7 +37,8 @@ branch's code, not just its files. Repos without the ref are reported `[SKIP]`.
 | `2-update-mechanisms` | re-install at `@latest`; `xt init -y` + `xt update --apply` in a fresh git repo | update leaves no `.xtrm/registry.json` |
 | `3-clone-and-init` | clone the 3 repos, `xt init -y`, snapshot | clone fails |
 | `4-apply-edits-and-update` | apply `--branch` (if given), delete a hook payload to induce drift, `xt update --apply`, snapshot | — |
-| `5-verify` | compare snapshots and assert invariants | see below |
+| `4b-global-drift` | break `~/.claude/skills`, `~/.pi/agent/skills`, and the SessionStart `--new-instance` argument; re-run `xt update --apply` (with `XTRM_GLOBAL_HOOKS=1`) + `install_xtmux`, assert each repair | pointer or hook-arg drift not restored |
+| `5-verify` | run global-surface assertions (see below), compare project snapshots, run the live scenario | see below |
 
 Snapshots record: trio versions, `.xtrm/registry.json` asset-group count,
 registry parity (`declared/missing/mismatch`), hook command count in
@@ -52,8 +53,24 @@ restored the hook payload stage 4 deleted. Registry *hash* mismatches are
 reported as `[WARN]`, not failures — a clone of a repo's default branch
 legitimately sits ahead of the released registry's hashes.
 
-Globally it asserts the three specialists-owned skills (`using-specialists`,
-`update-specialists`, `using-specialists-auto`) landed in
+Stage 5 also runs a global-surface check — the surface the container used to
+ignore entirely (bead `xtrm-wiy5n.4.32`):
+
+- `~/.claude/skills` and `~/.pi/agent/skills` are symlinks whose targets
+  actually resolve to `~/.xtrm/skills/default`. A dangling link is FAIL — a
+  count is not a check.
+- `~/.claude/settings.json` carries the xtmux hook events, every SessionStart
+  `agent-state.sh` entry contains the `--new-instance` **argument** (bead
+  `xtrm-wiy5n.4.25`), no two entries share the same command string (bead
+  `xtrm-wiy5n.4.27`), and no `agent-state.sh` entry is untagged (missing
+  `_source`, which lets duplicates accumulate on every re-install).
+- `~/.pi/agent/settings.json` has at least one `xtmux` package and at least
+  one wired hook event.
+- The installed `@jaggerxtrm/specialists` package ships at least five
+  `.specialist.json` files in `config/specialists/`.
+
+Globally it also asserts the three specialists-owned skills
+(`using-specialists`, `update-specialists`, `using-specialists-auto`) landed in
 `~/.xtrm/skills/default`, runs the core clone's own
 `scripts/check-skill-root-budget.mjs` (so the budgets live in one place, not
 duplicated here), and asserts that the `Source and destination must not be the
@@ -77,6 +94,27 @@ tmux is unavailable.
 
 Failures print the tail of the command log. `--keep` retains the work directory
 (snapshots + full command log) instead of deleting it on exit.
+
+## Proving each global-surface check fails on broken input
+
+The container accepts an `XTRM_SMOKE_FAULT` env var that injects a single
+fault right before the global assertions run. Stage `4b-global-drift` is
+skipped when a fault is under test so the break survives; the assertion
+downstream must trip. Every value below has been proven to force a FAIL:
+
+```bash
+# Each of these must exit nonzero and name the corresponding assertion.
+docker run --rm -e XTRM_SMOKE_FAULT=broken-claude-skills xtrm-smoke ./verify.sh --skip-live
+docker run --rm -e XTRM_SMOKE_FAULT=broken-pi-skills     xtrm-smoke ./verify.sh --skip-live
+docker run --rm -e XTRM_SMOKE_FAULT=missing-new-instance xtrm-smoke ./verify.sh --skip-live
+docker run --rm -e XTRM_SMOKE_FAULT=duplicate-hook       xtrm-smoke ./verify.sh --skip-live
+docker run --rm -e XTRM_SMOKE_FAULT=untagged-agent-state xtrm-smoke ./verify.sh --skip-live
+docker run --rm -e XTRM_SMOKE_FAULT=removed-pi-package   xtrm-smoke ./verify.sh --skip-live
+docker run --rm -e XTRM_SMOKE_FAULT=removed-specialists  xtrm-smoke ./verify.sh --skip-live
+```
+
+An unrecognised value fails the script with a named error instead of silently
+passing.
 
 Expect roughly 12–15 minutes end to end. `xt init -y` runs `gitnexus analyze`
 per repo with a 120 s internal timeout, which dominates the runtime.
