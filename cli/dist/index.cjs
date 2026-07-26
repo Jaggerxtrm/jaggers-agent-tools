@@ -44868,6 +44868,22 @@ async function listFilesUnder(root) {
   if (await import_fs_extra3.default.pathExists(root)) await walk2(root);
   return files.sort();
 }
+async function ancestorIsSymlink(root, absTarget) {
+  const rel = import_node_path2.default.relative(root, absTarget);
+  if (!rel || rel === "" || rel.startsWith(".." + import_node_path2.default.sep) || rel === "..") return true;
+  const parts = rel.split(import_node_path2.default.sep).filter(Boolean);
+  let current = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = import_node_path2.default.join(current, parts[i]);
+    try {
+      const stat = await import_fs_extra3.default.lstat(current);
+      if (stat.isSymbolicLink()) return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
 async function removeTrackedEntries(root, relPaths) {
   const resolvedRoot = import_node_path2.default.resolve(root);
   const rootPrefix = resolvedRoot + import_node_path2.default.sep;
@@ -44875,6 +44891,7 @@ async function removeTrackedEntries(root, relPaths) {
     const abs = import_node_path2.default.resolve(resolvedRoot, rel);
     if (abs !== resolvedRoot && !abs.startsWith(rootPrefix)) continue;
     if (abs === resolvedRoot) continue;
+    if (await ancestorIsSymlink(resolvedRoot, abs)) continue;
     await import_fs_extra3.default.remove(abs);
   }
 }

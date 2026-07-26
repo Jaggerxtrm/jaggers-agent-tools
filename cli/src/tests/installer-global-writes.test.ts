@@ -205,6 +205,33 @@ describe('ensureGlobalSkillsBootstrapped safe-delete (xtrm-wiy5n.4.37)', () => {
         expect(fs.existsSync(path.join(homeDir, '.xtrm', 'skills', 'default', 'shipped-b', 'SKILL.md'))).toBe(true);
     });
 
+    it('proof 6: if a tracked directory is replaced with a symlink between installs, the installer refuses to traverse it and the external target survives (Codex P1)', async () => {
+        // Adversarial: after install v1, the user (or attacker) replaces
+        // default/skill-x with a symlink to a working copy outside the managed
+        // root. removeTrackedEntries would previously follow the parent-dir
+        // symlink and delete `<external>/SKILL.md` because the lexical
+        // startsWith check on `default/skill-x/SKILL.md` still passes.
+        seedPkg('1.0.0', { default: { 'skill-x/SKILL.md': '# shipped v1', 'skill-x/lib/helper.md': '# helper' } });
+        await bootstrap();
+
+        const skillDir = path.join(homeDir, '.xtrm', 'skills', 'default', 'skill-x');
+        const external = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-w437-external-'));
+        try {
+            fs.writeFileSync(path.join(external, 'SKILL.md'), '# external — must NOT be touched');
+            fs.writeFileSync(path.join(external, 'lib.md'), '# external lib');
+            fs.removeSync(skillDir);
+            fs.symlinkSync(external, skillDir, 'dir');
+
+            seedPkg('2.0.0', { default: { 'shipped-b/SKILL.md': '# shipped v2' } });
+            await bootstrap();
+
+            expect(fs.readFileSync(path.join(external, 'SKILL.md'), 'utf8')).toBe('# external — must NOT be touched');
+            expect(fs.readFileSync(path.join(external, 'lib.md'), 'utf8')).toBe('# external lib');
+        } finally {
+            fs.removeSync(external);
+        }
+    });
+
     it('proof 5: a user file present BEFORE the first install survives the SECOND install (manifest must not adopt files it did not copy)', async () => {
         // Every existing user upgrading to this version is in exactly this
         // position: they have files under ~/.xtrm/skills/default before any

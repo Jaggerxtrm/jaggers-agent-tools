@@ -39,6 +39,29 @@ export async function listFilesUnder(root: string): Promise<string[]> {
   return files.sort();
 }
 
+// xtrm-wiy5n.4.37 (Codex P1) — if any directory between the tracked root and a
+// manifest entry is a symlink, `fs.remove(abs)` follows the parent-dir link and
+// deletes a file OUTSIDE the managed root. The lexical `startsWith` check does
+// not catch this because it operates on unresolved strings. Refuse to remove
+// any tracked path whose ancestor chain crosses a symlink.
+async function ancestorIsSymlink(root: string, absTarget: string): Promise<boolean> {
+  const rel = path.relative(root, absTarget);
+  if (!rel || rel === '' || rel.startsWith('..' + path.sep) || rel === '..') return true;
+  const parts = rel.split(path.sep).filter(Boolean);
+  let current = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = path.join(current, parts[i]);
+    try {
+      const stat = await fs.lstat(current);
+      if (stat.isSymbolicLink()) return true;
+    } catch {
+      // Ancestor does not exist — nothing to follow, so no traversal risk.
+      return false;
+    }
+  }
+  return false;
+}
+
 export async function removeTrackedEntries(root: string, relPaths: readonly string[]): Promise<void> {
   const resolvedRoot = path.resolve(root);
   const rootPrefix = resolvedRoot + path.sep;
@@ -49,6 +72,7 @@ export async function removeTrackedEntries(root: string, relPaths: readonly stri
     // any path that escapes the tracked root.
     if (abs !== resolvedRoot && !abs.startsWith(rootPrefix)) continue;
     if (abs === resolvedRoot) continue;
+    if (await ancestorIsSymlink(resolvedRoot, abs)) continue;
     await fs.remove(abs);
   }
 }
