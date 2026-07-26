@@ -3,6 +3,14 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import { writeJsonAtomic } from '../utils/atomic-write.js';
+import {
+  INSTALLER_MANIFEST_FILENAME,
+  listFilesUnder,
+  pruneEmptyDirsUnder,
+  readManifestJson,
+  removeTrackedEntries,
+  writeManifestJson,
+} from './installer-manifest.js';
 
 interface GlobalHooksBootstrapOptions {
   readonly force?: boolean;
@@ -47,6 +55,17 @@ function resolveGlobalHooksConfigPath(): string {
 
 function resolveStatePath(): string {
   return path.join(resolveGlobalHooksRoot(), 'state.json');
+}
+
+function resolveHooksManifestPath(): string {
+  return path.join(resolveGlobalHooksRoot(), INSTALLER_MANIFEST_FILENAME);
+}
+
+// xtrm-wiy5n.4.37 — track every file the previous install wrote under
+// ~/.xtrm/hooks. On the next install only those paths are removed; anything
+// else (a user-authored hook, a manual override) survives.
+interface HooksInstallerManifest {
+  files?: string[];
 }
 
 function resolveLogPath(): string {
@@ -158,10 +177,20 @@ export async function ensureGlobalHooksBootstrapped(pkgRoot: string, opts: Globa
   }
 
   try {
-    await fs.remove(targetHooksRoot);
-    await fs.copy(sourceHooksRoot, targetHooksRoot, { filter: COPY_FILTER });
+    const manifestPath = resolveHooksManifestPath();
+    const previousManifest = await readManifestJson<HooksInstallerManifest>(manifestPath, {});
+    await fs.ensureDir(targetHooksRoot);
+    await removeTrackedEntries(targetHooksRoot, previousManifest.files ?? []);
+    await pruneEmptyDirsUnder(targetHooksRoot);
+    await fs.copy(sourceHooksRoot, targetHooksRoot, { filter: COPY_FILTER, overwrite: true });
     await fs.ensureDir(path.dirname(targetHooksConfigPath));
-    await fs.copy(sourceHooksConfigPath, targetHooksConfigPath);
+    await fs.copy(sourceHooksConfigPath, targetHooksConfigPath, { overwrite: true });
+    // xtrm-wiy5n.4.37 — derive the manifest from the SOURCE walk (same
+    // __pycache__ filter as COPY_FILTER). Walking the target would adopt
+    // pre-existing user-authored hooks and the next fingerprint-change
+    // install would then delete them.
+    const nextFiles = await listFilesUnder(sourceHooksRoot);
+    await writeManifestJson(manifestPath, { files: nextFiles });
     await writeJsonAtomic(statePath, {
       installedVersion,
       installedFrom: pkgRoot,
