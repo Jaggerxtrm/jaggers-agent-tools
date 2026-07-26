@@ -115,19 +115,9 @@ Claude Code panes do not autonomously loop between specialist chain steps — th
 
 If blocked: stop broad changes, write concise bead note with exact blocker + evidence, message parent with one-liner (`blocked: <one-line>; notes in bead`). For a decision, ask for exactly one: `decision needed: choose schema A or B; tradeoff in bead notes`.
 
-**Admin-merge bypass** — authorized only when every OTHER required check is green (test, smoke, pr-review-gate, Codex, review threads resolved, no conflict), in exactly three scanner states:
+**Admin-merge bypass** — only if every OTHER required check is green (test/smoke/pr-review-gate/Codex/threads/no conflict); NEVER for a real test failure, real scanner finding, unresolved bot review thread, or merge conflict. Authorized scanner states: (1) terminal zero-step — `started_at == completed_at`, 0 steps; (2) QUEUED > 15 min with no state progression (15 min covers typical Actions runner-backpressure drain; longer = no-signal, not backlog); (3) terminal FAILURE annotated `GitHub Actions has encountered an internal error`. Cite the case number when escalating for authorization.
 
-1. Terminal zero-step failure — `started_at == completed_at`, 0 steps.
-2. QUEUED > 15 min with no state progression. (15 min covers the typical GitHub-Actions runner-backpressure drain window; longer indicates no-signal, not backlog.)
-3. Terminal FAILURE annotated `GitHub Actions has encountered an internal error`.
-
-Never bypassed: a real test failure, a real scanner finding, an unresolved bot review thread, a merge conflict. Any other scanner state → escalate, do not merge.
-
-**Rebase-push workflow**: rebase onto latest `origin/main` → run the agreed suite locally → **normal `git push`**. `--force-with-lease` (and `--force`) requires operator authorization via reply-required message before pushing:
-
-    decision needed: rebase-push needs --force-with-lease on <branch>; reason <one-line>; proceed?
-
-`--force-with-lease` is the safer form and is the right tool once authorized; what is banned is using it (or `--force`) without that authorization.
+**Rebase-push**: rebase onto latest `origin/main` → run the agreed suite locally → **normal fast-forward `git push`**. If the push is rejected as non-fast-forward (main advanced, rebase rewrote history), request operator authorization first via reply-required message BEFORE any `--force-with-lease` or `--force`: `decision needed: rebase-push needs --force-with-lease on <branch>; reason <one-line>; proceed?` — the ban is on using either flag without authorization, not on the flag itself.
 
 ## Completion checklist
 
