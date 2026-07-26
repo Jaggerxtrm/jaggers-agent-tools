@@ -21,7 +21,14 @@ const RUNTIME_ARG_BYTE_CEILING = (128 * 1024) - 1;
 const TMUX_CONSUMER_READY_TIMEOUT_MS = 5_000;
 const TMUX_PAYLOAD_READY_TIMEOUT_MS = 5_000;
 const RUNTIME_ORIGIN_SLUG_LENGTH = 5;
-const RUNTIME_ORIGIN_WAIT_ATTEMPTS = 50;
+/**
+ * Ceiling on the readiness handshake in assignBeadToRuntime — pi was measured
+ * at ~11s from `tmux new-session` to `agent.ready`, so this is headroom around
+ * a real signal, not the synchronization itself.
+ */
+const RUNTIME_READY_TIMEOUT_MS = 30_000;
+const RUNTIME_READY_POLL_INTERVAL_MS = 500;
+const RUNTIME_READY_QUERY_LIMIT = 20;
 const AUTO_ASSIGNEE_RE = /^(?:pi|claude)\/[a-z0-9]{5}$/;
 
 export function runtimeAssigneeFromOrigin(runtime: 'pi' | 'claude', runtimeOriginId: string): string | null {
@@ -34,13 +41,81 @@ export function shouldAutoAssignBead(assignee: string | undefined): boolean {
     return !assignee || AUTO_ASSIGNEE_RE.test(assignee);
 }
 
+/**
+ * Runtime instance id from the newest `agent.ready` row for `paneId`, or `''`
+ * when the handshake has not landed yet. `null` means the journal cannot be
+ * queried at all (no `xtmux` on PATH) — there is then no signal to wait for, so
+ * the caller stops instead of burning the whole readiness budget.
+ *
+ * `xtmux log query --limit N` returns the newest N rows. Rows older than
+ * `sinceMs`, and any row carrying the pane's previous occupant's id, are dropped
+ * so neither a recycled `%N` pane id nor a restarted agent can resolve to a dead
+ * instance.
+ */
+function readyInstanceId(
+    paneId: string,
+    sinceMs: number,
+    previousInstanceId: string,
+): string | null {
+    const query = spawnSync('xtmux', [
+        'log', 'query',
+        '--type', 'agent.ready',
+        '--pane', paneId,
+        '--limit', String(RUNTIME_READY_QUERY_LIMIT),
+        '--json',
+    ], { encoding: 'utf8', stdio: 'pipe' });
+    if (query.error) return null;
+    if (query.status !== 0) return '';
+
+    let rows: unknown;
+    try {
+        rows = JSON.parse(query.stdout ?? '');
+    } catch {
+        return '';
+    }
+    if (!Array.isArray(rows)) return '';
+
+    let latest = '';
+    let latestAt = -1;
+    for (const row of rows as Array<{ createdAtMs?: unknown; instanceId?: unknown }>) {
+        const at = typeof row?.createdAtMs === 'number' ? row.createdAtMs : -1;
+        const id = typeof row?.instanceId === 'string' ? row.instanceId.trim() : '';
+        if (!id || id === previousInstanceId || at < sinceMs || at <= latestAt) continue;
+        latest = id;
+        latestAt = at;
+    }
+    return latest;
+}
+
+export interface AssignBeadOptions {
+    /** Instance id the pane carried before this launch; its `agent.ready` row must not win. */
+    previousInstanceId?: string;
+    /**
+     * Reject `agent.ready` rows older than this epoch-ms. It guards a recycled `%N`
+     * pane id whose journal still holds a previous occupation's row.
+     *
+     * MUST be captured before the runtime is started. Readiness is emitted exactly
+     * once per occupation, so a watermark taken afterwards can reject the very row
+     * this function is waiting for — and then there is no second one to catch, so
+     * the launcher stalls for the whole timeout and skips the assignment. That is
+     * the same failure this function exists to fix.
+     */
+    readyAfterMs?: number;
+    readyTimeoutMs?: number;
+}
+
 export async function assignBeadToRuntime(
     bead: string,
     runtime: 'pi' | 'claude',
     paneId: string,
     cwd: string,
-    previousInstanceId = '',
+    options: AssignBeadOptions = {},
 ): Promise<void> {
+    const {
+        previousInstanceId = '',
+        readyAfterMs = Date.now(),
+        readyTimeoutMs = RUNTIME_READY_TIMEOUT_MS,
+    } = options;
     const warn = (message: string): void => console.error(kleur.yellow(`  ⚠ bead assignee: ${message}`));
     const show = spawnSync('bd', ['show', bead, '--json'], { cwd, encoding: 'utf8', stdio: 'pipe' });
     if (show.status !== 0) {
@@ -57,19 +132,40 @@ export async function assignBeadToRuntime(
         return;
     }
 
-    let instanceId = '';
-    for (let attempt = 0; attempt < RUNTIME_ORIGIN_WAIT_ATTEMPTS; attempt++) {
-        const context = spawnSync('tmux', ['show-options', '-p', '-t', paneId, '-qv', '@agent_instance_id'], {
-            encoding: 'utf8', stdio: 'pipe',
-        });
-        instanceId = context.status === 0 ? (context.stdout ?? '').trim() : '';
-        if (instanceId && instanceId !== previousInstanceId) break;
-        await new Promise(resolve => setTimeout(resolve, 100));
+    // Synchronize on the runtime's own readiness handshake, NOT on the
+    // `@agent_instance_id` pane option appearing.
+    //
+    // That option is written by xtmux's scripts/agent-state.sh from the runtime's
+    // SessionStart hook, which for pi lands ~11s after `tmux new-session`. So
+    // core#508's 5s poll of the bare option could never observe it and the
+    // assignment silently never happened on `--role --bead` (xtrm-wiy5n.4.18).
+    //
+    // `agent.ready` is the handshake: agent-state.sh emits it exactly once per
+    // agent occupation, only after the runtime has finished init and installed its
+    // control hooks, and it carries the fresh instance id in the same row. Waiting
+    // for that row — and rejecting one belonging to the pane's previous occupant —
+    // is the same correlation rule xtmux's own `handoff --wait-ready` applies, so a
+    // reused pane can never resolve to a dead agent's identity.
+    const deadline = Date.now() + readyTimeoutMs;
+    let instanceId: string | null = '';
+    for (;;) {
+        instanceId = readyInstanceId(paneId, readyAfterMs, previousInstanceId);
+        if (instanceId === null) {
+            warn(`xtmux unavailable, cannot resolve runtime-origin for ${bead}; session launch continues`);
+            return;
+        }
+        if (instanceId || Date.now() >= deadline) break;
+        await new Promise(resolve => setTimeout(resolve, RUNTIME_READY_POLL_INTERVAL_MS));
     }
 
-    const assignee = runtimeAssigneeFromOrigin(runtime, instanceId);
+    const assignee = instanceId ? runtimeAssigneeFromOrigin(runtime, instanceId) : null;
     if (!assignee) {
-        warn(`runtime-origin unavailable for ${bead}; session launch continues`);
+        // Distinguish the two failure modes: diagnosing xtrm-wiy5n.4.18 started
+        // from this warning's text, and "never readied" is a different bug from
+        // "readied with an id we cannot slug".
+        warn(instanceId
+            ? `unusable runtime-origin '${instanceId}' for ${bead}; session launch continues`
+            : `${runtime} did not signal readiness for ${bead} within ${Math.round(readyTimeoutMs / 1000)}s; session launch continues`);
         return;
     }
 
@@ -1882,6 +1978,9 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             process.exit(runtimeResult.status ?? 0);
         }
 
+        // Before spawn, not after: the runtime's agent.ready fires once, and a
+        // watermark taken later could reject it. See AssignBeadOptions.readyAfterMs.
+        const readyAfterMs = Date.now();
         const runtimeProcess = spawn(plan.runtimeCmd, plan.runtimeArgs, {
             cwd: worktreePath,
             stdio: 'inherit',
@@ -1891,7 +1990,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             runtimeProcess.once('error', () => resolve(1));
             runtimeProcess.once('exit', code => resolve(code ?? 1));
         });
-        await assignBeadToRuntime(bead, runtime, paneId, worktreePath, previousInstanceId);
+        await assignBeadToRuntime(bead, runtime, paneId, worktreePath, { previousInstanceId, readyAfterMs });
         process.exit(await runtimeExit);
     }
 
@@ -1979,6 +2078,10 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
         process.exit(1);
     };
 
+    // Before the pane exists, so it strictly precedes any runtime start on either
+    // transport. See AssignBeadOptions.readyAfterMs.
+    const readyAfterMs = Date.now();
+
     if (args.mode === 'bare') {
         const newSess = spawnSync('tmux', [
             'new-session', '-d',
@@ -2052,7 +2155,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     for (const { key, value } of plan.paneOptions) {
         spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
     }
-    if (bead) await assignBeadToRuntime(bead, runtime, paneId, worktreePath);
+    if (bead) await assignBeadToRuntime(bead, runtime, paneId, worktreePath, { readyAfterMs });
 
     if (args.mode === 'role') {
         emitAgentRoleLaunched({
