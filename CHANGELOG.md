@@ -75,6 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Claude-column contract matrix for the cross-runtime gate (#512)** ([c48b46b](https://github.com/xtrm-dev/core/commit/c48b46b1c66734c66f154451f85f3bb31f21745c)) — 2026-07-26 15:48
 
+- **Re-vendor specialists skills at master ba8526cd** ([1ae4a49](https://github.com/xtrm-dev/core/commit/1ae4a499388dbb9cf2f47d5caf8de8abfa60961c)) — 2026-07-26 16:35
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
