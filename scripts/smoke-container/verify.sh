@@ -74,6 +74,18 @@ run() {
   return 1
 }
 
+# run_in <dir> <desc> <cmd...> — same, in another directory. Only the command
+# runs in a subshell; ok/fail stay in this shell, so a failure still reaches
+# FAILED and the exit code. `( cd … && run … )` would lose both.
+run_in() {
+  local dir="$1" desc="$2"; shift 2
+  printf '\n$ (in %s) %s\n' "$dir" "$*" >>"$LOG"
+  if ( cd "$dir" && "$@" ) >>"$LOG" 2>&1; then ok "$desc"; return 0; fi
+  fail "$desc (tail of $LOG below)"
+  tail -20 "$LOG" | sed 's/^/         /'
+  return 1
+}
+
 field() { grep "^$1=" "$2" 2>/dev/null | cut -d= -f2-; }
 
 # expect_ge <label> <actual> <floor>
@@ -142,6 +154,29 @@ install_from_source() {
   fi
 }
 
+# registry_parity <repo dir> — every file the registry declares must exist under
+# its group's source_dir. Prints "total/missing/mismatch"; mismatch is recorded
+# but only reported, because a source clone can legitimately sit ahead of the
+# released registry's hashes.
+registry_parity() {
+  local dir="$1"
+  local reg="$dir/.xtrm/registry.json"
+  [ -f "$reg" ] || { printf '0/0/0'; return; }
+  local total=0 missing=0 mismatch=0 path hash
+  while IFS='|' read -r path hash; do
+    [ -n "$path" ] || continue
+    total=$((total + 1))
+    if [ ! -f "$dir/$path" ]; then
+      missing=$((missing + 1))
+      continue
+    fi
+    [ "$(sha256sum "$dir/$path" | cut -d' ' -f1)" = "$hash" ] || mismatch=$((mismatch + 1))
+  done < <(jq -r '.assets | to_entries[] | .value as $g
+                  | ($g.files // {}) | to_entries[]
+                  | "\($g.source_dir)/\(.key)|\(.value.hash)"' "$reg" 2>/dev/null)
+  printf '%s/%s/%s' "$total" "$missing" "$mismatch"
+}
+
 # snapshot <label> <repo dir> — records the state stage 5 compares.
 snapshot() {
   # Separate statements: `local a=$1 b=$a` trips `set -u` in bash.
@@ -153,7 +188,7 @@ snapshot() {
     # xtmux's bin has no --version; read the installed manifest instead.
     printf 'xtmux_version=%s\n'      "$(jq -r '.version' "$(xtmux_root)/package.json" 2>/dev/null)"
     printf 'registry_assets=%s\n'    "$(jq '.assets | length' "$dir/.xtrm/registry.json" 2>/dev/null || echo 0)"
-    printf 'registry_sha=%s\n'       "$(sha256sum "$dir/.xtrm/registry.json" 2>/dev/null | cut -c1-16)"
+    printf 'registry_parity=%s\n'    "$(registry_parity "$dir")"
     printf 'hook_commands=%s\n'      "$(jq '[.. | .command? | select(.)] | length' "$dir/.xtrm/config/hooks.json" 2>/dev/null || echo 0)"
     printf 'hook_files=%s\n'         "$(find "$dir/.xtrm/hooks" -type f 2>/dev/null | wc -l | tr -d ' ')"
     printf 'skill_roots_repo=%s\n'   "$(find "$dir/.xtrm/skills" -maxdepth 3 -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')"
@@ -195,8 +230,8 @@ install_xtmux "@jaggerxtrm/xtmux@latest"
 SCRATCH="$WORK/scratch"
 mkdir -p "$SCRATCH"
 run "git init scratch project" git init -q "$SCRATCH"
-( cd "$SCRATCH" && run "xt init -y" xt init -y ) || true
-( cd "$SCRATCH" && run "xt update --apply" xt update --apply --repo . ) || true
+run_in "$SCRATCH" "xt init -y" xt init -y || true
+run_in "$SCRATCH" "xt update --apply" xt update --apply --repo .
 [ -f "$SCRATCH/.xtrm/registry.json" ] \
   && ok "scratch project has .xtrm/registry.json" \
   || fail "xt init/update produced no .xtrm/registry.json in a fresh project"
@@ -209,7 +244,7 @@ for entry in "${REPOS[@]}"; do
   dir="$WORK/repos/$name"
   mkdir -p "$(dirname "$dir")"
   run "clone $name" git clone --quiet --depth 1 "$url" "$dir" || continue
-  ( cd "$dir" && run "xt init -y ($name)" xt init -y ) || true
+  run_in "$dir" "xt init -y ($name)" xt init -y || true
   snapshot "$name-pre" "$dir"
 done
 
@@ -245,7 +280,7 @@ for entry in "${REPOS[@]}"; do
     skip "$name: no .xtrm/hooks payload to drift"
   fi
 
-  ( cd "$dir" && run "xt update --apply ($name)" xt update --apply --repo . ) || true
+  run_in "$dir" "xt update --apply ($name)" xt update --apply --repo .
   snapshot "$name-post" "$dir"
 done
 
@@ -264,6 +299,15 @@ for entry in "${REPOS[@]}"; do
   expect_ge "$name skill_roots_global" "$(field skill_roots_global "$post")" 1
   expect_eq "$name symlinks under .xtrm" "$(field symlinks "$post")" 0
 
+  # registry parity: total/missing/mismatch
+  parity="$(field registry_parity "$post")"
+  expect_ge "$name registry files declared" "${parity%%/*}" 1
+  expect_eq "$name registry files missing on disk" "$(printf '%s' "$parity" | cut -d/ -f2)" 0
+  mismatch="$(printf '%s' "$parity" | cut -d/ -f3)"
+  [ "$mismatch" = "0" ] \
+    && ok "$name registry hashes all match" \
+    || warn "$name has $mismatch registry hash mismatch(es) — clone is ahead of the released registry"
+
   victim="$(field drift_victim "$pre")"
   if [ -n "$victim" ]; then
     [ -f "$victim" ] \
@@ -278,6 +322,24 @@ for s in using-specialists update-specialists using-specialists-auto; do
     && ok "global skill mirror has $s" \
     || fail "global skill mirror is missing $s/SKILL.md"
 done
+
+# Skill roots within budget: run core's own budget script against its clone, so
+# the numbers stay in one place instead of being duplicated here. The clone's
+# .xtrm/skills/default holds whatever the *installed* package shipped, so a
+# pre-release run legitimately reports overruns that the release being gated is
+# about to fix — hence WARN with the numbers, not a gate failure.
+budget_script="$WORK/repos/core/scripts/check-skill-root-budget.mjs"
+if [ -f "$budget_script" ]; then
+  budget_out="$(cd "$WORK/repos/core" && node "$budget_script" 2>&1)"
+  printf '\n$ check-skill-root-budget.mjs\n%s\n' "$budget_out" >>"$LOG"
+  if printf '%s' "$budget_out" | grep -q '^FAIL'; then
+    warn "installed skill roots exceed documented budget: $(printf '%s' "$budget_out" | awk '/^FAIL/{printf "%s %s ", $2, $3$4$5}')"
+  else
+    ok "skill roots within documented budget"
+  fi
+else
+  skip "skill-root budget script not present in the core clone"
+fi
 
 # Global npm bins must not shadow system commands. Released
 # @jaggerxtrm/specialists declares bin "install", which shadows install(1) for
@@ -297,7 +359,7 @@ else
 fi
 
 # The fresh-machine regression this gate exists to catch.
-if grep -qr "Source and destination must not be the same" "$LOG"; then
+if grep -q "Source and destination must not be the same" "$LOG"; then
   fail "'Source and destination must not be the same' appeared in install/update output"
 else
   ok "no 'Source and destination must not be the same' regression"
@@ -358,11 +420,14 @@ else
 
   run "sp list" sp list
   if [ -n "${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}" ]; then
-    ( cd "$SCRATCH" && run "sp run (smoke prompt)" \
-        timeout 300 sp run explorer --prompt 'Reply with the single word OK.' ) || true
+    run_in "$SCRATCH" "sp run (smoke prompt)" \
+      timeout 300 sp run explorer --prompt 'Reply with the single word OK.'
   else
     skip "sp run needs model credentials (pass -e ANTHROPIC_API_KEY=... to docker run)"
   fi
+  # SCOPE also asked for "terminal notification lands". Not assertable here —
+  # a headless container has no terminal to receive one.
+  skip "terminal notification delivery (no terminal in a headless container)"
 fi
 
 # ===========================================================================

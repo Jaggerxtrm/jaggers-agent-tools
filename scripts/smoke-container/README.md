@@ -39,27 +39,41 @@ branch's code, not just its files. Repos without the ref are reported `[SKIP]`.
 | `4-apply-edits-and-update` | apply `--branch` (if given), delete a hook payload to induce drift, `xt update --apply`, snapshot | — |
 | `5-verify` | compare snapshots and assert invariants | see below |
 
-Snapshots record: trio versions, `.xtrm/registry.json` asset count + hash,
-hook command count in `.xtrm/config/hooks.json`, hook payload file count,
-skill-root counts (repo and global `~/.xtrm/skills/default`), and symlink count
-under `.xtrm`.
+Snapshots record: trio versions, `.xtrm/registry.json` asset-group count,
+registry parity (`declared/missing/mismatch`), hook command count in
+`.xtrm/config/hooks.json`, hook payload file count, skill-root counts (repo and
+global `~/.xtrm/skills/default`), and symlink count under `.xtrm`.
 
 Stage 5 asserts, per repo: at least one wired hook command, hook payload count
-not regressed against the pre snapshot, a non-empty registry, a populated global
-skill mirror, zero symlinks under `.xtrm`, and that `xt update --apply` restored
-the hook payload stage 4 deleted. Globally it asserts the three
-specialists-owned skills (`using-specialists`, `update-specialists`,
-`using-specialists-auto`) landed in `~/.xtrm/skills/default`, and that the
-`Source and destination must not be the same` fresh-machine regression did not
-reappear anywhere in the run.
+not regressed against the pre snapshot, a non-empty registry, every file the
+registry declares present on disk under its group's `source_dir`, a populated
+global skill mirror, zero symlinks under `.xtrm`, and that `xt update --apply`
+restored the hook payload stage 4 deleted. Registry *hash* mismatches are
+reported as `[WARN]`, not failures — a clone of a repo's default branch
+legitimately sits ahead of the released registry's hashes.
+
+Globally it asserts the three specialists-owned skills (`using-specialists`,
+`update-specialists`, `using-specialists-auto`) landed in
+`~/.xtrm/skills/default`, runs the core clone's own
+`scripts/check-skill-root-budget.mjs` (so the budgets live in one place, not
+duplicated here), and asserts that the `Source and destination must not be the
+same` fresh-machine regression did not reappear anywhere in the run.
+
+Budget overruns are `[WARN]`. The clone's `.xtrm/skills/default` holds whatever
+the *installed* package shipped, so a pre-release run legitimately reports roots
+that the release being gated is about to slim — a red gate there would block the
+fix. Compare the pre and post runs: overruns present in both are a real
+regression.
 
 The live scenario migrates the observability DB, asserts `xtmux-obs health`,
 starts a tmux session, runs `xtmux log follow` and `xtmux-events --json` against
 it, and sends a beaded `xtmux message-send`. The follower must deliver that
 exact message key live, and `xtmux-events` must start and report the session it
-is following. `sp run` only runs when model credentials are in the environment;
-otherwise it is `[SKIP]`, which does not affect PASS/FAIL. Use `--skip-live`
-where tmux is unavailable.
+is following. `sp run` only runs when model credentials are in the environment —
+and when it does run, it gates; without credentials it is `[SKIP]`, which does
+not affect PASS/FAIL. Terminal-notification delivery is always `[SKIP]`: there
+is no terminal in a headless container to receive one. Use `--skip-live` where
+tmux is unavailable.
 
 Failures print the tail of the command log. `--keep` retains the work directory
 (snapshots + full command log) instead of deleting it on exit.
