@@ -16,6 +16,16 @@ declare -A BRANCH_FOR=()
 KEEP=0
 SKIP_LIVE=0
 TAG=latest
+# XTRM_SMOKE_FAULT names a single fault to inject just before the global-surface
+# assertions. Used to prove each new check catches its target. Values:
+#   broken-claude-skills   dangling ~/.claude/skills symlink
+#   broken-pi-skills       dangling ~/.pi/agent/skills symlink
+#   missing-new-instance   drop --new-instance from the xtmux SessionStart hook
+#   duplicate-hook         append a duplicate xtmux SessionStart entry
+#   untagged-agent-state   append an untagged agent-state.sh entry (bead 4.27)
+#   removed-pi-package     drop a package from ~/.pi/agent/settings.json
+#   removed-specialists    delete a specialist definition file
+FAULT="${XTRM_SMOKE_FAULT:-}"
 
 usage() {
   cat <<'EOF'
@@ -177,6 +187,262 @@ registry_parity() {
   printf '%s/%s/%s' "$total" "$missing" "$mismatch"
 }
 
+# --- global-surface helpers ------------------------------------------------
+# Everything the trio installs into $HOME. This is the surface the container
+# used to ignore entirely — bead xtrm-wiy5n.4.32.
+
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+CLAUDE_SKILLS_LINK="$HOME/.claude/skills"
+PI_SKILLS_LINK="$HOME/.pi/agent/skills"
+PI_SETTINGS="$HOME/.pi/agent/settings.json"
+SKILLS_DEFAULT_TARGET="$HOME/.xtrm/skills/default"
+
+# resolve <path> — canonicalise a symlink (or file/dir) target; empty if broken.
+resolve() { readlink -f -- "$1" 2>/dev/null || true; }
+
+# jq_count <expr> <file> — count JSON hits without piping fragile grep chains.
+jq_count() {
+  local expr="$1" file="$2"
+  [ -f "$file" ] || { printf 0; return; }
+  jq -r "$expr" "$file" 2>/dev/null || printf 0
+}
+
+# check_symlink_target <label> <link> <expected>
+check_symlink_target() {
+  local label="$1" link="$2" expected="$3"
+  if [ ! -L "$link" ]; then
+    fail "$label: $link is not a symlink"
+    return
+  fi
+  local actual; actual="$(resolve "$link")"
+  local expected_resolved; expected_resolved="$(resolve "$expected")"
+  if [ -z "$actual" ] || [ ! -e "$actual" ]; then
+    fail "$label: $link resolves to <broken> (readlink: $(readlink -- "$link" 2>/dev/null))"
+    return
+  fi
+  if [ "$actual" = "$expected_resolved" ]; then
+    ok "$label: $link → $actual"
+  else
+    fail "$label: $link → $actual, expected $expected_resolved"
+  fi
+}
+
+# --- global-surface fault injection ----------------------------------------
+# Called just before global assertions to prove each check catches its target.
+# Each fault MUST make one of the checks below trip.
+
+inject_broken_claude_skills() {
+  rm -rf -- "$CLAUDE_SKILLS_LINK"
+  ln -s /nonexistent/xtrm-fault-target "$CLAUDE_SKILLS_LINK"
+  warn "fault injected: $CLAUDE_SKILLS_LINK now points at /nonexistent/xtrm-fault-target"
+}
+inject_broken_pi_skills() {
+  rm -rf -- "$PI_SKILLS_LINK"
+  ln -s /nonexistent/xtrm-fault-target "$PI_SKILLS_LINK"
+  warn "fault injected: $PI_SKILLS_LINK now points at /nonexistent/xtrm-fault-target"
+}
+inject_missing_new_instance() {
+  local tmp="$CLAUDE_SETTINGS.fault-tmp"
+  jq '(.hooks.SessionStart // []) |= (map(
+        if (.hooks // []) | any(.command // "" | contains("agent-state.sh"))
+        then . + {hooks: ([.hooks[] | .command |= gsub(" --new-instance"; "")])}
+        else . end
+      ))' "$CLAUDE_SETTINGS" > "$tmp" && mv "$tmp" "$CLAUDE_SETTINGS"
+  warn "fault injected: stripped --new-instance from every SessionStart agent-state.sh entry"
+}
+inject_duplicate_hook() {
+  local tmp="$CLAUDE_SETTINGS.fault-tmp"
+  jq '(.hooks.SessionStart // []) |= (
+        . + [([.[] | select((.hooks // []) | any(.command // "" | contains("agent-state.sh")))] | .[0])]
+      )' "$CLAUDE_SETTINGS" > "$tmp" && mv "$tmp" "$CLAUDE_SETTINGS"
+  warn "fault injected: appended a duplicate SessionStart xtmux entry"
+}
+inject_untagged_agent_state() {
+  local tmp="$CLAUDE_SETTINGS.fault-tmp"
+  # Copy an existing xtmux entry, strip its _source/_xtmux tags. Nothing else
+  # in this file uses agent-state.sh, so a positive match here is the fault.
+  jq '(.hooks.SessionStart // []) |= (
+        . + [
+          ([.[] | select((.hooks // []) | any(.command // "" | contains("agent-state.sh")))] | .[0])
+          | del(._source, ._xtmux)
+        ]
+      )' "$CLAUDE_SETTINGS" > "$tmp" && mv "$tmp" "$CLAUDE_SETTINGS"
+  warn "fault injected: appended an untagged agent-state.sh SessionStart entry"
+}
+inject_removed_pi_package() {
+  local tmp="$PI_SETTINGS.fault-tmp"
+  jq '.packages = (.packages // []) | .packages |= (if length > 0 then .[1:] else . end)' \
+    "$PI_SETTINGS" > "$tmp" && mv "$tmp" "$PI_SETTINGS"
+  warn "fault injected: dropped the first package from $PI_SETTINGS"
+}
+inject_removed_specialists() {
+  local sp_dir; sp_dir="$(specialists_config_dir)"
+  # Delete a canonical specialist the release contract depends on, not the
+  # alphabetically-first template. A blunt count check floors far below the
+  # real number and wouldn't notice one file missing; the per-name check
+  # below is what catches this.
+  local victim="$sp_dir/executor.specialist.json"
+  [ -f "$victim" ] && rm -f -- "$victim" \
+    && warn "fault injected: removed $(basename "$victim")"
+}
+
+apply_fault() {
+  case "$1" in
+    "")                       return 0 ;;
+    broken-claude-skills)     inject_broken_claude_skills ;;
+    broken-pi-skills)         inject_broken_pi_skills ;;
+    missing-new-instance)     inject_missing_new_instance ;;
+    duplicate-hook)           inject_duplicate_hook ;;
+    untagged-agent-state)     inject_untagged_agent_state ;;
+    removed-pi-package)       inject_removed_pi_package ;;
+    removed-specialists)      inject_removed_specialists ;;
+    *) fail "unknown XTRM_SMOKE_FAULT: $1"; return 1 ;;
+  esac
+}
+
+# specialists_config_dir — where the installed package keeps its .specialist.json
+# files. Read from `npm root -g` (single global path in this image), matches
+# what `sp` loads. If neither structure is present the check downstream fails.
+specialists_config_dir() {
+  local root; root="$(npm root -g 2>/dev/null)"
+  printf '%s/@jaggerxtrm/specialists/config/specialists' "${root:-/usr/local/lib/node_modules}"
+}
+
+# global_drift_and_repair — mirror the project drift+repair from stage 4 on the
+# global install surface. Break each target xt update --apply is documented to
+# own, then re-run the same command and assert the repair. Skipped when a
+# specific fault is under test (that path needs the break to persist).
+global_drift_and_repair() {
+  # 1. Both global skill pointers. xt update --apply calls
+  # ensureUserAgentsSkillsSymlink({force:true}) at cli/src/commands/update.ts:112
+  # which is exactly what should repair this.
+  rm -rf -- "$CLAUDE_SKILLS_LINK" "$PI_SKILLS_LINK"
+  ln -s /nonexistent/xtrm-drift "$CLAUDE_SKILLS_LINK"
+  ln -s /nonexistent/xtrm-drift "$PI_SKILLS_LINK"
+  ok "drift: broke $CLAUDE_SKILLS_LINK and $PI_SKILLS_LINK"
+
+  # 2. Global settings.json hook argument. Only the xtmux installer owns this
+  # file, so trigger its repair path via re-install below.
+  if [ -f "$CLAUDE_SETTINGS" ]; then
+    inject_missing_new_instance
+  fi
+
+  # Re-run xt update (repairs the pointers) and xtmux install (repairs the
+  # hooks). Both are idempotent and cheap. For xtmux the repair invokes the
+  # ALREADY-INSTALLED install.mjs so a `--branch xtmux=<ref>` build survives
+  # into stage 5 — reinstalling from @TAG here would silently overwrite the
+  # branch-built candidate with the published tag (Codex #522: line 334).
+  run_in "$SCRATCH" "xt update --apply (drift repair)" \
+    env XTRM_GLOBAL_HOOKS=1 xt update --apply --repo .
+  local xtmux_installer; xtmux_installer="$(xtmux_root)/scripts/install.mjs"
+  if [ -f "$xtmux_installer" ]; then
+    patch_bundled_bun
+    run "xtmux install.mjs --from-npm (drift repair, in-place)" \
+      node "$xtmux_installer" --from-npm
+  else
+    fail "xtmux install.mjs missing at $xtmux_installer — cannot repair global hooks"
+  fi
+
+  # Assert repair. FAIL is deliberate — if xt/xtmux stopped restoring these,
+  # the release gate should surface it. `check_symlink_target` records its own
+  # ok/fail lines, so no extra chatter here.
+  check_symlink_target "drift-repair: claude skills"   "$CLAUDE_SKILLS_LINK" "$SKILLS_DEFAULT_TARGET"
+  check_symlink_target "drift-repair: pi agent skills" "$PI_SKILLS_LINK"     "$SKILLS_DEFAULT_TARGET"
+  if [ -f "$CLAUDE_SETTINGS" ]; then
+    local stripped
+    stripped="$(jq_count '[.hooks.SessionStart // [] | .[]
+                          | select((.hooks // []) | any(.command // "" | contains("agent-state.sh")))
+                          | .hooks[] | select(.command // "" | contains("agent-state.sh") and (contains("--new-instance") | not))] | length' \
+                "$CLAUDE_SETTINGS")"
+    expect_eq "drift-repair: SessionStart entries missing --new-instance" "$stripped" 0
+  fi
+}
+
+# check_global_surface — the assertions bead xtrm-wiy5n.4.32 requires. Runs
+# after any drift-repair AND after any XTRM_SMOKE_FAULT injection, so a
+# proof-run breaks exactly the surface the assertion below covers.
+check_global_surface() {
+  printf '  --- global surface (~/.claude, ~/.pi, specialists)\n'
+
+  # 1. Symlinks: resolve targets, do not count. A count would pass a dangling link.
+  check_symlink_target "claude skills pointer"   "$CLAUDE_SKILLS_LINK" "$SKILLS_DEFAULT_TARGET"
+  check_symlink_target "pi agent skills pointer" "$PI_SKILLS_LINK"     "$SKILLS_DEFAULT_TARGET"
+
+  # 2. Global settings.json — event coverage, hook ARGUMENTS, no duplicates.
+  if [ ! -f "$CLAUDE_SETTINGS" ]; then
+    fail "$CLAUDE_SETTINGS missing (xtmux install did not write it)"
+  else
+    # Event coverage: xtmux install writes eight named events. An aggregate
+    # count would still pass if one whole category disappeared and another had
+    # extra entries — Codex #522: line 369. Check each event by name.
+    for ev in SessionStart UserPromptSubmit PreToolUse Notification \
+              PostToolUse Stop SubagentStop SessionEnd; do
+      local ev_count
+      ev_count="$(jq -r --arg ev "$ev" \
+        '[.hooks[$ev] // [] | .[] | select(._source == "xtmux")] | length' \
+        "$CLAUDE_SETTINGS" 2>/dev/null || printf 0)"
+      expect_ge "claude settings: xtmux $ev entries" "$ev_count" 1
+    done
+
+    # ARGUMENT check (bead 4.25): every SessionStart agent-state.sh entry must
+    # carry --new-instance. A count of entries with the flag missing == 0.
+    local missing_flag
+    missing_flag="$(jq_count '[.hooks.SessionStart // [] | .[]
+                              | (.hooks // []) | .[] | .command // ""
+                              | select(contains("agent-state.sh") and (contains("--new-instance") | not))] | length' \
+                    "$CLAUDE_SETTINGS")"
+    expect_eq "claude settings: SessionStart entries missing --new-instance" "$missing_flag" 0
+
+    # DUPLICATE check (bead 4.27): no two SessionStart xtmux entries share the
+    # same command string. A raw count would not see the shape, so group by
+    # command and pick groups of size > 1.
+    local dupes
+    dupes="$(jq_count '[.hooks | to_entries[] as $ev
+                       | $ev.value // []
+                       | map(select((.hooks // []) | any(.command // "" | contains("agent-state.sh")))
+                             | (.hooks // []) | map(.command // "") | join(""))
+                       | group_by(.) | map(select(length > 1)) | length] | add // 0' \
+             "$CLAUDE_SETTINGS")"
+    expect_eq "claude settings: duplicate agent-state.sh entries per event" "$dupes" 0
+
+    # UNTAGGED check (bead 4.27): every agent-state.sh entry must carry an
+    # ownership tag. An untagged entry survives every remove-then-write cycle.
+    local untagged
+    untagged="$(jq_count '[.hooks | to_entries[] | .value[]
+                          | select((.hooks // []) | any(.command // "" | contains("agent-state.sh")))
+                          | select((._source // "") == "")] | length' \
+                 "$CLAUDE_SETTINGS")"
+    expect_eq "claude settings: untagged agent-state.sh entries" "$untagged" 0
+  fi
+
+  # 3. ~/.pi/agent/settings.json — has hooks and the xtmux package installed.
+  if [ ! -f "$PI_SETTINGS" ]; then
+    fail "$PI_SETTINGS missing (xtmux install did not write it)"
+  else
+    local pi_pkg_hits
+    pi_pkg_hits="$(jq_count '[.packages // [] | .[]
+                             | select(test("xtmux"; "i"))] | length' "$PI_SETTINGS")"
+    expect_ge "pi settings: xtmux package registered" "$pi_pkg_hits" 1
+    local pi_hook_events
+    pi_hook_events="$(jq_count '.hooks // {} | keys | length' "$PI_SETTINGS")"
+    expect_ge "pi settings: hook events wired" "$pi_hook_events" 1
+  fi
+
+  # 4. Specialist definitions on disk. `sp list` runs later — this asserts the
+  # underlying .specialist.json files (which sp reads) are present.
+  local sp_dir; sp_dir="$(specialists_config_dir)"
+  local sp_count
+  sp_count="$(find "$sp_dir" -maxdepth 1 -name '*.specialist.json' 2>/dev/null | wc -l | tr -d ' ')"
+  expect_ge "specialist definitions in $sp_dir" "$sp_count" 5
+  # Per-name check: the core specialists the CLAUDE.md workflow depends on.
+  # A count-only check would not notice one of them going missing.
+  for name in executor explorer reviewer planner debugger; do
+    [ -f "$sp_dir/$name.specialist.json" ] \
+      && ok "specialist $name.specialist.json present" \
+      || fail "specialist $name.specialist.json missing"
+  done
+}
+
 # snapshot <label> <repo dir> — records the state stage 5 compares.
 snapshot() {
   # Separate statements: `local a=$1 b=$a` trips `set -u` in bash.
@@ -199,8 +465,9 @@ snapshot() {
 }
 
 printf 'xtrm trio smoke test — %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-printf 'dist-tag: %s   branch(all): %s   live checks: %s\n' \
-  "$TAG" "${BRANCH_ALL:-<none>}" "$([ "$SKIP_LIVE" -eq 1 ] && echo skipped || echo on)"
+printf 'dist-tag: %s   branch(all): %s   live checks: %s   fault: %s\n' \
+  "$TAG" "${BRANCH_ALL:-<none>}" "$([ "$SKIP_LIVE" -eq 1 ] && echo skipped || echo on)" \
+  "${FAULT:-<none>}"
 
 # ===========================================================================
 stage "1-install"
@@ -288,8 +555,35 @@ for entry in "${REPOS[@]}"; do
 done
 
 # ===========================================================================
+stage "4b-global-drift"
+# ===========================================================================
+# Reconcile the pi hook wiring at least once. reconcileGlobalPiHooks() is only
+# called by xt update when XTRM_GLOBAL_HOOKS=1, and no other stage flips that
+# flag — without this call, ~/.pi/agent/settings.json.hooks is empty and the
+# pi-hooks assertion in stage 5 would fail on any run.
+run_in "$SCRATCH" "xt update --apply (global hook reconcile)" \
+  env XTRM_GLOBAL_HOOKS=1 xt update --apply --repo .
+
+# Same drift+repair pattern as stage 4, but on the global install surface —
+# the surface bead xtrm-wiy5n.4.32 called out. Skipped when a specific fault is
+# under test; that path needs the break to survive into stage 5.
+if [ -z "$FAULT" ]; then
+  global_drift_and_repair
+else
+  skip "global drift+repair (XTRM_SMOKE_FAULT=$FAULT — leaving fault target intact)"
+fi
+
+# ===========================================================================
 stage "5-verify"
 # ===========================================================================
+# If a fault is under test, inject it right before assertions so no downstream
+# code can restore it. FAILED must go up by at least one below.
+if [ -n "$FAULT" ]; then
+  apply_fault "$FAULT" || true
+fi
+
+check_global_surface
+
 for entry in "${REPOS[@]}"; do
   IFS='|' read -r name _url _pkg <<<"$entry"
   pre="$WORK/snap-$name-pre.txt"; post="$WORK/snap-$name-post.txt"
