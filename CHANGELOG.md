@@ -71,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Claude-column contract matrix for the cross-runtime gate** ([0c5f455](https://github.com/xtrm-dev/core/commit/0c5f4558f940244d0eccdf909da6a628644db692)) — 2026-07-26 15:31
 
-- **Address Codex review on the Claude-column matrix** ([d182424](https://github.com/xtrm-dev/core/commit/d182424bfafbff254c5ef48cb2dfda5e26ce6b5e)) — 2026-07-26 15:41
+- **Address Codex review on the Claude-column matrix** ([7497a86](https://github.com/xtrm-dev/core/commit/7497a86e644fa25fb93617e8849a68b92f98d8a7)) — 2026-07-26 15:41
 
 ## [v0.11.2] — 2026-07-22
 
