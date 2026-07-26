@@ -15,9 +15,12 @@ import {
     checkPositionZeroSlash,
     chooseAttachCommand,
     createRuntimeBufferName,
+    effectiveModel,
     claudeExplicitSkillLines,
     guardRolePassthrough,
+    isForeignProviderModel,
     parseSpecialistJson,
+    passthroughModels,
     probeSkillPrefixAvailable,
     renderDeclaredSkillPrefix,
     renderRoleTask,
@@ -781,6 +784,65 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
     });
 });
 
+describe('isForeignProviderModel', () => {
+    it.each([
+        'qwencloud/qwen3.8-max-preview', 'openai-codex/gpt-5.4', 'gemini/gemini-3-pro',
+        'Qwen-CLI/qwen3-coder', 'zai-coding-cn/glm-5', 'nano-gpt/moonshotai/kimi-k2.6',
+        // Outer provider decides — a nested anthropic model is still an
+        // OpenRouter id claude cannot run (Codex P1 on PR #511).
+        'openrouter/anthropic/claude-sonnet-4.6',
+    ])('flags the pi provider/model shape: %s', (model) => {
+        expect(isForeignProviderModel(model)).toBe(true);
+    });
+
+    it.each([
+        // Claude ids, aliases and vendor forms.
+        'opus', 'sonnet[1m]', 'claude-opus-5', 'claude-opus-4-1@20250805',
+        'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+        // Bedrock application-inference-profile ARN — a valid --model with no
+        // 'claude' in it. Must never be refused (Codex P1 on PR #511).
+        'arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123',
+        // Custom / unrecognised gateways stay the operator's call, slash or not
+        // (docs/xt-pi-role.md: explicit custom-provider identifiers win).
+        'anthropic/claude-sonnet-5', 'acme/production', 'my-custom-model', '', '   ',
+        // Vendor-prefixed gateway names are not the vendor (Codex P2 on PR #511).
+        'openai-compatible/production', 'google-proxy/claude',
+    ])('leaves %s alone', (model) => {
+        expect(isForeignProviderModel(model)).toBe(false);
+    });
+});
+
+describe('passthroughModels', () => {
+    it.each([
+        [['--model', 'qwencloud/qwen3.8-max-preview'], ['qwencloud/qwen3.8-max-preview']],
+        [['--add-dir', '~/n', '--model=opus'], ['opus']],
+        [['--add-dir', '~/notes'], []],
+        [['--model'], []],
+        // Every occurrence, not the first: the tail is forwarded verbatim, so a
+        // later value wins at the runtime (Codex P2 on PR #511).
+        [['--model', 'opus', '--model=qwencloud/qwen3.8-max-preview'], ['opus', 'qwencloud/qwen3.8-max-preview']],
+        // After the operator's own `--`, `--model` is positional text.
+        [['--', '--model', 'qwencloud/qwen3.8-max-preview'], []],
+    ])('reads %s', (passthrough, expected) => {
+        expect(passthroughModels(passthrough as string[])).toEqual(expected);
+    });
+});
+
+// Last --model wins at the runtime; only that one is worth validating.
+describe('effectiveModel', () => {
+    it.each([
+        [undefined, [], undefined],
+        ['opus', [], 'opus'],
+        [undefined, ['--model', 'opus'], 'opus'],
+        // Tail overrides the native flag (Codex P2: safe native must not mask it).
+        ['opus', ['--model', 'qwencloud/qwen3.8-max-preview'], 'qwencloud/qwen3.8-max-preview'],
+        // ...and an overridden foreign value must not block a valid launch.
+        [undefined, ['--model', 'qwencloud/qwen3.8-max-preview', '--model', 'opus'], 'opus'],
+    ])('resolves (%s, %s)', (model, passthrough, expected) => {
+        expect(effectiveModel(model as string | undefined, passthrough as string[])).toBe(expected);
+    });
+});
+
 describe('buildRoleTmuxPlan (claude runtime)', () => {
     const role = parseSpecialistJson('chain-coordinator', JSON.stringify({
         specialist: {
@@ -850,6 +912,44 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
         expect(plan.runtimeArgs[modelIdx + 1]).toBe('opus');
         expect(plan.runtimeArgs).not.toContain('openai-codex/gpt-5.6-luna');
         expect(plan.runtimeArgs).not.toContain('--thinking');
+    });
+
+    // xtrm-wiy5n.4.19: sp view --surface claude falls back to the pi-surface
+    // execution.model when no surface_models.claude is declared, so a role
+    // default like qwencloud/… reaches the launcher. Forwarding it spawned a
+    // live session that died at turn 1.
+    it('drops a cross-provider role default so claude inherits the parent model', () => {
+        const plan = buildRoleTmuxPlan({ ...WT,
+            runtime: 'claude',
+            role: { ...role, model: 'qwencloud/qwen3.8-max-preview' },
+            parentSessionId: '',
+            turn1Body: '',
+        });
+        expect(plan.runtimeArgs).not.toContain('--model');
+        expect(plan.runtimeArgs).not.toContain('qwencloud/qwen3.8-max-preview');
+    });
+
+    it('keeps a Bedrock inference-profile ARN role default', () => {
+        const arn = 'arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123';
+        const plan = buildRoleTmuxPlan({ ...WT,
+            runtime: 'claude',
+            role: { ...role, model: arn },
+            parentSessionId: '',
+            turn1Body: '',
+        });
+        const modelIdx = plan.runtimeArgs.indexOf('--model');
+        expect(plan.runtimeArgs[modelIdx + 1]).toBe(arn);
+    });
+
+    it('keeps a Claude role default', () => {
+        const plan = buildRoleTmuxPlan({ ...WT,
+            runtime: 'claude',
+            role,
+            parentSessionId: '',
+            turn1Body: '',
+        });
+        const modelIdx = plan.runtimeArgs.indexOf('--model');
+        expect(plan.runtimeArgs[modelIdx + 1]).toBe('claude-opus-4-8');
     });
 
     it('omits --model for a surface-resolved Claude default', () => {
