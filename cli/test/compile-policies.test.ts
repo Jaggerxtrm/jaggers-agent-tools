@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -173,5 +173,75 @@ describe('compile-policies — output structure', () => {
     expect(Array.isArray(sessionStart)).toBe(true);
     const allHooks = sessionStart.flatMap((g: { hooks: object[] }) => g.hooks ?? []);
     expect(allHooks.length).toBeGreaterThan(1);
+  });
+});
+
+// xtrm-wiy5n.4.38 — a hook is wired in live settings but no longer ships.
+// The compiled config (.xtrm/config/hooks.json) is copied into ~/.xtrm/config
+// by the global hooks bootstrap and then propagated into ~/.claude/settings.json
+// by the runtime sync. Once a hook file is deleted from the payload but a
+// policy still references it, the wired entry points at a file that will not
+// ship on the next release. That is a payload/wiring mismatch and must fail at
+// build time — see task /tmp/w438-task.txt and the ownership finding in the
+// report.
+describe('compile-policies — payload/wiring parity gate (xtrm-wiy5n.4.38)', () => {
+  const FIXTURE = path.join(POLICIES_DIR, '_w438-mismatch-fixture.json');
+
+  afterEach(() => {
+    if (existsSync(FIXTURE)) unlinkSync(FIXTURE);
+  });
+
+  function seedMismatchingPolicy(): void {
+    // A fake policy whose Claude hook targets a file that does NOT exist under
+    // .xtrm/hooks/. Order 99 so it lands after the real policies alphabetically
+    // and does not perturb their relative ordering in the compiled output.
+    writeFileSync(FIXTURE, JSON.stringify({
+      id: '_w438-mismatch-fixture',
+      description: 'Fixture policy for xtrm-wiy5n.4.38 payload/wiring parity gate — must not be released.',
+      version: '1',
+      runtime: 'both',
+      order: 99,
+      claude: {
+        hooks: [
+          {
+            event: 'SessionStart',
+            command: 'node ${CLAUDE_PLUGIN_ROOT}/hooks/does-not-ship-w438.mjs',
+          },
+        ],
+      },
+    }, null, 2) + '\n');
+  }
+
+  it('exits non-zero and names the missing payload file when a policy hook references one that does not ship', () => {
+    seedMismatchingPolicy();
+
+    const result = runCompiler(['--dry-run']);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('does-not-ship-w438.mjs');
+    expect(result.stderr).toMatch(/payload|missing|not.*ship|referenced/i);
+  });
+
+  it('exits non-zero on the default write path too — a bad compile must never touch .xtrm/config/hooks.json', () => {
+    const original = readFileSync(HOOKS_OUTPUT, 'utf8');
+    seedMismatchingPolicy();
+
+    try {
+      const result = runCompiler([]);
+      expect(result.status).not.toBe(0);
+      // The output file must not have been overwritten with a broken config.
+      expect(readFileSync(HOOKS_OUTPUT, 'utf8')).toBe(original);
+    } finally {
+      // Restore just in case (belt-and-suspenders — the gate should have kept it intact).
+      writeFileSync(HOOKS_OUTPUT, original);
+    }
+  });
+
+  it('every hook command already in the real policies resolves to a file that ships in .xtrm/hooks/', () => {
+    // Standing regression: with the fixture absent, compile-policies must
+    // succeed. If a future PR deletes a payload file and forgets to update
+    // policies, THIS is the assertion that stops it.
+    const result = runCompiler(['--dry-run']);
+    expect(result.status).toBe(0);
   });
 });

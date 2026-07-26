@@ -103,6 +103,58 @@ for (const [key, hookEntries] of eventGroups) {
   hooksOutput[event].push(group);
 }
 
+// ── Payload/wiring parity gate ────────────────────────────────────────────────
+// xtrm-wiy5n.4.38 — a hook command in `policies/*.json` typically looks like
+// `node ${CLAUDE_PLUGIN_ROOT}/hooks/<relpath>` (also with $CLAUDE_PLUGIN_ROOT
+// unbraced). The relpath must exist under `.xtrm/hooks/<relpath>` in this
+// repo, or the wire will point at a file that does not ship. The compiled
+// config then propagates through the global-hooks bootstrap into
+// ~/.xtrm/config/hooks.json and through the runtime sync into
+// ~/.claude/settings.json, so a mismatch here becomes a broken hook on every
+// session start that fires it. Fail loud instead — never emit a bad hook wire.
+const PLUGIN_ROOT_HOOK_RE = /\$\{?CLAUDE_PLUGIN_ROOT\}?\/hooks\/([A-Za-z0-9_\-./]+)/g;
+const HOOKS_PAYLOAD_DIR = join(ROOT, '.xtrm', 'hooks');
+
+function collectReferencedHookFiles(policiesData) {
+  const missing = new Map(); // relpath -> array of {policyFile, event, command}
+  for (const policy of policiesData) {
+    const runtime = policy.runtime ?? 'both';
+    // Only Claude-side commands ship via .xtrm/hooks. Pi extensions live
+    // under packages/pi-extensions/ and are covered by --check-pi.
+    if (runtime === 'pi') continue;
+    for (const hook of policy.claude?.hooks ?? []) {
+      const command = hook.command ?? '';
+      let match;
+      // Reset the RegExp between iterations because /g regexes are stateful.
+      PLUGIN_ROOT_HOOK_RE.lastIndex = 0;
+      while ((match = PLUGIN_ROOT_HOOK_RE.exec(command)) !== null) {
+        const rel = match[1];
+        const absPath = join(HOOKS_PAYLOAD_DIR, rel);
+        if (existsSync(absPath)) continue;
+        if (!missing.has(rel)) missing.set(rel, []);
+        missing.get(rel).push({ policyFile: policy.file, event: hook.event, command });
+      }
+    }
+  }
+  return missing;
+}
+
+function runPayloadWiringCheck(policiesData) {
+  const missing = collectReferencedHookFiles(policiesData);
+  if (missing.size === 0) return;
+  console.error('✗ Payload/wiring mismatch — the following hook files are referenced by policies but do not ship under .xtrm/hooks/:');
+  for (const [rel, refs] of missing) {
+    console.error(`  - .xtrm/hooks/${rel} (missing)`);
+    for (const ref of refs) {
+      console.error(`      referenced by ${ref.policyFile} (event=${ref.event}) → ${ref.command}`);
+    }
+  }
+  console.error('  Fix: restore the file under .xtrm/hooks/, or remove the hook entry from the policy.');
+  process.exit(1);
+}
+
+runPayloadWiringCheck(policies);
+
 const output = JSON.stringify({ hooks: hooksOutput }, null, 2) + '\n';
 
 function listPiExtensionDirs(dir) {
