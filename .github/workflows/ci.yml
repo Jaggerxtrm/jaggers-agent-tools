@@ -99,6 +99,14 @@ jobs:
     - name: Skill root budget guard
       run: npm run check:skill-root-budget
 
+    - name: Forbidden-phrase drift guard
+      run: npm run check:forbidden-phrases
+
+    # No Specialists checkout on the runner, so this skips unless SPECIALISTS_REPO_PATH
+    # is provided; it is a hard gate locally and in prepublishOnly.
+    - name: Vendored Specialists skill parity guard
+      run: npm run check:vendored-specialists-parity
+
     - name: Run Tests
       run: |
         npm test --prefix cli

@@ -110,7 +110,7 @@ Dispatch an explorer to scan the repo:
 ```bash
 sp run explorer --bead <triage-bead-id> \
   --prompt "Read .triage/open.json plus .triage/bv-triage.json and .triage/bv-alerts.json. Cluster issues by shared implementation surface, file paths, symbols, feature area, and graph context. Return JSON: [{cluster_id, issues:[], shared_files:[], shared_symbols:[], graph_signal:[], confidence:0-1, rationale}]." \
-  --context-depth 0 --background
+  --context-depth 0
 ```
 
 Save the result as `.triage/code-overlap.json` either way — Phase 2d
@@ -125,7 +125,7 @@ relationship-type selection:
 ```bash
 sp run overthinker --bead <triage-bead-id> \
   --prompt "Inputs: .triage/dup-mechanical.json, .triage/bv-triage.json, .triage/bv-alerts.json, .triage/code-overlap.json. For each cluster, recommend ONE action from: duplicate, supersede, new-epic, parent-child, blocks, discovered-from, caused-by, validates, tracks, until, relates-to, related, no-op. Prefer cluster-level semantic judgement over pairwise title similarity. Return JSON: [{cluster_id, issues:[], action, justification, target?, source?}]." \
-  --context-depth 0 --background
+  --context-depth 0
 ```
 
 ---
