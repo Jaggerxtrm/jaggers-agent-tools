@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Drift-lint gates for forbidden phrases and vendored specialists parity (xtrm-wiy5n.4.3) (#514)** ([a89f55d](https://github.com/xtrm-dev/core/commit/a89f55db0b7da94bebd3fa3c10ae78f987157863)) — 2026-07-26 16:25
 
-- **Add Alpine smoke-test container for the xtrm trio** ([05d89f0](https://github.com/xtrm-dev/core/commit/05d89f06cf090da3263cf229cebe13b086f60dbd)) — 2026-07-26 15:39
+- **Alpine smoke-test container for the xtrm trio (xtrm-wiy5n.4.1) (#513)** ([335c6e7](https://github.com/xtrm-dev/core/commit/335c6e7bc7f8a0d83d46da5f041f0396ef2b397d)) — 2026-07-26 19:10
 
 ### Fixed
 
@@ -37,9 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Stop xt claude --role forwarding non-Claude models (xtrm-wiy5n.4.19) (#511)** ([50b1987](https://github.com/xtrm-dev/core/commit/50b19878aad623b4ff9c4dcd81fb3dc21cae30e7)) — 2026-07-26 18:58
 
-- **Propagate smoke-stage failures and close SCOPE gaps** ([e6dfbe7](https://github.com/xtrm-dev/core/commit/e6dfbe7443191f6a3a14045a60a40a9514eff44f)) — 2026-07-26 16:19
+- **Stop gating main on a CHANGELOG check squash-merge cannot satisfy** ([e1f3954](https://github.com/xtrm-dev/core/commit/e1f3954d81ffda1ac81720763d34d5a1e971a5c5)) — 2026-07-26 19:05
 
-- **Honour --tag past stage 1 and select smoke artifacts by arch** ([d390fc8](https://github.com/xtrm-dev/core/commit/d390fc847ea280d0326a3157998f64901a871b90)) — 2026-07-26 16:40
+- **Raise the fast-uri override floor to ^3.1.4** ([4de67ed](https://github.com/xtrm-dev/core/commit/4de67ed986d0f866d6f4c47fffa25a1113df8e16)) — 2026-07-26 19:10
 
 ### Other changes
 
@@ -84,6 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Claude-column contract matrix for the cross-runtime gate (#512)** ([c48b46b](https://github.com/xtrm-dev/core/commit/c48b46b1c66734c66f154451f85f3bb31f21745c)) — 2026-07-26 15:48
 
 - **Re-vendor specialists skills at master ba8526cd (#515)** ([53e4afe](https://github.com/xtrm-dev/core/commit/53e4afe451d73e7655cfc664297694fb45e7905b)) — 2026-07-26 18:02
+
+- **Refresh dist for fast-uri 3.1.4** ([cebbeb5](https://github.com/xtrm-dev/core/commit/cebbeb5953fabf05f4946f577e8f639cd35b4b65)) — 2026-07-26 19:23
 
 ## [v0.11.2] — 2026-07-22
 
