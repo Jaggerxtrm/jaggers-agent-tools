@@ -25,6 +25,11 @@ const VENDORED_HOOKS = [
 const DRAIN_STOP = 'auto-monitor-drain-stop.mjs';
 const ON_SEND = 'auto-monitor-on-send.mjs';
 const CONSUMED = 'auto-monitor-consumed.mjs';
+// xtrm-wiy5n.4.24: Stop hook that closes the Claude/Pi asymmetry — Pi polls
+// its inbox on a 30 s cycle; Claude had no equivalent. This hook queries the
+// pane-scoped inbox surface (Jaggerxtrm/xtmux#87) and surfaces each new
+// inbound messageKey to stderr exactly once per pane lifetime.
+const INBOX_REMINDER = 'inbox-reminder-stop.mjs';
 
 // This pane (the requester/sender) and its peer (the reply target).
 const SELF_SESSION = '$5805';
@@ -360,17 +365,19 @@ describe('EVAL-01 Claude column', () => {
     ]);
   });
 
-  it('inbound reply-required message is surfaced next normal cycle, not by the Stop gate', () => {
-    // Claude/Pi asymmetry: Pi's inbox extension queues a continuation and acks.
-    // Claude has no inbound hook at all — Stop, PostToolUse and agent-state.sh
-    // are the whole wired surface, and none of them queries the inbox. So the
-    // Claude-side guarantee is that the sender-owned Stop gate leaves an inbound
-    // duty *intact and undischarged*, for the pane's own next-cycle
-    // `message-list --expects-reply` to retrieve.
+  it('inbound reply-required message is surfaced by the inbox reminder Stop hook (Pi/Claude parity, xtrm-wiy5n.4.24)', () => {
+    // xtrm-wiy5n.4.24: Pi polls its inbox on a 30 s cycle; Claude previously
+    // had no equivalent. The inbox-reminder Stop hook queries the pane-scoped
+    // surface (Jaggerxtrm/xtmux#87 made `message-list --pane $TMUX_PANE`
+    // resolve `--for` from live tmux) and writes each new messageKey to
+    // stderr once. The sender-owned Stop gate still leaves the row intact —
+    // acking is the operator's decision, not the reminder's.
     const inbound = {
       messageKey: 'msg-inbound-1',
       senderId: PEER_SESSION,
       recipientId: SELF_SESSION,
+      beadId: 'wiy5n-42',
+      summary: 'ping from peer',
       expectsReply: true,
       replyStatus: 'pending',
     };
@@ -381,41 +388,176 @@ describe('EVAL-01 Claude column', () => {
       'message-get': json(inbound),
     });
 
-    // The next normal cycle: bounded key discovery, then the exact row (MSG-03).
+    // The pane's own next cycle can still retrieve the row (probe reads a
+    // sequence entry the reminder later replays; the fake picker's sequences
+    // repeat the last entry so both calls see the same row).
     const discovered = probe(runtime, [
-      'message-list',
-      '--for',
-      SELF_SESSION,
-      '--pane',
-      SELF_PANE,
-      '--expects-reply',
-      '--json',
+      'message-list', '--for', SELF_SESSION, '--pane', SELF_PANE, '--expects-reply', '--json',
     ]) as Array<{ messageKey: string; replyStatus: string }>;
     expect(discovered).toHaveLength(1);
-    expect(probe(runtime, ['message-get', discovered[0].messageKey, '--json'])).toEqual(inbound);
     const cyclePresent = pickerCalls(runtime).length;
 
-    const result = runHook(DRAIN_STOP, STOP_INPUT, runtime);
-    expect(result.stdout.trim()).toBe('');
-    expect(result.status).toBe(0);
+    // The inbox reminder queries message-list with the exact pane-scoped
+    // argv the xtmux surface accepts, and emits a `systemMessage` JSON
+    // envelope on STDOUT (Claude's Stop hook contract only surfaces stdout
+    // on exit 0; stderr is only surfaced on exit != 0 or block). Stop is
+    // not blocked. Codex #525 — the reminder text MUST include the
+    // messageKey so the suggested `xtmux message-reply --in-reply-to`
+    // command is executable as-is.
+    const reminder = runHook(INBOX_REMINDER, STOP_INPUT, runtime, { TMUX_PANE: SELF_PANE, TMUX_OPT_STORE: path.join(workDir, 'reminder-store.json') });
+    expect(reminder.stderr.trim()).toBe('');
+    expect(reminder.status).toBe(0);
+    const envelope = JSON.parse(reminder.stdout);
+    expect(envelope).toHaveProperty('systemMessage');
+    expect(envelope.systemMessage).toContain('Reply required:');
+    expect(envelope.systemMessage).toContain(PEER_SESSION);
+    expect(envelope.systemMessage).toContain('wiy5n-42');
+    expect(envelope.systemMessage).toContain('msg-inbound-1');
+    expect(envelope.systemMessage).toContain('--in-reply-to msg-inbound-1');
+    const reminderCalls = pickerCalls(runtime).slice(cyclePresent);
+    expect(reminderCalls[0]).toEqual([
+      'message-list', '--pane', SELF_PANE, '--unacked', '--expects-reply', '--json', '--limit', '5',
+    ]);
 
-    // The Stop gate consulted only the sender-owned ledger. It did not ack,
-    // consume or otherwise discharge the inbound duty, so the row stays pending.
-    const hookCalls = pickerCalls(runtime).slice(cyclePresent);
-    expect(hookCalls.map((call) => call[0])).toEqual(['obligations']);
+    // The sender-owned Stop gate still runs afterwards and remains untouched
+    // by the reminder — no ack, no consume, no arm. Row stays pending.
+    const gate = runHook(DRAIN_STOP, STOP_INPUT, runtime);
+    expect(gate.stdout.trim()).toBe('');
+    expect(gate.status).toBe(0);
     expect(
-      (probe(runtime, ['message-list', '--expects-reply', '--json']) as typeof discovered)[0]
-        .replyStatus,
+      (probe(runtime, ['message-list', '--expects-reply', '--json']) as typeof discovered)[0].replyStatus,
     ).toBe('pending');
   });
 
-  it('inbound FYI applies bounded policy and creates no duty', () => {
-    // Coalescing FYIs addressed to this pane. `--expects-reply` retrieval — the
-    // duty-bearing query — must not return them, and the Stop gate must neither
-    // see them nor arm anything for them.
+  // Anti-spin: same-message-still-pending on the next Stop MUST be silent.
+  // The reminder records the surfaced key in the tmux option
+  // @agent_inbox_reminded_keys; the fake tmux shim below persists that option
+  // across invocations so the second run sees "already reminded" and stays
+  // silent. A reminder that fires forever is as bad as no reminder.
+  it('inbox reminder does not spin on the same pending message (xtrm-wiy5n.4.24)', () => {
+    const inbound = {
+      messageKey: 'msg-inbound-repeat',
+      senderId: PEER_SESSION,
+      recipientId: SELF_SESSION,
+      beadId: 'wiy5n-99',
+      summary: 'still waiting',
+      expectsReply: true,
+      replyStatus: 'pending',
+    };
+    const runtime = createRuntime({
+      'message-list': json([inbound]),
+    });
+
+    // Swap in a tmux shim that persists per-pane options to disk so
+    // show-options in the second Stop sees what set-option wrote in the first.
+    const optionStore = path.join(workDir, 'tmux-options.json');
+    fs.writeJsonSync(optionStore, {});
+    const STATEFUL_TMUX = `#!/usr/bin/env node
+const { readFileSync, writeFileSync, existsSync, appendFileSync } = require("node:fs");
+const argv = process.argv.slice(2);
+const store = process.env.TMUX_OPT_STORE;
+const state = existsSync(store) ? JSON.parse(readFileSync(store, "utf8")) : {};
+function tOf(a) { const i = a.indexOf("-t"); return i >= 0 ? a[i + 1] : ""; }
+if (argv[0] === "show-options") {
+  const t = tOf(argv); const name = argv[argv.length - 1];
+  process.stdout.write((state[t]?.[name] ?? "") + "\\n");
+  process.exit(0);
+}
+if (argv[0] === "set-option") {
+  const t = tOf(argv); const name = argv[argv.length - 2]; const value = argv[argv.length - 1];
+  state[t] = state[t] || {}; state[t][name] = value;
+  writeFileSync(store, JSON.stringify(state));
+  process.exit(0);
+}
+// display-message (unused by the reminder) and everything else: echo target.
+process.exit(0);
+`;
+    fs.removeSync(path.join(binDir, 'tmux'));
+    fs.writeFileSync(path.join(binDir, 'tmux'), STATEFUL_TMUX, { mode: 0o755 });
+    fs.chmodSync(path.join(binDir, 'tmux'), 0o755);
+
+
+    const first = runHook(INBOX_REMINDER, STOP_INPUT, runtime, {
+      TMUX_PANE: SELF_PANE,
+      TMUX_OPT_STORE: optionStore,
+    });
+    // Reminder went out on STDOUT as a systemMessage envelope, and included
+    // the messageKey so the suggested reply command is executable as-is.
+    const firstEnv = JSON.parse(first.stdout);
+    expect(firstEnv.systemMessage).toContain('Reply required:');
+    expect(firstEnv.systemMessage).toContain('still waiting');
+    expect(firstEnv.systemMessage).toContain('msg-inbound-repeat');
+    // Anti-spin write-first ordering (Codex #525): the key MUST be recorded
+    // in the tmux option BEFORE the reminder is emitted. If persist ever
+    // fails, the hook aborts the reminder rather than re-fire forever.
+    const stored = fs.readJsonSync(optionStore) as Record<string, Record<string, string>>;
+    expect(stored[SELF_PANE]?.['@agent_inbox_reminded_keys'] ?? '').toContain('msg-inbound-repeat');
+
+    // Second Stop, same pending message: NO NEW REMINDER on stdout OR stderr.
+    // The row is still surfaced by the query, but the anti-spin registry
+    // filters it before anything reaches the operator.
+    const second = runHook(INBOX_REMINDER, STOP_INPUT, runtime, {
+      TMUX_PANE: SELF_PANE,
+      TMUX_OPT_STORE: optionStore,
+    });
+    expect(second.stdout.trim()).toBe('');
+    expect(second.stderr.trim()).toBe('');
+    expect(second.status).toBe(0);
+  });
+
+  // Codex #525 P2 (persistence failure). If the tmux registry write fails
+  // (pane gone between query and write, tmux server crash mid-write), the
+  // hook MUST abort the reminder — a message that isn't recorded would
+  // re-fire on every subsequent Stop and violate the anti-spin guarantee.
+  it('inbox reminder aborts silently when the anti-spin write fails (xtrm-wiy5n.4.24)', () => {
+    const inbound = {
+      messageKey: 'msg-persist-fail',
+      senderId: PEER_SESSION,
+      recipientId: SELF_SESSION,
+      beadId: 'wiy5n-x',
+      summary: 'persist should fail',
+      expectsReply: true,
+      replyStatus: 'pending',
+    };
+    const runtime = createRuntime({ 'message-list': json([inbound]) });
+
+    // A tmux shim that FAILS every set-option (exit 1) but succeeds
+    // show-options (returns empty) so readRemindedKeys sees no prior keys
+    // and the fresh set is non-empty.
+    const FAILING_TMUX = `#!/bin/sh
+case "$1" in
+  set-option) exit 1 ;;
+  show-options) exit 0 ;;
+  *) exit 0 ;;
+esac
+`;
+    fs.removeSync(path.join(binDir, 'tmux'));
+    fs.writeFileSync(path.join(binDir, 'tmux'), FAILING_TMUX, { mode: 0o755 });
+    fs.chmodSync(path.join(binDir, 'tmux'), 0o755);
+
+    const result = runHook(INBOX_REMINDER, STOP_INPUT, runtime, { TMUX_PANE: SELF_PANE });
+    expect(result.status).toBe(0);
+    // Reminder must not have escaped through EITHER channel — the write
+    // failure aborts the emit path entirely.
+    expect(result.stdout.trim()).toBe('');
+    expect(result.stderr.trim()).toBe('');
+  });
+
+  it('inbound FYI applies bounded policy, creates no duty, and is silent on the reply-required reminder (Pi/Claude parity, xtrm-wiy5n.4.24)', () => {
+    // xtrm-wiy5n.4.24: coalescing FYIs addressed to this pane. FYIs by
+    // definition do NOT expect a reply — surfacing them under a "reply
+    // required" heading would be dishonest — so the reminder queries with
+    // `--expects-reply` and leaves them out. The sender-owned Stop gate must
+    // still not arm anything for them either. Parity with Pi's inbox model:
+    // FYIs surface through a different channel (a widget on Pi's side; a
+    // deliberate absence here), not through the reply-required reminder.
     const runtime = createRuntime({
       obligations: json([]),
       'monitor-list': json([]),
+      // The `--unacked --expects-reply` query the reminder issues MUST be
+      // empty for pure FYIs: both fixtures below shape the same underlying
+      // `message-list` subcommand, but the reminder only fires on rows
+      // returned by the `--expects-reply` filter.
       'message-list': [
         json([
           { messageKey: 'msg-fyi-a', recipientId: SELF_SESSION, expectsReply: false },
@@ -425,17 +567,30 @@ describe('EVAL-01 Claude column', () => {
       ],
     });
 
-    // Both FYIs are retrievable...
+    // Both FYIs are retrievable through a generic listing...
     expect(probe(runtime, ['message-list', '--for', SELF_SESSION, '--json'])).toHaveLength(2);
     // ...and neither carries a reply obligation.
     expect(probe(runtime, ['message-list', '--expects-reply', '--json'])).toEqual([]);
     const cyclePresent = pickerCalls(runtime).length;
 
-    const result = runHook(DRAIN_STOP, STOP_INPUT, runtime);
-    expect(result.stdout.trim()).toBe('');
-    const subcommands = pickerCalls(runtime).slice(cyclePresent).map((call) => call[0]);
-    expect(subcommands).toEqual(['obligations']);
-    expect(subcommands).not.toContain('wait-agent');
+    // The reply-required reminder MUST be silent for FYIs (they have no
+    // duty to remind about) and MUST NOT arm anything.  Silence now means
+    // both stdout AND stderr are empty (Codex #525: reminder emits through
+    // stdout systemMessage; a silent path leaves both untouched).
+    const reminder = runHook(INBOX_REMINDER, STOP_INPUT, runtime, { TMUX_PANE: SELF_PANE });
+    expect(reminder.stdout.trim()).toBe('');
+    expect(reminder.stderr.trim()).toBe('');
+    const reminderCalls = pickerCalls(runtime).slice(cyclePresent).map((call) => call[0]);
+    expect(reminderCalls).toEqual(['message-list']);
+
+    const cycleAfterReminder = pickerCalls(runtime).length;
+    // The sender-owned Stop gate still runs and stays untouched by the
+    // reminder — no wait-agent arming for FYIs.
+    const gate = runHook(DRAIN_STOP, STOP_INPUT, runtime);
+    expect(gate.stdout.trim()).toBe('');
+    const gateCalls = pickerCalls(runtime).slice(cycleAfterReminder).map((call) => call[0]);
+    expect(gateCalls).toEqual(['obligations']);
+    expect(gateCalls).not.toContain('wait-agent');
   });
 
   it('restart with pending state reconstructs the duty from SQLite alone', () => {

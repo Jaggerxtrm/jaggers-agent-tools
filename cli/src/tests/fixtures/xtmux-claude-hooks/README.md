@@ -16,8 +16,12 @@ whenever these copies diverge from the installed originals.
 | `auto-monitor-drain-stop.mjs` | xtmux | `hooks/claude/auto-monitor-drain-stop.mjs` |
 | `auto-monitor-on-send.mjs` | xtmux | `hooks/claude/auto-monitor-on-send.mjs` |
 | `auto-monitor-consumed.mjs` | xtmux | `hooks/claude/auto-monitor-consumed.mjs` |
+| `inbox-reminder-stop.mjs`    | core  | *(core-owned, not vendored — xtrm-wiy5n.4.24)* |
 
-Vendored from `@jaggerxtrm/xtmux` **0.2.2**.
+Vendored from `@jaggerxtrm/xtmux` **0.2.2**. The drift guard in
+`eval-01-claude-side.test.ts` iterates `VENDORED_HOOKS`, so a core-owned
+hook that lives alongside these copies does NOT need an upstream and is
+NOT checked for drift against `~/.claude/hooks/xtmux/`.
 
 ## Re-vendoring
 
