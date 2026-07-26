@@ -178,6 +178,26 @@ function pickerCalls(runtime: Runtime): string[][] {
     .map((line) => JSON.parse(line) as string[]);
 }
 
+/**
+ * Ask the fake xtmux a question directly, the way the pane's own next cycle
+ * would. Used to prove an inbox fixture is genuinely reachable before asserting
+ * that a hook never reached for it — otherwise a fixture typo would make that
+ * assertion pass for the wrong reason.
+ */
+function probe(runtime: Runtime, args: string[]): unknown {
+  const result = spawnSync(fakePicker, args, {
+    encoding: 'utf8',
+    timeout: 20_000,
+    env: {
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      FAKE_XTMUX_STATE: runtime.stateFile,
+      FAKE_XTMUX_LOG: runtime.logFile,
+    },
+  });
+  expect(result.status).toBe(0);
+  return JSON.parse(result.stdout ?? '');
+}
+
 /** The Stop hook's decision payload, or null when it let the turn end. */
 function decisionOf(stdout: string): { decision: string; reason: string } | null {
   const trimmed = stdout.trim();
@@ -341,45 +361,79 @@ describe('EVAL-01 Claude column', () => {
   });
 
   it('inbound reply-required message is surfaced next normal cycle, not by the Stop gate', () => {
-    // Claude/Pi asymmetry: Pi's inbox extension queues a continuation, Claude has
-    // no inbound hook. The Stop gate is sender-owned only — it must read the
-    // obligation ledger and never the inbox, so an inbound duty cannot block the
-    // turn and is picked up by the pane's own `message-list` on the next cycle.
+    // Claude/Pi asymmetry: Pi's inbox extension queues a continuation and acks.
+    // Claude has no inbound hook at all — Stop, PostToolUse and agent-state.sh
+    // are the whole wired surface, and none of them queries the inbox. So the
+    // Claude-side guarantee is that the sender-owned Stop gate leaves an inbound
+    // duty *intact and undischarged*, for the pane's own next-cycle
+    // `message-list --expects-reply` to retrieve.
+    const inbound = {
+      messageKey: 'msg-inbound-1',
+      senderId: PEER_SESSION,
+      recipientId: SELF_SESSION,
+      expectsReply: true,
+      replyStatus: 'pending',
+    };
     const runtime = createRuntime({
       obligations: json([]),
       'monitor-list': json([]),
-      'message-list': json([
-        {
-          messageKey: 'msg-inbound-1',
-          senderId: PEER_SESSION,
-          recipientId: SELF_SESSION,
-          expectsReply: true,
-          replyStatus: 'pending',
-        },
-      ]),
+      'message-list': json([inbound]),
+      'message-get': json(inbound),
     });
+
+    // The next normal cycle: bounded key discovery, then the exact row (MSG-03).
+    const discovered = probe(runtime, [
+      'message-list',
+      '--for',
+      SELF_SESSION,
+      '--pane',
+      SELF_PANE,
+      '--expects-reply',
+      '--json',
+    ]) as Array<{ messageKey: string; replyStatus: string }>;
+    expect(discovered).toHaveLength(1);
+    expect(probe(runtime, ['message-get', discovered[0].messageKey, '--json'])).toEqual(inbound);
+    const cyclePresent = pickerCalls(runtime).length;
 
     const result = runHook(DRAIN_STOP, STOP_INPUT, runtime);
     expect(result.stdout.trim()).toBe('');
     expect(result.status).toBe(0);
-    expect(pickerCalls(runtime).map((call) => call[0])).toEqual(['obligations']);
+
+    // The Stop gate consulted only the sender-owned ledger. It did not ack,
+    // consume or otherwise discharge the inbound duty, so the row stays pending.
+    const hookCalls = pickerCalls(runtime).slice(cyclePresent);
+    expect(hookCalls.map((call) => call[0])).toEqual(['obligations']);
+    expect(
+      (probe(runtime, ['message-list', '--expects-reply', '--json']) as typeof discovered)[0]
+        .replyStatus,
+    ).toBe('pending');
   });
 
   it('inbound FYI applies bounded policy and creates no duty', () => {
-    // Several coalescing FYIs addressed to this pane. None is a reply
-    // obligation, so none reaches the Stop gate and none arms a wait.
+    // Coalescing FYIs addressed to this pane. `--expects-reply` retrieval — the
+    // duty-bearing query — must not return them, and the Stop gate must neither
+    // see them nor arm anything for them.
     const runtime = createRuntime({
       obligations: json([]),
       'monitor-list': json([]),
-      'message-list': json([
-        { messageKey: 'msg-fyi-a', recipientId: SELF_SESSION, expectsReply: false },
-        { messageKey: 'msg-fyi-b', recipientId: SELF_SESSION, expectsReply: false },
-      ]),
+      'message-list': [
+        json([
+          { messageKey: 'msg-fyi-a', recipientId: SELF_SESSION, expectsReply: false },
+          { messageKey: 'msg-fyi-b', recipientId: SELF_SESSION, expectsReply: false },
+        ]),
+        json([]),
+      ],
     });
+
+    // Both FYIs are retrievable...
+    expect(probe(runtime, ['message-list', '--for', SELF_SESSION, '--json'])).toHaveLength(2);
+    // ...and neither carries a reply obligation.
+    expect(probe(runtime, ['message-list', '--expects-reply', '--json'])).toEqual([]);
+    const cyclePresent = pickerCalls(runtime).length;
 
     const result = runHook(DRAIN_STOP, STOP_INPUT, runtime);
     expect(result.stdout.trim()).toBe('');
-    const subcommands = pickerCalls(runtime).map((call) => call[0]);
+    const subcommands = pickerCalls(runtime).slice(cyclePresent).map((call) => call[0]);
     expect(subcommands).toEqual(['obligations']);
     expect(subcommands).not.toContain('wait-agent');
   });
@@ -462,39 +516,71 @@ describe('EVAL-01 Claude column', () => {
   });
 
   it('idle urgent steering uses a correlated safe-send that arms no new wait', () => {
-    // A correlated `safe-send-pointer --reply-to` fulfils an existing request; it
-    // creates no outstanding duty of its own, so it must not arm a monitor.
+    // The two halves differ by exactly one thing: whether the steering command
+    // carried `--reply-to`. Correlated steering fulfils an existing request and
+    // owes nothing further; uncorrelated steering is a fresh request and must be
+    // made durable. Losing `--reply-to` in the producer therefore does not go
+    // unnoticed — it flips this scenario into the second half.
+    const requestKey = 'msg-1785078040-1524097';
+    const steerCommand = (replyTo?: string) =>
+      [
+        'xtmux safe-send-pointer --yes',
+        replyTo ? `--reply-to ${replyTo}` : '',
+        `${PEER_PANE} 'leggi /tmp/reply.md e seguilo' --json`,
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+    const correlatedResult = {
+      messageKey: 'msg-steer-1',
+      recipientId: PEER_SESSION,
+      targetPaneId: PEER_PANE,
+      inReplyTo: requestKey,
+      injected: true,
+      expectsReply: false,
+    };
     const correlated = createRuntime({ obligations: json([]) });
     const steer = runHook(
       ON_SEND,
       {
         tool_name: 'Bash',
-        tool_response: {
-          stdout: JSON.stringify({
-            messageKey: 'msg-steer-1',
-            recipientId: PEER_SESSION,
-            targetPaneId: PEER_PANE,
-            inReplyTo: 'msg-1785078040-1524097',
-            injected: true,
-            expectsReply: false,
-          }),
-        },
+        tool_input: { command: steerCommand(requestKey) },
+        tool_response: { stdout: JSON.stringify(correlatedResult) },
       },
       correlated,
     );
+    // The correlation key survives into the result the hook is handed...
+    expect(correlatedResult.inReplyTo).toBe(requestKey);
     expect(steer.status).toBe(0);
-    expect(steer.stderr).not.toContain('durable reply expected');
+    expect(steer.stderr.trim()).toBe('');
+    // ...and no new duty means no arm.
     expect(pickerCalls(correlated)).toEqual([]);
 
-    // MSG-02's other half: a safe-send that *does* create an outstanding duty is
-    // confirmed durable, so the Stop gate can demand a wait for it.
+    // Injection is steering, not a wait completion: it must not consume a wake.
+    const notAWake = createRuntime({ 'monitor-list': json([]), 'wait-agent': json({}) });
+    runHook(
+      CONSUMED,
+      {
+        tool_name: 'Bash',
+        tool_input: { command: steerCommand(requestKey) },
+        tool_response: { exitCode: 0 },
+      },
+      notAWake,
+      { TMUX_PANE: SELF_PANE },
+    );
+    expect(pickerCalls(notAWake)).toEqual([]);
+
+    // MSG-02's other half: the same steering *without* `--reply-to` is a fresh
+    // request, so it creates an outstanding duty and the Stop gate demands a wait.
     const owed = createRuntime({
       obligations: json([obligation({ messageKey: 'msg-steer-2' })]),
+      'monitor-list': json([]),
     });
     const demanding = runHook(
       ON_SEND,
       {
         tool_name: 'Bash',
+        tool_input: { command: steerCommand() },
         tool_response: {
           stdout: JSON.stringify({
             messageKey: 'msg-steer-2',
@@ -508,7 +594,14 @@ describe('EVAL-01 Claude column', () => {
       owed,
     );
     expect(demanding.stderr).toContain('durable reply expected');
-    expect(pickerCalls(owed).map((call) => call[0])).toEqual(['obligations']);
+    expect(decisionOf(runHook(DRAIN_STOP, STOP_INPUT, owed).stdout)?.reason).toContain(
+      `xtmux wait-agent ${PEER_PANE} --wait-for-transition --consume`,
+    );
+    expect(pickerCalls(owed).map((call) => call[0])).toEqual([
+      'obligations',
+      'obligations',
+      'monitor-list',
+    ]);
   });
 });
 
@@ -520,7 +613,9 @@ describe('EVAL-01 Claude column vendoring', () => {
     () => {
       for (const name of VENDORED_HOOKS) {
         const installed = path.join(INSTALLED_HOOKS_DIR, name);
-        if (!fs.existsSync(installed)) continue;
+        // A removed or renamed hook is drift too — it would leave the suite
+        // testing a vendored copy of something that no longer ships.
+        expect(fs.existsSync(installed), `${name} missing from ${INSTALLED_HOOKS_DIR}`).toBe(true);
         expect(fs.readFileSync(path.join(HOOKS_DIR, name), 'utf8')).toBe(
           fs.readFileSync(installed, 'utf8'),
         );
