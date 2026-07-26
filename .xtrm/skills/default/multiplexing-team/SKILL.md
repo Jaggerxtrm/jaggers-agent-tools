@@ -115,6 +115,10 @@ Claude Code panes do not autonomously loop between specialist chain steps — th
 
 If blocked: stop broad changes, write concise bead note with exact blocker + evidence, message parent with one-liner (`blocked: <one-line>; notes in bead`). For a decision, ask for exactly one: `decision needed: choose schema A or B; tradeoff in bead notes`.
 
+**Admin-merge bypass** — only if every OTHER required check is green (test/smoke/pr-review-gate/Codex/threads/no conflict); NEVER for a real test failure, real scanner finding, unresolved bot review thread, or merge conflict. Authorized scanner states: (1) terminal zero-step — `started_at == completed_at`, 0 steps; (2) QUEUED > 15 min with no state progression (15 min covers typical Actions runner-backpressure drain; longer = no-signal, not backlog); (3) terminal FAILURE annotated `GitHub Actions has encountered an internal error`. Cite the case number when escalating for authorization.
+
+**Rebase-push**: rebase onto latest `origin/main` → run the agreed suite locally → **normal fast-forward `git push`**. If the push is rejected as non-fast-forward (main advanced, rebase rewrote history), request operator authorization first via reply-required message BEFORE any `--force-with-lease` or `--force`: `decision needed: rebase-push needs --force-with-lease on <branch>; reason <one-line>; proceed?` — the ban is on using either flag without authorization, not on the flag itself.
+
 ## Completion checklist
 
 ```bash
