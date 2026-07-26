@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Retire dead Specialists hook payloads (#509)** ([75ee080](https://github.com/xtrm-dev/core/commit/75ee080ebedfacc86a55dd6d3af0f75cca9fd05b)) — 2026-07-25 20:13
 
+- **Assign beads from the runtime readiness handshake (xtrm-wiy5n.4.18)** ([76b704f](https://github.com/xtrm-dev/core/commit/76b704fc6e7bf1893257e8fe405e922b54c410dc)) — 2026-07-26 15:06
+
 ### Other changes
 
 - **Dump CI changelog:check diagnostics (#489)** ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58)) — 2026-07-23 13:40
@@ -69,9 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Align xtmux communication contracts (#507)** ([362db69](https://github.com/xtrm-dev/core/commit/362db69aa09936f4498927bbc6685bc0fd1fd27a)) — 2026-07-25 16:08
 
-- **Claude-column contract matrix for the cross-runtime gate** ([0c5f455](https://github.com/xtrm-dev/core/commit/0c5f4558f940244d0eccdf909da6a628644db692)) — 2026-07-26 15:31
-
-- **Address Codex review on the Claude-column matrix** ([7497a86](https://github.com/xtrm-dev/core/commit/7497a86e644fa25fb93617e8849a68b92f98d8a7)) — 2026-07-26 15:41
+- **Claude-column contract matrix for the cross-runtime gate (#512)** ([c48b46b](https://github.com/xtrm-dev/core/commit/c48b46b1c66734c66f154451f85f3bb31f21745c)) — 2026-07-26 15:48
 
 ## [v0.11.2] — 2026-07-22
 
