@@ -24,7 +24,13 @@ RUN apk add --no-cache \
 # `npm i -g @jaggerxtrm/xtmux`. /opt/bun/bin goes first in PATH so the musl
 # build always wins for `sp` (#!/usr/bin/env bun) and for verify.sh.
 ARG BUN_VERSION=1.3.14
-RUN curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64-musl.zip" -o /tmp/bun.zip \
+ARG TARGETARCH
+RUN case "${TARGETARCH:-amd64}" in \
+      amd64) bun_arch=x64 ;; \
+      arm64) bun_arch=aarch64 ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${bun_arch}-musl.zip" -o /tmp/bun.zip \
  && unzip -q /tmp/bun.zip -d /tmp/bun \
  && install -D -m 0755 /tmp/bun/*/bun /opt/bun/bin/bun \
  && rm -rf /tmp/bun /tmp/bun.zip \
@@ -37,7 +43,7 @@ ENV PATH="/opt/bun/bin:${PATH}" \
 # @beads/bd's postinstall download does not resolve on musl, so take the
 # release binary directly (works via gcompat, verified at build time).
 ARG BEADS_VERSION=1.1.0
-RUN curl -fsSL "https://github.com/gastownhall/beads/releases/download/v${BEADS_VERSION}/beads_${BEADS_VERSION}_linux_amd64.tar.gz" -o /tmp/beads.tgz \
+RUN curl -fsSL "https://github.com/gastownhall/beads/releases/download/v${BEADS_VERSION}/beads_${BEADS_VERSION}_linux_${TARGETARCH:-amd64}.tar.gz" -o /tmp/beads.tgz \
  && tar -xzf /tmp/beads.tgz -C /tmp bd \
  && install -m 0755 /tmp/bd /usr/local/bin/bd \
  && rm -f /tmp/beads.tgz /tmp/bd \

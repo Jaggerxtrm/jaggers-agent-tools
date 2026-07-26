@@ -23,7 +23,7 @@ usage: ./verify.sh [options]
 
   --branch <ref>            test <ref> in every repo that has it (checkout + install from source)
   --branch <repo>=<ref>     test <ref> in one repo only (repo: core|specialists|xtmux); repeatable
-  --tag <dist-tag>          npm dist-tag to install in stages 1-2 (default: latest)
+  --tag <dist-tag>          npm dist-tag installed and updated to in every stage (default: latest)
   --skip-live               skip the stage-5 tmux/sp live scenario
   --keep                    keep the work directory on exit
   -h, --help                this text
@@ -223,9 +223,12 @@ printf '  versions: xt=%s sp=%s xtmux=%s bd=%s\n' \
 # ===========================================================================
 stage "2-update-mechanisms"
 # ===========================================================================
-run "npm i -g xtrm-tools@latest" npm i -g xtrm-tools@latest
-run "npm i -g @jaggerxtrm/specialists@latest" npm i -g @jaggerxtrm/specialists@latest
-install_xtmux "@jaggerxtrm/xtmux@latest"
+# Re-install at the same dist-tag under test. Hardcoding @latest here would
+# silently replace a `--tag next` candidate, so stages 2-5 would exercise
+# latest and could report PASS on a broken candidate.
+run "npm i -g xtrm-tools@$TAG (update)" npm i -g "xtrm-tools@$TAG"
+run "npm i -g @jaggerxtrm/specialists@$TAG (update)" npm i -g "@jaggerxtrm/specialists@$TAG"
+install_xtmux "@jaggerxtrm/xtmux@$TAG"
 
 SCRATCH="$WORK/scratch"
 mkdir -p "$SCRATCH"

@@ -13,7 +13,7 @@ re-runs `xt update --apply`, and verifies the before/after state.
 ```bash
 docker build -t xtrm-smoke scripts/smoke-container/
 docker run --rm xtrm-smoke ./verify.sh                 # currently-released packages
-docker run --rm xtrm-smoke ./verify.sh --tag next      # a different npm dist-tag
+docker run --rm xtrm-smoke ./verify.sh --tag next      # a release candidate, in every stage
 docker run --rm xtrm-smoke ./verify.sh --branch xt/foo # unreleased branch, all repos
 docker run --rm xtrm-smoke ./verify.sh --branch core=xt/foo --branch xtmux=fix/bar
 docker run --rm xtrm-smoke ./verify.sh --skip-live     # no tmux/sp scenario
@@ -106,6 +106,14 @@ correctly but renders nothing, because it joins the journal's `session_id`
 (`$0`) against `xtmux dashboard`'s composite `sessionId`
 (`$0_name_%0_path_ts`). `xtmux log follow` delivering the same event is the
 hard assertion; the render gap is reported and named.
+
+## Architecture
+
+Bun and beads binaries are selected from `TARGETARCH` (`amd64` → bun `x64` /
+beads `linux_amd64`, `arm64` → bun `aarch64` / beads `linux_arm64`). Only the
+amd64 path has been run end to end; the arm64 mapping is mechanical and
+untested. Any other `TARGETARCH` fails the build with a named error rather than
+installing an incompatible binary.
 
 ## Non-goals
 
