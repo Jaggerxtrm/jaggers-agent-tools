@@ -61913,7 +61913,9 @@ var RUNTIME_ARG_BYTE_CEILING = 128 * 1024 - 1;
 var TMUX_CONSUMER_READY_TIMEOUT_MS = 5e3;
 var TMUX_PAYLOAD_READY_TIMEOUT_MS = 5e3;
 var RUNTIME_ORIGIN_SLUG_LENGTH = 5;
-var RUNTIME_ORIGIN_WAIT_ATTEMPTS = 50;
+var RUNTIME_READY_TIMEOUT_MS = 3e4;
+var RUNTIME_READY_POLL_INTERVAL_MS = 500;
+var RUNTIME_READY_QUERY_LIMIT = 20;
 var AUTO_ASSIGNEE_RE = /^(?:pi|claude)\/[a-z0-9]{5}$/;
 function runtimeAssigneeFromOrigin(runtime, runtimeOriginId) {
   const tail = runtimeOriginId.trim().split(/[/:]/).filter(Boolean).at(-1);
@@ -61923,7 +61925,39 @@ function runtimeAssigneeFromOrigin(runtime, runtimeOriginId) {
 function shouldAutoAssignBead(assignee) {
   return !assignee || AUTO_ASSIGNEE_RE.test(assignee);
 }
-async function assignBeadToRuntime(bead, runtime, paneId, cwd, previousInstanceId = "") {
+function readyInstanceId(paneId, sinceMs, previousInstanceId) {
+  const query = (0, import_node_child_process.spawnSync)("xtmux", [
+    "log",
+    "query",
+    "--type",
+    "agent.ready",
+    "--pane",
+    paneId,
+    "--limit",
+    String(RUNTIME_READY_QUERY_LIMIT),
+    "--json"
+  ], { encoding: "utf8", stdio: "pipe" });
+  if (query.error) return null;
+  if (query.status !== 0) return "";
+  let rows;
+  try {
+    rows = JSON.parse(query.stdout ?? "");
+  } catch {
+    return "";
+  }
+  if (!Array.isArray(rows)) return "";
+  let latest = "";
+  let latestAt = -1;
+  for (const row of rows) {
+    const at = typeof row?.createdAtMs === "number" ? row.createdAtMs : -1;
+    const id = typeof row?.instanceId === "string" ? row.instanceId.trim() : "";
+    if (!id || id === previousInstanceId || at < sinceMs || at <= latestAt) continue;
+    latest = id;
+    latestAt = at;
+  }
+  return latest;
+}
+async function assignBeadToRuntime(bead, runtime, paneId, cwd, previousInstanceId = "", readyTimeoutMs = RUNTIME_READY_TIMEOUT_MS) {
   const warn2 = (message) => console.error(kleur_default.yellow(`  \u26A0 bead assignee: ${message}`));
   const show = (0, import_node_child_process.spawnSync)("bd", ["show", bead, "--json"], { cwd, encoding: "utf8", stdio: "pipe" });
   if (show.status !== 0) {
@@ -61938,19 +61972,21 @@ async function assignBeadToRuntime(bead, runtime, paneId, cwd, previousInstanceI
     warn2(`invalid bd show output for ${bead}; session launch continues`);
     return;
   }
+  const startedAtMs = Date.now();
+  const deadline = startedAtMs + readyTimeoutMs;
   let instanceId = "";
-  for (let attempt = 0; attempt < RUNTIME_ORIGIN_WAIT_ATTEMPTS; attempt++) {
-    const context = (0, import_node_child_process.spawnSync)("tmux", ["show-options", "-p", "-t", paneId, "-qv", "@agent_instance_id"], {
-      encoding: "utf8",
-      stdio: "pipe"
-    });
-    instanceId = context.status === 0 ? (context.stdout ?? "").trim() : "";
-    if (instanceId && instanceId !== previousInstanceId) break;
-    await new Promise((resolve5) => setTimeout(resolve5, 100));
+  for (; ; ) {
+    instanceId = readyInstanceId(paneId, startedAtMs, previousInstanceId);
+    if (instanceId === null) {
+      warn2(`xtmux unavailable, cannot resolve runtime-origin for ${bead}; session launch continues`);
+      return;
+    }
+    if (instanceId || Date.now() >= deadline) break;
+    await new Promise((resolve5) => setTimeout(resolve5, RUNTIME_READY_POLL_INTERVAL_MS));
   }
-  const assignee = runtimeAssigneeFromOrigin(runtime, instanceId);
+  const assignee = instanceId ? runtimeAssigneeFromOrigin(runtime, instanceId) : null;
   if (!assignee) {
-    warn2(`runtime-origin unavailable for ${bead}; session launch continues`);
+    warn2(instanceId ? `unusable runtime-origin '${instanceId}' for ${bead}; session launch continues` : `${runtime} did not signal readiness for ${bead} within ${Math.round(readyTimeoutMs / 1e3)}s; session launch continues`);
     return;
   }
   const update = (0, import_node_child_process.spawnSync)("bd", ["update", bead, `--assignee=${assignee}`, "--json"], {
