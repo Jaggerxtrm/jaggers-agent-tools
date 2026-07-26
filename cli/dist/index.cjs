@@ -61957,7 +61957,12 @@ function readyInstanceId(paneId, sinceMs, previousInstanceId) {
   }
   return latest;
 }
-async function assignBeadToRuntime(bead, runtime, paneId, cwd, previousInstanceId = "", readyTimeoutMs = RUNTIME_READY_TIMEOUT_MS) {
+async function assignBeadToRuntime(bead, runtime, paneId, cwd, options = {}) {
+  const {
+    previousInstanceId = "",
+    readyAfterMs = Date.now(),
+    readyTimeoutMs = RUNTIME_READY_TIMEOUT_MS
+  } = options;
   const warn2 = (message) => console.error(kleur_default.yellow(`  \u26A0 bead assignee: ${message}`));
   const show = (0, import_node_child_process.spawnSync)("bd", ["show", bead, "--json"], { cwd, encoding: "utf8", stdio: "pipe" });
   if (show.status !== 0) {
@@ -61972,11 +61977,10 @@ async function assignBeadToRuntime(bead, runtime, paneId, cwd, previousInstanceI
     warn2(`invalid bd show output for ${bead}; session launch continues`);
     return;
   }
-  const startedAtMs = Date.now();
-  const deadline = startedAtMs + readyTimeoutMs;
+  const deadline = Date.now() + readyTimeoutMs;
   let instanceId = "";
   for (; ; ) {
-    instanceId = readyInstanceId(paneId, startedAtMs, previousInstanceId);
+    instanceId = readyInstanceId(paneId, readyAfterMs, previousInstanceId);
     if (instanceId === null) {
       warn2(`xtmux unavailable, cannot resolve runtime-origin for ${bead}; session launch continues`);
       return;
@@ -63091,6 +63095,7 @@ async function launchTmuxSession(args) {
       });
       process.exit(runtimeResult.status ?? 0);
     }
+    const readyAfterMs2 = Date.now();
     const runtimeProcess = (0, import_node_child_process.spawn)(plan.runtimeCmd, plan.runtimeArgs, {
       cwd: worktreePath,
       stdio: "inherit",
@@ -63100,7 +63105,7 @@ async function launchTmuxSession(args) {
       runtimeProcess.once("error", () => resolve5(1));
       runtimeProcess.once("exit", (code) => resolve5(code ?? 1));
     });
-    await assignBeadToRuntime(bead, runtime, paneId2, worktreePath, previousInstanceId);
+    await assignBeadToRuntime(bead, runtime, paneId2, worktreePath, { previousInstanceId, readyAfterMs: readyAfterMs2 });
     process.exit(await runtimeExit);
   }
   const sessionExists = (name) => {
@@ -63166,6 +63171,7 @@ async function launchTmuxSession(args) {
 `));
     process.exit(1);
   };
+  const readyAfterMs = Date.now();
   if (args.mode === "bare") {
     const newSess = (0, import_node_child_process.spawnSync)("tmux", [
       "new-session",
@@ -63246,7 +63252,7 @@ async function launchTmuxSession(args) {
   for (const { key, value } of plan.paneOptions) {
     (0, import_node_child_process.spawnSync)("tmux", ["set-option", "-p", "-t", paneId, key, value], { stdio: "pipe" });
   }
-  if (bead) await assignBeadToRuntime(bead, runtime, paneId, worktreePath);
+  if (bead) await assignBeadToRuntime(bead, runtime, paneId, worktreePath, { readyAfterMs });
   if (args.mode === "role") {
     emitAgentRoleLaunched({
       pane: paneId,

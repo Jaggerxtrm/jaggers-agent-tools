@@ -87,14 +87,35 @@ function readyInstanceId(
     return latest;
 }
 
+export interface AssignBeadOptions {
+    /** Instance id the pane carried before this launch; its `agent.ready` row must not win. */
+    previousInstanceId?: string;
+    /**
+     * Reject `agent.ready` rows older than this epoch-ms. It guards a recycled `%N`
+     * pane id whose journal still holds a previous occupation's row.
+     *
+     * MUST be captured before the runtime is started. Readiness is emitted exactly
+     * once per occupation, so a watermark taken afterwards can reject the very row
+     * this function is waiting for — and then there is no second one to catch, so
+     * the launcher stalls for the whole timeout and skips the assignment. That is
+     * the same failure this function exists to fix.
+     */
+    readyAfterMs?: number;
+    readyTimeoutMs?: number;
+}
+
 export async function assignBeadToRuntime(
     bead: string,
     runtime: 'pi' | 'claude',
     paneId: string,
     cwd: string,
-    previousInstanceId = '',
-    readyTimeoutMs = RUNTIME_READY_TIMEOUT_MS,
+    options: AssignBeadOptions = {},
 ): Promise<void> {
+    const {
+        previousInstanceId = '',
+        readyAfterMs = Date.now(),
+        readyTimeoutMs = RUNTIME_READY_TIMEOUT_MS,
+    } = options;
     const warn = (message: string): void => console.error(kleur.yellow(`  ⚠ bead assignee: ${message}`));
     const show = spawnSync('bd', ['show', bead, '--json'], { cwd, encoding: 'utf8', stdio: 'pipe' });
     if (show.status !== 0) {
@@ -125,11 +146,10 @@ export async function assignBeadToRuntime(
     // for that row — and rejecting one belonging to the pane's previous occupant —
     // is the same correlation rule xtmux's own `handoff --wait-ready` applies, so a
     // reused pane can never resolve to a dead agent's identity.
-    const startedAtMs = Date.now();
-    const deadline = startedAtMs + readyTimeoutMs;
+    const deadline = Date.now() + readyTimeoutMs;
     let instanceId: string | null = '';
     for (;;) {
-        instanceId = readyInstanceId(paneId, startedAtMs, previousInstanceId);
+        instanceId = readyInstanceId(paneId, readyAfterMs, previousInstanceId);
         if (instanceId === null) {
             warn(`xtmux unavailable, cannot resolve runtime-origin for ${bead}; session launch continues`);
             return;
@@ -1958,6 +1978,9 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             process.exit(runtimeResult.status ?? 0);
         }
 
+        // Before spawn, not after: the runtime's agent.ready fires once, and a
+        // watermark taken later could reject it. See AssignBeadOptions.readyAfterMs.
+        const readyAfterMs = Date.now();
         const runtimeProcess = spawn(plan.runtimeCmd, plan.runtimeArgs, {
             cwd: worktreePath,
             stdio: 'inherit',
@@ -1967,7 +1990,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             runtimeProcess.once('error', () => resolve(1));
             runtimeProcess.once('exit', code => resolve(code ?? 1));
         });
-        await assignBeadToRuntime(bead, runtime, paneId, worktreePath, previousInstanceId);
+        await assignBeadToRuntime(bead, runtime, paneId, worktreePath, { previousInstanceId, readyAfterMs });
         process.exit(await runtimeExit);
     }
 
@@ -2055,6 +2078,10 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
         process.exit(1);
     };
 
+    // Before the pane exists, so it strictly precedes any runtime start on either
+    // transport. See AssignBeadOptions.readyAfterMs.
+    const readyAfterMs = Date.now();
+
     if (args.mode === 'bare') {
         const newSess = spawnSync('tmux', [
             'new-session', '-d',
@@ -2128,7 +2155,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     for (const { key, value } of plan.paneOptions) {
         spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
     }
-    if (bead) await assignBeadToRuntime(bead, runtime, paneId, worktreePath);
+    if (bead) await assignBeadToRuntime(bead, runtime, paneId, worktreePath, { readyAfterMs });
 
     if (args.mode === 'role') {
         emitAgentRoleLaunched({

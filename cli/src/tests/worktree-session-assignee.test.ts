@@ -194,7 +194,7 @@ describe('assignBeadToRuntime', () => {
     it('ignores a readiness row belonging to the pane previous occupant', async () => {
         const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         await withFakeCommands({ instanceId: 'old12-origin' }, async ({ capture }) => {
-            await assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd(), 'old12-origin', 0);
+            await assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd(), { previousInstanceId: 'old12-origin', readyTimeoutMs: 0 });
             expect(() => readFileSync(capture, 'utf8')).toThrow();
         });
         expect(error).toHaveBeenCalledWith(expect.stringContaining('did not signal readiness'));
@@ -203,16 +203,29 @@ describe('assignBeadToRuntime', () => {
     it('ignores a readiness row emitted before the wait began', async () => {
         const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         await withFakeCommands({ instanceId: '4h2xk-origin', readyOffsetMs: -60_000 }, async ({ capture }) => {
-            await assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd(), '', 0);
+            await assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd(), { readyTimeoutMs: 0 });
             expect(() => readFileSync(capture, 'utf8')).toThrow();
         });
         expect(error).toHaveBeenCalledWith(expect.stringContaining('did not signal readiness'));
     });
 
+    // A watermark captured before the runtime started must still accept a row the
+    // runtime emitted during the launcher's own gap. readiness fires once per
+    // occupation, so losing that row costs the whole assignment — the bug this
+    // module exists to fix, reintroduced through the staleness guard.
+    it('accepts a readiness row emitted before the call but after the launch watermark', async () => {
+        await withFakeCommands({ instanceId: '4h2xk-origin', readyOffsetMs: -60_000 }, async ({ capture }) => {
+            await assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd(), {
+                readyAfterMs: Date.now() - 120_000,
+            });
+            expect(readFileSync(capture, 'utf8')).toContain('--assignee=pi/4h2xk');
+        });
+    });
+
     it('warns and continues when the runtime never signals readiness', async () => {
         const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         await withFakeCommands({ instanceId: '' }, async ({ capture }) => {
-            await expect(assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd(), '', 0)).resolves.toBeUndefined();
+            await expect(assignBeadToRuntime('xtrm-test', 'pi', '%7', process.cwd(), { readyTimeoutMs: 0 })).resolves.toBeUndefined();
             expect(() => readFileSync(capture, 'utf8')).toThrow();
         });
         expect(error).toHaveBeenCalledWith(expect.stringContaining('pi did not signal readiness'));
