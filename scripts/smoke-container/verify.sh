@@ -328,10 +328,20 @@ global_drift_and_repair() {
   fi
 
   # Re-run xt update (repairs the pointers) and xtmux install (repairs the
-  # hooks). Both are idempotent and cheap.
+  # hooks). Both are idempotent and cheap. For xtmux the repair invokes the
+  # ALREADY-INSTALLED install.mjs so a `--branch xtmux=<ref>` build survives
+  # into stage 5 — reinstalling from @TAG here would silently overwrite the
+  # branch-built candidate with the published tag (Codex #522: line 334).
   run_in "$SCRATCH" "xt update --apply (drift repair)" \
     env XTRM_GLOBAL_HOOKS=1 xt update --apply --repo .
-  install_xtmux "@jaggerxtrm/xtmux@$TAG"
+  local xtmux_installer; xtmux_installer="$(xtmux_root)/scripts/install.mjs"
+  if [ -f "$xtmux_installer" ]; then
+    patch_bundled_bun
+    run "xtmux install.mjs --from-npm (drift repair, in-place)" \
+      node "$xtmux_installer" --from-npm
+  else
+    fail "xtmux install.mjs missing at $xtmux_installer — cannot repair global hooks"
+  fi
 
   # Assert repair. FAIL is deliberate — if xt/xtmux stopped restoring these,
   # the release gate should surface it. `check_symlink_target` records its own
@@ -362,11 +372,17 @@ check_global_surface() {
   if [ ! -f "$CLAUDE_SETTINGS" ]; then
     fail "$CLAUDE_SETTINGS missing (xtmux install did not write it)"
   else
-    # Event coverage: xtmux install writes eight events. Under-count catches an
-    # installer regression that silently drops a category.
-    local xtmux_events
-    xtmux_events="$(jq_count '[.hooks | to_entries[] | .value[] | select(._source == "xtmux")] | length' "$CLAUDE_SETTINGS")"
-    expect_ge "claude settings: xtmux hook entries" "$xtmux_events" 6
+    # Event coverage: xtmux install writes eight named events. An aggregate
+    # count would still pass if one whole category disappeared and another had
+    # extra entries — Codex #522: line 369. Check each event by name.
+    for ev in SessionStart UserPromptSubmit PreToolUse Notification \
+              PostToolUse Stop SubagentStop SessionEnd; do
+      local ev_count
+      ev_count="$(jq -r --arg ev "$ev" \
+        '[.hooks[$ev] // [] | .[] | select(._source == "xtmux")] | length' \
+        "$CLAUDE_SETTINGS" 2>/dev/null || printf 0)"
+      expect_ge "claude settings: xtmux $ev entries" "$ev_count" 1
+    done
 
     # ARGUMENT check (bead 4.25): every SessionStart agent-state.sh entry must
     # carry --new-instance. A count of entries with the flag missing == 0.
