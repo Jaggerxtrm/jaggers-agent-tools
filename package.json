@@ -68,6 +68,7 @@
     "check:package": "node scripts/assert-no-self-dependency.mjs",
     "changelog:update": "node scripts/changelog-update.mjs",
     "changelog:check": "node scripts/changelog-update.mjs --check",
+    "changelog:preview": "node scripts/changelog-update.mjs --preview",
     "version": "npm run changelog:update -- --tag v$npm_package_version && npm run sync:cli-version && git add CHANGELOG.md cli/package.json packages/pi-extensions/package.json",
     "check:skills-ownership": "node scripts/check-skills-ownership.mjs",
     "check:specialists-vendor": "node scripts/verify-specialists-vendor.mjs",

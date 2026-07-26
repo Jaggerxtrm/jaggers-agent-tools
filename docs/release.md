@@ -113,8 +113,8 @@ git checkout main && git pull
 # 2. Generate concise notes before creating the tag.
 git-cliff --config changelog/cliff.toml --unreleased --tag vX.Y.Z > /tmp/xtrm-vX.Y.Z.md
 
-# 3. Bump version. The npm version lifecycle promotes [Unreleased] to
-#    [X.Y.Z] through scripts/changelog-update.mjs, then syncs workspace versions.
+# 3. Bump version. The npm version lifecycle runs scripts/changelog-update.mjs --tag,
+#    which writes the [X.Y.Z] section from the git log, then syncs workspace versions.
 npm version minor -m "release: %s"  # use patch for fix-only batches
 git push --follow-tags
 
@@ -127,6 +127,29 @@ That last step triggers `publish.yml`. The workflow:
 1. `resolve_ref` reads `.xtrm/specialists-source.json` → `.source.ref` (currently `master`).
 2. `fresh_machine_smoke` runs the workflow_call entry of `fresh-machine-smoke.yml` with that ref. If smoke fails, publish never starts.
 3. `publish` runs the 6 gates in order, then `npm publish --provenance`.
+
+### CHANGELOG.md: the [Unreleased] block stays empty
+
+The committed `## [Unreleased]` heading is an **empty placeholder**. Nothing goes under it
+on a branch. Step 3 above generates the whole released section from the git log, so a
+committed entry adds nothing to the release.
+
+| You want | Command |
+|---|---|
+| See what is pending release | `npm run changelog:preview` (prints, writes nothing) |
+| CI/pre-push says the block is not empty | `npm run changelog:update` |
+| Cut a release | `npm version …` — runs `--tag` for you |
+
+This is not a style preference. The block is derived from the git log, so two branches off
+the same `main` hold two different generated states of the same lines, and every merge to
+`main` conflicts every other open pull request on a file nobody disagreed about — the cost
+grows with the square of the open pull requests (five rebases in one day, bead
+`xtrm-wiy5n.4.28`). Squash-merge also rewrites the commit ids and timestamps the entries are
+keyed on, so a per-branch block cannot be kept true on `main` at all (bead `xtrm-wiy5n.4.29`).
+
+No merge driver is configured for `CHANGELOG.md`, deliberately: `merge=union` would
+concatenate both sides of a real release conflict and silently duplicate entries. With an
+empty placeholder there is nothing to merge.
 
 ### If publish fails
 
