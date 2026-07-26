@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Close topology and reuse P1 gaps (#506)** ([bee5f42](https://github.com/xtrm-dev/core/commit/bee5f42b53943cd5e36476988e4ccb29a3ae54a9)) — 2026-07-25 14:03
 
-- **Retire dead specialists hooks** ([d37d8d7](https://github.com/xtrm-dev/core/commit/d37d8d7d9ee090a5170a5b2c3253741515c2802b)) — 2026-07-25 19:16
+- **Retire dead Specialists hook payloads (#509)** ([75ee080](https://github.com/xtrm-dev/core/commit/75ee080ebedfacc86a55dd6d3af0f75cca9fd05b)) — 2026-07-25 20:13
 
 ### Other changes
 
@@ -69,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Align xtmux communication contracts (#507)** ([362db69](https://github.com/xtrm-dev/core/commit/362db69aa09936f4498927bbc6685bc0fd1fd27a)) — 2026-07-25 16:08
 
-- **Refresh changelog** ([9169943](https://github.com/xtrm-dev/core/commit/9169943d25663775b0144fc7cd73a48449f17b27)) — 2026-07-25 19:17
+- **Claude-column contract matrix for the cross-runtime gate** ([0c5f455](https://github.com/xtrm-dev/core/commit/0c5f4558f940244d0eccdf909da6a628644db692)) — 2026-07-26 15:31
 
 ## [v0.11.2] — 2026-07-22
 
