@@ -61585,8 +61585,43 @@ async function cleanupConflictingPiPackageSettings(projectRoot, dryRun, isGlobal
   );
   return [...globalRemoved, ...projectRemoved];
 }
-function reconcileProjectExtensionPackageEntry(packages) {
+async function reconcileProjectExtensionPackageEntry(packages, dryRun, log) {
+  const ensured = await ensureGlobalDeclaresExtensionPackage(dryRun, log);
+  if (!ensured) return [...packages];
   return packages.filter((entry) => entry !== PROJECT_EXTENSION_PACKAGE_ID);
+}
+async function ensureGlobalDeclaresExtensionPackage(dryRun, log) {
+  const settingsPath = import_path3.default.join(PI_AGENT_DIR, "settings.json");
+  let settings;
+  try {
+    settings = await import_fs_extra13.default.readJson(settingsPath);
+  } catch (error51) {
+    const errno = error51.code;
+    if (errno !== "ENOENT") {
+      const msg = `\u26A0 cannot ensure global registration of ${PROJECT_EXTENSION_PACKAGE_ID}: ${settingsPath} unreadable (${errno ?? error51.message}). Leaving per-repo entry in place.`;
+      console.error(msg);
+      log?.(msg);
+      return false;
+    }
+    settings = {};
+  }
+  const globalPackages = normalizeStringArray(settings.packages);
+  if (globalPackages.includes(PROJECT_EXTENSION_PACKAGE_ID)) return true;
+  if (dryRun) return true;
+  try {
+    await import_fs_extra13.default.ensureDir(PI_AGENT_DIR);
+    await import_fs_extra13.default.writeJson(
+      settingsPath,
+      { ...settings, packages: [...globalPackages, PROJECT_EXTENSION_PACKAGE_ID] },
+      { spaces: 2 }
+    );
+    return true;
+  } catch (error51) {
+    const msg = `\u26A0 cannot ensure global registration of ${PROJECT_EXTENSION_PACKAGE_ID}: write to ${settingsPath} failed (${error51.message}). Leaving per-repo entry in place.`;
+    console.error(msg);
+    log?.(msg);
+    return false;
+  }
 }
 async function updatePiSettings(projectRoot, dryRun, log) {
   const piDirPath = import_path3.default.join(projectRoot, ".pi");
@@ -61600,7 +61635,7 @@ async function updatePiSettings(projectRoot, dryRun, log) {
   const LEGACY_PACKAGE_IDS = /* @__PURE__ */ new Set(["npm:@xtrm/pi-extensions", "./extensions/"]);
   const existingProjectPackages = normalizeStringArray(existingSettings.packages).filter((entry) => !LEGACY_PACKAGE_IDS.has(entry) && !entry.startsWith("./extensions/"));
   const { kept } = pruneConflictingPiPackageEntries(existingProjectPackages);
-  const existingPackages = reconcileProjectExtensionPackageEntry(kept);
+  const existingPackages = await reconcileProjectExtensionPackageEntry(kept, dryRun, log);
   const existingSkills = normalizeStringArray(existingSettings.skills);
   const normalizedSkills = normalizePiSkillsEntries(existingSkills);
   const existingExtensions = normalizeStringArray(existingSettings.extensions).filter((entry) => !LEGACY_PROJECT_EXTENSION_ENTRIES.has(entry));
@@ -64755,13 +64790,17 @@ Examples:
     }
     const plan = await inventoryPiRuntime(sourceDir, globalTargetDir);
     const pkgOk = plan.packages.filter((s) => s.installed).length;
-    const projectScoped = pointer.pointsToXtrmExtensions;
-    if (projectScoped) {
+    const legacyScoped = pointer.pointsToXtrmExtensions;
+    const packageMode = pointer.globalDeclaresExtensionPackage && !legacyScoped;
+    const mirrorInventoryRelevant = !legacyScoped && !packageMode;
+    if (legacyScoped) {
       console.log(kleur_default.dim("  Scope:      project (legacy ../.xtrm/extensions pointer)"));
     } else {
-      console.log(kleur_default.dim("  Scope:      global"));
-      const extOk = plan.extensions.filter((s) => s.installed && !s.stale).length;
-      console.log(kleur_default.dim(`  Extensions: ${extOk}/${plan.extensions.length} up-to-date`));
+      console.log(kleur_default.dim(`  Scope:      global${packageMode ? " (package mode)" : ""}`));
+      if (mirrorInventoryRelevant) {
+        const extOk = plan.extensions.filter((s) => s.installed && !s.stale).length;
+        console.log(kleur_default.dim(`  Extensions: ${extOk}/${plan.extensions.length} up-to-date`));
+      }
     }
     console.log(kleur_default.dim(`  Registration: ${EXTENSION_PACKAGE_ID} (${pointer.globalDeclaresExtensionPackage ? "global" : "not declared globally"})`));
     console.log(kleur_default.dim(`  Packages:   ${pkgOk}/${plan.packages.length} installed`));
@@ -64769,7 +64808,7 @@ Examples:
       const names = plan.missingPackages.map((s) => s.pkg.displayName).join(", ");
       console.log(kleur_default.yellow(`  Packages:   ${names}`));
     }
-    if (!projectScoped) {
+    if (mirrorInventoryRelevant) {
       if (plan.missingExtensions.length > 0) {
         const names = plan.missingExtensions.map((s) => s.ext.displayName).join(", ");
         console.log(kleur_default.yellow(`  Missing:    ${names}`));
@@ -64778,14 +64817,16 @@ Examples:
         const names = plan.staleExtensions.map((s) => s.ext.displayName).join(", ");
         console.log(kleur_default.yellow(`  Stale:      ${names}`));
       }
-      if (plan.orphanedExtensions.length > 0) {
-        console.log(kleur_default.red(`  Orphaned:   ${plan.orphanedExtensions.join(", ")}`));
-      }
     }
-    const hasGlobalDrift = !projectScoped && !plan.allPresent;
+    if (!legacyScoped && plan.orphanedExtensions.length > 0) {
+      const suffix = packageMode ? " (collide with npm package \u2014 remove)" : "";
+      console.log(kleur_default.red(`  Orphaned:   ${plan.orphanedExtensions.join(", ")}${suffix}`));
+    }
+    const hasMirrorDrift = mirrorInventoryRelevant && !plan.allPresent;
+    const hasOrphanCollision = packageMode && plan.orphanedExtensions.length > 0;
     const hasPackageDrift = plan.missingPackages.length > 0;
     const hasGlobalRegistrationDrift = !pointer.globalDeclaresExtensionPackage;
-    if (!pointer.hasProjectPackageDrift && !hasGlobalDrift && !hasPackageDrift && !hasGlobalRegistrationDrift) {
+    if (!pointer.hasProjectPackageDrift && !hasMirrorDrift && !hasOrphanCollision && !hasPackageDrift && !hasGlobalRegistrationDrift) {
       console.log(t.success("\n  \u2713 Pi runtime configuration looks healthy\n"));
       return;
     }
@@ -64876,7 +64917,15 @@ Examples:
         console.log(kleur_default.yellow(`  \u26A0 ${EXTENSION_PACKAGE_ID} not declared in ~/.pi/agent/settings.json`));
         allOk = false;
       }
-      if (plan.missingExtensions.length === 0 && plan.staleExtensions.length === 0 && plan.orphanedExtensions.length === 0) {
+      const packageMode = pointer.globalDeclaresExtensionPackage && !pointer.pointsToXtrmExtensions;
+      if (packageMode) {
+        if (plan.orphanedExtensions.length > 0) {
+          console.log(kleur_default.red(`  \u2717 orphaned extension mirrors (collide with npm package): ${plan.orphanedExtensions.join(", ")}`));
+          allOk = false;
+        } else {
+          console.log(t.success("  \u2713 global package mode: no legacy extension mirrors"));
+        }
+      } else if (plan.missingExtensions.length === 0 && plan.staleExtensions.length === 0 && plan.orphanedExtensions.length === 0) {
         console.log(t.success(`  \u2713 global extensions deployed (${plan.extensions.length})`));
       } else {
         if (plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0) {

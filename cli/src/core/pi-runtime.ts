@@ -1297,24 +1297,78 @@ export async function cleanupConflictingPiPackageSettings(
 }
 
 /**
- * Strip `npm:@jaggerxtrm/pi-extensions` from the per-project `packages` array
- * (bead xtrm-xnymw). The package is GLOBAL-ONLY: it must never appear in a
- * per-repo `.pi/settings.json`, and the write path must never re-add it —
- * including when the global settings file is missing, unreadable, or empty.
+ * Enforce the operator's `npm:@jaggerxtrm/pi-extensions` invariant
+ * (bead xtrm-xnymw): after any sync the package is registered EXACTLY ONCE,
+ * and that once is global. Both "registered twice" and "registered nowhere"
+ * are failures.
  *
- * Pi resolves packages by identity, not by scope: for an `npm:` source
- * `getPackageIdentity` returns `npm:<name>` with no scope component, so the
- * same package declared globally and per-project collides in `dedupePackages`
- * — and the PROJECT entry wins. It is therefore not a harmless duplicate. The
- * project entry shadows the global install and pins the repo to whatever copy
- * happens to sit in `<project>/.pi/npm/node_modules`, which drifts.
+ * ENSURE-THEN-REMOVE:
+ *   1. make sure `~/.pi/agent/settings.json` declares the package;
+ *   2. THEN strip it from the per-repo `packages` array.
  *
- * The earlier evidence-gated variant read `~/.pi/agent/settings.json` and
- * fell open (re-adding the entry) on any read error, which re-created the
- * exact entry the operator kept deleting by hand. That branch is gone.
+ * Never the reverse, and never remove without step 1 having succeeded.
+ * The earlier variants of this function fell open on any global read error
+ * (re-adding the entry) OR removed unconditionally (leaving nothing to load
+ * the package when the global settings had no entry yet). Both were wrong.
+ *
+ * If step 1 fails — global settings unreadable, disk error, write failure —
+ * the per-repo entry is left in place and a diagnostic is emitted to stderr
+ * and to the caller's log channel. A working per-repo entry is strictly
+ * better than no registration at all.
+ *
+ * Pi resolves npm packages by scope-free identity, so a coexisting global
+ * and per-repo entry collide in `dedupePackages` with the PROJECT entry
+ * winning — which pins the repo to whatever copy sits in
+ * `<project>/.pi/npm/node_modules`. That is the "registered twice" failure.
  */
-function reconcileProjectExtensionPackageEntry(packages: readonly string[]): string[] {
+async function reconcileProjectExtensionPackageEntry(
+    packages: readonly string[],
+    dryRun: boolean,
+    log?: (message: string) => void,
+): Promise<string[]> {
+    const ensured = await ensureGlobalDeclaresExtensionPackage(dryRun, log);
+    if (!ensured) return [...packages];
     return packages.filter((entry) => entry !== PROJECT_EXTENSION_PACKAGE_ID);
+}
+
+async function ensureGlobalDeclaresExtensionPackage(
+    dryRun: boolean,
+    log?: (message: string) => void,
+): Promise<boolean> {
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- PI_AGENT_DIR is an internal runtime path and filename is fixed.
+    const settingsPath = path.join(PI_AGENT_DIR, 'settings.json');
+    let settings: PiSettingsShape;
+    try {
+        settings = await fs.readJson(settingsPath) as PiSettingsShape;
+    } catch (error) {
+        const errno = (error as NodeJS.ErrnoException).code;
+        if (errno !== 'ENOENT') {
+            const msg = `⚠ cannot ensure global registration of ${PROJECT_EXTENSION_PACKAGE_ID}: ${settingsPath} unreadable (${errno ?? (error as Error).message}). Leaving per-repo entry in place.`;
+            console.error(msg);
+            log?.(msg);
+            return false;
+        }
+        settings = {};
+    }
+
+    const globalPackages = normalizeStringArray(settings.packages);
+    if (globalPackages.includes(PROJECT_EXTENSION_PACKAGE_ID)) return true;
+    if (dryRun) return true;
+
+    try {
+        await fs.ensureDir(PI_AGENT_DIR);
+        await fs.writeJson(
+            settingsPath,
+            { ...settings, packages: [...globalPackages, PROJECT_EXTENSION_PACKAGE_ID] },
+            { spaces: 2 },
+        );
+        return true;
+    } catch (error) {
+        const msg = `⚠ cannot ensure global registration of ${PROJECT_EXTENSION_PACKAGE_ID}: write to ${settingsPath} failed (${(error as Error).message}). Leaving per-repo entry in place.`;
+        console.error(msg);
+        log?.(msg);
+        return false;
+    }
 }
 
 export async function updatePiSettings(
@@ -1336,7 +1390,7 @@ export async function updatePiSettings(
     const existingProjectPackages = normalizeStringArray(existingSettings.packages)
         .filter((entry) => !LEGACY_PACKAGE_IDS.has(entry) && !entry.startsWith('./extensions/'));
     const { kept } = pruneConflictingPiPackageEntries(existingProjectPackages);
-    const existingPackages = reconcileProjectExtensionPackageEntry(kept);
+    const existingPackages = await reconcileProjectExtensionPackageEntry(kept, dryRun, log);
 
     const existingSkills = normalizeStringArray(existingSettings.skills);
     const normalizedSkills = normalizePiSkillsEntries(existingSkills);

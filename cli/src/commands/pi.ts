@@ -218,14 +218,22 @@ Examples:
 
             const plan = await inventoryPiRuntime(sourceDir, globalTargetDir);
             const pkgOk = plan.packages.filter(s => s.installed).length;
-            const projectScoped = pointer.pointsToXtrmExtensions;
+            const legacyScoped = pointer.pointsToXtrmExtensions;
+            // In package mode the npm entrypoint supplies extensions; loose
+            // mirrors under ~/.pi/agent/extensions are legacy and their
+            // absence is CORRECT. Only orphans (extra mirrors) still matter —
+            // they collide with the npm package on tool names.
+            const packageMode = pointer.globalDeclaresExtensionPackage && !legacyScoped;
+            const mirrorInventoryRelevant = !legacyScoped && !packageMode;
 
-            if (projectScoped) {
+            if (legacyScoped) {
                 console.log(kleur.dim('  Scope:      project (legacy ../.xtrm/extensions pointer)'));
             } else {
-                console.log(kleur.dim('  Scope:      global'));
-                const extOk = plan.extensions.filter(s => s.installed && !s.stale).length;
-                console.log(kleur.dim(`  Extensions: ${extOk}/${plan.extensions.length} up-to-date`));
+                console.log(kleur.dim(`  Scope:      global${packageMode ? ' (package mode)' : ''}`));
+                if (mirrorInventoryRelevant) {
+                    const extOk = plan.extensions.filter(s => s.installed && !s.stale).length;
+                    console.log(kleur.dim(`  Extensions: ${extOk}/${plan.extensions.length} up-to-date`));
+                }
             }
 
             console.log(kleur.dim(`  Registration: ${EXTENSION_PACKAGE_ID} (${pointer.globalDeclaresExtensionPackage ? 'global' : 'not declared globally'})`));
@@ -236,7 +244,7 @@ Examples:
                 console.log(kleur.yellow(`  Packages:   ${names}`));
             }
 
-            if (!projectScoped) {
+            if (mirrorInventoryRelevant) {
                 if (plan.missingExtensions.length > 0) {
                     const names = plan.missingExtensions.map(s => s.ext.displayName).join(', ');
                     console.log(kleur.yellow(`  Missing:    ${names}`));
@@ -245,16 +253,18 @@ Examples:
                     const names = plan.staleExtensions.map(s => s.ext.displayName).join(', ');
                     console.log(kleur.yellow(`  Stale:      ${names}`));
                 }
-                if (plan.orphanedExtensions.length > 0) {
-                    console.log(kleur.red(`  Orphaned:   ${plan.orphanedExtensions.join(', ')}`));
-                }
+            }
+            if (!legacyScoped && plan.orphanedExtensions.length > 0) {
+                const suffix = packageMode ? ' (collide with npm package — remove)' : '';
+                console.log(kleur.red(`  Orphaned:   ${plan.orphanedExtensions.join(', ')}${suffix}`));
             }
 
-            const hasGlobalDrift = !projectScoped && !plan.allPresent;
+            const hasMirrorDrift = mirrorInventoryRelevant && !plan.allPresent;
+            const hasOrphanCollision = packageMode && plan.orphanedExtensions.length > 0;
             const hasPackageDrift = plan.missingPackages.length > 0;
             const hasGlobalRegistrationDrift = !pointer.globalDeclaresExtensionPackage;
 
-            if (!pointer.hasProjectPackageDrift && !hasGlobalDrift && !hasPackageDrift && !hasGlobalRegistrationDrift) {
+            if (!pointer.hasProjectPackageDrift && !hasMirrorDrift && !hasOrphanCollision && !hasPackageDrift && !hasGlobalRegistrationDrift) {
                 console.log(t.success('\n  ✓ Pi runtime configuration looks healthy\n'));
                 return;
             }
@@ -363,7 +373,21 @@ Examples:
                     allOk = false;
                 }
 
-                if (plan.missingExtensions.length === 0 && plan.staleExtensions.length === 0 && plan.orphanedExtensions.length === 0) {
+                // Codex P2: in global package mode the npm entrypoint supplies
+                // the managed extensions; loose mirrors under
+                // ~/.pi/agent/extensions are legacy and their absence is
+                // CORRECT — do not report it as drift. Orphaned mirrors still
+                // matter because they collide with the npm package on tool
+                // names (this is exactly what broke Pi tonight).
+                const packageMode = pointer.globalDeclaresExtensionPackage && !pointer.pointsToXtrmExtensions;
+                if (packageMode) {
+                    if (plan.orphanedExtensions.length > 0) {
+                        console.log(kleur.red(`  ✗ orphaned extension mirrors (collide with npm package): ${plan.orphanedExtensions.join(', ')}`));
+                        allOk = false;
+                    } else {
+                        console.log(t.success('  ✓ global package mode: no legacy extension mirrors'));
+                    }
+                } else if (plan.missingExtensions.length === 0 && plan.staleExtensions.length === 0 && plan.orphanedExtensions.length === 0) {
                     console.log(t.success(`  ✓ global extensions deployed (${plan.extensions.length})`));
                 } else {
                     if (plan.missingExtensions.length > 0 || plan.staleExtensions.length > 0) {
