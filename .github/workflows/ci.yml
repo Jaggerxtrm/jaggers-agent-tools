@@ -74,9 +74,16 @@ jobs:
       run: npm run check:skills-ownership
 
     - name: Policy parity checks (Claude + Pi)
+      # PI_AGENT_DIR points at a scratch dir so this step never writes to the
+      # runner's real HOME. On the self-hosted runner HOME is the operator's
+      # machine, and copying loose extensions into ~/.pi/agent/extensions/
+      # broke Pi startup (module resolution + tool-name conflicts vs the
+      # global npm package). See bead xtrm-spcuo.
+      env:
+        PI_AGENT_DIR: ${{ runner.temp }}/pi-agent
       run: |
-        mkdir -p ~/.pi/agent/extensions
-        cp -r packages/pi-extensions/extensions/* ~/.pi/agent/extensions/
+        mkdir -p "$PI_AGENT_DIR/extensions"
+        cp -r packages/pi-extensions/extensions/* "$PI_AGENT_DIR/extensions/"
         node scripts/compile-policies.mjs --check
         node scripts/compile-policies.mjs --check-pi
 
