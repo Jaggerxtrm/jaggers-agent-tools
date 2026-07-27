@@ -23,6 +23,10 @@ The operator says "release it", "ship vX.Y.Z", "cut a tag", or just "release".
 
 ## Preconditions
 
+- Run the global-surface smoke container before publishing and again after. It is the only gate
+  that checks what the packages install into a user's HOME, and nothing runs it for you. Commands
+  and the expected pre-release failure: `docs/release.md`, "Global-surface smoke container".
+
 - Working tree clean except whitelisted release artifacts.
 - `CHANGELOG.md` exists with an `[Unreleased]` block.
 - On the publish branch (usually `master`).

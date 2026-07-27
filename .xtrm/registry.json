@@ -718,7 +718,7 @@
           "version": "0.11.2"
         },
         "releasing/SKILL.md": {
-          "hash": "1b96ef8e995e2722acb385def315c9613b0d742261a7073ea43e695cacc0f23d",
+          "hash": "0a2370a274fd07e977eceab2ea229e9db6560254da2c81a15ddf698d049c88c9",
           "version": "0.11.2"
         },
         "security-pipeline/scripts/security-bootstrap.sh": {
