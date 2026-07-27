@@ -1297,39 +1297,24 @@ export async function cleanupConflictingPiPackageSettings(
 }
 
 /**
- * Decide whether the per-project `packages` array should carry
- * `npm:@jaggerxtrm/pi-extensions` (xtrm-tzzud item 1).
+ * Strip `npm:@jaggerxtrm/pi-extensions` from the per-project `packages` array
+ * (bead xtrm-xnymw). The package is GLOBAL-ONLY: it must never appear in a
+ * per-repo `.pi/settings.json`, and the write path must never re-add it —
+ * including when the global settings file is missing, unreadable, or empty.
  *
  * Pi resolves packages by identity, not by scope: for an `npm:` source
  * `getPackageIdentity` returns `npm:<name>` with no scope component, so the
  * same package declared globally and per-project collides in `dedupePackages`
  * — and the PROJECT entry wins. It is therefore not a harmless duplicate. The
  * project entry shadows the global install and pins the repo to whatever copy
- * happens to sit in `<project>/.pi/npm/node_modules`, which drifts: at the time
- * this landed the global install was 0.11.0 while consumer repos were pinned at
- * 0.9.0–0.11.1 by exactly this write.
+ * happens to sit in `<project>/.pi/npm/node_modules`, which drifts.
  *
- * Removal is evidence-gated, matching the ownership rule in
- * docs/architecture/repair-transaction.md: the entry is dropped only when the
- * global agent settings are proven to declare it. When they do not, the project
- * entry is load-bearing and is left in place (or added), because nothing else
- * would load the extension package.
+ * The earlier evidence-gated variant read `~/.pi/agent/settings.json` and
+ * fell open (re-adding the entry) on any read error, which re-created the
+ * exact entry the operator kept deleting by hand. That branch is gone.
  */
-async function reconcileProjectExtensionPackageEntry(packages: readonly string[]): Promise<string[]> {
-    const next = packages.filter((entry) => entry !== PROJECT_EXTENSION_PACKAGE_ID);
-    if (await globalPiSettingsDeclareExtensionPackage()) return next;
-    return [...next, PROJECT_EXTENSION_PACKAGE_ID];
-}
-
-async function globalPiSettingsDeclareExtensionPackage(): Promise<boolean> {
-    try {
-        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- PI_AGENT_DIR is an internal runtime path and filename is fixed.
-        const settings = await fs.readJson(path.join(PI_AGENT_DIR, 'settings.json')) as PiSettingsShape;
-        return normalizeStringArray(settings.packages).includes(PROJECT_EXTENSION_PACKAGE_ID);
-    } catch {
-        // Unreadable or absent global settings prove nothing — keep the project entry.
-        return false;
-    }
+function reconcileProjectExtensionPackageEntry(packages: readonly string[]): string[] {
+    return packages.filter((entry) => entry !== PROJECT_EXTENSION_PACKAGE_ID);
 }
 
 export async function updatePiSettings(
@@ -1351,7 +1336,7 @@ export async function updatePiSettings(
     const existingProjectPackages = normalizeStringArray(existingSettings.packages)
         .filter((entry) => !LEGACY_PACKAGE_IDS.has(entry) && !entry.startsWith('./extensions/'));
     const { kept } = pruneConflictingPiPackageEntries(existingProjectPackages);
-    const existingPackages = await reconcileProjectExtensionPackageEntry(kept);
+    const existingPackages = reconcileProjectExtensionPackageEntry(kept);
 
     const existingSkills = normalizeStringArray(existingSettings.skills);
     const normalizedSkills = normalizePiSkillsEntries(existingSkills);

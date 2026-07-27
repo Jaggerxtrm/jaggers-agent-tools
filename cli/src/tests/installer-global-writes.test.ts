@@ -74,11 +74,13 @@ describe('runClaudeRuntimeSyncPhase isGlobal=false', () => {
     });
 });
 
-// Matrix finding 1: updatePiSettings unconditionally pushed the extension
-// package into per-project packages. Pi resolves npm packages by scope-free
-// identity and lets the PROJECT entry win, so that write shadowed the global
-// install rather than duplicating it harmlessly (xtrm-tzzud.1).
-describe('updatePiSettings project packages', () => {
+// xtrm-xnymw: `npm:@jaggerxtrm/pi-extensions` is a GLOBAL-ONLY package. The
+// per-repo `.pi/settings.json` must NEVER carry it, and the write path must
+// not re-add it under ANY condition — including when the global settings
+// file is missing, unreadable, or has no `packages` array. Before this fix,
+// `reconcileProjectExtensionPackageEntry` fell open on any read error and
+// re-created the exact entry the operator kept deleting by hand.
+describe('updatePiSettings project packages — global-only invariant (xtrm-xnymw)', () => {
     async function update() {
         const { updatePiSettings } = await import('../core/pi-runtime.js');
         return updatePiSettings(repoRoot, false);
@@ -105,20 +107,55 @@ describe('updatePiSettings project packages', () => {
         expect(fs.readJsonSync(projectPi()).packages).toEqual(['npm:other']);
     });
 
-    it('keeps the project entry load-bearing when the global settings do NOT declare it', async () => {
+    it('does NOT re-add the entry when the global settings do not declare it', async () => {
+        // Pre-fix behaviour re-added PKG here on the pretence that the project
+        // entry was "load-bearing"; that was wrong — the package is global-only
+        // and the presence of the entry is drift, not load-bearing.
         fs.writeJsonSync(globalPi(), { packages: ['npm:something-else'] });
 
         await update();
 
-        expect(fs.readJsonSync(projectPi()).packages).toContain(PKG);
+        expect(fs.readJsonSync(projectPi()).packages ?? []).not.toContain(PKG);
     });
 
-    it('keeps the project entry when the global settings are missing entirely', async () => {
+    it('does NOT re-add the entry when the global settings file is missing', async () => {
         fs.removeSync(globalPi());
 
         await update();
 
-        expect(fs.readJsonSync(projectPi()).packages).toContain(PKG);
+        expect(fs.readJsonSync(projectPi()).packages ?? []).not.toContain(PKG);
+    });
+
+    it('does NOT re-add the entry when the global settings file is unreadable', async () => {
+        // Same file-permissions channel the pre-fix catch{} branch swallowed:
+        // an unreadable global settings file previously re-added the entry.
+        fs.writeJsonSync(globalPi(), { packages: [PKG] });
+        fs.chmodSync(globalPi(), 0o000);
+
+        try {
+            await update();
+            expect(fs.readJsonSync(projectPi()).packages ?? []).not.toContain(PKG);
+        } finally {
+            fs.chmodSync(globalPi(), 0o644);
+        }
+    });
+
+    it('does NOT re-add the entry when the global settings has no packages array', async () => {
+        fs.writeJsonSync(globalPi(), { skills: [] });
+
+        await update();
+
+        expect(fs.readJsonSync(projectPi()).packages ?? []).not.toContain(PKG);
+    });
+
+    it('removes the entry even when the pre-existing project settings are the only trace', async () => {
+        fs.removeSync(globalPi());
+        fs.ensureDirSync(path.join(repoRoot, '.pi'));
+        fs.writeJsonSync(projectPi(), { packages: [PKG] });
+
+        await update();
+
+        expect(fs.readJsonSync(projectPi()).packages ?? []).not.toContain(PKG);
     });
 });
 
