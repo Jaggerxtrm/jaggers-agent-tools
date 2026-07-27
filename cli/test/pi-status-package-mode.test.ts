@@ -11,6 +11,7 @@ const CLI_ROOT = path.dirname(path.dirname(CLI_BIN));
 const PKG = 'npm:@jaggerxtrm/pi-extensions';
 
 let tempHome = '';
+let stubBin = '';
 
 beforeEach(async () => {
     tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xt-pi-status-pkgmode-'));
@@ -19,6 +20,13 @@ beforeEach(async () => {
     await fs.writeJson(path.join(tempHome, '.pi', 'agent', 'settings.json'), { packages: [PKG] });
     // Deliberately do NOT populate ~/.pi/agent/extensions — this is the correct
     // steady state in global package mode. Codex P2: absence must not be flagged.
+    // Stub `pi --version` so the status command runs past its "pi installed?"
+    // gate on CI runners that don't have the real pi binary.
+    stubBin = path.join(tempHome, 'bin');
+    await fs.ensureDir(stubBin);
+    const stubPi = path.join(stubBin, 'pi');
+    await fs.writeFile(stubPi, '#!/bin/sh\necho "0.99.0-test-stub"\nexit 0\n');
+    await fs.chmod(stubPi, 0o755);
 });
 
 afterEach(async () => {
@@ -29,7 +37,12 @@ function runStatus(cwd: string) {
     return spawnSync('node', [CLI_BIN, 'pi', 'status'], {
         encoding: 'utf8',
         timeout: 20000,
-        env: { ...process.env, HOME: tempHome, PI_AGENT_DIR: path.join(tempHome, '.pi', 'agent') },
+        env: {
+            ...process.env,
+            HOME: tempHome,
+            PI_AGENT_DIR: path.join(tempHome, '.pi', 'agent'),
+            PATH: `${stubBin}:${process.env.PATH ?? ''}`,
+        },
         cwd,
     });
 }
@@ -38,7 +51,6 @@ describe('xt pi status — global package mode without mirrors (xtrm-xnymw, Code
     it('does not flag missing/stale extensions when there are no ~/.pi/agent/extensions mirrors', () => {
         const r = runStatus(CLI_ROOT);
         const combined = (r.stdout ?? '') + (r.stderr ?? '');
-        if (!/Pi Runtime Status/i.test(combined)) return;   // pi binary absent in this env
 
         // The pre-fix regression: package-mode ran the mirror inventory and
         // reported every managed extension as missing under the "Missing:"
