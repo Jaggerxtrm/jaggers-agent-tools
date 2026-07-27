@@ -61585,16 +61585,41 @@ async function cleanupConflictingPiPackageSettings(projectRoot, dryRun, isGlobal
   );
   return [...globalRemoved, ...projectRemoved];
 }
-async function reconcileProjectExtensionPackageEntry(packages) {
-  const next = packages.filter((entry) => entry !== PROJECT_EXTENSION_PACKAGE_ID);
-  if (await globalPiSettingsDeclareExtensionPackage()) return next;
-  return [...next, PROJECT_EXTENSION_PACKAGE_ID];
+async function reconcileProjectExtensionPackageEntry(packages, dryRun, log) {
+  const ensured = await ensureGlobalDeclaresExtensionPackage(dryRun, log);
+  if (!ensured) return [...packages];
+  return packages.filter((entry) => entry !== PROJECT_EXTENSION_PACKAGE_ID);
 }
-async function globalPiSettingsDeclareExtensionPackage() {
+async function ensureGlobalDeclaresExtensionPackage(dryRun, log) {
+  const settingsPath = import_path3.default.join(PI_AGENT_DIR, "settings.json");
+  let settings;
   try {
-    const settings = await import_fs_extra13.default.readJson(import_path3.default.join(PI_AGENT_DIR, "settings.json"));
-    return normalizeStringArray(settings.packages).includes(PROJECT_EXTENSION_PACKAGE_ID);
-  } catch {
+    settings = await import_fs_extra13.default.readJson(settingsPath);
+  } catch (error51) {
+    const errno = error51.code;
+    if (errno !== "ENOENT") {
+      const msg = `\u26A0 cannot ensure global registration of ${PROJECT_EXTENSION_PACKAGE_ID}: ${settingsPath} unreadable (${errno ?? error51.message}). Leaving per-repo entry in place.`;
+      console.error(msg);
+      log?.(msg);
+      return false;
+    }
+    settings = {};
+  }
+  const globalPackages = normalizeStringArray(settings.packages);
+  if (globalPackages.includes(PROJECT_EXTENSION_PACKAGE_ID)) return true;
+  if (dryRun) return true;
+  try {
+    await import_fs_extra13.default.ensureDir(PI_AGENT_DIR);
+    await import_fs_extra13.default.writeJson(
+      settingsPath,
+      { ...settings, packages: [...globalPackages, PROJECT_EXTENSION_PACKAGE_ID] },
+      { spaces: 2 }
+    );
+    return true;
+  } catch (error51) {
+    const msg = `\u26A0 cannot ensure global registration of ${PROJECT_EXTENSION_PACKAGE_ID}: write to ${settingsPath} failed (${error51.message}). Leaving per-repo entry in place.`;
+    console.error(msg);
+    log?.(msg);
     return false;
   }
 }
@@ -61610,7 +61635,7 @@ async function updatePiSettings(projectRoot, dryRun, log) {
   const LEGACY_PACKAGE_IDS = /* @__PURE__ */ new Set(["npm:@xtrm/pi-extensions", "./extensions/"]);
   const existingProjectPackages = normalizeStringArray(existingSettings.packages).filter((entry) => !LEGACY_PACKAGE_IDS.has(entry) && !entry.startsWith("./extensions/"));
   const { kept } = pruneConflictingPiPackageEntries(existingProjectPackages);
-  const existingPackages = await reconcileProjectExtensionPackageEntry(kept);
+  const existingPackages = await reconcileProjectExtensionPackageEntry(kept, dryRun, log);
   const existingSkills = normalizeStringArray(existingSettings.skills);
   const normalizedSkills = normalizePiSkillsEntries(existingSkills);
   const existingExtensions = normalizeStringArray(existingSettings.extensions).filter((entry) => !LEGACY_PROJECT_EXTENSION_ENTRIES.has(entry));
@@ -64640,6 +64665,7 @@ function createInstallPiCommand() {
 var PI_AGENT_DIR4 = process.env.PI_AGENT_DIR || import_path8.default.join((0, import_node_os10.homedir)(), ".pi", "agent");
 var RETIRED_PI_COMMANDS = /* @__PURE__ */ new Set(["install"]);
 var RETIRED_PI_INSTALL_REDIRECT = "xt pi install is retired \u2014 run: xt update --apply --repo <path> (planned removal: v0.13.0)";
+var EXTENSION_PACKAGE_ID = "npm:@jaggerxtrm/pi-extensions";
 function resolveProjectRoot() {
   const gitResult = (0, import_node_child_process5.spawnSync)("git", ["rev-parse", "--show-toplevel"], {
     cwd: process.cwd(),
@@ -64655,22 +64681,43 @@ function hasSettingsEntry(entries, expectedEntry) {
     return entry.replace(/\\/g, "/") === expectedEntry;
   });
 }
+async function globalDeclaresExtensionPackage() {
+  try {
+    const settings = await import_fs_extra18.default.readJson(import_path8.default.join(PI_AGENT_DIR4, "settings.json"));
+    const packages = Array.isArray(settings.packages) ? settings.packages.filter((entry) => typeof entry === "string") : [];
+    return packages.includes(EXTENSION_PACKAGE_ID);
+  } catch {
+    return false;
+  }
+}
 async function getPiProjectPointer(projectRoot) {
   const settingsPath = import_path8.default.join(projectRoot, ".pi", "settings.json");
   const hasSettingsFile = await import_fs_extra18.default.pathExists(settingsPath);
+  const globalDeclares = await globalDeclaresExtensionPackage();
   if (!hasSettingsFile) {
-    return { hasProjectSettings: false, hasProjectExtensionPackage: false, pointsToXtrmExtensions: false };
+    return {
+      hasProjectSettings: false,
+      hasProjectPackageDrift: false,
+      pointsToXtrmExtensions: false,
+      globalDeclaresExtensionPackage: globalDeclares
+    };
   }
   try {
     const settings = await import_fs_extra18.default.readJson(settingsPath);
     const packageEntries = Array.isArray(settings.packages) ? settings.packages.filter((entry) => typeof entry === "string") : [];
     return {
       hasProjectSettings: true,
-      hasProjectExtensionPackage: packageEntries.includes("npm:@jaggerxtrm/pi-extensions"),
-      pointsToXtrmExtensions: hasSettingsEntry(settings.extensions, "../.xtrm/extensions")
+      hasProjectPackageDrift: packageEntries.includes(EXTENSION_PACKAGE_ID),
+      pointsToXtrmExtensions: hasSettingsEntry(settings.extensions, "../.xtrm/extensions"),
+      globalDeclaresExtensionPackage: globalDeclares
     };
   } catch {
-    return { hasProjectSettings: true, hasProjectExtensionPackage: false, pointsToXtrmExtensions: false };
+    return {
+      hasProjectSettings: true,
+      hasProjectPackageDrift: false,
+      pointsToXtrmExtensions: false,
+      globalDeclaresExtensionPackage: globalDeclares
+    };
   }
 }
 function createPiCommand() {
@@ -64743,21 +64790,25 @@ Examples:
     }
     const plan = await inventoryPiRuntime(sourceDir, globalTargetDir);
     const pkgOk = plan.packages.filter((s) => s.installed).length;
-    const projectScoped = pointer.hasProjectExtensionPackage || pointer.pointsToXtrmExtensions;
-    if (projectScoped) {
-      console.log(kleur_default.dim("  Scope:      project"));
-      console.log(kleur_default.dim(`  Extensions: package mode (npm:@jaggerxtrm/pi-extensions${pointer.hasProjectExtensionPackage ? "" : " missing"})`));
+    const legacyScoped = pointer.pointsToXtrmExtensions;
+    const packageMode = pointer.globalDeclaresExtensionPackage && !legacyScoped;
+    const mirrorInventoryRelevant = !legacyScoped && !packageMode;
+    if (legacyScoped) {
+      console.log(kleur_default.dim("  Scope:      project (legacy ../.xtrm/extensions pointer)"));
     } else {
-      console.log(kleur_default.dim("  Scope:      global"));
-      const extOk = plan.extensions.filter((s) => s.installed && !s.stale).length;
-      console.log(kleur_default.dim(`  Extensions: ${extOk}/${plan.extensions.length} up-to-date`));
+      console.log(kleur_default.dim(`  Scope:      global${packageMode ? " (package mode)" : ""}`));
+      if (mirrorInventoryRelevant) {
+        const extOk = plan.extensions.filter((s) => s.installed && !s.stale).length;
+        console.log(kleur_default.dim(`  Extensions: ${extOk}/${plan.extensions.length} up-to-date`));
+      }
     }
+    console.log(kleur_default.dim(`  Registration: ${EXTENSION_PACKAGE_ID} (${pointer.globalDeclaresExtensionPackage ? "global" : "not declared globally"})`));
     console.log(kleur_default.dim(`  Packages:   ${pkgOk}/${plan.packages.length} installed`));
     if (plan.missingPackages.length > 0) {
       const names = plan.missingPackages.map((s) => s.pkg.displayName).join(", ");
       console.log(kleur_default.yellow(`  Packages:   ${names}`));
     }
-    if (!projectScoped) {
+    if (mirrorInventoryRelevant) {
       if (plan.missingExtensions.length > 0) {
         const names = plan.missingExtensions.map((s) => s.ext.displayName).join(", ");
         console.log(kleur_default.yellow(`  Missing:    ${names}`));
@@ -64766,19 +64817,24 @@ Examples:
         const names = plan.staleExtensions.map((s) => s.ext.displayName).join(", ");
         console.log(kleur_default.yellow(`  Stale:      ${names}`));
       }
-      if (plan.orphanedExtensions.length > 0) {
-        console.log(kleur_default.red(`  Orphaned:   ${plan.orphanedExtensions.join(", ")}`));
-      }
     }
-    const hasProjectSettingsDrift = !pointer.hasProjectSettings || !pointer.hasProjectExtensionPackage;
-    const hasGlobalDrift = !projectScoped && !plan.allPresent;
+    if (!legacyScoped && plan.orphanedExtensions.length > 0) {
+      const suffix = packageMode ? " (collide with npm package \u2014 remove)" : "";
+      console.log(kleur_default.red(`  Orphaned:   ${plan.orphanedExtensions.join(", ")}${suffix}`));
+    }
+    const hasMirrorDrift = mirrorInventoryRelevant && !plan.allPresent;
+    const hasOrphanCollision = packageMode && plan.orphanedExtensions.length > 0;
     const hasPackageDrift = plan.missingPackages.length > 0;
-    if (!hasProjectSettingsDrift && !hasGlobalDrift && !hasPackageDrift) {
+    const hasGlobalRegistrationDrift = !pointer.globalDeclaresExtensionPackage;
+    if (!pointer.hasProjectPackageDrift && !hasMirrorDrift && !hasOrphanCollision && !hasPackageDrift && !hasGlobalRegistrationDrift) {
       console.log(t.success("\n  \u2713 Pi runtime configuration looks healthy\n"));
       return;
     }
-    if (hasProjectSettingsDrift) {
-      console.log(kleur_default.yellow("  Settings:   .pi/settings.json missing managed npm:@jaggerxtrm/pi-extensions entry"));
+    if (pointer.hasProjectPackageDrift) {
+      console.log(kleur_default.red(`  Settings:   .pi/settings.json declares ${EXTENSION_PACKAGE_ID}; this package is global-only. Run xt update --apply.`));
+    }
+    if (hasGlobalRegistrationDrift) {
+      console.log(kleur_default.yellow(`  Settings:   ${EXTENSION_PACKAGE_ID} is not declared in ~/.pi/agent/settings.json (add via xt update --apply).`));
     }
     console.log(kleur_default.dim("\n  \u2192 run: xt update --apply --repo <path>\n"));
   });
@@ -64845,16 +64901,29 @@ Examples:
       console.log(kleur_default.dim("  \u25CB managed extensions not bundled in this install"));
     } else {
       const plan = await inventoryPiRuntime(sourceDir, globalTargetDir);
-      const projectScoped = pointer.hasProjectExtensionPackage || pointer.pointsToXtrmExtensions;
       if (!pointer.hasProjectSettings) {
-        console.log(kleur_default.yellow("  \u26A0 missing .pi/settings.json; run xt pi reload to bootstrap project Pi settings"));
+        console.log(kleur_default.yellow("  \u26A0 missing .pi/settings.json; run xt update --apply to bootstrap project Pi settings"));
         allOk = false;
-      } else if (projectScoped) {
-        if (pointer.hasProjectExtensionPackage) {
-          console.log(t.success("  \u2713 project runtime uses npm:@jaggerxtrm/pi-extensions"));
-        } else {
-          console.log(kleur_default.yellow("  \u26A0 legacy project extension pointer detected; run xt pi reload to migrate"));
+      } else if (pointer.hasProjectPackageDrift) {
+        console.log(kleur_default.red(`  \u2717 .pi/settings.json declares ${EXTENSION_PACKAGE_ID}; this package is global-only. Run xt update --apply.`));
+        allOk = false;
+      } else if (pointer.pointsToXtrmExtensions) {
+        console.log(kleur_default.yellow("  \u26A0 legacy ../.xtrm/extensions pointer detected; run xt update --apply to migrate"));
+        allOk = false;
+      }
+      if (pointer.globalDeclaresExtensionPackage) {
+        console.log(t.success(`  \u2713 ${EXTENSION_PACKAGE_ID} registered globally`));
+      } else {
+        console.log(kleur_default.yellow(`  \u26A0 ${EXTENSION_PACKAGE_ID} not declared in ~/.pi/agent/settings.json`));
+        allOk = false;
+      }
+      const packageMode = pointer.globalDeclaresExtensionPackage && !pointer.pointsToXtrmExtensions;
+      if (packageMode) {
+        if (plan.orphanedExtensions.length > 0) {
+          console.log(kleur_default.red(`  \u2717 orphaned extension mirrors (collide with npm package): ${plan.orphanedExtensions.join(", ")}`));
           allOk = false;
+        } else {
+          console.log(t.success("  \u2713 global package mode: no legacy extension mirrors"));
         }
       } else if (plan.missingExtensions.length === 0 && plan.staleExtensions.length === 0 && plan.orphanedExtensions.length === 0) {
         console.log(t.success(`  \u2713 global extensions deployed (${plan.extensions.length})`));
