@@ -121,12 +121,22 @@ Nothing runs it for you. It needs docker and a few minutes, so it is not in CI.
 ```bash
 docker build -t xtrm-smoke scripts/smoke-container/
 
-# BEFORE publishing — against the currently released packages.
-docker run --rm xtrm-smoke ./verify.sh --skip-live
+# BEFORE publishing — MUST name the candidate. `--branch <repo>=<ref>` packs each repo
+# from that ref and installs it globally, so the run tests the code you are about to ship.
+docker run --rm xtrm-smoke ./verify.sh --skip-live \
+  --branch core=main --branch specialists=master --branch xtmux=main
 
-# AFTER publishing — same command, now resolving the new versions.
+# AFTER publishing — no --branch. Now `latest` IS the new release.
 docker run --rm xtrm-smoke ./verify.sh --skip-live          # <-- this one must PASS
 ```
+
+**Do not run the pre-release check without `--branch` (or `--tag next`).** `verify.sh` defaults
+`TAG` to `latest` and installs the three *published* packages (`verify.sh:18`, `:475-477`). A bare
+run before publishing therefore tests the release you already shipped, not the one you are about
+to. A global-surface regression introduced by the pending release would pass it silently.
+
+`--branch` is trustworthy through stage 5 as of core#522 — before that, the drift-repair stage
+reinstalled `@latest` over the branch build and silently discarded it.
 
 `exit 0` is PASS. Nonzero is FAIL with the failing stage named in the summary.
 
