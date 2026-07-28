@@ -141,7 +141,11 @@ install_xtmux() {
   warn "npm i -g $spec needed the musl bun shim (bundled bun.exe is a glibc binary — Alpine/musl install path is not clean upstream)"
   npm i -g --ignore-scripts "$spec" >>"$LOG" 2>&1 || { fail "npm i -g --ignore-scripts $spec"; return 1; }
   patch_bundled_bun
-  node "$(xtmux_root)/scripts/install.mjs" --from-npm >>"$LOG" 2>&1 || { fail "xtmux install.mjs --from-npm"; return 1; }
+  # Bare invocation, NOT --from-npm: that flag is the postinstall marker and
+  # makes the installer exit 0 without doing anything unless npm_config_global
+  # is set (install.mjs:18). Here we NEED it to run — the --ignore-scripts
+  # install above deliberately skipped the postinstall (xtrm-9hq6w).
+  node "$(xtmux_root)/scripts/install.mjs" >>"$LOG" 2>&1 || { fail "xtmux install.mjs"; return 1; }
   patch_bundled_bun || { fail "could not place musl bun in $(xtmux_root)/node_modules/bun/bin"; return 1; }
   run "xtmux-obs runs after musl bun shim" xtmux-obs --help
 }
@@ -337,8 +341,11 @@ global_drift_and_repair() {
   local xtmux_installer; xtmux_installer="$(xtmux_root)/scripts/install.mjs"
   if [ -f "$xtmux_installer" ]; then
     patch_bundled_bun
-    run "xtmux install.mjs --from-npm (drift repair, in-place)" \
-      node "$xtmux_installer" --from-npm
+    # Bare invocation, NOT --from-npm — see install_xtmux above. Passing the
+    # postinstall marker here silently no-opped the repair, so the gate
+    # measured drift that was never repaired (xtrm-9hq6w, Codex xtmux#88).
+    run "xtmux install.mjs (drift repair, in-place)" \
+      node "$xtmux_installer"
   else
     fail "xtmux install.mjs missing at $xtmux_installer — cannot repair global hooks"
   fi
