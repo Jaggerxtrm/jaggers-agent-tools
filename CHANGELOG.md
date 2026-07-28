@@ -9,6 +9,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.3] - 2026-07-28
+
+### Added
+- /prd-to-plan skill for spec → runnable bd board ([7e8c105](https://github.com/xtrm-dev/core/commit/7e8c10589b6d93bc32f29c9ce2c2da119cf891a9))
+- --no-pr flag + fix stale prs.tsv prompt refs (#496) ([0b5ec71](https://github.com/xtrm-dev/core/commit/0b5ec71d8533a3b74853b95942760813e66baae3))
+- --epic <id> scoped export with notes (xtrm-ipf4n) (#498) ([a20d52e](https://github.com/xtrm-dev/core/commit/a20d52e5052b089d1c344330cc1a09e91cc80e7d))
+- Assign beaded sessions from runtime origin (#508) ([2fdcef8](https://github.com/xtrm-dev/core/commit/2fdcef84933664a908d06e301b164625afe93fe4))
+- Drift-lint gates for forbidden phrases and vendored specialists parity (xtrm-wiy5n.4.3) (#514) ([a89f55d](https://github.com/xtrm-dev/core/commit/a89f55db0b7da94bebd3fa3c10ae78f987157863))
+- Alpine smoke-test container for the xtrm trio (xtrm-wiy5n.4.1) (#513) ([335c6e7](https://github.com/xtrm-dev/core/commit/335c6e7bc7f8a0d83d46da5f041f0396ef2b397d))
+- Fail build on payload/wiring mismatch (xtrm-wiy5n.4.38) (#523) ([b602bac](https://github.com/xtrm-dev/core/commit/b602bacb7e5320790fc4f4aa07fd0cfa56cf2775))
+- Xt version --check-updates + xt doctor updates row (xtrm-wiy5n.4.7) (#524) ([94d03ea](https://github.com/xtrm-dev/core/commit/94d03ea93d09fa9a8f19280a7acf53a60fe2fe44))
+- Close the Claude/Pi inbox asymmetry with a Stop reminder hook (#525) ([617a74f](https://github.com/xtrm-dev/core/commit/617a74fe0130811a6da15329907edae8233f2dbb))
+
+### Fixed
+- Summary lines double-print epic id (xtrm-5swny) (#499) ([87fc6b8](https://github.com/xtrm-dev/core/commit/87fc6b80b1acae51d431507104e6566071b94e32))
+- Remove stale service-skills wiring (#500) ([efa5f11](https://github.com/xtrm-dev/core/commit/efa5f11ab80df85296e3dc86bebcbcbe91db8584))
+- Close topology and reuse P1 gaps (#506) ([bee5f42](https://github.com/xtrm-dev/core/commit/bee5f42b53943cd5e36476988e4ccb29a3ae54a9))
+- Retire dead Specialists hook payloads (#509) ([75ee080](https://github.com/xtrm-dev/core/commit/75ee080ebedfacc86a55dd6d3af0f75cca9fd05b))
+- Assign beads from the runtime readiness handshake (xtrm-wiy5n.4.18) (#510) ([359af43](https://github.com/xtrm-dev/core/commit/359af431f8c90d33044002525039cb39579dc388))
+- Stop xt claude --role forwarding non-Claude models (xtrm-wiy5n.4.19) (#511) ([50b1987](https://github.com/xtrm-dev/core/commit/50b19878aad623b4ff9c4dcd81fb3dc21cae30e7))
+- Unbreak main — PR-scope the CHANGELOG gate, raise the fast-uri floor (xtrm-wiy5n.4.29) (#516) ([772aed0](https://github.com/xtrm-dev/core/commit/772aed0531c28caed8c1a7b437415b08742377f8))
+- Stop committing the generated [Unreleased] block (xtrm-wiy5n.4.28) (#517) ([dd24f66](https://github.com/xtrm-dev/core/commit/dd24f66b441ceec3303dd1a67a24ce40e49b2ade))
+- Never delete a file the installer cannot prove it wrote (xtrm-wiy5n.4.37) (#520) ([c915502](https://github.com/xtrm-dev/core/commit/c9155026df405d1996a5765aa10b696f2af9585c))
+- Smoke container verifies the global install surface (xtrm-wiy5n.4.32) (#522) ([a85321d](https://github.com/xtrm-dev/core/commit/a85321d7fed515537fc8f6ad0d567e297cbc21a7))
+- Scope Policy parity step to a scratch PI_AGENT_DIR (xtrm-spcuo) (#526) ([3ca992c](https://github.com/xtrm-dev/core/commit/3ca992c5fa3f6fc1a4f87ae98309a08d6e8781b9))
+- Npm:@jaggerxtrm/pi-extensions is global-only (xtrm-xnymw) (#527) ([1aa3930](https://github.com/xtrm-dev/core/commit/1aa393099732aaf500add2df6a60dca67ecdc0bb))
+- Invoke xtmux installer bare, not --from-npm (xtrm-9hq6w) (#529) ([3b9d6e6](https://github.com/xtrm-dev/core/commit/3b9d6e6dc92b13a9978de2d5b92d3b5c217ff7cd))
+- Force branch checkout past the generated registry (xtrm-kqf0y) (#530) ([b6b8d94](https://github.com/xtrm-dev/core/commit/b6b8d945d97fdfa4bf977b3def530f90d092d90f))
+
+### Other changes
+- Dump CI changelog:check diagnostics (#489) ([428a27b](https://github.com/xtrm-dev/core/commit/428a27bfa1dcf3ae6d2e819db92533823ca0aa58))
+- Canonicalize pr-review-gate template + refresh review-skill docs (xtrm-54zwl.2 + .4) ([ccf3a1a](https://github.com/xtrm-dev/core/commit/ccf3a1a9a1d49de400a5a3a0c86d7edf271b6ae6))
+- Nudge to use service-knowledge on ambiguous incidents (#503) ([6c0d1fa](https://github.com/xtrm-dev/core/commit/6c0d1fa7907b4a9aeec0a72ad6951ec1ac1fe46f))
+
+### Project maintenance
+- Auto-refresh CHANGELOG.md — pre-push hook + PR CI check (xtrm-reyem.12) (#488) ([6e7040d](https://github.com/xtrm-dev/core/commit/6e7040df7ecb9dafd0fc6a732f98e4a9897b3be1))
+- Audit-reconcile v0724 program plan + consolidated determinism report ([48f6e7c](https://github.com/xtrm-dev/core/commit/48f6e7c8443eb8b2654ecd9415ce60d5ee6647fc))
+- Add pr-review-gate required-status-check workflow (xtrm-54zwl.1) ([6a6c19e](https://github.com/xtrm-dev/core/commit/6a6c19ec230c48590bfa289bff6ba57711c7d510))
+- Set explicit job name for readable required-check context ([b12cdd0](https://github.com/xtrm-dev/core/commit/b12cdd0dcf50d8e2ce9d461c365e76bf3af86b36))
+- Set explicit job name + drop unsupported pull_request_review_thread trigger ([217048b](https://github.com/xtrm-dev/core/commit/217048b00497a37d4e07aa327ea52d780ffbcb8d))
+- Use JS-native regex flag ('i') instead of Perl-style (?i) ([9c0c73d](https://github.com/xtrm-dev/core/commit/9c0c73d75910b2cadf24eaef1ad85a538841ca52))
+- Add workflow_dispatch for post-resolve manual refresh ([dc7021f](https://github.com/xtrm-dev/core/commit/dc7021fda3b08e0238e6c08d8717abff2220f994))
+- Retire vendored service-skills from core [xtrm-56flm.6] (#493) ([c2c7edc](https://github.com/xtrm-dev/core/commit/c2c7edca6034c98599b06419b0bcc269c4d8f9a3))
+- Rename /prd-to-plan → /spec-dispatch (#494) ([fa6e2be](https://github.com/xtrm-dev/core/commit/fa6e2be25fa6fa8e7f76bbe9016fd3fc1c0ce7f3))
+- Tighten to Bot __typename + paginate threads/reviews (per Codex P2s on #495) ([9ee9682](https://github.com/xtrm-dev/core/commit/9ee968208de5fbfe75d0a0f310b5804a74b0b7f8))
+- Recommend symlink install over cp (xtrm-81c64) (#497) ([e642412](https://github.com/xtrm-dev/core/commit/e64241266a01e0d19e2a363f30a8c597135fa5ac))
+- Wave-2 — pull_request_review_comment trigger + preserve CR verdicts (xtrm-54zwl.7) ([6651be3](https://github.com/xtrm-dev/core/commit/6651be380872f333a4c388e097cf1c9436d874ed))
+- Reconcile SKILL.md + CLAUDE.md with pr-review-gate wave-2 reality (xtrm-54zwl.8) ([2ff4e42](https://github.com/xtrm-dev/core/commit/2ff4e42aa49001fe7a40918d09636e594c79ca78))
+- Slim 4 orchestration roots + retire MSG-06 rows + budget check (xtrm-wiy5n.1.1) (#504) ([4ca674e](https://github.com/xtrm-dev/core/commit/4ca674ef066b724b2640cb028123d6bdfc575eb1))
+- Align xtmux communication contracts (#507) ([362db69](https://github.com/xtrm-dev/core/commit/362db69aa09936f4498927bbc6685bc0fd1fd27a))
+- Claude-column contract matrix for the cross-runtime gate (#512) ([c48b46b](https://github.com/xtrm-dev/core/commit/c48b46b1c66734c66f154451f85f3bb31f21745c))
+- Re-vendor specialists skills at master ba8526cd (#515) ([53e4afe](https://github.com/xtrm-dev/core/commit/53e4afe451d73e7655cfc664297694fb45e7905b))
+- Commit the injected communication-style + task-tracking block (xtrm-wiy5n.4.36) (#518) ([2a659f0](https://github.com/xtrm-dev/core/commit/2a659f0c1c859473245806eedb0d9f185ff78a31))
+- Remove the ambiguous tool prohibition and the contradicting bd line (xtrm-wiy5n.4.36) (#519) ([060958d](https://github.com/xtrm-dev/core/commit/060958d94d39fa6a369091f4121828c030111c4a))
+- Admin-merge bypass matrix + rebase-push discipline (xtrm-wiy5n.4.8 + .4.12) (#521) ([ded850a](https://github.com/xtrm-dev/core/commit/ded850a343d877f6262451fe3140fa171c47f777))
+- Name the global-surface smoke container in the release path (xtrm-x9wz8) (#528) ([653dae6](https://github.com/xtrm-dev/core/commit/653dae6ded6327bda0d68060fa4243a6cac5242b))
+- Compact entries — no bold, no blank line between bullets (#531) ([8ef20ce](https://github.com/xtrm-dev/core/commit/8ef20ced683803f065f885833099ab04845a897f))
+
 ## [v0.11.2] — 2026-07-22
 
 ### Changed
