@@ -103,6 +103,58 @@ gh workflow run install-order-matrix.yml
 
 None of the above gate the release. They're confidence checks.
 
+### Global-surface smoke container — run it, before AND after
+
+`scripts/smoke-container/` is the gate for the surface the packages install into a user's HOME:
+the `~/.claude/skills` and `~/.pi/agent/skills` pointers, per-event xtmux hook coverage in
+`~/.claude/settings.json`, the SessionStart `--new-instance` argument, `~/.pi/agent/settings.json`
+packages, and a drift-break-and-repair stage that breaks each pointer and asserts
+`xt update --apply` restores it.
+
+This is **not** `fresh-machine-smoke.yml`. That one is wired into `publish.yml` and gates the
+bootstrap path — can a fresh user get to a working repo. It would not catch a hook wired without
+its argument, a dangling skills pointer, or a duplicate hook entry. This container is what catches
+those (beads `xtrm-wiy5n.4.25`, `.4.27`, `.4.32`).
+
+Nothing runs it for you. It needs docker and a few minutes, so it is not in CI.
+
+```bash
+docker build -t xtrm-smoke scripts/smoke-container/
+
+# BEFORE publishing — MUST name the candidate. `--branch <repo>=<ref>` packs each repo
+# from that ref and installs it globally, so the run tests the code you are about to ship.
+docker run --rm xtrm-smoke ./verify.sh --skip-live \
+  --branch core=main --branch specialists=master --branch xtmux=main
+
+# AFTER publishing — no --branch. Now `latest` IS the new release.
+docker run --rm xtrm-smoke ./verify.sh --skip-live          # <-- this one must PASS
+```
+
+**Do not run the pre-release check without `--branch` (or `--tag next`).** `verify.sh` defaults
+`TAG` to `latest` and installs the three *published* packages (`verify.sh:18`, `:475-477`). A bare
+run before publishing therefore tests the release you already shipped, not the one you are about
+to. A global-surface regression introduced by the pending release would pass it silently.
+
+`--branch` is trustworthy through stage 5 as of core#522 — before that, the drift-repair stage
+reinstalled `@latest` over the branch build and silently discarded it.
+
+`exit 0` is PASS. Nonzero is FAIL with the failing stage named in the summary.
+
+**Read the pre-release run, do not "fix" it.** It runs against whatever is on `latest`, so a fix
+that is merged but unpublished shows up as a FAIL. That is the gate reporting the reason for the
+release. Only the post-release run is required to pass.
+
+Useful flags:
+
+| Flag | Effect |
+|---|---|
+| `--skip-live` | no tmux/`sp` scenario — faster, no API key needed |
+| `--branch <repo>=<ref>` | packs and installs that repo's branch globally, so the run tests the branch's **code** |
+| `--tag next` | exercise a release candidate in every stage |
+| `-e ANTHROPIC_API_KEY=...` | enables the live `sp run` scenario |
+| `-e XTRM_SMOKE_FAULT=<name>` | injects one break before the assertions — used to prove a check can fail |
+
+
 ### Cutting the release
 
 ```bash
