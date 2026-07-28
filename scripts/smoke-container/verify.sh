@@ -538,9 +538,18 @@ for entry in "${REPOS[@]}"; do
   ref="${BRANCH_FOR[$name]:-$BRANCH_ALL}"
 
   if [ -n "$ref" ]; then
+    # --force is required, not sloppiness. Stage 3 ran `xt init` in this clone,
+    # which rewrites the TRACKED generated file .xtrm/registry.json. The clone
+    # and this fetch read origin at two different moments, so when a PR lands
+    # in between, FETCH_HEAD carries a different registry.json and a plain
+    # checkout aborts with "local changes would be overwritten". That made the
+    # release gate fail for whoever was merging at the time — precisely when
+    # the gate gets run. The generated scaffolding is not signal here: we want
+    # the branch's source, and stage 4 regenerates it via `xt update --apply`
+    # immediately after injecting drift.
     if git -C "$dir" ls-remote --exit-code --heads origin "$ref" >/dev/null 2>&1; then
       run "fetch $name@$ref" git -C "$dir" fetch --quiet --depth 1 origin "$ref" \
-        && run "checkout $name@$ref" git -C "$dir" checkout --quiet FETCH_HEAD \
+        && run "checkout $name@$ref" git -C "$dir" checkout --quiet --force FETCH_HEAD \
         && install_from_source "$name" "$dir" "$pkg"
     else
       skip "$name has no branch '$ref' on origin"
