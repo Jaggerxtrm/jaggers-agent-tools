@@ -1,4 +1,4 @@
-# XTRM Tools
+# Core
 
 [![npm version](https://img.shields.io/npm/v/xtrm-tools.svg)](https://www.npmjs.com/package/xtrm-tools)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -16,7 +16,12 @@
 >
 > The README is an orientation surface, not a substitute for the live command contract. For development or integration work, clone and inspect Core, Specialists, and xtmux together rather than relying only on npm package contents.
 
-**XTRM Tools (`xt`) is the local control plane for persistent, multi-agent software development.**
+> [!NOTE]
+> **Naming**
+>
+> **XTRM** is the whole stack. **Core** is its control-plane component and this repository's name. Core is currently distributed on npm as `xtrm-tools`; that package name is transitional and is planned for retirement as the three repositories converge into the XTRM monorepo.
+
+**Core (`xt`) is the local control plane of XTRM for persistent, multi-agent software development.**
 
 It launches Claude and Pi in isolated worktrees, binds work to durable Bead contracts, distributes skills and policies, enforces lifecycle gates, coordinates Specialists and xtmux, projects live topology across repositories, and maintains the installed runtime through `init`, `update`, `doctor`, and release gates.
 
@@ -26,7 +31,7 @@ XTRM is not a hosted agent platform. It is a local, inspectable operating layer 
 
 ```mermaid
 flowchart LR
-    U[User / project intent] --> C[XTRM Tools<br/>control plane]
+    U[User / project intent] --> C[Core<br/>control plane]
 
     C --> B[Beads<br/>task graph + durable memory]
     C --> R[Claude / Pi<br/>role sessions]
@@ -46,7 +51,7 @@ flowchart LR
 
 | Component | Primary responsibility |
 |---|---|
-| **XTRM Tools** | Install, launch, govern, observe, update, and release the local agent stack |
+| **Core** | Install, launch, govern, observe, update, and release the local XTRM stack |
 | **Specialists** | Execute fresh, role-bounded jobs with structured handoffs and review evidence |
 | **xtmux** | Provide tmux-native identity, lifecycle state, messages, waits, monitors, and event streams |
 | **Beads** | Hold task contracts, claims, dependencies, status, notes, and cross-session memory |
@@ -169,7 +174,7 @@ Core owns coordinated release validation for the stack:
 
 ## Quick start
 
-Install the three runtime packages explicitly:
+Install the three currently published runtime packages explicitly. `xtrm-tools` is the transitional npm package name for Core:
 
 ```bash
 npm install --global \
@@ -218,7 +223,7 @@ sp ps
 sequenceDiagram
     participant U as User
     participant B as Beads
-    participant C as XTRM Tools
+    participant C as Core
     participant A as Claude / Pi
     participant S as Specialists
     participant X as xtmux
@@ -244,7 +249,6 @@ sequenceDiagram
 | Task governance | Beads hooks, claims, close and memory gates |
 | Skills | `xt skills`, managed global/project views |
 | Policies | `scripts/compile-policies.mjs`, Claude hooks, Pi extensions |
-| Runtime UX | Claude statusline, Pi themes/tool rendering, Specialist overlays |
 | Topology | `xt topology` and its read-only views |
 | Maintenance | `xt init`, `xt update`, `xt doctor`, update checks |
 | Publication | `xt end`, normal Git/PR flow, release gates |
