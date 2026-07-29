@@ -2,8 +2,8 @@
 title: XTRM UI Extension
 scope: xtrm-ui
 category: reference
-version: 2.0.0
-updated: 2026-07-10
+version: 2.1.0
+updated: 2026-07-30
 description: "XTRM-owned Pi chrome, themes, and native/external tool rendering"
 source_of_truth_for:
   - "packages/pi-extensions/extensions/xtrm-ui/index.ts"
@@ -60,20 +60,26 @@ in Pi settings or persisted session preferences are migrated to the equivalent
 
 Native tools (`bash`, `read`, `write`, `edit`, `grep`, `find`, and `ls`) retain
 Pi's execute functions and use `ToolRenderContext` for arguments, state, errors,
-and timing.
-
-External tools use one background-row renderer with provider badges for Serena,
-GitNexus, structured-return, process, and generic tools. Collapsed output is
-bounded; Ctrl+O reveals hidden content. Rendering does not mutate tool-result
-payloads.
-
-Completed tools use one footer convention:
+and timing. Their rows use one tree shape:
 
 ```text
-└─ showing 6/94 lines (ctrl+o expand) · 1.6s · 247B
+• grep renderResult
+  └ first matching line
+    next matching line
+    showing 6/94 matchs (ctrl+o expand) · 1.6s · 247B
 ```
 
-Pending tools have no footer. Expansion hints appear only when content is hidden.
+Collapsed native rows show up to six output lines. Bash keeps the latest six;
+read, new-file write, grep, find, and ls keep the first six. Edit and updated-file
+write retain their 18-line diff preview. Small results render in full without an
+expansion hint.
+
+External tools use one background-row renderer with provider badges for Serena,
+GitNexus, structured-return, process, and generic tools. Their collapsed output is
+bounded and retains the `└─` metadata footer. Ctrl+O reveals hidden content.
+Rendering does not mutate tool-result payloads.
+
+Pending tools have no metadata footer. Expansion hints appear only when content is hidden.
 
 ## Preferences
 

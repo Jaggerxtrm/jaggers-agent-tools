@@ -259,22 +259,93 @@ describe("xtrm-ui built-in tool rendering", () => {
       context(args, { executionStarted: true, isPartial: true }),
     );
 
-    expect(pending.render(200).join("\n")).toContain("$ echo context-label");
+    expect(pending.render(200).join("\n")).toBe("• Ran echo context-label");
     expect(running.render(200).join("\n")).toBe("");
   });
 
-  it("reads bash labels from render context args", () => {
+  it("renders multiline bash commands and six collapsed output lines as one tree", () => {
     const { tools } = loadExtension();
+    const output = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
     const component = tools.bash.renderResult(
-      { content: [{ type: "text", text: "ok" }], details: {} },
+      { content: [{ type: "text", text: output }], details: {} },
       { expanded: false, isPartial: false },
       theme,
-      context({ command: "echo context-label" }),
+      context({ command: "echo one\necho two" }),
     );
 
     const lines = component.render(200);
-    expect(lines[0]).toBe("› $ echo context-label");
-    expect(lines.at(-1)).toBe("└─ 1 line · 2B");
+    expect(lines.slice(0, 3)).toEqual([
+      "• Ran echo one",
+      "  │ echo two",
+      "  └ line 3",
+    ]);
+    expect(lines.at(-1)).toContain("showing 6/8 lines (ctrl+o expand)");
+  });
+
+  it.each([
+    ["read", { path: "sample.txt" }, "sample.txt", "line"],
+    ["find", { pattern: "*.ts" }, "*.ts", "match"],
+    ["grep", { pattern: "needle" }, "needle", "match"],
+    ["ls", { path: "." }, ".", "entry"],
+  ])("shows six collapsed output lines for %s", (name, args, subject, noun) => {
+    const { tools } = loadExtension();
+    const output = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
+    const component = tools[name].renderResult(
+      { content: [{ type: "text", text: output }], details: {} },
+      { expanded: false, isPartial: false },
+      theme,
+      context(args),
+    );
+
+    const lines = component.render(200);
+    expect(lines[0]).toBe(`• ${name} ${subject}`);
+    expect(lines[1]).toBe("  └ line 1");
+    expect(lines[6]).toBe("    line 6");
+    expect(lines.at(-1)).toContain(`showing 6/8 ${noun}s (ctrl+o expand)`);
+  });
+
+  it("shows small native results without an expansion hint", () => {
+    const { tools } = loadExtension();
+    const lines = tools.find.renderResult(
+      { content: [{ type: "text", text: "only.ts" }], details: {} },
+      { expanded: false, isPartial: false },
+      theme,
+      context({ pattern: "*.ts" }),
+    ).render(200);
+
+    expect(lines).toEqual([
+      "• find *.ts",
+      "  └ only.ts",
+      "    1 match · 7B",
+    ]);
+    expect(lines.join("\n")).not.toContain("ctrl+o expand");
+  });
+
+  it("renders edit diffs and new writes as trees", () => {
+    const { tools } = loadExtension();
+    const path = join(mkdtempSync(join(tmpdir(), "xtrm-ui-")), "new.txt");
+    const content = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
+    const writeContext = context({ path, content });
+    tools.write.renderCall(writeContext.args, theme, writeContext);
+
+    const write = tools.write.renderResult(
+      { content: [{ type: "text", text: "ok" }], details: undefined },
+      { expanded: false, isPartial: false },
+      theme,
+      writeContext,
+    ).render(200);
+    const edit = tools.edit.renderResult(
+      { content: [{ type: "text", text: "ok" }], details: { diff: "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new" } },
+      { expanded: false, isPartial: false },
+      theme,
+      context({ path }),
+    ).render(200);
+
+    expect(write[0]).toBe(`• write ${path}`);
+    expect(write[1]).toBe("  └ line 1");
+    expect(write.at(-1)).toContain("showing 6/8 lines (ctrl+o expand)");
+    expect(edit[0]).toBe(`• edit ${path}`);
+    expect(edit[1]).toMatch(/^  └ /);
   });
 
   it("keeps pre-write diff data in renderer-local state", () => {
