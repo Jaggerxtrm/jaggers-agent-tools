@@ -40,7 +40,6 @@ import {
   lineCount,
   previewLines,
   renderRichDiffPreview,
-  renderToolSummary,
   TOOL_ROW_MARKER,
   shortenCommand,
   shortenPath,
@@ -561,13 +560,6 @@ function applyXtrmChrome(
 // Tool Render Helpers
 // ============================================================================
 
-function renderOutputPreview(theme: any, lines: string[], maxLines: number): string {
-  const subset = lines.slice(0, maxLines);
-  let text = subset.map((line) => theme.fg("toolOutput", `  ${line}`)).join("\n");
-  if (lines.length > maxLines) text += `\n${theme.fg("muted", `  … +${lines.length - maxLines} more`)}`;
-  return text;
-}
-
 function renderVerticalPreview(theme: any, lines: string[], maxLines: number): string {
   const subset = lines.slice(0, maxLines);
   let text = subset.map((line) => `${theme.fg("muted", "│")} ${theme.fg("toolOutput", line)}`).join("\n");
@@ -583,8 +575,16 @@ function lineRange(offset?: number, limit?: number): string | undefined {
   return `${start}-${start + limit - 1}`;
 }
 
+const DEFAULT_TOOL_PREVIEW_LINES = 6;
+
 function summarizeCount(text: string): number {
   return text.split("\n").filter((line) => line.trim().length > 0).length;
+}
+
+function previewSummary(shown: number, total: number, noun: string, expanded: boolean): string {
+  return !expanded && shown < total
+    ? `showing ${shown}/${total} ${noun}s (ctrl+o expand)`
+    : formatLineLabel(total, noun);
 }
 
 // ============================================================================
@@ -861,17 +861,53 @@ function createWritePreview(path: string, nextContent: string): XtrmWritePreview
   };
 }
 
-function appendToolFooter(theme: any, text: string, parts: Array<string | undefined>): string {
-  const meta = joinMeta(parts);
-  return meta ? `${text}\n${theme.fg("dim", `└─ ${meta}`)}` : text;
+function appendToolTree(
+  theme: any,
+  lines: string[],
+  outputLines: string[],
+  meta?: string,
+): string {
+  outputLines.forEach((line, index) => {
+    lines.push(index === 0
+      ? `  ${theme.fg("muted", "└")} ${theme.fg("toolOutput", line)}`
+      : `    ${theme.fg("toolOutput", line)}`);
+  });
+  if (meta) lines.push(`${outputLines.length > 0 ? "    " : `  ${theme.fg("muted", "└")} `}${theme.fg("dim", meta)}`);
+  return lines.join("\n");
+}
+
+function renderBashTree(
+  theme: any,
+  statusColor: string,
+  command: string,
+  outputLines: string[] = [],
+  meta?: string,
+): string {
+  const [firstCommand = "", ...continuedCommands] = command.split("\n");
+  return appendToolTree(theme, [
+    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${theme.fg(statusColor, firstCommand)}`,
+    ...continuedCommands.map((line) => `  ${theme.fg("muted", "│")} ${theme.fg(statusColor, line)}`),
+  ], outputLines, meta);
+}
+
+function renderNamedToolTree(
+  theme: any,
+  statusColor: string,
+  label: string,
+  subject: string,
+  outputLines: string[] = [],
+  meta?: string,
+): string {
+  return appendToolTree(theme, [
+    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold(label))}${subject ? ` ${theme.fg(statusColor, subject)}` : ""}`,
+  ], outputLines, meta);
 }
 
 function renderPendingCall(toolName: string, args: Record<string, unknown>, theme: any): Text {
   if (toolName === "bash") {
-    const command = shortenCommand(String(args.command ?? ""), 80);
-    return new Text(`${theme.fg("accent", TOOL_ROW_MARKER)} ${theme.fg("accent", "$")} ${theme.fg("accent", command)}`, 0, 0);
+    return new Text(renderBashTree(theme, "accent", String(args.command ?? "")), 0, 0);
   }
-  return new Text(renderToolSummary(theme, "pending", toolName, summarizeToolSubject(toolName, args), undefined), 0, 0);
+  return new Text(renderNamedToolTree(theme, "accent", toolName, summarizeToolSubject(toolName, args) ?? ""), 0, 0);
 }
 
 function summarizeToolSubject(toolName: string, args: Record<string, unknown>): string | undefined {
@@ -1057,25 +1093,19 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const args = context.args as Record<string, unknown>;
       const command = String(args.command ?? "");
       if (isPartial) {
-        return toolRowText(theme, `${theme.fg("accent", TOOL_ROW_MARKER)} ${theme.fg("accent", "$")} ${theme.fg("accent", command)}`);
+        return toolRowText(theme, renderBashTree(theme, "accent", command));
       }
       const output = getTextContent(result as any);
       const outputLines = cleanOutputLines(output);
       const statusColor = context.isError ? "error" : "success";
-      let text = `${theme.fg(statusColor, TOOL_ROW_MARKER)} ${theme.fg(statusColor, "$")} ${theme.fg(statusColor, command)}`;
-      const visibleLines = expanded ? outputLines : outputLines.slice(-4);
-      if (visibleLines.length > 0) {
-        text += "\n" + visibleLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-      }
-      const lineSummary = !expanded && visibleLines.length < outputLines.length
-        ? `showing ${visibleLines.length}/${outputLines.length} lines (ctrl+o expand)`
-        : formatLineLabel(outputLines.length, "line");
-      text = appendToolFooter(theme, text, [
+      const visibleLines = expanded ? outputLines : outputLines.slice(-DEFAULT_TOOL_PREVIEW_LINES);
+      const lineSummary = previewSummary(visibleLines.length, outputLines.length, "line", expanded);
+      const text = renderBashTree(theme, statusColor, command, visibleLines, joinMeta([
         lineSummary,
         renderDuration(context),
         formatPayloadSize(output),
         details.truncation?.truncated ? "truncated" : undefined,
-      ]);
+      ]));
       return toolRowText(theme, text);
     },
   });
@@ -1090,7 +1120,7 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("read", args as Record<string, unknown>, theme, context),
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "read", "loading", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "read", "loading"));
       const details = (result.details ?? {}) as ReadToolDetails;
       const args = context.args as Record<string, unknown>;
       const subjectBase = shortenPath(String(args.path ?? ""));
@@ -1098,30 +1128,33 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const subject = range ? `${subjectBase}:${range}` : subjectBase;
       const first = result.content[0];
       if (first?.type === "image") {
-        const text = appendToolFooter(
+        return toolRowText(theme, renderNamedToolTree(
           theme,
-          renderToolSummary(theme, "success", "read", subject, undefined),
-          ["image", renderDuration(context)],
-        );
-        return toolRowText(theme, text);
+          "success",
+          "read",
+          subject,
+          [],
+          joinMeta(["image", renderDuration(context)]),
+        ));
       }
       const textContent = getTextContent(result as any);
       const lines = textContent.split("\n");
       const totalLines = lines.length;
-      const showContent = expanded || totalLines <= 6;
-      let text = renderToolSummary(theme, context.isError ? "error" : "success", "read", subject, undefined);
-      if (showContent && totalLines > 0) {
-        text += "\n" + lines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-      }
-      const lineSummary = !showContent && totalLines > 0
-        ? `${formatLineLabel(totalLines, "line")} (ctrl+o expand)`
-        : formatLineLabel(totalLines, "line");
-      text = appendToolFooter(theme, text, [
-        lineSummary,
-        renderDuration(context),
-        formatPayloadSize(textContent),
-        details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined,
-      ]);
+      const visibleLines = expanded ? lines : lines.slice(0, DEFAULT_TOOL_PREVIEW_LINES);
+      const lineSummary = previewSummary(visibleLines.length, totalLines, "line", expanded);
+      const text = renderNamedToolTree(
+        theme,
+        context.isError ? "error" : "success",
+        "read",
+        subject,
+        totalLines > 0 ? visibleLines : [],
+        joinMeta([
+          lineSummary,
+          renderDuration(context),
+          formatPayloadSize(textContent),
+          details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined,
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1136,23 +1169,30 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("edit", args as Record<string, unknown>, theme, context),
     renderResult(result, { isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "edit", "applying", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "edit", "applying"));
       const details = (result.details ?? {}) as EditToolDetails;
       const args = context.args as Record<string, unknown>;
       const path = String(args.path ?? "");
       const textContent = getTextContent(result as any);
       if (context.isError) {
-        const text = appendToolFooter(
+        return toolRowText(theme, renderNamedToolTree(
           theme,
-          renderToolSummary(theme, "error", "edit", path, textContent.split("\n")[0]),
-          [renderDuration(context)],
-        );
-        return toolRowText(theme, text);
+          "error",
+          "edit",
+          path,
+          [],
+          joinMeta([textContent.split("\n")[0], renderDuration(context)]),
+        ));
       }
       const stats = details.diff ? diffStats(details.diff) : { additions: 0, removals: 0 };
-      let text = renderToolSummary(theme, "success", "edit", path, undefined);
-      if (details.diff) text += `\n${renderRichDiffPreview(theme, details.diff, 18)}`;
-      text = appendToolFooter(theme, text, [`+${stats.additions}`, `-${stats.removals}`, renderDuration(context)]);
+      const text = renderNamedToolTree(
+        theme,
+        "success",
+        "edit",
+        path,
+        details.diff ? renderRichDiffPreview(theme, details.diff, 18).split("\n") : [],
+        joinMeta([`+${stats.additions}`, `-${stats.removals}`, renderDuration(context)]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1173,48 +1213,59 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       return renderCall("write", input, theme, context);
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "write", "writing", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "write", "writing"));
       const args = context.args as Record<string, unknown>;
       const path = String(args.path ?? "");
       const content = String(args.content ?? "");
       const textContent = getTextContent(result as any);
       if (context.isError) {
-        const text = appendToolFooter(
+        return toolRowText(theme, renderNamedToolTree(
           theme,
-          renderToolSummary(theme, "error", "write", path, textContent.split("\n")[0]),
-          [renderDuration(context)],
-        );
-        return toolRowText(theme, text);
+          "error",
+          "write",
+          path,
+          [],
+          joinMeta([textContent.split("\n")[0], renderDuration(context)]),
+        ));
       }
 
       const preview = (context.state as XtrmToolRenderState).writePreview;
       if (preview?.kind === "unchanged") {
-        const text = appendToolFooter(
+        return toolRowText(theme, renderNamedToolTree(
           theme,
-          renderToolSummary(theme, "success", "write", path, undefined),
-          ["no changes", renderDuration(context)],
-        );
-        return toolRowText(theme, text);
+          "success",
+          "write",
+          path,
+          [],
+          joinMeta(["no changes", renderDuration(context)]),
+        ));
       }
       if (preview?.kind === "updated") {
-        let text = renderToolSummary(theme, "success", "write", path, undefined);
-        if (preview.diff) text += `\n${renderRichDiffPreview(theme, preview.diff, 18)}`;
-        text = appendToolFooter(theme, text, [`+${preview.additions}`, `-${preview.removals}`, renderDuration(context)]);
-        return toolRowText(theme, text);
+        return toolRowText(theme, renderNamedToolTree(
+          theme,
+          "success",
+          "write",
+          path,
+          preview.diff ? renderRichDiffPreview(theme, preview.diff, 18).split("\n") : [],
+          joinMeta([`+${preview.additions}`, `-${preview.removals}`, renderDuration(context)]),
+        ));
       }
 
       const lines = preview?.kind === "created" ? preview.lineCount : lineCount(content);
-      let text = renderToolSummary(theme, "success", "write", path, undefined);
       const contentLines = content.split("\n");
-      const showContent = content && (expanded || contentLines.length <= 6);
-      if (showContent) {
-        text += "\n" + contentLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-      }
-      text = appendToolFooter(theme, text, [
-        !showContent && lines > 0 ? `${formatLineLabel(lines, "line")} (ctrl+o expand)` : formatLineLabel(lines, "line"),
-        renderDuration(context),
-        formatPayloadSize(content),
-      ]);
+      const visibleLines = !content ? [] : expanded ? contentLines : contentLines.slice(0, DEFAULT_TOOL_PREVIEW_LINES);
+      const text = renderNamedToolTree(
+        theme,
+        "success",
+        "write",
+        path,
+        visibleLines,
+        joinMeta([
+          previewSummary(visibleLines.length, lines, "line", expanded),
+          renderDuration(context),
+          formatPayloadSize(content),
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1229,19 +1280,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("find", args as Record<string, unknown>, theme, context),
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "find", "searching", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "find", "searching"));
       const details = (result.details ?? {}) as FindToolDetails;
       const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = summarizeCount(textContent);
-      let text = renderToolSummary(theme, context.isError ? "error" : "success", "find", String(args.pattern ?? ""), undefined);
-      if (expanded && count > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 10), 10)}`;
-      text = appendToolFooter(theme, text, [
-        !expanded && count > 0 ? `${formatLineLabel(count, "match")} (ctrl+o expand)` : formatLineLabel(count, "match"),
-        renderDuration(context),
-        formatPayloadSize(textContent),
-        details.resultLimitReached ? "limit reached" : undefined,
-      ]);
+      const outputLines = count > 0 ? previewLines(textContent, expanded ? 10 : DEFAULT_TOOL_PREVIEW_LINES) : [];
+      const text = renderNamedToolTree(
+        theme,
+        context.isError ? "error" : "success",
+        "find",
+        String(args.pattern ?? ""),
+        outputLines,
+        joinMeta([
+          previewSummary(Math.min(outputLines.length, count), count, "match", expanded),
+          renderDuration(context),
+          formatPayloadSize(textContent),
+          details.resultLimitReached ? "limit reached" : undefined,
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1256,19 +1313,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("grep", args as Record<string, unknown>, theme, context),
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "grep", "searching", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "grep", "searching"));
       const details = (result.details ?? {}) as GrepToolDetails;
       const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = countPrefixedItems(textContent, ["-- "]) || summarizeCount(textContent);
-      let text = renderToolSummary(theme, context.isError ? "error" : "success", "grep", String(args.pattern ?? ""), undefined);
-      if (expanded && textContent.length > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 12), 12)}`;
-      text = appendToolFooter(theme, text, [
-        !expanded && count > 0 ? `${formatLineLabel(count, "match")} (ctrl+o expand)` : formatLineLabel(count, "match"),
-        renderDuration(context),
-        formatPayloadSize(textContent),
-        details.matchLimitReached ? "limit reached" : undefined,
-      ]);
+      const outputLines = textContent.length > 0 ? previewLines(textContent, expanded ? 12 : DEFAULT_TOOL_PREVIEW_LINES) : [];
+      const text = renderNamedToolTree(
+        theme,
+        context.isError ? "error" : "success",
+        "grep",
+        String(args.pattern ?? ""),
+        outputLines,
+        joinMeta([
+          previewSummary(Math.min(outputLines.length, count), count, "match", expanded),
+          renderDuration(context),
+          formatPayloadSize(textContent),
+          details.matchLimitReached ? "limit reached" : undefined,
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1283,19 +1346,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("ls", args as Record<string, unknown>, theme, context),
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "ls", "listing", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "ls", "listing"));
       const details = (result.details ?? {}) as LsToolDetails;
       const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = summarizeCount(textContent);
-      let text = renderToolSummary(theme, context.isError ? "error" : "success", "ls", shortenPath(String(args.path ?? ".")), undefined);
-      if (expanded && count > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 12), 12)}`;
-      text = appendToolFooter(theme, text, [
-        !expanded && count > 0 ? `${formatLineLabel(count, "entry")} (ctrl+o expand)` : formatLineLabel(count, "entry"),
-        renderDuration(context),
-        formatPayloadSize(textContent),
-        details.entryLimitReached ? "limit reached" : undefined,
-      ]);
+      const outputLines = count > 0 ? previewLines(textContent, expanded ? 12 : DEFAULT_TOOL_PREVIEW_LINES) : [];
+      const text = renderNamedToolTree(
+        theme,
+        context.isError ? "error" : "success",
+        "ls",
+        shortenPath(String(args.path ?? ".")),
+        outputLines,
+        joinMeta([
+          previewSummary(Math.min(outputLines.length, count), count, "entry", expanded),
+          renderDuration(context),
+          formatPayloadSize(textContent),
+          details.entryLimitReached ? "limit reached" : undefined,
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
