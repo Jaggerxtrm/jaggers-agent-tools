@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.4] - 2026-07-30
+
+### Added
+- Unify native tool rendering (xtrm-cgxqy) (#534) ([5a897c8](https://github.com/xtrm-dev/core/commit/5a897c89e991a4741850abbc3d31d32d496f2104))
+
 ## [0.11.3] - 2026-07-28
 
 ### Added
