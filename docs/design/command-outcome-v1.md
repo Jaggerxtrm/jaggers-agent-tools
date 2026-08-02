@@ -29,6 +29,8 @@ The structured mode is deliberately narrow:
 
 The adapter records `readiness.status=unverified` and `source=tmux-pane`. A live pane proves that the tmux mutation completed; it does not prove that the runtime accepted its first turn. The adapter therefore never fabricates `ready` or a runtime thread identifier. Pi and Claude keep `thread_id=null` until their released harnesses expose an exact identifier through this launch seam.
 
+If worktree session metadata cannot be persisted, the adapter reports `status=degraded` with `reason_code=session_created_metadata_not_persisted` and omits the metadata-dependent resume action. The live tmux session remains attachable.
+
 ## Safety profiles
 
 The Pi adapter records the current native-runtime permission boundary. The Claude adapter records the released `--dangerously-skip-permissions` behavior. Both record `hook_trust=preserved`; neither profile introduces a hook-trust bypass.
@@ -40,7 +42,7 @@ These fields characterize released behavior. The future Codex adapter will use i
 The detached result includes four optional actions:
 
 1. attach to the live tmux session, or switch the current client when invoked from inside tmux;
-2. resume through `xt attach <slug>` after the tmux session ends;
+2. resume through `xt attach <branch>` after the tmux session ends;
 3. inspect drift with `xt doctor`;
 4. close through `xt end` from the owned worktree.
 
