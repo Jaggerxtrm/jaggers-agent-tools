@@ -152,6 +152,18 @@ describe('aggregated topology projection contract', () => {
 });
 
 describe('validator behavior', () => {
+    it('bounds command outcomes and rejects fields that could smuggle raw runtime content', () => {
+        const id = 'xtrm.command-outcome.v1';
+        const payload = structuredClone(golden[id]) as Record<string, any>;
+
+        expect(validate(id, payload).valid).toBe(true);
+        expect(validate(id, { ...payload, prompt: 'untrusted turn body' }).valid).toBe(false);
+        expect(validate(id, { ...payload, summary: 'x'.repeat(241) }).valid).toBe(false);
+
+        payload.next_actions[0].argv[1] = 'attach\n--unexpected';
+        expect(validate(id, payload).valid).toBe(false);
+    });
+
     it('rejects a fabricated invalid pi-extension manifest (audit acceptance criterion)', () => {
         const fabricated = {
             schema_version: 'xtrm.pi-extension-manifest.v1',
