@@ -100,9 +100,12 @@ describe('K1 runtime characterization', () => {
         config_root: 'ignored with --ignore-user-config',
       },
     });
-    expect(metadata.runtime.executable_source).toContain('/codex');
+    expect(metadata.runtime.executable_source).toBe(
+      '<CODEX_HOME>/packages/standalone/releases/0.146.0-x86_64-unknown-linux-musl/bin/codex',
+    );
     expect(metadata.capture.command).toContain('--ephemeral');
     expect(metadata.capture.redactions).toContain('thread_id');
+    expect(metadata.capture.redactions).toContain('executable_source_home');
 
     expect(events.map((event) => event.type)).toEqual([
       'thread.started',
@@ -124,8 +127,8 @@ describe('K1 runtime characterization', () => {
       },
     });
 
-    const serialized = JSON.stringify(events);
+    const serialized = JSON.stringify({ metadata, events });
     expect(serialized).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    expect(serialized).not.toContain('/home/dawid');
+    expect(serialized).not.toMatch(/\/(?:home|Users)\/[^/"\\s]+/);
   });
 });
