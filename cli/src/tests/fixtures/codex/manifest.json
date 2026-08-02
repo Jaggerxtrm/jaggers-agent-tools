@@ -1,0 +1,264 @@
+{
+  "$comment": "CHARACTERIZATION fixture set for KAN-127 K1 / beads xtrm-ozknq.5. Pins Codex 0.146.0 hook payload schemas so a later shared-launcher refactor cannot silently change the assumed Codex contract.",
+  "runtime": "codex",
+  "runtime_version": "codex-cli 0.146.0",
+  "executable": "/home/jagger/.codex/packages/standalone/releases/0.146.0-x86_64-unknown-linux-musl/bin/codex",
+  "codex_home": "/home/jagger/.codex",
+  "codex_home_source": "CODEX_HOME unset at capture time; resolved to the default $HOME/.codex, which exists on this host",
+  "capture_date": "2026-08-02",
+  "capture_method": {
+    "summary": "Static extraction of the draft-07 JSON Schemas embedded in the codex binary. No Codex session was started and no hook was invoked.",
+    "steps": [
+      "Resolve the binary: readlink -f $(command -v codex) -> the executable path above (the path encodes version 0.146.0).",
+      "Read the whole binary as bytes (311001136 bytes for this build).",
+      "Find every occurrence of the literal byte sequence '{\\n  \"$schema\"'. This build yields exactly 21 occurrences, all in the byte range [247554023, 247579685).",
+      "From each occurrence, scan forward with a string-aware brace-balance counter (tracking quotes and backslash escapes) until depth returns to 0; that slice is one complete schema document.",
+      "json.loads each slice, then write it to <title>.json pretty-printed with indent=2 and sort_keys=true, plus a trailing newline.",
+      "sha256 each written file and record it in this manifest."
+    ],
+    "byte_range_searched": [
+      247554023,
+      247579685
+    ],
+    "occurrence_count": 21,
+    "serialization": "json.dumps(schema, indent=2, sort_keys=True) + '\\n'"
+  },
+  "redaction": {
+    "instance_data_captured": false,
+    "assertion": "These fixtures are JSON Schema documents (type/enum/const/required declarations) extracted from the binary. They contain no captured instance data, no session transcript, no environment values, and therefore no credentials, tokens, API keys, file paths from the operator's machine, or prompt text. The validator test proves this by scanning every fixture for a FORBIDDEN_SUBSTRINGS set.",
+    "verified_by": "cli/src/tests/codex-k1-payload-fixtures.test.ts (redaction negative proof)"
+  },
+  "documented_gaps": [
+    "SUPERSEDED 2026-08-02 by the `live` section. As recorded at schema-extraction time: 'No 0.146.0-produced rollout JSONL exists on this host. The newest rollout is /home/jagger/.codex/sessions/2026/04/29/rollout-2026-04-29T10-29-38-019dd85b-a646-7263-8947-0bcb7369be4d.jsonl with cli_version 0.122.0. Session-transcript shape for 0.146.0 is therefore NOT pinned by this fixture set.' A real 0.146.0 rollout is now pinned at live/rollout-0.146.0.observed.jsonl, and its drift from that 0.122.0 baseline is asserted in cli/src/tests/codex-k1-live-payloads.test.ts.",
+    "SUPERSEDED 2026-08-02 by the `live` section, and only for four of the eleven events. As recorded at schema-extraction time: 'No live hook INVOCATION was observed. Only the declared schemas are evidence; actual field VALUES that Codex emits at runtime (for example the real content of tool_input, transcript_path, or session_id) are unverified.' SessionStart, UserPromptSubmit, Stop and SessionEnd are now pinned against a real capture. PreToolUse, PostToolUse, PermissionRequest, PreCompact, PostCompact, SubagentStart and SubagentStop were NOT exercised by the capture command and their runtime VALUES remain unverified.",
+    "The hook enum VALUES for HookScope, HookSource, HookRunStatus and HookTrustStatus could not be recovered from the binary: the embedded TypeScript bindings use deduplicated placeholder markers instead of literal variants. These enums are NOT represented in this fixture set and must not be inferred from it.",
+    "Output schemas carry no top-level 'required' array in this build; only input schemas do. The hook_event_name const appears on inputs; outputs carry the event name as 'hookEventName' inside a hookSpecificOutput definition.",
+    "session-end has an input schema but deliberately no output schema, so 21 files cover 11 events."
+  ],
+  "expected_event_count": 11,
+  "expected_file_count": 21,
+  "files": {
+    "permission-request.command.input.json": {
+      "title": "permission-request.command.input",
+      "byte_offset": 247556878,
+      "byte_length": 1279,
+      "sha256": "ffe7200494f1113307efc1c958816fbaa3c16297ce4bb358bc5b22172a437a70"
+    },
+    "permission-request.command.output.json": {
+      "title": "permission-request.command.output",
+      "byte_offset": 247558190,
+      "byte_length": 2346,
+      "sha256": "69c0a581b3f02ec44b22d4f8a7f2f3c15d37dc2df4bb106b3e4395f5e0c70972"
+    },
+    "post-compact.command.input.json": {
+      "title": "post-compact.command.input",
+      "byte_offset": 247560562,
+      "byte_length": 1071,
+      "sha256": "d5cecd14bd2ca18605ba8209108f76291f886ffe3cb4762d70e712c148836f31"
+    },
+    "post-compact.command.output.json": {
+      "title": "post-compact.command.output",
+      "byte_offset": 247561660,
+      "byte_length": 475,
+      "sha256": "811b7ae2a4b277cd51c9df989f347e494fa981d01e346bc2a757506e97734882"
+    },
+    "post-tool-use.command.input.json": {
+      "title": "post-tool-use.command.input",
+      "byte_offset": 247554023,
+      "byte_length": 1386,
+      "sha256": "d569956a287ec0864b514d8ff5dbdf0b70bfbb370d89e61a1207bbdf9208ba7d"
+    },
+    "post-tool-use.command.output.json": {
+      "title": "post-tool-use.command.output",
+      "byte_offset": 247555437,
+      "byte_length": 1441,
+      "sha256": "fe7271d436266554150b2be783ca10da08dded8784eb8af2ffd00fb81668988a"
+    },
+    "pre-compact.command.input.json": {
+      "title": "pre-compact.command.input",
+      "byte_offset": 247565456,
+      "byte_length": 1069,
+      "sha256": "5728b5da4c63e1e07f2d53ac8b2adc18306cd3dc8b01b556fc422e75b32a8734"
+    },
+    "pre-compact.command.output.json": {
+      "title": "pre-compact.command.output",
+      "byte_offset": 247566551,
+      "byte_length": 474,
+      "sha256": "98ba0dbf0848d8283cfe48a85122f4d9122baae1b457f50e239504864900247e"
+    },
+    "pre-tool-use.command.input.json": {
+      "title": "pre-tool-use.command.input",
+      "byte_offset": 247562161,
+      "byte_length": 1336,
+      "sha256": "d5cb38c98a7d931907aa96614c4c52a5bc0c37d61b3f897837e32331842d3100"
+    },
+    "pre-tool-use.command.output.json": {
+      "title": "pre-tool-use.command.output",
+      "byte_offset": 247563524,
+      "byte_length": 1907,
+      "sha256": "1ba5f66f888f5a8362ff8c46883b4cb1297de53d3d802b92d25535460cfdd0fc"
+    },
+    "session-end.command.input.json": {
+      "title": "session-end.command.input",
+      "byte_offset": 247569226,
+      "byte_length": 717,
+      "sha256": "99bf6e75091525b96926dd85a0adf6589dea93fe0d181394027fabda8139402e"
+    },
+    "session-start.command.input.json": {
+      "title": "session-start.command.input",
+      "byte_offset": 247567052,
+      "byte_length": 1060,
+      "sha256": "9a2fe5c4541eb733c1b9a402b28b3c50939bd3d3bb76cf6d7ec7e56cc1441f5d"
+    },
+    "session-start.command.output.json": {
+      "title": "session-start.command.output",
+      "byte_offset": 247568140,
+      "byte_length": 1061,
+      "sha256": "72c8cded2efc7024abfd62692b84934b1b1999cb595665f4a520dc8ebb5eb690"
+    },
+    "stop.command.input.json": {
+      "title": "stop.command.input",
+      "byte_offset": 247577462,
+      "byte_length": 1241,
+      "sha256": "b162ebcae8c3b872aee3725128b436769557fc1fe0c83336c4e76eed62b22626"
+    },
+    "stop.command.output.json": {
+      "title": "stop.command.output",
+      "byte_offset": 247578722,
+      "byte_length": 963,
+      "sha256": "37679d1a933fdc3dc8cea5ff12d7d0e2dacfc036208d134aefc09247e1222d88"
+    },
+    "subagent-start.command.input.json": {
+      "title": "subagent-start.command.input",
+      "byte_offset": 247569971,
+      "byte_length": 1197,
+      "sha256": "e1cacc5cd92217e96e327cf182038fa93099d194c3107439b4dad4b806d414cc"
+    },
+    "subagent-start.command.output.json": {
+      "title": "subagent-start.command.output",
+      "byte_offset": 247571197,
+      "byte_length": 1065,
+      "sha256": "531f7a457ad8430de82388319ff2bf030fd3a1dc0e9a0d4078447bc30948448b"
+    },
+    "subagent-stop.command.input.json": {
+      "title": "subagent-stop.command.input",
+      "byte_offset": 247572289,
+      "byte_length": 1502,
+      "sha256": "27842578768e74fb8bcd86b30156b207011829a81dc01b00cfd55340df8b079f"
+    },
+    "subagent-stop.command.output.json": {
+      "title": "subagent-stop.command.output",
+      "byte_offset": 247573819,
+      "byte_length": 972,
+      "sha256": "a3987dab22b8684ab108bbb76ec5306471d9e01b1b7cac007b1ed90bc9e055cf"
+    },
+    "user-prompt-submit.command.input.json": {
+      "title": "user-prompt-submit.command.input",
+      "byte_offset": 247574791,
+      "byte_length": 1230,
+      "sha256": "31d3d5e094ae9baa9478bc8e3d09f689de5a74228a404d2dffe60fc8fa89e3a0"
+    },
+    "user-prompt-submit.command.output.json": {
+      "title": "user-prompt-submit.command.output",
+      "byte_offset": 247576054,
+      "byte_length": 1390,
+      "sha256": "12a741340d3a5acaf139721ad086d79d6dc0d961f752c6d82bd7a315f374e641"
+    }
+  },
+  "live": {
+    "$comment": "LIVE EVIDENCE section. Unlike the `files` section above (static schema documents read out of the codex binary), everything here is real captured INSTANCE data from an operator-approved Codex run. Validated by cli/src/tests/codex-k1-live-payloads.test.ts.",
+    "runtime": "codex",
+    "runtime_version": "codex-cli 0.146.0",
+    "capture_date": "2026-08-02",
+    "codex_home": "/home/jagger/.codex",
+    "capture_command": "codex exec --skip-git-repo-check -s read-only -C <empty tmp dir> --json -o <file> \"reply with the single word ok\"",
+    "hook_mechanism": {
+      "summary": "Temporary command hooks were installed in ~/.codex/hooks.json for SessionStart, UserPromptSubmit, Stop and SessionEnd. Each hook was the command `cat > <file>`, so the file written is the hook's raw stdin, byte-for-byte, with no transformation by the capture harness.",
+      "hook_marker": "each temporary hook entry carried _source: \"xtrm-k1-capture\"",
+      "trust": "Hook trust was granted INTERACTIVELY by the operator at the trust prompt. --dangerously-bypass-hook-trust was NOT used.",
+      "teardown": "The temporary hooks were removed and ~/.codex/hooks.json was restored byte-identically after the capture window closed."
+    },
+    "sandbox_flag_used": "-s read-only",
+    "trap": "The capture ran under -s read-only, yet every hook payload reports permission_mode=bypassPermissions. permission_mode does NOT reflect the --sandbox flag. Never derive a safety profile from a hook payload; derive it from the argv Core emitted. Pinned by the negative-proof test in cli/src/tests/codex-k1-live-payloads.test.ts.",
+    "redaction": {
+      "rule": "Literal, ordered, longest-prefix-first string replacement applied to the raw captured UTF-8 text before it was written here.",
+      "replacements": [
+        [
+          "/home/jagger/.codex",
+          "<CODEX_HOME>"
+        ],
+        [
+          "/home/jagger/.claude/jobs/fd25ec64/tmp/probe2",
+          "<CWD>"
+        ],
+        [
+          "/home/jagger/.claude/jobs/fd25ec64/tmp/probe",
+          "<CWD>"
+        ],
+        [
+          "/home/jagger",
+          "<HOME>"
+        ]
+      ],
+      "cwd_note": "The two runs used two distinct empty temp working directories (probe2 for the hook capture, probe for the rollout). Both collapse to the single placeholder <CWD>; the raw distinction is not preserved.",
+      "kept_deliberately": "Session and turn UUIDs are NOT redacted. They are not secrets and they are the evidence for the identity join across hook payload, --json event stream, rollout filename and rollout session_meta.",
+      "serialization": "Hook payloads: json.loads(redacted) then json.dumps(doc, indent=2) + '\\n' \u2014 key ORDER is preserved verbatim from the capture; keys are NOT sorted. Rollout: line-preserving replacement only, each line re-parsed to prove it still decodes; payloads were never re-serialized.",
+      "verified_by": "cli/src/tests/codex-k1-live-payloads.test.ts (redaction negative proof)"
+    },
+    "observed_event_stream": [
+      "{\"type\":\"thread.started\",\"thread_id\":\"019fc3d5-fb32-7f80-b292-9134f94f01eb\"}",
+      "{\"type\":\"turn.started\"}",
+      "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"ok\"}}",
+      "{\"type\":\"turn.completed\",\"usage\":{}}"
+    ],
+    "documented_gaps": [
+      "The rollout in this section is NOT the transcript of the hook-capture session. The hook payloads come from session 019fc3d5-fb32-7f80-b292-9134f94f01eb (turn succeeded, last_assistant_message 'ok'). The rollout comes from an earlier session 019fc3bc-fb7a-7ae0-9536-125624bf726b whose turn failed with codex_error_info 'unauthorized'. The four-surface identity join is therefore proven WITHIN each artifact, not ACROSS these two files.",
+      "The rollout file was renamed on copy to rollout-0.146.0.observed.jsonl, so the original on-disk filename is no longer part of the fixture. The filename-carries-the-session-uuid claim is instead pinned from transcript_path inside the four hook payloads, which is itself a real rollout path emitted by Codex.",
+      "No Stop hook payload was captured for an auth-failed turn. stop.command.input declares last_assistant_message as a REQUIRED NullableString, and the auth-failed rollout records task_complete.last_agent_message = null, so an adapter must treat Stop.last_assistant_message as possibly null. The observed non-null value 'ok' only proves the success path.",
+      "Only the four session/turn lifecycle events were exercised. No tool call, no permission prompt and no compaction occurred, so tool_input/tool_response/permission payload VALUES are still unverified."
+    ],
+    "expected_file_count": 5,
+    "files": {
+      "rollout-0.146.0.observed.jsonl": {
+        "source_capture_file": "rollout-0.146.0-exec-authfail.jsonl",
+        "kind": "rollout-jsonl",
+        "lines": 11,
+        "bytes": 5311,
+        "sha256": "317e2be634fd8d66dae6c073ae7b32192620040dbb48988e391804f692c00f34",
+        "redaction_note": "Content values >200 chars replaced with a size-annotated placeholder and world_state.state.host_skills emptied, to avoid publishing provider prompt text and the operator skill inventory in a PUBLIC repo. All keys, line types, UUIDs, timestamps and cli_version are preserved, so every structural assertion still holds."
+      },
+      "session-end.observed.json": {
+        "source_capture_file": "SessionEnd-1785697016762440300.json",
+        "kind": "hook-stdin",
+        "hook_event_name": "SessionEnd",
+        "schema": "session-end.command.input.json",
+        "bytes": 261,
+        "sha256": "33cfe48ad4ed4a7c9f5ecd4d9be4553e8ad4568754fb8e3e7c6c6db6e738c206"
+      },
+      "session-start.observed.json": {
+        "source_capture_file": "SessionStart-1785697014622592258.json",
+        "kind": "hook-stdin",
+        "hook_event_name": "SessionStart",
+        "schema": "session-start.command.input.json",
+        "bytes": 333,
+        "sha256": "7f62e3407f7c35f6831da6174179225666a91006a3b971ba29b57a88f21f9a0f"
+      },
+      "stop.observed.json": {
+        "source_capture_file": "Stop-1785697016707733584.json",
+        "kind": "hook-stdin",
+        "hook_event_name": "Stop",
+        "schema": "stop.command.input.json",
+        "bytes": 418,
+        "sha256": "56c21c7eab0fc26145b9ba854a7af2567f00b7e3b3da6a89ed17628a209e65b4"
+      },
+      "user-prompt-submit.observed.json": {
+        "source_capture_file": "UserPromptSubmit-1785697014625238724.json",
+        "kind": "hook-stdin",
+        "hook_event_name": "UserPromptSubmit",
+        "schema": "user-prompt-submit.command.input.json",
+        "bytes": 412,
+        "sha256": "b65307f2785ba03db0ce3f899d7b04624c691d785cf446c0c0ae9637fff02683"
+      }
+    }
+  }
+}
