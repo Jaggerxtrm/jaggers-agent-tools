@@ -626,7 +626,9 @@ function resolveRuntimeExecutable(runtime: 'pi' | 'claude'): string | null {
         stdio: 'pipe',
     });
     const executable = (result.stdout ?? '').trim();
-    return result.status === 0 && path.isAbsolute(executable) ? executable : null;
+    return result.status === 0 && executable
+        ? path.resolve(process.cwd(), executable)
+        : null;
 }
 
 export function createRuntimeBufferName(): string {

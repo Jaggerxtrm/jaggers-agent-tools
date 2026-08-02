@@ -62150,7 +62150,7 @@ function buildDetachedLaunchOutcome(input) {
       ),
       ...input.metadataPersisted ? [action(
         "resume",
-        ["xt", "attach", input.sessionSlug],
+        ["xt", "attach", input.branchName],
         input.worktreePath,
         "Resume the runtime in this worktree after the tmux session ends."
       )] : [],
@@ -62560,7 +62560,7 @@ function resolveRuntimeExecutable(runtime) {
     stdio: "pipe"
   });
   const executable = (result.stdout ?? "").trim();
-  return result.status === 0 && import_node_path13.default.isAbsolute(executable) ? executable : null;
+  return result.status === 0 && executable ? import_node_path13.default.resolve(process.cwd(), executable) : null;
 }
 function createRuntimeBufferName() {
   return `xtrm-role-${(0, import_node_crypto6.randomBytes)(16).toString("hex")}`;
