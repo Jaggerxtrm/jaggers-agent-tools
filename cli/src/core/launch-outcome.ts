@@ -17,10 +17,21 @@ export function checkStructuredLaunchOptions(input: {
     json: boolean;
     attach: boolean;
     reuse: boolean;
+    sessionSlug?: string;
 }): { ok: true } | { ok: false; error: string } {
     if (!input.json) return { ok: true };
     if (input.attach) return { ok: false, error: '--json requires --no-attach' };
     if (input.reuse) return { ok: false, error: '--json cannot be combined with --reuse' };
+    if (input.sessionSlug !== undefined) {
+        try {
+            assertOutcomeString('sessionSlug', input.sessionSlug, 256);
+        } catch (error) {
+            return {
+                ok: false,
+                error: error instanceof Error ? error.message : 'xtrm.command-outcome.v1: invalid sessionSlug',
+            };
+        }
+    }
     return { ok: true };
 }
 
