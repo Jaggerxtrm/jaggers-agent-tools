@@ -47,7 +47,7 @@ describe('detached launch command outcome', () => {
 
         expect(outcome.next_actions.map((action) => action.argv)).toEqual([
             ['tmux', 'attach-session', '-t', `${runtime}-codex-k2`],
-            ['xt', 'attach', 'codex-k2'],
+            ['xt', 'attach', 'xt/codex-k2'],
             ['xt', 'doctor'],
             ['xt', 'end'],
         ]);
@@ -98,6 +98,24 @@ describe('detached launch command outcome', () => {
 
         expect(outcome.next_actions[0]?.argv).toEqual([
             'tmux', 'switch-client', '-t', 'pi-inside-tmux',
+        ]);
+    });
+
+    it('uses the created branch as the exact resume selector', () => {
+        const outcome = buildDetachedLaunchOutcome({
+            runtime: 'pi',
+            runtimeVersion: '0.74.2',
+            sessionSlug: 'xt/foo',
+            sessionName: 'pi-xt-foo',
+            tmuxSessionId: '$42',
+            paneId: '%17',
+            worktreePath: '/srv/project/.xtrm/worktrees/project-xt-pi-xt/foo',
+            branchName: 'xt/xt/foo',
+            metadataPersisted: true,
+        });
+
+        expect(outcome.next_actions.find((action) => action.kind === 'resume')?.argv).toEqual([
+            'xt', 'attach', 'xt/xt/foo',
         ]);
     });
 

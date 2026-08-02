@@ -172,7 +172,7 @@ export function buildDetachedLaunchOutcome(input: DetachedLaunchOutcomeInput): C
             ),
             ...(input.metadataPersisted ? [action(
                 'resume',
-                ['xt', 'attach', input.sessionSlug],
+                ['xt', 'attach', input.branchName],
                 input.worktreePath,
                 'Resume the runtime in this worktree after the tmux session ends.',
             )] : []),
