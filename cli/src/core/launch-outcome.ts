@@ -9,6 +9,7 @@ export interface DetachedLaunchOutcomeInput {
     paneId: string;
     worktreePath: string;
     branchName: string;
+    insideTmux?: boolean;
 }
 
 export function checkStructuredLaunchOptions(input: {
@@ -110,7 +111,7 @@ export function buildDetachedLaunchOutcome(input: DetachedLaunchOutcomeInput): C
         next_actions: [
             action(
                 'attach',
-                ['tmux', 'attach-session', '-t', input.sessionName],
+                ['tmux', input.insideTmux ? 'switch-client' : 'attach-session', '-t', input.sessionName],
                 input.worktreePath,
                 'Attach to the live detached session.',
             ),

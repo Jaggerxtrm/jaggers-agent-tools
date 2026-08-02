@@ -2322,6 +2322,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
                 paneId,
                 worktreePath,
                 branchName,
+                insideTmux,
             });
             process.stdout.write(`${JSON.stringify(outcome)}\n`);
         } else {

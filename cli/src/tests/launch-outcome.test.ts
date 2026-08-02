@@ -78,6 +78,24 @@ describe('detached launch command outcome', () => {
         });
     });
 
+    it('switches the current tmux client instead of advertising a nested attach', () => {
+        const outcome = buildDetachedLaunchOutcome({
+            runtime: 'pi',
+            runtimeVersion: '0.74.2',
+            sessionSlug: 'inside-tmux',
+            sessionName: 'pi-inside-tmux',
+            tmuxSessionId: '$42',
+            paneId: '%17',
+            worktreePath: '/srv/project/.xtrm/worktrees/project-xt-inside-tmux',
+            branchName: 'xt/inside-tmux',
+            insideTmux: true,
+        });
+
+        expect(outcome.next_actions[0]?.argv).toEqual([
+            'tmux', 'switch-client', '-t', 'pi-inside-tmux',
+        ]);
+    });
+
     it('shell-quotes display text while preserving argv as the authority', () => {
         expect(renderOutcomeArgv(['xt', 'attach', "name with 'quotes'"])).toBe(
             "xt attach 'name with '\"'\"'quotes'\"'\"''",
