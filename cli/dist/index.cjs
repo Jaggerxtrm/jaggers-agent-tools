@@ -62029,6 +62029,9 @@ function checkStructuredLaunchOptions(input) {
   if (!input.json) return { ok: true };
   if (input.attach) return { ok: false, error: "--json requires --no-attach" };
   if (input.reuse) return { ok: false, error: "--json cannot be combined with --reuse" };
+  if (input.role && input.insideTmux && !input.newSession) {
+    return { ok: false, error: "--no-attach requires --new-session for role launches inside tmux" };
+  }
   if (input.sessionSlug !== void 0) {
     try {
       assertOutcomeString("sessionSlug", input.sessionSlug, 256);
@@ -62065,6 +62068,14 @@ var CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
 function assertOutcomeString(label, value, maxLength) {
   if (value.length === 0 || value.length > maxLength || CONTROL_CHARACTER.test(value)) {
     throw new Error(`xtrm.command-outcome.v1: invalid ${label}`);
+  }
+}
+function sanitizeRuntimeVersion(value) {
+  try {
+    assertOutcomeString("runtimeVersion", value, 128);
+    return value;
+  } catch {
+    return null;
   }
 }
 function assertDetachedLaunchInput(input) {
@@ -63031,7 +63042,10 @@ async function launchWorktreeSession(opts) {
     json: structuredOutput,
     attach,
     reuse: Boolean(opts.reuse),
-    sessionSlug: name
+    sessionSlug: name,
+    role: Boolean(roleName),
+    insideTmux: Boolean(process.env.TMUX),
+    newSession: Boolean(newSession)
   });
   if (!structuredCheck.ok) {
     console.error(kleur_default.red(`
@@ -63654,7 +63668,8 @@ async function launchTmuxSession(args) {
         encoding: "utf8",
         timeout: 5e3
       });
-      const runtimeVersion = versionResult.status === 0 ? (versionResult.stdout ?? "").trim().split(/\r?\n/, 1)[0]?.slice(0, 128) || null : null;
+      const runtimeVersionLine = versionResult.status === 0 ? (versionResult.stdout ?? "").trim().split(/\r?\n/, 1)[0]?.slice(0, 128) ?? "" : "";
+      const runtimeVersion = sanitizeRuntimeVersion(runtimeVersionLine);
       const outcome = buildDetachedLaunchOutcome({
         runtime,
         runtimeVersion,

@@ -13,6 +13,7 @@ import {
     buildDetachedLaunchOutcome,
     checkStructuredLaunchPaths,
     checkStructuredLaunchOptions,
+    sanitizeRuntimeVersion,
 } from '../core/launch-outcome.js';
 
 /**
@@ -1504,6 +1505,9 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         attach,
         reuse: Boolean(opts.reuse),
         sessionSlug: name,
+        role: Boolean(roleName),
+        insideTmux: Boolean(process.env.TMUX),
+        newSession: Boolean(newSession),
     });
     if (!structuredCheck.ok) {
         console.error(kleur.red(`\n  ✗ ${structuredCheck.error}\n`));
@@ -2325,9 +2329,10 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
                 encoding: 'utf8',
                 timeout: 5_000,
             });
-            const runtimeVersion = versionResult.status === 0
-                ? (versionResult.stdout ?? '').trim().split(/\r?\n/, 1)[0]?.slice(0, 128) || null
-                : null;
+            const runtimeVersionLine = versionResult.status === 0
+                ? (versionResult.stdout ?? '').trim().split(/\r?\n/, 1)[0]?.slice(0, 128) ?? ''
+                : '';
+            const runtimeVersion = sanitizeRuntimeVersion(runtimeVersionLine);
             const outcome = buildDetachedLaunchOutcome({
                 runtime,
                 runtimeVersion,
