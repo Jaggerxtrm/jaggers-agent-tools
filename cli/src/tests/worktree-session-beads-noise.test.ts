@@ -274,6 +274,9 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
 
     mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
       const joinedArgs = args.join(' ');
+      if (command === 'sh' && args[0] === '-c') {
+        return { status: 0, stdout: '/opt/xtrm/bin/pi\n', stderr: '' };
+      }
       if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
         return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
       }
@@ -294,7 +297,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       if (command === 'tmux' && args[0] === 'display-message' && args.includes('#{session_id}')) {
         return { status: 0, stdout: '$7\n', stderr: '' };
       }
-      if (command === 'pi' && args[0] === '--version') {
+      if (command === '/opt/xtrm/bin/pi' && args[0] === '--version') {
         return { status: 0, stdout: 'pi 0.74.2\u001b[31m\n', stderr: '' };
       }
       return { status: 0, stdout: '', stderr: '' };
@@ -325,6 +328,16 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       persistence: { completed: false, kind: 'worktree.session-metadata' },
     });
     expect(outcome.next_actions.some((next: { kind: string }) => next.kind === 'resume')).toBe(false);
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      '/opt/xtrm/bin/pi',
+      ['--version'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+    expect(mocked.spawnSync.mock.calls.some(([command, args]) =>
+      command === 'tmux'
+      && args[0] === 'new-session'
+      && args.at(-1) === "'/opt/xtrm/bin/pi' 'echo hi'"
+    )).toBe(true);
     expect(mocked.spawnSync).toHaveBeenCalledWith(
       'bd',
       ['worktree', 'create', worktreePath, '--branch', 'xt/json'],

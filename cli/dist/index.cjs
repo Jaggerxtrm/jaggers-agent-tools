@@ -62549,6 +62549,14 @@ function slugifyForSession(input) {
 function shellQuote(s) {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
+function resolveRuntimeExecutable(runtime) {
+  const result = (0, import_node_child_process.spawnSync)("sh", ["-c", 'command -v "$1"', "xtrm", runtime], {
+    encoding: "utf8",
+    stdio: "pipe"
+  });
+  const executable = (result.stdout ?? "").trim();
+  return result.status === 0 && import_node_path13.default.isAbsolute(executable) ? executable : null;
+}
 function createRuntimeBufferName() {
   return `xtrm-role-${(0, import_node_crypto6.randomBytes)(16).toString("hex")}`;
 }
@@ -62558,6 +62566,7 @@ function deleteRuntimeBuffer(bufferName) {
 function buildBufferedRuntimeCommand(bufferName, payloadWaitTimeoutMs = TMUX_PAYLOAD_READY_TIMEOUT_MS) {
   const script = [
     "const { execFileSync, spawnSync } = require('node:child_process')",
+    "const path = require('node:path')",
     "const buffer = process.argv[1]",
     "const cleanup = () => spawnSync('tmux', ['delete-buffer', '-b', buffer], { stdio: 'ignore' })",
     "for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => { cleanup(); process.exit(1) })",
@@ -62570,7 +62579,7 @@ function buildBufferedRuntimeCommand(bufferName, payloadWaitTimeoutMs = TMUX_PAY
     "  cleanup()",
     "}",
     "const payload = JSON.parse(raw)",
-    "if (!['pi', 'claude'].includes(payload.runtimeCmd) || !Array.isArray(payload.runtimeArgs) || payload.runtimeArgs.some((arg) => typeof arg !== 'string')) process.exit(2)",
+    "if (typeof payload.runtimeCmd !== 'string' || !['pi', 'claude'].includes(path.basename(payload.runtimeCmd)) || (!['pi', 'claude'].includes(payload.runtimeCmd) && !path.isAbsolute(payload.runtimeCmd)) || !Array.isArray(payload.runtimeArgs) || payload.runtimeArgs.some((arg) => typeof arg !== 'string')) process.exit(2)",
     "const result = spawnSync(payload.runtimeCmd, payload.runtimeArgs, { stdio: 'inherit' })",
     "if (result.error) throw result.error",
     "process.exit(result.status ?? 1)"
@@ -63217,6 +63226,13 @@ async function launchWorktreeSession(opts) {
 `));
     process.exit(1);
   }
+  const runtimeExecutable = structuredOutput ? resolveRuntimeExecutable(runtime) : runtime;
+  if (!runtimeExecutable) {
+    console.error(kleur_default.red(`
+  \u2717 Could not resolve an absolute ${runtime} executable for structured launch
+`));
+    process.exit(1);
+  }
   if (!structuredOutput) {
     console.log(kleur_default.bold(`
   Launching ${runtime} session`));
@@ -63315,6 +63331,7 @@ async function launchWorktreeSession(opts) {
   }
   const common = {
     runtime,
+    runtimeExecutable,
     sessionSlug: slug,
     bead,
     attach,
@@ -63384,6 +63401,7 @@ function emitAgentRoleLaunched(fields) {
 async function launchTmuxSession(args) {
   const {
     runtime,
+    runtimeExecutable,
     sessionSlug,
     bead,
     attach,
@@ -63441,6 +63459,7 @@ async function launchTmuxSession(args) {
     passthrough
   };
   const plan = args.mode === "role" ? buildRoleTmuxPlan({ ...planCommon, role: args.role }) : buildBareTmuxPlan({ ...planCommon, sessionSlug });
+  const runtimeCmdString = [runtimeExecutable, ...plan.runtimeArgs].map(shellQuote).join(" ");
   const agentEnv = buildAgentEnv(plan.paneOptions);
   if (currentPaneMode) {
     const paneQuery2 = (0, import_node_child_process.spawnSync)("tmux", ["display-message", "-p", "#{pane_id}"], {
@@ -63474,7 +63493,7 @@ async function launchTmuxSession(args) {
       });
     }
     if (!bead) {
-      const runtimeResult = (0, import_node_child_process.spawnSync)(plan.runtimeCmd, plan.runtimeArgs, {
+      const runtimeResult = (0, import_node_child_process.spawnSync)(runtimeExecutable, plan.runtimeArgs, {
         cwd: worktreePath,
         stdio: "inherit",
         env: { ...process.env, ...agentEnv }
@@ -63482,7 +63501,7 @@ async function launchTmuxSession(args) {
       process.exit(runtimeResult.status ?? 0);
     }
     const readyAfterMs2 = Date.now();
-    const runtimeProcess = (0, import_node_child_process.spawn)(plan.runtimeCmd, plan.runtimeArgs, {
+    const runtimeProcess = (0, import_node_child_process.spawn)(runtimeExecutable, plan.runtimeArgs, {
       cwd: worktreePath,
       stdio: "inherit",
       env: { ...process.env, ...agentEnv }
@@ -63567,7 +63586,7 @@ async function launchTmuxSession(args) {
       "-c",
       worktreePath,
       ...envArgs,
-      plan.runtimeCmdString
+      runtimeCmdString
     ], { stdio: "pipe", encoding: "utf8" });
     if (newSess.status !== 0) failNewSession((newSess.stderr ?? "").trim());
   } else {
@@ -63599,7 +63618,7 @@ async function launchTmuxSession(args) {
       process.exit(1);
     }
     const bufferedPayload = JSON.stringify({
-      runtimeCmd: plan.runtimeCmd,
+      runtimeCmd: runtimeExecutable,
       runtimeArgs: plan.runtimeArgs
     });
     const loaded = (0, import_node_child_process.spawnSync)("tmux", ["load-buffer", "-b", runtimeBuffer, "-"], {
@@ -63663,7 +63682,7 @@ async function launchTmuxSession(args) {
         "#{session_id}"
       ], { stdio: "pipe", encoding: "utf8" });
       const tmuxSessionId = sessionIdResult.status === 0 ? (sessionIdResult.stdout ?? "").trim() || null : null;
-      const versionResult = (0, import_node_child_process.spawnSync)(runtime, ["--version"], {
+      const versionResult = (0, import_node_child_process.spawnSync)(runtimeExecutable, ["--version"], {
         stdio: "pipe",
         encoding: "utf8",
         timeout: 5e3
