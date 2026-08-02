@@ -62078,6 +62078,11 @@ function sanitizeRuntimeVersion(value) {
     return null;
   }
 }
+function parseLiveTmuxSessionId(status, stdout) {
+  if (status !== 0) return { ok: false, error: "detached tmux session is no longer live" };
+  const sessionId = stdout.trim();
+  return /^\$[0-9]+$/.test(sessionId) ? { ok: true, sessionId } : { ok: false, error: "detached tmux session returned an invalid identity" };
+}
 function assertDetachedLaunchInput(input) {
   if (input.runtimeVersion !== null) assertOutcomeString("runtimeVersion", input.runtimeVersion, 128);
   assertOutcomeString("sessionSlug", input.sessionSlug, 256);
@@ -63681,7 +63686,17 @@ async function launchTmuxSession(args) {
         `=${plan.sessionName}`,
         "#{session_id}"
       ], { stdio: "pipe", encoding: "utf8" });
-      const tmuxSessionId = sessionIdResult.status === 0 ? (sessionIdResult.stdout ?? "").trim() || null : null;
+      const sessionIdentity = parseLiveTmuxSessionId(
+        sessionIdResult.status,
+        sessionIdResult.stdout ?? ""
+      );
+      if (!sessionIdentity.ok) {
+        process.stderr.write(kleur_default.red(`
+  \u2717 ${sessionIdentity.error}
+`));
+        process.exit(1);
+      }
+      const tmuxSessionId = sessionIdentity.sessionId;
       const versionResult = (0, import_node_child_process.spawnSync)(runtimeExecutable, ["--version"], {
         stdio: "pipe",
         encoding: "utf8",

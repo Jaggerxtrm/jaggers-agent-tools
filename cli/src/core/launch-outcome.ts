@@ -85,6 +85,16 @@ export function sanitizeRuntimeVersion(value: string): string | null {
     }
 }
 
+export function parseLiveTmuxSessionId(status: number | null, stdout: string):
+    | { ok: true; sessionId: string }
+    | { ok: false; error: string } {
+    if (status !== 0) return { ok: false, error: 'detached tmux session is no longer live' };
+    const sessionId = stdout.trim();
+    return /^\$[0-9]+$/.test(sessionId)
+        ? { ok: true, sessionId }
+        : { ok: false, error: 'detached tmux session returned an invalid identity' };
+}
+
 function assertDetachedLaunchInput(input: DetachedLaunchOutcomeInput): void {
     if (input.runtimeVersion !== null) assertOutcomeString('runtimeVersion', input.runtimeVersion, 128);
     assertOutcomeString('sessionSlug', input.sessionSlug, 256);

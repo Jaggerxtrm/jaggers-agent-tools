@@ -4,6 +4,7 @@ import { validate } from '@xtrm/contracts';
 import {
     buildDetachedLaunchOutcome,
     checkStructuredLaunchOptions,
+    parseLiveTmuxSessionId,
     renderOutcomeArgv,
     sanitizeRuntimeVersion,
 } from '../core/launch-outcome.js';
@@ -105,6 +106,18 @@ describe('detached launch command outcome', () => {
             "xt attach 'name with '\"'\"'quotes'\"'\"''",
         );
         expect(renderOutcomeArgv(['printf', '$USER'])).toBe("printf '$USER'");
+    });
+
+    it('requires a live tmux session id before emitting a successful outcome', () => {
+        expect(parseLiveTmuxSessionId(0, '$42\n')).toEqual({ ok: true, sessionId: '$42' });
+        expect(parseLiveTmuxSessionId(1, '')).toEqual({
+            ok: false,
+            error: 'detached tmux session is no longer live',
+        });
+        expect(parseLiveTmuxSessionId(0, 'hostile')).toEqual({
+            ok: false,
+            error: 'detached tmux session returned an invalid identity',
+        });
     });
 
     it('rejects structured output modes that cannot produce one deterministic result', () => {
