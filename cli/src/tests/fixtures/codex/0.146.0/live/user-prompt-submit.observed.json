@@ -1,0 +1,10 @@
+{
+  "session_id": "019fc3d5-fb32-7f80-b292-9134f94f01eb",
+  "turn_id": "019fc3d5-fbbd-7d03-9e18-1ec6b74b8dd2",
+  "transcript_path": "<CODEX_HOME>/sessions/2026/08/02/rollout-2026-08-02T20-56-48-019fc3d5-fb32-7f80-b292-9134f94f01eb.jsonl",
+  "cwd": "<CWD>",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "gpt-5.6-sol",
+  "permission_mode": "bypassPermissions",
+  "prompt": "reply with the single word ok"
+}
