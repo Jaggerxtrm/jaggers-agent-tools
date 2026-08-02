@@ -7,13 +7,14 @@ Status: K1 evidence for `xtrm-ozknq.5`. This document records observed behavior.
 - Core commit: `9b823f80d373a4cb82173ec594f525b1f20caa39`.
 - Codex: `codex-cli 0.146.0`, resolved from `<USER_BIN>/codex` to the standalone `0.146.0-x86_64-unknown-linux-musl` release.
 - Pi and Claude behavior: characterized by `cli/src/tests/worktree-session-role.test.ts`, `cli/src/tests/worktree-session-bare-slash.test.ts`, `cli/src/tests/worktree-session-beads-noise.test.ts`, `cli/src/tests/end-worktree.test.ts`, and `cli/src/tests/pi-launch-self-heal-regression.test.ts`.
-- Codex lifecycle payload: `cli/src/tests/fixtures/codex/0.146.0/exec-success.jsonl`, captured on 2026-08-02 with the exact argv recorded in its metadata.
+- Codex exec event stream: `cli/src/tests/fixtures/codex/0.146.0/exec-success.jsonl`, captured on 2026-08-02 with the exact argv recorded in its metadata.
+- Codex hook schemas and live lifecycle payloads: `cli/src/tests/fixtures/codex/0.146.0/manifest.json` and `live/`, captured with hook trust granted interactively and without `--dangerously-bypass-hook-trust`.
 - Codex product reference: the current OpenAI Codex manual fetched on 2026-08-02. Runtime observations take precedence for this installed version.
 - Programme sequencing: [KAN-127 execution note](https://github.com/xtrm-dev/xtrm/blob/ed06ba222307030c7153c43cd2370262706b78a4/docs/shared/xtrm-codex-kan-127-execution-note.md).
 
 ## Released launcher baseline
 
-Core currently owns one shared worktree launcher for Pi and Claude. Both create one branch and one worktree, publish bead, parent, worktree and branch identity to tmux, wait for runtime readiness, and clean up a failed launch. Their argv heads remain runtime-specific:
+Core currently owns one shared worktree launcher for Pi and Claude. Both create one branch and one worktree, publish bead, parent, worktree and branch identity to tmux, and wait for runtime readiness. Failure cleanup kills the transient tmux buffer and session, but a failure after worktree creation leaves the worktree and branch behind. Their argv heads remain runtime-specific:
 
 | Concern | Pi | Claude |
 | --- | --- | --- |
@@ -25,7 +26,7 @@ Core currently owns one shared worktree launcher for Pi and Claude. Both create 
 | Resume used by `xt attach` | `pi -c` | `claude --continue --dangerously-skip-permissions` |
 | Interactive machine outcome | no versioned outcome object | no versioned outcome object |
 
-Human output reports the worktree and branch before launch and supplies recovery prose after failures. JSON consumers instead use tmux pane options, runtime-origin and xtmux events. K2 must introduce a stable machine outcome without changing these released argv and metadata baselines.
+Human output reports the worktree and branch through `console.log` on stdout before launch and supplies recovery prose after failures. The detached `session_name:pane_id` write is therefore not the only stdout content visible to a caller. JSON consumers instead use tmux pane options, runtime-origin and xtmux events. K2 must introduce a stable machine outcome without changing these released argv and metadata baselines.
 
 ## Observed Codex boundary
 
@@ -39,6 +40,16 @@ The minimal XTRM adapter consumes only the following native surfaces:
 - stable lifecycle and hook payloads for readiness, identity and turn capture.
 
 Native Codex multi-agent execution is outside the parity architecture. Specialists and xtmux remain the worker, orchestration and monitoring authorities. Plugins, MCP bundles, apps/connectors and other extended capabilities remain optional K7 work.
+
+## Observed Codex lifecycle
+
+The trusted 0.146.0 capture proves that `Stop` and `SessionEnd` fire. The xtmux `done` and `off` transitions are therefore reachable through native Codex lifecycle events. This supersedes the earlier absence of a verified Codex equivalent for the Claude Stop path.
+
+`Stop.last_assistant_message` carries the final assistant text directly. The field is required but nullable, so an adapter must type it as `string | null`. Codex turn capture must consume this payload and must not copy Claude's transcript tail-reading algorithm. The successful capture proves the non-null path; a failed-turn `Stop` payload remains unobserved.
+
+`session_id` is stable across `SessionStart`, `UserPromptSubmit`, `Stop`, and `SessionEnd`, and equals the `thread.started.thread_id` for the captured session. `turn_id` correlates `UserPromptSubmit` with `Stop` and is absent from session-scoped events. The live rollout fixture comes from a different session, so the hook-to-rollout join shape is characterized within each artifact rather than asserted across those two files.
+
+Hook `permission_mode` is not a sandbox signal. The read-only capture reports `permission_mode=bypassPermissions`, while its rollout records `sandbox_policy.type=read-only` and `approval_policy=never`. Core must record a safety profile from the argv it emitted. K5 must not infer it from hook payloads. The 0.146.0 rollout also adds `context_window`, `history_mode`, `session_id`, `thread_source`, five turn-context keys, and a `world_state` line relative to the recorded 0.122.0 shape; adapters must remain version-aware.
 
 ## Safety profiles
 
