@@ -71024,8 +71024,8 @@ function createAttachCommand() {
     if (name) {
       const norm = name.startsWith("xt/") ? `refs/heads/${name}` : `refs/heads/xt/${name}`;
       const found = worktrees.find(
-        (wt) => wt.path.endsWith(name) || wt.branch === norm || wt.branch === `refs/heads/${name}`
-      );
+        (wt) => wt.branch === norm || wt.branch === `refs/heads/${name}`
+      ) ?? worktrees.find((wt) => wt.path.endsWith(name));
       if (!found) {
         console.error(kleur_default.red(`
   \u2717 No xt worktree found matching "${name}"
