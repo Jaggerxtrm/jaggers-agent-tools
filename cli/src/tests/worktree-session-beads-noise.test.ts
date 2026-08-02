@@ -324,6 +324,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       readiness: { status: 'unverified', source: 'tmux-pane' },
       persistence: { completed: false, kind: 'worktree.session-metadata' },
     });
+    expect(outcome.next_actions.some((next: { kind: string }) => next.kind === 'resume')).toBe(false);
     expect(mocked.spawnSync).toHaveBeenCalledWith(
       'bd',
       ['worktree', 'create', worktreePath, '--branch', 'xt/json'],
