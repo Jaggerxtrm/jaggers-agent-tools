@@ -24,10 +24,8 @@ export function createAttachCommand(): Command {
             if (name) {
                 const norm = name.startsWith('xt/') ? `refs/heads/${name}` : `refs/heads/xt/${name}`;
                 const found = worktrees.find(wt =>
-                    wt.path.endsWith(name) ||
-                    wt.branch === norm ||
-                    wt.branch === `refs/heads/${name}`
-                );
+                    wt.branch === norm || wt.branch === `refs/heads/${name}`
+                ) ?? worktrees.find(wt => wt.path.endsWith(name));
                 if (!found) {
                     console.error(kleur.red(`\n  ✗ No xt worktree found matching "${name}"\n`));
                     console.log(kleur.dim('  Run: xt worktree list\n'));
