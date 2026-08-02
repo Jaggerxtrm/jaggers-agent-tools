@@ -13,6 +13,7 @@ import {
     buildDetachedLaunchOutcome,
     checkStructuredLaunchPaths,
     checkStructuredLaunchOptions,
+    parseLiveTmuxSessionId,
     sanitizeRuntimeVersion,
 } from '../core/launch-outcome.js';
 
@@ -2340,9 +2341,15 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             const sessionIdResult = spawnSync('tmux', [
                 'display-message', '-p', '-t', `=${plan.sessionName}`, '#{session_id}',
             ], { stdio: 'pipe', encoding: 'utf8' });
-            const tmuxSessionId = sessionIdResult.status === 0
-                ? (sessionIdResult.stdout ?? '').trim() || null
-                : null;
+            const sessionIdentity = parseLiveTmuxSessionId(
+                sessionIdResult.status,
+                sessionIdResult.stdout ?? '',
+            );
+            if (!sessionIdentity.ok) {
+                process.stderr.write(kleur.red(`\n  ✗ ${sessionIdentity.error}\n`));
+                process.exit(1);
+            }
+            const tmuxSessionId = sessionIdentity.sessionId;
             const versionResult = spawnSync(runtimeExecutable, ['--version'], {
                 stdio: 'pipe',
                 encoding: 'utf8',
