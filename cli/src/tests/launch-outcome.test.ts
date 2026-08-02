@@ -117,6 +117,15 @@ describe('detached launch command outcome', () => {
             error: '--json cannot be combined with --reuse',
         });
         expect(checkStructuredLaunchOptions({ json: true, attach: false, reuse: false })).toEqual({ ok: true });
+        expect(checkStructuredLaunchOptions({
+            json: true,
+            attach: false,
+            reuse: false,
+            sessionSlug: `group/${'a'.repeat(251)}`,
+        })).toEqual({
+            ok: false,
+            error: 'xtrm.command-outcome.v1: invalid sessionSlug',
+        });
     });
 
     it('rejects control characters instead of emitting an invalid or injectable outcome', () => {

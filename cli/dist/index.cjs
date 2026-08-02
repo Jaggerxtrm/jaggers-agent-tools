@@ -62029,6 +62029,16 @@ function checkStructuredLaunchOptions(input) {
   if (!input.json) return { ok: true };
   if (input.attach) return { ok: false, error: "--json requires --no-attach" };
   if (input.reuse) return { ok: false, error: "--json cannot be combined with --reuse" };
+  if (input.sessionSlug !== void 0) {
+    try {
+      assertOutcomeString("sessionSlug", input.sessionSlug, 256);
+    } catch (error51) {
+      return {
+        ok: false,
+        error: error51 instanceof Error ? error51.message : "xtrm.command-outcome.v1: invalid sessionSlug"
+      };
+    }
+  }
   return { ok: true };
 }
 function quoteArg(arg) {
@@ -63007,7 +63017,8 @@ async function launchWorktreeSession(opts) {
   const structuredCheck = checkStructuredLaunchOptions({
     json: structuredOutput,
     attach,
-    reuse: Boolean(opts.reuse)
+    reuse: Boolean(opts.reuse),
+    sessionSlug: name
   });
   if (!structuredCheck.ok) {
     console.error(kleur_default.red(`

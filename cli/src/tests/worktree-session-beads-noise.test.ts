@@ -332,6 +332,47 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
+  it('rejects an oversized structured slug before creating a worktree or tmux session', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      name: `group/${'a'.repeat(251)}`,
+      prompt: 'echo hi',
+      attach: false,
+      json: true,
+    })).rejects.toThrow('exit:1');
+
+    expect(errorSpy.mock.calls.flat().join(' ')).toContain('invalid sessionSlug');
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'bd',
+      expect.arrayContaining(['worktree', 'create']),
+      expect.anything(),
+    );
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'tmux',
+      expect.arrayContaining(['new-session']),
+      expect.anything(),
+    );
+  });
+
   it('transports a 100KB rendered bead through a tmux buffer without putting it in the new-session command', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-claude-large');

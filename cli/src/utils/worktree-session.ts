@@ -1502,6 +1502,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         json: structuredOutput,
         attach,
         reuse: Boolean(opts.reuse),
+        sessionSlug: name,
     });
     if (!structuredCheck.ok) {
         console.error(kleur.red(`\n  ✗ ${structuredCheck.error}\n`));
