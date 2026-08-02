@@ -266,7 +266,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
-  it('reports a metadata persistence failure in the structured outcome', async () => {
+  it('reports metadata failure and sanitizes an unsafe runtime version in the structured outcome', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-json');
     await fs.ensureDir(path.join(repoRoot, '.beads'));
@@ -295,7 +295,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
         return { status: 0, stdout: '$7\n', stderr: '' };
       }
       if (command === 'pi' && args[0] === '--version') {
-        return { status: 0, stdout: 'pi 0.74.2\n', stderr: '' };
+        return { status: 0, stdout: 'pi 0.74.2\u001b[31m\n', stderr: '' };
       }
       return { status: 0, stdout: '', stderr: '' };
     });
@@ -318,7 +318,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     const outcome = JSON.parse(String(stdoutSpy.mock.calls[0][0]));
     expect(outcome).toMatchObject({
       schema_version: 'xtrm.command-outcome.v1',
-      runtime: { name: 'pi', version: 'pi 0.74.2' },
+      runtime: { name: 'pi', version: null },
       identity: { session_name: 'pi-json', tmux_session_id: '$7', pane_id: '%42' },
       worktree: { path: worktreePath, branch: 'xt/json', owner: 'core' },
       readiness: { status: 'unverified', source: 'tmux-pane' },
@@ -361,6 +361,54 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     })).rejects.toThrow('exit:1');
 
     expect(errorSpy.mock.calls.flat().join(' ')).toContain('invalid sessionSlug');
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'bd',
+      expect.arrayContaining(['worktree', 'create']),
+      expect.anything(),
+    );
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'tmux',
+      expect.arrayContaining(['new-session']),
+      expect.anything(),
+    );
+  });
+
+  it('rejects a detached structured role in the current tmux pane before creating a worktree', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+    const previousTmux = process.env.TMUX;
+    process.env.TMUX = '/tmp/tmux-1000/default,1,0';
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    try {
+      await expect(launchWorktreeSession({
+        runtime: 'pi',
+        name: 'role-detached',
+        role: 'reviewer',
+        attach: false,
+        json: true,
+      })).rejects.toThrow('exit:1');
+    } finally {
+      if (previousTmux === undefined) delete process.env.TMUX;
+      else process.env.TMUX = previousTmux;
+    }
+
+    expect(errorSpy.mock.calls.flat().join(' ')).toContain('--no-attach requires --new-session');
     expect(mocked.spawnSync).not.toHaveBeenCalledWith(
       'bd',
       expect.arrayContaining(['worktree', 'create']),

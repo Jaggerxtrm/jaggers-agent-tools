@@ -5,6 +5,7 @@ import {
     buildDetachedLaunchOutcome,
     checkStructuredLaunchOptions,
     renderOutcomeArgv,
+    sanitizeRuntimeVersion,
 } from '../core/launch-outcome.js';
 
 describe('detached launch command outcome', () => {
@@ -140,6 +141,12 @@ describe('detached launch command outcome', () => {
             branchName: 'xt/safe',
             metadataPersisted: true,
         })).toThrow(/xtrm\.command-outcome\.v1/);
+    });
+
+    it('drops an unsafe runtime version instead of invalidating a completed launch', () => {
+        expect(sanitizeRuntimeVersion('pi 0.74.2\u001b[31m')).toBeNull();
+        expect(sanitizeRuntimeVersion('')).toBeNull();
+        expect(sanitizeRuntimeVersion('pi 0.74.2')).toBe('pi 0.74.2');
     });
 
     it('reports metadata persistence failure without claiming completion', () => {

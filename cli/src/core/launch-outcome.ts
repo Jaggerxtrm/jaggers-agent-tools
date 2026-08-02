@@ -18,10 +18,16 @@ export function checkStructuredLaunchOptions(input: {
     attach: boolean;
     reuse: boolean;
     sessionSlug?: string;
+    role?: boolean;
+    insideTmux?: boolean;
+    newSession?: boolean;
 }): { ok: true } | { ok: false; error: string } {
     if (!input.json) return { ok: true };
     if (input.attach) return { ok: false, error: '--json requires --no-attach' };
     if (input.reuse) return { ok: false, error: '--json cannot be combined with --reuse' };
+    if (input.role && input.insideTmux && !input.newSession) {
+        return { ok: false, error: '--no-attach requires --new-session for role launches inside tmux' };
+    }
     if (input.sessionSlug !== undefined) {
         try {
             assertOutcomeString('sessionSlug', input.sessionSlug, 256);
@@ -67,6 +73,15 @@ const CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
 function assertOutcomeString(label: string, value: string, maxLength: number): void {
     if (value.length === 0 || value.length > maxLength || CONTROL_CHARACTER.test(value)) {
         throw new Error(`xtrm.command-outcome.v1: invalid ${label}`);
+    }
+}
+
+export function sanitizeRuntimeVersion(value: string): string | null {
+    try {
+        assertOutcomeString('runtimeVersion', value, 128);
+        return value;
+    } catch {
+        return null;
     }
 }
 
