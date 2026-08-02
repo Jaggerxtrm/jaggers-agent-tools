@@ -160,12 +160,12 @@ export function buildDetachedLaunchOutcome(input: DetachedLaunchOutcomeInput): C
                 input.worktreePath,
                 'Attach to the live detached session.',
             ),
-            action(
+            ...(input.metadataPersisted ? [action(
                 'resume',
                 ['xt', 'attach', input.sessionSlug],
                 input.worktreePath,
                 'Resume the runtime in this worktree after the tmux session ends.',
-            ),
+            )] : []),
             action(
                 'repair',
                 ['xt', 'doctor'],
