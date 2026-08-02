@@ -11,6 +11,7 @@ import { runPiLaunchPreflight } from '../core/pi-runtime.js';
 import { runtimeCompatibilityError } from '../core/runtime-compat.js';
 import {
     buildDetachedLaunchOutcome,
+    checkStructuredLaunchPaths,
     checkStructuredLaunchOptions,
 } from '../core/launch-outcome.js';
 
@@ -1739,6 +1740,16 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
 
     // Branch name
     const branchName = `xt/${slug}`;
+
+    const structuredPathCheck = checkStructuredLaunchPaths({
+        json: structuredOutput,
+        worktreePath,
+        branchName,
+    });
+    if (!structuredPathCheck.ok) {
+        console.error(kleur.red(`\n  ✗ ${structuredPathCheck.error}\n`));
+        process.exit(1);
+    }
 
     if (!structuredOutput) {
         console.log(kleur.bold(`\n  Launching ${runtime} session`));

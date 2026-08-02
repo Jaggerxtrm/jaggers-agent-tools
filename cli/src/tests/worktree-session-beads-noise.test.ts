@@ -373,6 +373,63 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     );
   });
 
+  it('rejects a structured worktree path with control characters before launch mutations', async () => {
+    const repoRoot = path.join(tempRoot, 'repo\nhostile');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        fs.ensureDirSync(args[2]);
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'has-session') {
+        return { status: 1, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'list-panes') {
+        return { status: 0, stdout: '%42\n', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'display-message' && args.includes('#{session_id}')) {
+        return { status: 0, stdout: '$7\n', stderr: '' };
+      }
+      if (command === 'pi' && args[0] === '--version') {
+        return { status: 0, stdout: 'pi 0.74.2\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      name: 'control-path',
+      prompt: 'echo hi',
+      attach: false,
+      json: true,
+    })).rejects.toThrow('exit:1');
+
+    expect(errorSpy.mock.calls.flat().join(' ')).toContain('invalid worktreePath');
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'bd',
+      expect.arrayContaining(['worktree', 'create']),
+      expect.anything(),
+    );
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'tmux',
+      expect.arrayContaining(['new-session']),
+      expect.anything(),
+    );
+  });
+
   it('transports a 100KB rendered bead through a tmux buffer without putting it in the new-session command', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-claude-large');
