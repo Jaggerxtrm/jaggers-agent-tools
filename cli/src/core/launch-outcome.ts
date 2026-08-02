@@ -35,6 +35,24 @@ export function checkStructuredLaunchOptions(input: {
     return { ok: true };
 }
 
+export function checkStructuredLaunchPaths(input: {
+    json: boolean;
+    worktreePath: string;
+    branchName: string;
+}): { ok: true } | { ok: false; error: string } {
+    if (!input.json) return { ok: true };
+    try {
+        assertOutcomeString('worktreePath', input.worktreePath, 4096);
+        assertOutcomeString('branchName', input.branchName, 4096);
+        return { ok: true };
+    } catch (error) {
+        return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'xtrm.command-outcome.v1: invalid launch path',
+        };
+    }
+}
+
 function quoteArg(arg: string): string {
     if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(arg)) return arg;
     return `'${arg.replaceAll("'", `'"'"'`)}'`;

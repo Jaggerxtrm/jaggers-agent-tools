@@ -62041,6 +62041,19 @@ function checkStructuredLaunchOptions(input) {
   }
   return { ok: true };
 }
+function checkStructuredLaunchPaths(input) {
+  if (!input.json) return { ok: true };
+  try {
+    assertOutcomeString("worktreePath", input.worktreePath, 4096);
+    assertOutcomeString("branchName", input.branchName, 4096);
+    return { ok: true };
+  } catch (error51) {
+    return {
+      ok: false,
+      error: error51 instanceof Error ? error51.message : "xtrm.command-outcome.v1: invalid launch path"
+    };
+  }
+}
 function quoteArg(arg) {
   if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(arg)) return arg;
   return `'${arg.replaceAll("'", `'"'"'`)}'`;
@@ -63179,6 +63192,17 @@ async function launchWorktreeSession(opts) {
   const worktreeName = `${cwdBasename}-xt-${runtime}-${slug}`;
   const worktreePath = import_node_path13.default.join(mainRepoRoot, ".xtrm", "worktrees", worktreeName);
   const branchName = `xt/${slug}`;
+  const structuredPathCheck = checkStructuredLaunchPaths({
+    json: structuredOutput,
+    worktreePath,
+    branchName
+  });
+  if (!structuredPathCheck.ok) {
+    console.error(kleur_default.red(`
+  \u2717 ${structuredPathCheck.error}
+`));
+    process.exit(1);
+  }
   if (!structuredOutput) {
     console.log(kleur_default.bold(`
   Launching ${runtime} session`));
