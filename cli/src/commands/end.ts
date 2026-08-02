@@ -6,6 +6,7 @@ import { join, dirname, isAbsolute, resolve } from 'node:path';
 import { t } from '../utils/theme.js';
 import { unregisterPluginsForWorktree } from '../utils/worktree-session.js';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
+import { readCodexWorktreeSession, removeCodexTrustProfile } from '../core/codex-session.js';
 
 interface EndOptions {
     draft: boolean;
@@ -335,6 +336,7 @@ export function createEndCommand(): Command {
         .option('--dry-run', 'Preview PR title, body, and linked issues without pushing or creating PR', false)
         .action(async (opts: EndOptions) => {
             const cwd = process.cwd();
+            const codexSession = readCodexWorktreeSession(cwd);
 
             // 1. Gate: must be in an xt worktree (branch starts with xt/)
             const branchResult = git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
@@ -518,6 +520,14 @@ export function createEndCommand(): Command {
 
                     if (cleanup.removed) {
                         unregisterPluginsForWorktree(cwd);
+                        if (codexSession
+                            && existsSync(codexSession.profilePath)
+                            && !removeCodexTrustProfile({
+                                name: codexSession.profileName,
+                                path: codexSession.profilePath,
+                            }, cwd)) {
+                            cleanup.warnings.push(`Refused to remove modified Codex profile ${codexSession.profilePath}`);
+                        }
                         clearStatuslineClaim(repoRoot);
                         if (cleanup.alreadyMissing) {
                             console.log(t.success('  ✓ Worktree already absent; cleaned stale git metadata'));

@@ -33,6 +33,8 @@ describe('xt attach Codex resume', () => {
             launchedAt: '2026-08-02T18:29:29.000Z',
             threadId: '019fc3bc-fb7a-7ae0-9536-125624bf726b',
             safetyProfile: 'codex-yolo',
+            profileName: 'xtrm-0123456789abcdef',
+            profilePath: path.join(os.homedir(), '.codex', 'xtrm-0123456789abcdef.config.toml'),
         });
         mocked.listXtWorktrees.mockReturnValue([{
             path: worktree,
@@ -51,6 +53,8 @@ describe('xt attach Codex resume', () => {
         expect(mocked.spawnSync).toHaveBeenCalledWith(
             'codex',
             [
+                '--profile',
+                'xtrm-0123456789abcdef',
                 'resume',
                 '--dangerously-bypass-approvals-and-sandbox',
                 '019fc3bc-fb7a-7ae0-9536-125624bf726b',

@@ -77,7 +77,7 @@ export function createAttachCommand(): Command {
                     console.error(kleur.red('\n  ✗ Codex session metadata is missing or invalid; refusing positional resume\n'));
                     process.exit(1);
                 }
-                resumeArgs = buildCodexResumeArgs(session.threadId, session.safetyProfile);
+                resumeArgs = buildCodexResumeArgs(session.threadId, session.safetyProfile, session.profileName);
             } else {
                 resumeArgs = runtime === 'claude'
                     ? ['--continue', '--dangerously-skip-permissions']

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import {
     closeSync,
     existsSync,
@@ -8,6 +9,7 @@ import {
     readSync,
     readdirSync,
     renameSync,
+    lstatSync,
     unlinkSync,
     writeFileSync,
 } from 'node:fs';
@@ -19,12 +21,60 @@ export interface CodexWorktreeSession {
     launchedAt: string;
     threadId: string;
     safetyProfile: 'codex-yolo' | 'codex-workspace-write';
+    profileName: string;
+    profilePath: string;
+}
+
+export interface CodexTrustProfile {
+    name: string;
+    path: string;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_SESSION_FILES = 4_096;
 const MAX_DIRECTORY_DEPTH = 8;
 const FIRST_LINE_BYTES = 64 * 1024;
+const PROFILE_NAME = /^xtrm-[0-9a-f]{16}$/;
+
+function trustProfileContent(worktreePath: string): string {
+    return `[projects.${JSON.stringify(worktreePath)}]\ntrust_level = "trusted"\n`;
+}
+
+export function codexTrustProfile(codexHome: string, worktreePath: string): CodexTrustProfile {
+    const digest = createHash('sha256').update(worktreePath).digest('hex').slice(0, 16);
+    const name = `xtrm-${digest}`;
+    return { name, path: path.join(codexHome, `${name}.config.toml`) };
+}
+
+export function ensureCodexTrustProfile(codexHome: string, worktreePath: string): CodexTrustProfile {
+    const profile = codexTrustProfile(codexHome, worktreePath);
+    const expected = trustProfileContent(worktreePath);
+    mkdirSync(codexHome, { recursive: true });
+    if (existsSync(profile.path)) {
+        const stat = lstatSync(profile.path);
+        if (!stat.isFile() || stat.isSymbolicLink() || readFileSync(profile.path, 'utf8') !== expected) {
+            throw new Error(`refusing to replace non-owned Codex profile ${profile.path}`);
+        }
+        return profile;
+    }
+    writeFileSync(profile.path, expected, { flag: 'wx', mode: 0o600 });
+    return profile;
+}
+
+export function removeCodexTrustProfile(profile: CodexTrustProfile, worktreePath: string): boolean {
+    if (!PROFILE_NAME.test(profile.name)
+        || path.basename(profile.path) !== `${profile.name}.config.toml`
+        || !existsSync(profile.path)) return false;
+    try {
+        const stat = lstatSync(profile.path);
+        if (!stat.isFile() || stat.isSymbolicLink()
+            || readFileSync(profile.path, 'utf8') !== trustProfileContent(worktreePath)) return false;
+        unlinkSync(profile.path);
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 function sessionMetaPath(worktreePath: string): string {
     return path.join(worktreePath, '.xtrm', 'session-meta.json');
@@ -108,7 +158,12 @@ export function readCodexWorktreeSession(worktreePath: string): CodexWorktreeSes
             || !Number.isFinite(Date.parse(parsed.launchedAt))
             || typeof parsed.threadId !== 'string'
             || !UUID.test(parsed.threadId)
-            || (parsed.safetyProfile !== 'codex-yolo' && parsed.safetyProfile !== 'codex-workspace-write')) {
+            || (parsed.safetyProfile !== 'codex-yolo' && parsed.safetyProfile !== 'codex-workspace-write')
+            || typeof parsed.profileName !== 'string'
+            || !PROFILE_NAME.test(parsed.profileName)
+            || typeof parsed.profilePath !== 'string'
+            || !path.isAbsolute(parsed.profilePath)
+            || path.basename(parsed.profilePath) !== `${parsed.profileName}.config.toml`) {
             return null;
         }
         return parsed as unknown as CodexWorktreeSession;
