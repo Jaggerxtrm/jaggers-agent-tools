@@ -197,6 +197,10 @@ describe('detached launch command outcome', () => {
             completed: false,
             kind: 'worktree.session-metadata',
         });
+        expect(outcome).toMatchObject({
+            status: 'degraded',
+            reason_code: 'session_created_metadata_not_persisted',
+        });
         expect(outcome.next_actions.some((next) => next.kind === 'resume')).toBe(false);
         expect(validate('xtrm.command-outcome.v1', outcome)).toMatchObject({ valid: true, errors: [] });
     });

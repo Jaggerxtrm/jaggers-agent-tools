@@ -143,9 +143,13 @@ export function buildDetachedLaunchOutcome(input: DetachedLaunchOutcomeInput): C
 
     const outcome: CommandOutcomeV1 = {
         schema_version: 'xtrm.command-outcome.v1',
-        status: 'ok',
-        reason_code: 'session_created_readiness_unverified',
-        summary: `Detached ${input.runtime} session created; runtime readiness is not asserted.`,
+        status: input.metadataPersisted ? 'ok' : 'degraded',
+        reason_code: input.metadataPersisted
+            ? 'session_created_readiness_unverified'
+            : 'session_created_metadata_not_persisted',
+        summary: input.metadataPersisted
+            ? `Detached ${input.runtime} session created; runtime readiness is not asserted.`
+            : `Detached ${input.runtime} session created, but exact resume metadata was not persisted.`,
         runtime: { name: input.runtime, version: input.runtimeVersion },
         identity: {
             thread_id: null,
