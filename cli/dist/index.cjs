@@ -62095,10 +62095,10 @@ function buildDetachedLaunchOutcome(input) {
     worktree: { path: input.worktreePath, branch: input.branchName, owner: "core" },
     readiness: { status: "unverified", source: "tmux-pane" },
     safety_profile: safetyProfile,
-    persistence: { completed: true, kind: "worktree.session-metadata" },
+    persistence: { completed: input.metadataPersisted, kind: "worktree.session-metadata" },
     authoritative_mutation: { completed: true, kind: "interactive-session.created" },
     side_effects: [
-      { kind: "worktree.created", status: "ok", id: input.branchName },
+      { kind: "worktree.created", status: "ok", id: input.sessionSlug },
       { kind: "tmux.session.created", status: "ok", id: input.tmuxSessionId },
       { kind: "runtime.readiness", status: "skipped", id: null }
     ],
@@ -62884,7 +62884,9 @@ function writeSessionMeta(worktreePath, runtime) {
     const dest = sessionMetaPath(worktreePath);
     (0, import_node_fs2.mkdirSync)(import_node_path13.default.dirname(dest), { recursive: true });
     (0, import_node_fs2.writeFileSync)(dest, JSON.stringify(meta3, null, 2));
+    return true;
   } catch {
+    return false;
   }
 }
 function unregisterPluginsForWorktree(worktreePath) {
@@ -63211,7 +63213,7 @@ async function launchWorktreeSession(opts) {
     markPathSkipWorktree(worktreePath, ".beads");
   } catch {
   }
-  writeSessionMeta(worktreePath, runtime);
+  const metadataPersisted = writeSessionMeta(worktreePath, runtime);
   if (!structuredOutput) {
     console.log(kleur_default.green(`
   \u2713 Worktree ready \u2014 launching ${runtime}...
@@ -63269,6 +63271,7 @@ async function launchWorktreeSession(opts) {
     attach,
     worktreePath,
     branchName,
+    metadataPersisted,
     modelOverride: model,
     thinkingOverride: thinking,
     turn1Body: composedTurn1Body,
@@ -63337,6 +63340,7 @@ async function launchTmuxSession(args) {
     attach,
     worktreePath,
     branchName,
+    metadataPersisted,
     modelOverride,
     thinkingOverride,
     turn1Body,
@@ -63625,6 +63629,7 @@ async function launchTmuxSession(args) {
         paneId,
         worktreePath,
         branchName,
+        metadataPersisted,
         insideTmux
       });
       process.stdout.write(`${JSON.stringify(outcome)}
