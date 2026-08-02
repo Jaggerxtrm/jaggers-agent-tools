@@ -1280,7 +1280,7 @@ function markPathSkipWorktree(worktreePath: string, pathspec: string): void {
 }
 
 export interface SessionMeta {
-    runtime: 'claude' | 'pi';
+    runtime: 'claude' | 'pi' | 'codex';
     launchedAt: string;
 }
 

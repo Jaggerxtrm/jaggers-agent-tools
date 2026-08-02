@@ -10,6 +10,7 @@ try { version = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), '
 
 import { createClaudeCommand } from './commands/claude.js';
 import { createPiCommand } from './commands/pi.js';
+import { createCodexCommand } from './commands/codex.js';
 import { runProjectInit } from './commands/init.js';
 import { createStatusCommand } from './commands/status.js';
 import { createResetCommand } from './commands/reset.js';
@@ -55,6 +56,7 @@ program.exitOverride((err) => {
 // Main commands
 program.addCommand(createClaudeCommand());
 program.addCommand(createPiCommand());
+program.addCommand(createCodexCommand());
 program
     .command('init')
     .description('First-time xtrm bootstrap: machine → Claude → Pi → project')

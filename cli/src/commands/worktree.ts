@@ -13,7 +13,7 @@ export interface WorktreeInfo {
     branch: string;
     head: string;
     prunable: boolean;
-    runtime?: 'claude' | 'pi';
+    runtime?: 'claude' | 'pi' | 'codex';
     launchedAt?: string;
     lastLogMsg?: string;
     lastLogTime?: Date;
