@@ -63698,6 +63698,7 @@ async function launchTmuxSession(args) {
       }
       const tmuxSessionId = sessionIdentity.sessionId;
       const versionResult = (0, import_node_child_process.spawnSync)(runtimeExecutable, ["--version"], {
+        cwd: worktreePath,
         stdio: "pipe",
         encoding: "utf8",
         timeout: 5e3

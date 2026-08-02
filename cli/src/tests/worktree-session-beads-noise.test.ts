@@ -331,7 +331,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(mocked.spawnSync).toHaveBeenCalledWith(
       path.join(repoRoot, 'bin', 'pi'),
       ['--version'],
-      expect.objectContaining({ stdio: 'pipe' }),
+      expect.objectContaining({ cwd: worktreePath, stdio: 'pipe' }),
     );
     expect(mocked.spawnSync.mock.calls.some(([command, args]) =>
       command === 'tmux'

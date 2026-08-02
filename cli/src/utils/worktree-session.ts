@@ -2353,6 +2353,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             }
             const tmuxSessionId = sessionIdentity.sessionId;
             const versionResult = spawnSync(runtimeExecutable, ['--version'], {
+                cwd: worktreePath,
                 stdio: 'pipe',
                 encoding: 'utf8',
                 timeout: 5_000,
