@@ -266,7 +266,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
-  it('emits one valid structured outcome for an opt-in detached launch', async () => {
+  it('reports a metadata persistence failure in the structured outcome', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-json');
     await fs.ensureDir(path.join(repoRoot, '.beads'));
@@ -282,6 +282,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       }
       if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
         fs.ensureDirSync(worktreePath);
+        fs.ensureDirSync(path.join(worktreePath, '.xtrm', 'session-meta.json'));
         return { status: 0, stdout: '', stderr: '' };
       }
       if (command === 'tmux' && args[0] === 'has-session') {
@@ -321,6 +322,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       identity: { session_name: 'pi-json', tmux_session_id: '$7', pane_id: '%42' },
       worktree: { path: worktreePath, branch: 'xt/json', owner: 'core' },
       readiness: { status: 'unverified', source: 'tmux-pane' },
+      persistence: { completed: false, kind: 'worktree.session-metadata' },
     });
     expect(mocked.spawnSync).toHaveBeenCalledWith(
       'bd',

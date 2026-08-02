@@ -18,6 +18,7 @@ describe('detached launch command outcome', () => {
             paneId: '%17',
             worktreePath: '/srv/project/.xtrm/worktrees/project-xt-codex-k2',
             branchName: 'xt/codex-k2',
+            metadataPersisted: true,
         });
 
         expect(validate('xtrm.command-outcome.v1', outcome)).toMatchObject({ valid: true, errors: [] });
@@ -60,6 +61,7 @@ describe('detached launch command outcome', () => {
             paneId: '%2',
             worktreePath: '/srv/project/.xtrm/worktrees/project-xt-safe',
             branchName: 'xt/safe',
+            metadataPersisted: true,
         };
         const pi = buildDetachedLaunchOutcome({ ...base, runtime: 'pi', sessionName: 'pi-safe' });
         const claude = buildDetachedLaunchOutcome({ ...base, runtime: 'claude', sessionName: 'claude-safe' });
@@ -88,6 +90,7 @@ describe('detached launch command outcome', () => {
             paneId: '%17',
             worktreePath: '/srv/project/.xtrm/worktrees/project-xt-inside-tmux',
             branchName: 'xt/inside-tmux',
+            metadataPersisted: true,
             insideTmux: true,
         });
 
@@ -126,6 +129,46 @@ describe('detached launch command outcome', () => {
             paneId: '%2',
             worktreePath: '/srv/project/.xtrm/worktrees/project-xt-safe',
             branchName: 'xt/safe',
+            metadataPersisted: true,
         })).toThrow(/xtrm\.command-outcome\.v1/);
+    });
+
+    it('reports metadata persistence failure without claiming completion', () => {
+        const outcome = buildDetachedLaunchOutcome({
+            runtime: 'pi',
+            runtimeVersion: '0.74.2',
+            sessionSlug: 'metadata-failed',
+            sessionName: 'pi-metadata-failed',
+            tmuxSessionId: '$1',
+            paneId: '%2',
+            worktreePath: '/srv/project/.xtrm/worktrees/project-xt-metadata-failed',
+            branchName: 'xt/metadata-failed',
+            metadataPersisted: false,
+        });
+
+        expect(outcome.persistence).toEqual({
+            completed: false,
+            kind: 'worktree.session-metadata',
+        });
+        expect(validate('xtrm.command-outcome.v1', outcome)).toMatchObject({ valid: true, errors: [] });
+    });
+
+    it('keeps every side-effect identifier within the schema limit for long branch names', () => {
+        const sessionSlug = `group/${'a'.repeat(248)}`;
+        const outcome = buildDetachedLaunchOutcome({
+            runtime: 'pi',
+            runtimeVersion: '0.74.2',
+            sessionSlug,
+            sessionName: 'pi-long-branch',
+            tmuxSessionId: '$1',
+            paneId: '%2',
+            worktreePath: '/srv/project/.xtrm/worktrees/project-xt-long-branch',
+            branchName: `xt/${sessionSlug}`,
+            metadataPersisted: true,
+        });
+
+        expect(outcome.side_effects[0]?.id).toBe(sessionSlug);
+        expect(outcome.side_effects.every((effect) => effect.id == null || effect.id.length <= 256)).toBe(true);
+        expect(validate('xtrm.command-outcome.v1', outcome)).toMatchObject({ valid: true, errors: [] });
     });
 });

@@ -9,6 +9,7 @@ export interface DetachedLaunchOutcomeInput {
     paneId: string;
     worktreePath: string;
     branchName: string;
+    metadataPersisted: boolean;
     insideTmux?: boolean;
 }
 
@@ -101,10 +102,10 @@ export function buildDetachedLaunchOutcome(input: DetachedLaunchOutcomeInput): C
         worktree: { path: input.worktreePath, branch: input.branchName, owner: 'core' },
         readiness: { status: 'unverified', source: 'tmux-pane' },
         safety_profile: safetyProfile,
-        persistence: { completed: true, kind: 'worktree.session-metadata' },
+        persistence: { completed: input.metadataPersisted, kind: 'worktree.session-metadata' },
         authoritative_mutation: { completed: true, kind: 'interactive-session.created' },
         side_effects: [
-            { kind: 'worktree.created', status: 'ok', id: input.branchName },
+            { kind: 'worktree.created', status: 'ok', id: input.sessionSlug },
             { kind: 'tmux.session.created', status: 'ok', id: input.tmuxSessionId },
             { kind: 'runtime.readiness', status: 'skipped', id: null },
         ],

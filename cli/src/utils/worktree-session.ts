@@ -1274,14 +1274,15 @@ function sessionMetaPath(worktreePath: string): string {
     return path.join(worktreePath, '.xtrm', 'session-meta.json');
 }
 
-export function writeSessionMeta(worktreePath: string, runtime: 'claude' | 'pi'): void {
+export function writeSessionMeta(worktreePath: string, runtime: 'claude' | 'pi'): boolean {
     try {
         const meta: SessionMeta = { runtime, launchedAt: new Date().toISOString() };
         const dest = sessionMetaPath(worktreePath);
         mkdirSync(path.dirname(dest), { recursive: true });
         writeFileSync(dest, JSON.stringify(meta, null, 2));
+        return true;
     } catch {
-        // non-fatal
+        return false;
     }
 }
 
@@ -1803,7 +1804,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         // Non-fatal: bd will recover via git common-dir resolution regardless.
     }
 
-    writeSessionMeta(worktreePath, runtime);
+    const metadataPersisted = writeSessionMeta(worktreePath, runtime);
     if (!structuredOutput) {
         console.log(kleur.green(`\n  ✓ Worktree ready — launching ${runtime}...\n`));
         console.log(kleur.dim('  note: clean git worktrees do not include ignored dependency dirs like node_modules/ or .venv/'));
@@ -1882,6 +1883,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         attach,
         worktreePath,
         branchName,
+        metadataPersisted,
         modelOverride: model,
         thinkingOverride: thinking,
         turn1Body: composedTurn1Body,
@@ -1974,6 +1976,7 @@ type TmuxLaunchArgs = {
     attach: boolean;
     worktreePath: string;
     branchName: string;
+    metadataPersisted: boolean;
     modelOverride?: string;
     thinkingOverride?: string;
     /** Composed turn-1 positional body (sp prefix + user body). Empty = skills-only prime. */
@@ -1997,7 +2000,7 @@ type TmuxLaunchArgs = {
 
 async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     const {
-        runtime, sessionSlug, bead, attach, worktreePath, branchName, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
+        runtime, sessionSlug, bead, attach, worktreePath, branchName, metadataPersisted, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
         newSession, parent, child, reuse, json: structuredOutput = false,
     } = args;
 
@@ -2322,6 +2325,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
                 paneId,
                 worktreePath,
                 branchName,
+                metadataPersisted,
                 insideTmux,
             });
             process.stdout.write(`${JSON.stringify(outcome)}\n`);
