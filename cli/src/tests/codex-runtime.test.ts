@@ -12,6 +12,7 @@ describe('Codex runtime descriptor', () => {
     it('uses the managed YOLO profile by default without bypassing hook trust', () => {
         const result = buildCodexRuntimeArgs({
             yolo: true,
+            profileName: 'xtrm-0123456789abcdef',
             model: 'gpt-5.6-codex',
             prompt: 'inspect the launcher',
             skillNames: ['multiplexing'],
@@ -25,6 +26,7 @@ describe('Codex runtime descriptor', () => {
             hook_trust: 'preserved',
         });
         expect(result.argv).toEqual([
+            '--profile', 'xtrm-0123456789abcdef',
             '--dangerously-bypass-approvals-and-sandbox',
             '--model', 'gpt-5.6-codex',
             '--search',
@@ -34,9 +36,13 @@ describe('Codex runtime descriptor', () => {
     });
 
     it('maps --no-yolo to workspace-write with on-request approval', () => {
-        const result = buildCodexRuntimeArgs({ yolo: false });
+        const result = buildCodexRuntimeArgs({
+            yolo: false,
+            profileName: 'xtrm-0123456789abcdef',
+        });
 
         expect(result.argv).toEqual([
+            '--profile', 'xtrm-0123456789abcdef',
             '--sandbox', 'workspace-write',
             '--ask-for-approval', 'on-request',
         ]);
@@ -51,6 +57,7 @@ describe('Codex runtime descriptor', () => {
     it('adds role instructions without replacing Codex built-ins', () => {
         const result = buildCodexRuntimeArgs({
             yolo: true,
+            profileName: 'xtrm-0123456789abcdef',
             developerInstructions: 'Act as the release reviewer.',
         });
 
@@ -70,6 +77,10 @@ describe('Codex runtime descriptor', () => {
         ['--ask-for-approval=never'],
         ['-a', 'never'],
         ['-anever'],
+        ['--profile', 'foreign'],
+        ['--profile=foreign'],
+        ['-p', 'foreign'],
+        ['-pforeign'],
     ])('rejects conflicting or trust-bypassing passthrough %j', (...argv) => {
         expect(checkCodexPassthrough(argv)).toMatchObject({ ok: false });
     });
@@ -129,6 +140,7 @@ describe('Codex runtime descriptor', () => {
                 approvals: 'on-request',
                 hook_trust: 'preserved',
             },
+            profileName: 'xtrm-0123456789abcdef',
             insideTmux: false,
         });
 
@@ -137,7 +149,7 @@ describe('Codex runtime descriptor', () => {
         expect(outcome.next_actions.map((next) => next.argv)).toEqual([
             ['tmux', 'attach-session', '-t', 'codex-demo'],
             [
-                'codex', 'resume',
+                'codex', '--profile', 'xtrm-0123456789abcdef', 'resume',
                 '--sandbox', 'workspace-write',
                 '--ask-for-approval', 'on-request',
                 '019fc3bc-fb7a-7ae0-9536-125624bf726b',

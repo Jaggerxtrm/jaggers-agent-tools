@@ -5,6 +5,7 @@ import {
     buildDetachedLaunchOutcome,
     checkStructuredLaunchOptions,
     parseLiveTmuxSessionId,
+    parseLiveTmuxSessionListing,
     renderOutcomeArgv,
     sanitizeRuntimeVersion,
 } from '../core/launch-outcome.js';
@@ -133,6 +134,18 @@ describe('detached launch command outcome', () => {
             error: 'detached tmux session is no longer live',
         });
         expect(parseLiveTmuxSessionId(0, 'hostile')).toEqual({
+            ok: false,
+            error: 'detached tmux session returned an invalid identity',
+        });
+        expect(parseLiveTmuxSessionListing(0, 'other\t$41\nexact\t$42\n', 'exact')).toEqual({
+            ok: true,
+            sessionId: '$42',
+        });
+        expect(parseLiveTmuxSessionListing(0, 'exact-suffix\t$41\n', 'exact')).toEqual({
+            ok: false,
+            error: 'detached tmux session is no longer live',
+        });
+        expect(parseLiveTmuxSessionListing(0, 'exact\thostile\n', 'exact')).toEqual({
             ok: false,
             error: 'detached tmux session returned an invalid identity',
         });

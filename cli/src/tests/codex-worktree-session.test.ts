@@ -88,6 +88,7 @@ describe('Codex worktree launcher', () => {
                 return { status: 0, stdout: '', stderr: '' };
             }
             if (command === 'tmux' && args[0] === 'list-panes') return { status: 0, stdout: '%17\n', stderr: '' };
+            if (command === 'tmux' && args[0] === 'list-sessions') return { status: 0, stdout: 'codex-demo\t$42\n', stderr: '' };
             if (command === 'tmux' && args[0] === 'display-message') return { status: 0, stdout: '$42\n', stderr: '' };
             if (command === path.join(repoRoot, 'bin', 'codex') && args[0] === '--version') {
                 return { status: 0, stdout: 'codex-cli 0.146.0\n', stderr: '' };
@@ -116,6 +117,8 @@ describe('Codex worktree launcher', () => {
         expect(fs.readJsonSync(path.join(worktreePath, '.xtrm', 'session-meta.json'))).toMatchObject({
             runtime: 'codex',
             threadId: '019fc3bc-fb7a-7ae0-9536-125624bf726b',
+            profileName: expect.stringMatching(/^xtrm-[0-9a-f]{16}$/),
+            profilePath: expect.stringMatching(/\.config\.toml$/),
         });
         expect(mocked.spawnSync).toHaveBeenCalledWith(
             'tmux',
@@ -130,6 +133,7 @@ describe('Codex worktree launcher', () => {
         const payloadCall = mocked.spawnSync.mock.calls.find(([, args]) => args[0] === 'load-buffer');
         expect(JSON.parse(payloadCall?.[2]?.input as string)).toMatchObject({
             runtimeCmd: path.join(repoRoot, 'bin', 'codex'),
+            runtimeArgs: expect.arrayContaining(['--profile']),
         });
         expect(exitSpy).toHaveBeenCalledWith(0);
     });
@@ -138,6 +142,8 @@ describe('Codex worktree launcher', () => {
         const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-codex-cleanup-'));
         roots.push(repoRoot);
         const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', `${path.basename(repoRoot)}-xt-codex-fail`);
+        const codexHome = path.join(repoRoot, 'codex-home');
+        process.env.CODEX_HOME = codexHome;
         process.chdir(repoRoot);
 
         mocked.spawnSync.mockImplementation((command: string, args: string[] = []) => {
@@ -177,6 +183,9 @@ describe('Codex worktree launcher', () => {
             'tmux', ['delete-buffer', '-b', expect.stringMatching(/^xtrm-codex-[0-9a-f]{32}$/)],
             expect.objectContaining({ stdio: 'ignore' }),
         );
+        expect(fs.existsSync(codexHome)
+            ? fs.readdirSync(codexHome).filter((name) => name.startsWith('xtrm-'))
+            : []).toEqual([]);
     });
 
     it('rejects a pre-existing branch before any worktree mutation', async () => {

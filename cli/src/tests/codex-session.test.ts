@@ -4,8 +4,10 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+    ensureCodexTrustProfile,
     findCodexSession,
     readCodexWorktreeSession,
+    removeCodexTrustProfile,
     writeCodexWorktreeSession,
 } from '../core/codex-session.js';
 
@@ -55,11 +57,47 @@ describe('Codex thread persistence', () => {
             launchedAt: '2026-08-02T18:29:29.000Z',
             threadId: '019fc3bc-fb7a-7ae0-9536-125624bf726b',
             safetyProfile: 'codex-yolo' as const,
+            profileName: 'xtrm-0123456789abcdef',
+            profilePath: path.join(worktree, 'codex-home', 'xtrm-0123456789abcdef.config.toml'),
         };
 
         expect(writeCodexWorktreeSession(worktree, session)).toBe(true);
         expect(readCodexWorktreeSession(worktree)).toEqual(session);
         expect(fs.readJsonSync(path.join(worktree, '.xtrm', 'session-meta.json'))).toEqual(session);
+    });
+
+    it('creates an isolated trust profile without touching the base config', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-codex-profile-'));
+        roots.push(root);
+        const codexHome = path.join(root, 'codex-home');
+        const worktree = path.join(root, 'repo', '.xtrm', 'worktrees', 'repo-xt-codex-demo');
+        fs.ensureDirSync(codexHome);
+        fs.writeFileSync(path.join(codexHome, 'config.toml'), 'model = "gpt-5.6-sol"\n');
+
+        const profile = ensureCodexTrustProfile(codexHome, worktree);
+
+        expect(profile.name).toMatch(/^xtrm-[0-9a-f]{16}$/);
+        expect(profile.path).toBe(path.join(codexHome, `${profile.name}.config.toml`));
+        expect(fs.readFileSync(profile.path, 'utf8')).toBe(
+            `[projects.${JSON.stringify(worktree)}]\ntrust_level = "trusted"\n`,
+        );
+        expect(fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8')).toBe('model = "gpt-5.6-sol"\n');
+        expect(ensureCodexTrustProfile(codexHome, worktree)).toEqual(profile);
+        expect(removeCodexTrustProfile(profile, worktree)).toBe(true);
+        expect(fs.existsSync(profile.path)).toBe(false);
+    });
+
+    it('refuses to replace or remove a foreign profile collision', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-codex-profile-'));
+        roots.push(root);
+        const codexHome = path.join(root, 'codex-home');
+        const worktree = path.join(root, 'repo', '.xtrm', 'worktrees', 'repo-xt-codex-demo');
+        const initial = ensureCodexTrustProfile(codexHome, worktree);
+        fs.writeFileSync(initial.path, 'foreign = true\n');
+
+        expect(() => ensureCodexTrustProfile(codexHome, worktree)).toThrow('refusing to replace');
+        expect(removeCodexTrustProfile(initial, worktree)).toBe(false);
+        expect(fs.readFileSync(initial.path, 'utf8')).toBe('foreign = true\n');
     });
 
     it('rejects missing, malformed, and non-Codex metadata', () => {

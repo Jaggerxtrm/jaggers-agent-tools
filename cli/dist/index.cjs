@@ -62083,6 +62083,17 @@ function parseLiveTmuxSessionId(status, stdout) {
   const sessionId = stdout.trim();
   return /^\$[0-9]+$/.test(sessionId) ? { ok: true, sessionId } : { ok: false, error: "detached tmux session returned an invalid identity" };
 }
+function parseLiveTmuxSessionListing(status, stdout, expectedName) {
+  if (status !== 0) return { ok: false, error: "detached tmux session is no longer live" };
+  const matches = stdout.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+    const separator = line.indexOf("	");
+    if (separator < 1 || line.slice(0, separator) !== expectedName) return [];
+    return [line.slice(separator + 1)];
+  });
+  if (matches.length === 0) return { ok: false, error: "detached tmux session is no longer live" };
+  if (matches.length !== 1) return { ok: false, error: "detached tmux session returned an invalid identity" };
+  return parseLiveTmuxSessionId(0, matches[0] ?? "");
+}
 function assertDetachedLaunchInput(input) {
   if (input.runtimeVersion !== null) assertOutcomeString("runtimeVersion", input.runtimeVersion, 128);
   assertOutcomeString("sessionSlug", input.sessionSlug, 256);
@@ -63680,15 +63691,14 @@ async function launchTmuxSession(args) {
   if (!attach) {
     if (structuredOutput) {
       const sessionIdResult = (0, import_node_child_process.spawnSync)("tmux", [
-        "display-message",
-        "-p",
-        "-t",
-        `=${plan.sessionName}`,
-        "#{session_id}"
+        "list-sessions",
+        "-F",
+        "#{session_name}	#{session_id}"
       ], { stdio: "pipe", encoding: "utf8" });
-      const sessionIdentity = parseLiveTmuxSessionId(
+      const sessionIdentity = parseLiveTmuxSessionListing(
         sessionIdResult.status,
-        sessionIdResult.stdout ?? ""
+        sessionIdResult.stdout ?? "",
+        plan.sessionName
       );
       if (!sessionIdentity.ok) {
         process.stderr.write(kleur_default.red(`
@@ -65226,7 +65236,7 @@ Examples:
 init_kleur();
 var import_node_os11 = __toESM(require("os"), 1);
 var import_node_path18 = __toESM(require("path"), 1);
-var import_node_crypto9 = require("crypto");
+var import_node_crypto10 = require("crypto");
 var import_node_fs5 = require("fs");
 var import_node_child_process6 = require("child_process");
 
@@ -65237,11 +65247,13 @@ var OWNED_OR_FORBIDDEN_FLAGS = /* @__PURE__ */ new Set([
   "--sandbox",
   "-s",
   "--ask-for-approval",
-  "-a"
+  "-a",
+  "--profile",
+  "-p"
 ]);
 function checkCodexPassthrough(argv) {
   for (const arg of argv) {
-    const attachedShort = !arg.startsWith("--") ? arg.startsWith("-s") ? "-s" : arg.startsWith("-a") ? "-a" : null : null;
+    const attachedShort = !arg.startsWith("--") ? arg.startsWith("-s") ? "-s" : arg.startsWith("-a") ? "-a" : arg.startsWith("-p") ? "-p" : null : null;
     const flag = attachedShort ?? arg.split("=", 1)[0] ?? arg;
     if (OWNED_OR_FORBIDDEN_FLAGS.has(flag)) {
       return {
@@ -65273,7 +65285,8 @@ function buildCodexRuntimeArgs(input) {
     approvals: "on-request",
     hook_trust: "preserved"
   };
-  const argv = input.yolo ? ["--dangerously-bypass-approvals-and-sandbox"] : ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"];
+  if (!/^xtrm-[0-9a-f]{16}$/.test(input.profileName)) throw new Error("invalid Codex profile name");
+  const argv = ["--profile", input.profileName, ...input.yolo ? ["--dangerously-bypass-approvals-and-sandbox"] : ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"]];
   if (input.model) argv.push("--model", input.model);
   if (input.developerInstructions) {
     argv.push("-c", `developer_instructions=${JSON.stringify(input.developerInstructions)}`);
@@ -65284,10 +65297,11 @@ function buildCodexRuntimeArgs(input) {
   return { argv, safetyProfile };
 }
 var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-function buildCodexResumeArgs(threadId, safetyProfile) {
+function buildCodexResumeArgs(threadId, safetyProfile, profileName) {
   if (!UUID.test(threadId)) throw new Error("invalid Codex thread id");
+  if (!/^xtrm-[0-9a-f]{16}$/.test(profileName)) throw new Error("invalid Codex profile name");
   const safetyArgs = safetyProfile === "codex-yolo" ? ["--dangerously-bypass-approvals-and-sandbox"] : ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"];
-  return ["resume", ...safetyArgs, threadId];
+  return ["--profile", profileName, "resume", ...safetyArgs, threadId];
 }
 function parseCodexSessionMeta(line, expected) {
   let parsed;
@@ -65347,7 +65361,7 @@ function buildCodexDetachedOutcome(input) {
       ),
       outcomeAction(
         "resume",
-        ["codex", ...buildCodexResumeArgs(input.threadId, input.safetyProfile.name)],
+        ["codex", ...buildCodexResumeArgs(input.threadId, input.safetyProfile.name, input.profileName)],
         input.worktreePath,
         "Resume this exact Codex thread after the tmux session ends."
       ),
@@ -65359,11 +65373,48 @@ function buildCodexDetachedOutcome(input) {
 
 // src/core/codex-session.ts
 var import_node_path17 = __toESM(require("path"), 1);
+var import_node_crypto9 = require("crypto");
 var import_node_fs4 = require("fs");
 var UUID2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 var MAX_SESSION_FILES = 4096;
 var MAX_DIRECTORY_DEPTH = 8;
 var FIRST_LINE_BYTES = 64 * 1024;
+var PROFILE_NAME = /^xtrm-[0-9a-f]{16}$/;
+function trustProfileContent(worktreePath) {
+  return `[projects.${JSON.stringify(worktreePath)}]
+trust_level = "trusted"
+`;
+}
+function codexTrustProfile(codexHome, worktreePath) {
+  const digest = (0, import_node_crypto9.createHash)("sha256").update(worktreePath).digest("hex").slice(0, 16);
+  const name = `xtrm-${digest}`;
+  return { name, path: import_node_path17.default.join(codexHome, `${name}.config.toml`) };
+}
+function ensureCodexTrustProfile(codexHome, worktreePath) {
+  const profile = codexTrustProfile(codexHome, worktreePath);
+  const expected = trustProfileContent(worktreePath);
+  (0, import_node_fs4.mkdirSync)(codexHome, { recursive: true });
+  if ((0, import_node_fs4.existsSync)(profile.path)) {
+    const stat = (0, import_node_fs4.lstatSync)(profile.path);
+    if (!stat.isFile() || stat.isSymbolicLink() || (0, import_node_fs4.readFileSync)(profile.path, "utf8") !== expected) {
+      throw new Error(`refusing to replace non-owned Codex profile ${profile.path}`);
+    }
+    return profile;
+  }
+  (0, import_node_fs4.writeFileSync)(profile.path, expected, { flag: "wx", mode: 384 });
+  return profile;
+}
+function removeCodexTrustProfile(profile, worktreePath) {
+  if (!PROFILE_NAME.test(profile.name) || import_node_path17.default.basename(profile.path) !== `${profile.name}.config.toml` || !(0, import_node_fs4.existsSync)(profile.path)) return false;
+  try {
+    const stat = (0, import_node_fs4.lstatSync)(profile.path);
+    if (!stat.isFile() || stat.isSymbolicLink() || (0, import_node_fs4.readFileSync)(profile.path, "utf8") !== trustProfileContent(worktreePath)) return false;
+    (0, import_node_fs4.unlinkSync)(profile.path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 function sessionMetaPath2(worktreePath) {
   return import_node_path17.default.join(worktreePath, ".xtrm", "session-meta.json");
 }
@@ -65435,7 +65486,7 @@ function writeCodexWorktreeSession(worktreePath, session) {
 function readCodexWorktreeSession(worktreePath) {
   try {
     const parsed = JSON.parse((0, import_node_fs4.readFileSync)(sessionMetaPath2(worktreePath), "utf8"));
-    if (parsed.runtime !== "codex" || typeof parsed.launchedAt !== "string" || !Number.isFinite(Date.parse(parsed.launchedAt)) || typeof parsed.threadId !== "string" || !UUID2.test(parsed.threadId) || parsed.safetyProfile !== "codex-yolo" && parsed.safetyProfile !== "codex-workspace-write") {
+    if (parsed.runtime !== "codex" || typeof parsed.launchedAt !== "string" || !Number.isFinite(Date.parse(parsed.launchedAt)) || typeof parsed.threadId !== "string" || !UUID2.test(parsed.threadId) || parsed.safetyProfile !== "codex-yolo" && parsed.safetyProfile !== "codex-workspace-write" || typeof parsed.profileName !== "string" || !PROFILE_NAME.test(parsed.profileName) || typeof parsed.profilePath !== "string" || !import_node_path17.default.isAbsolute(parsed.profilePath) || import_node_path17.default.basename(parsed.profilePath) !== `${parsed.profileName}.config.toml`) {
       return null;
     }
     return parsed;
@@ -65445,7 +65496,7 @@ function readCodexWorktreeSession(worktreePath) {
 }
 
 // src/utils/codex-worktree-session.ts
-var SESSION_DISCOVERY_TIMEOUT_MS = 5e3;
+var SESSION_DISCOVERY_TIMEOUT_MS = 15e3;
 var SESSION_DISCOVERY_POLL_MS = 100;
 function shellQuote2(value) {
   return `'${value.replace(/'/g, `'\\''`)}'`;
@@ -65529,11 +65580,12 @@ function renderCodexTask(role, bead, cwd) {
   }
   return output.initial_prompt;
 }
-function cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer) {
+function cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer, profile) {
   if (buffer) (0, import_node_child_process6.spawnSync)("tmux", ["delete-buffer", "-b", buffer], { stdio: "ignore" });
   (0, import_node_child_process6.spawnSync)("tmux", ["kill-session", "-t", `=${sessionName}`], { stdio: "ignore" });
   (0, import_node_child_process6.spawnSync)("git", ["worktree", "remove", "--force", worktreePath], { cwd: mainRoot, stdio: "pipe" });
   (0, import_node_child_process6.spawnSync)("git", ["branch", "-D", branchName], { cwd: mainRoot, stdio: "pipe" });
+  if (profile) removeCodexTrustProfile(profile, worktreePath);
 }
 function fail(message) {
   console.error(kleur_default.red(`
@@ -65570,9 +65622,11 @@ async function launchCodexWorktreeSession(opts) {
   const mainRoot = mainGitRoot(cwd);
   if (!currentRoot || !mainRoot) fail("Not inside a git repository");
   if (currentRoot !== mainRoot) fail("Refusing to create a nested worktree from an existing worktree");
-  const slug = opts.name ?? (0, import_node_crypto9.randomBytes)(2).toString("hex");
+  const slug = opts.name ?? (0, import_node_crypto10.randomBytes)(2).toString("hex");
   const branchName = `xt/${slug}`;
   const worktreePath = import_node_path18.default.join(mainRoot, ".xtrm", "worktrees", `${import_node_path18.default.basename(mainRoot)}-xt-codex-${slugify2(slug)}`);
+  const codexHome = process.env.CODEX_HOME || import_node_path18.default.join(import_node_os11.default.homedir(), ".codex");
+  const trustProfile = codexTrustProfile(codexHome, worktreePath);
   const pathCheck = checkStructuredLaunchPaths({ json: structured, worktreePath, branchName });
   if (!pathCheck.ok) fail(pathCheck.error);
   const refCheck = (0, import_node_child_process6.spawnSync)("git", ["check-ref-format", "--branch", branchName], { cwd: mainRoot, stdio: "pipe" });
@@ -65614,6 +65668,7 @@ async function launchCodexWorktreeSession(opts) {
   }
   const runtimePlan = buildCodexRuntimeArgs({
     yolo: opts.yolo,
+    profileName: trustProfile.name,
     model: selectedModel,
     developerInstructions,
     prompt,
@@ -65630,7 +65685,7 @@ async function launchCodexWorktreeSession(opts) {
     console.log(kleur_default.dim(`  branch:   ${branchName}
 `));
   }
-  const buffer = `xtrm-codex-${(0, import_node_crypto9.randomBytes)(16).toString("hex")}`;
+  const buffer = `xtrm-codex-${(0, import_node_crypto10.randomBytes)(16).toString("hex")}`;
   let created = false;
   const bd2 = (0, import_node_child_process6.spawnSync)("bd", ["worktree", "create", worktreePath, "--branch", branchName], {
     cwd: mainRoot,
@@ -65658,6 +65713,12 @@ async function launchCodexWorktreeSession(opts) {
     }
   }
   if (!created) fail(`Failed to create worktree at ${worktreePath}`);
+  try {
+    ensureCodexTrustProfile(codexHome, worktreePath);
+  } catch (error51) {
+    cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer, trustProfile);
+    fail(error51 instanceof Error ? error51.message : String(error51));
+  }
   try {
     (0, import_node_fs5.rmSync)(import_node_path18.default.join(worktreePath, ".beads"), { recursive: true, force: true });
     const tracked = (0, import_node_child_process6.spawnSync)("git", ["-C", worktreePath, "ls-files", "--", ".beads"], {
@@ -65692,7 +65753,7 @@ async function launchCodexWorktreeSession(opts) {
   const agentEnv = { ...buildAgentEnv(paneOptions), XTMUX_AGENT_RUNTIME: "codex" };
   const envArgs = Object.entries(agentEnv).flatMap(([key, value]) => ["-e", `${key}=${value}`]);
   const cleanupOnSignal = () => {
-    cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer);
+    cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer, trustProfile);
     process.exit(1);
   };
   const removeSignalCleanup = () => {
@@ -65702,7 +65763,7 @@ async function launchCodexWorktreeSession(opts) {
   };
   const cleanupAndFail = (message) => {
     removeSignalCleanup();
-    cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer);
+    cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer, trustProfile);
     return fail(message);
   };
   process.once("SIGINT", cleanupOnSignal);
@@ -65742,7 +65803,6 @@ async function launchCodexWorktreeSession(opts) {
   for (const { key, value } of paneOptions) {
     (0, import_node_child_process6.spawnSync)("tmux", ["set-option", "-p", "-t", paneId, key, value], { stdio: "pipe" });
   }
-  const codexHome = process.env.CODEX_HOME || import_node_path18.default.join(import_node_os11.default.homedir(), ".codex");
   const session = await waitForCodexSession(import_node_path18.default.join(codexHome, "sessions"), worktreePath, launchedAfterMs);
   if (!session) return cleanupAndFail("Codex did not persist a discoverable thread id");
   const launchedAt = new Date(launchedAfterMs).toISOString();
@@ -65750,13 +65810,15 @@ async function launchCodexWorktreeSession(opts) {
     runtime: "codex",
     launchedAt,
     threadId: session.threadId,
-    safetyProfile: runtimePlan.safetyProfile.name
+    safetyProfile: runtimePlan.safetyProfile.name,
+    profileName: trustProfile.name,
+    profilePath: trustProfile.path
   })) cleanupAndFail("Could not persist Codex worktree session metadata");
-  const sessionQuery = (0, import_node_child_process6.spawnSync)("tmux", ["display-message", "-p", "-t", `=${sessionName}`, "#{session_id}"], {
+  const sessionQuery = (0, import_node_child_process6.spawnSync)("tmux", ["list-sessions", "-F", "#{session_name}	#{session_id}"], {
     stdio: "pipe",
     encoding: "utf8"
   });
-  const tmuxIdentity = parseLiveTmuxSessionId(sessionQuery.status, sessionQuery.stdout ?? "");
+  const tmuxIdentity = parseLiveTmuxSessionListing(sessionQuery.status, sessionQuery.stdout ?? "", sessionName);
   if (!tmuxIdentity.ok) return cleanupAndFail(tmuxIdentity.error);
   removeSignalCleanup();
   if (!attach) {
@@ -65777,6 +65839,7 @@ async function launchCodexWorktreeSession(opts) {
         worktreePath,
         branchName,
         safetyProfile: runtimePlan.safetyProfile,
+        profileName: trustProfile.name,
         insideTmux: Boolean(process.env.TMUX)
       });
       process.stdout.write(`${JSON.stringify(outcome)}
@@ -66251,7 +66314,7 @@ async function getManagedAgentSkillNames(repoRoot) {
 }
 
 // src/core/global-skills-bootstrap.ts
-var import_node_crypto10 = __toESM(require("crypto"), 1);
+var import_node_crypto11 = __toESM(require("crypto"), 1);
 var import_fs_extra20 = __toESM(require_lib(), 1);
 var import_node_path19 = __toESM(require("path"), 1);
 function resolveSkillsManifestPath(globalSkillsRoot) {
@@ -66259,7 +66322,7 @@ function resolveSkillsManifestPath(globalSkillsRoot) {
 }
 var COPY_FILTER2 = (sourcePath) => !sourcePath.endsWith("__pycache__");
 function hashPath(value) {
-  return import_node_crypto10.default.createHash("sha256").update(value).digest("hex");
+  return import_node_crypto11.default.createHash("sha256").update(value).digest("hex");
 }
 function formatLogPath(filePath) {
   const normalized = import_node_path19.default.resolve(filePath);
@@ -66983,7 +67046,7 @@ var import_node_util2 = require("util");
 var import_node_process6 = __toESM(require("process"), 1);
 var import_node_fs9 = __toESM(require("fs"), 1);
 var import_node_path27 = __toESM(require("path"), 1);
-var import_node_crypto11 = __toESM(require("crypto"), 1);
+var import_node_crypto12 = __toESM(require("crypto"), 1);
 var import_node_assert = __toESM(require("assert"), 1);
 
 // ../node_modules/dot-prop/index.js
@@ -68057,8 +68120,8 @@ var Conf = class {
     }
     try {
       const initializationVector = data.slice(0, 16);
-      const password = import_node_crypto11.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
-      const decipher = import_node_crypto11.default.createDecipheriv(encryptionAlgorithm, password, initializationVector);
+      const password = import_node_crypto12.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
+      const decipher = import_node_crypto12.default.createDecipheriv(encryptionAlgorithm, password, initializationVector);
       const slice = data.slice(17);
       const dataUpdate = typeof slice === "string" ? stringToUint8Array(slice) : slice;
       return uint8ArrayToString(concatUint8Arrays([decipher.update(dataUpdate), decipher.final()]));
@@ -68101,9 +68164,9 @@ var Conf = class {
   _write(value) {
     let data = this._serialize(value);
     if (this.#encryptionKey) {
-      const initializationVector = import_node_crypto11.default.randomBytes(16);
-      const password = import_node_crypto11.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
-      const cipher = import_node_crypto11.default.createCipheriv(encryptionAlgorithm, password, initializationVector);
+      const initializationVector = import_node_crypto12.default.randomBytes(16);
+      const password = import_node_crypto12.default.pbkdf2Sync(this.#encryptionKey, initializationVector.toString(), 1e4, 32, "sha512");
+      const cipher = import_node_crypto12.default.createCipheriv(encryptionAlgorithm, password, initializationVector);
       data = concatUint8Arrays([initializationVector, stringToUint8Array(":"), cipher.update(stringToUint8Array(data)), cipher.final()]);
     }
     if (import_node_process6.default.env.SNAP) {
@@ -69172,7 +69235,7 @@ var import_fs_extra35 = __toESM(require_lib(), 1);
 init_kleur();
 
 // src/utils/atomic-config.ts
-var import_node_crypto12 = require("crypto");
+var import_node_crypto13 = require("crypto");
 var import_fs_extra33 = __toESM(require_lib(), 1);
 var import_comment_json = __toESM(require_src3(), 1);
 var PROTECTED_KEYS = [
@@ -69393,7 +69456,7 @@ async function atomicWrite(filePath, data, options = {}) {
     backupOnSuccess = false,
     backupSuffix = ".bak"
   } = options;
-  const tempFilePath = `${filePath}.tmp.${(0, import_node_crypto12.randomUUID)()}`;
+  const tempFilePath = `${filePath}.tmp.${(0, import_node_crypto13.randomUUID)()}`;
   try {
     let content;
     if (preserveComments) {
@@ -70566,6 +70629,7 @@ function buildPrBody(issues, commitLog, diffStat, branch) {
 function createEndCommand() {
   return new Command("end").description("Close session: rebase, push, open PR, link beads issues, clean up worktree").option("--draft", "Open PR as draft", false).option("--keep", "Keep worktree after PR creation (default: prompt)", false).option("-y, --yes", "Skip confirmation prompts", false).option("--dry-run", "Preview PR title, body, and linked issues without pushing or creating PR", false).action(async (opts) => {
     const cwd = process.cwd();
+    const codexSession = readCodexWorktreeSession(cwd);
     const branchResult = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
     const branch = branchResult.out;
     if (!branch.startsWith("xt/")) {
@@ -70720,6 +70784,12 @@ function createEndCommand() {
         const cleanup = cleanupWorktreePath(cwd, repoRoot);
         if (cleanup.removed) {
           unregisterPluginsForWorktree(cwd);
+          if (codexSession && (0, import_node_fs11.existsSync)(codexSession.profilePath) && !removeCodexTrustProfile({
+            name: codexSession.profileName,
+            path: codexSession.profilePath
+          }, cwd)) {
+            cleanup.warnings.push(`Refused to remove modified Codex profile ${codexSession.profilePath}`);
+          }
           clearStatuslineClaim(repoRoot);
           if (cleanup.alreadyMissing) {
             console.log(t.success("  \u2713 Worktree already absent; cleaned stale git metadata"));
@@ -71664,7 +71734,7 @@ function createAttachCommand() {
         console.error(kleur_default.red("\n  \u2717 Codex session metadata is missing or invalid; refusing positional resume\n"));
         process.exit(1);
       }
-      resumeArgs = buildCodexResumeArgs(session.threadId, session.safetyProfile);
+      resumeArgs = buildCodexResumeArgs(session.threadId, session.safetyProfile, session.profileName);
     } else {
       resumeArgs = runtime === "claude" ? ["--continue", "--dangerously-skip-permissions"] : ["-c"];
     }
@@ -73281,7 +73351,7 @@ var import_node_path37 = __toESM(require("path"), 1);
 init_kleur();
 
 // src/core/skills-materializer.ts
-var import_node_crypto13 = require("crypto");
+var import_node_crypto14 = require("crypto");
 var import_node_path36 = __toESM(require("path"), 1);
 function sortByName(entries) {
   return [...entries].sort((a, b) => a.name.localeCompare(b.name));
@@ -76945,7 +77015,7 @@ function createSpecCommand() {
 init_kleur();
 var import_fs_extra60 = __toESM(require_lib(), 1);
 var import_node_path57 = __toESM(require("path"), 1);
-var import_node_crypto14 = __toESM(require("crypto"), 1);
+var import_node_crypto15 = __toESM(require("crypto"), 1);
 var import_node_os20 = __toESM(require("os"), 1);
 var import_child_process8 = require("child_process");
 init_git_staging();
@@ -77034,7 +77104,7 @@ async function appendMigrationLog(event) {
 }
 function hashFile4(filePath) {
   const content = import_fs_extra60.default.readFileSync(filePath);
-  return import_node_crypto14.default.createHash("sha256").update(content).digest("hex");
+  return import_node_crypto15.default.createHash("sha256").update(content).digest("hex");
 }
 async function createTarballBackup(sourceDir, backupName) {
   const backupRoot = import_node_path57.default.join(import_node_os20.default.homedir(), ".xtrm", "migration-backups");

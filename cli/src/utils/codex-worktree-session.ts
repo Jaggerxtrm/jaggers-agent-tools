@@ -11,13 +11,17 @@ import {
     checkCodexPassthrough,
 } from '../core/codex-runtime.js';
 import {
+    codexTrustProfile,
+    ensureCodexTrustProfile,
     findCodexSession,
+    removeCodexTrustProfile,
     writeCodexWorktreeSession,
+    type CodexTrustProfile,
 } from '../core/codex-session.js';
 import {
     checkStructuredLaunchOptions,
     checkStructuredLaunchPaths,
-    parseLiveTmuxSessionId,
+    parseLiveTmuxSessionListing,
     sanitizeRuntimeVersion,
 } from '../core/launch-outcome.js';
 import {
@@ -40,7 +44,7 @@ export interface CodexWorktreeSessionOptions {
     passthrough?: string[];
 }
 
-const SESSION_DISCOVERY_TIMEOUT_MS = 5_000;
+const SESSION_DISCOVERY_TIMEOUT_MS = 15_000;
 const SESSION_DISCOVERY_POLL_MS = 100;
 
 function shellQuote(value: string): string {
@@ -135,11 +139,13 @@ function cleanupCreatedLaunch(
     branchName: string,
     sessionName: string,
     buffer?: string,
+    profile?: CodexTrustProfile,
 ): void {
     if (buffer) spawnSync('tmux', ['delete-buffer', '-b', buffer], { stdio: 'ignore' });
     spawnSync('tmux', ['kill-session', '-t', `=${sessionName}`], { stdio: 'ignore' });
     spawnSync('git', ['worktree', 'remove', '--force', worktreePath], { cwd: mainRoot, stdio: 'pipe' });
     spawnSync('git', ['branch', '-D', branchName], { cwd: mainRoot, stdio: 'pipe' });
+    if (profile) removeCodexTrustProfile(profile, worktreePath);
 }
 
 function fail(message: string): never {
@@ -183,6 +189,8 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
     const slug = opts.name ?? randomBytes(2).toString('hex');
     const branchName = `xt/${slug}`;
     const worktreePath = path.join(mainRoot, '.xtrm', 'worktrees', `${path.basename(mainRoot)}-xt-codex-${slugify(slug)}`);
+    const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+    const trustProfile = codexTrustProfile(codexHome, worktreePath);
     const pathCheck = checkStructuredLaunchPaths({ json: structured, worktreePath, branchName });
     if (!pathCheck.ok) fail(pathCheck.error);
     const refCheck = spawnSync('git', ['check-ref-format', '--branch', branchName], { cwd: mainRoot, stdio: 'pipe' });
@@ -223,6 +231,7 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
 
     const runtimePlan = buildCodexRuntimeArgs({
         yolo: opts.yolo,
+        profileName: trustProfile.name,
         model: selectedModel,
         developerInstructions,
         prompt,
@@ -269,6 +278,13 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
     if (!created) fail(`Failed to create worktree at ${worktreePath}`);
 
     try {
+        ensureCodexTrustProfile(codexHome, worktreePath);
+    } catch (error) {
+        cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer, trustProfile);
+        fail(error instanceof Error ? error.message : String(error));
+    }
+
+    try {
         rmSync(path.join(worktreePath, '.beads'), { recursive: true, force: true });
         const tracked = spawnSync('git', ['-C', worktreePath, 'ls-files', '--', '.beads'], {
             cwd: worktreePath, stdio: 'pipe', encoding: 'utf8',
@@ -299,7 +315,7 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
     const agentEnv = { ...buildAgentEnv(paneOptions), XTMUX_AGENT_RUNTIME: 'codex' };
     const envArgs = Object.entries(agentEnv).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
     const cleanupOnSignal = (): void => {
-        cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer);
+        cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer, trustProfile);
         process.exit(1);
     };
     const removeSignalCleanup = (): void => {
@@ -309,7 +325,7 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
     };
     const cleanupAndFail = (message: string): never => {
         removeSignalCleanup();
-        cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer);
+        cleanupCreatedLaunch(mainRoot, worktreePath, branchName, sessionName, buffer, trustProfile);
         return fail(message);
     };
     process.once('SIGINT', cleanupOnSignal);
@@ -345,7 +361,6 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
         spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
     }
 
-    const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
     const session = await waitForCodexSession(path.join(codexHome, 'sessions'), worktreePath, launchedAfterMs);
     if (!session) return cleanupAndFail('Codex did not persist a discoverable thread id');
     const launchedAt = new Date(launchedAfterMs).toISOString();
@@ -354,12 +369,14 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
         launchedAt,
         threadId: session.threadId,
         safetyProfile: runtimePlan.safetyProfile.name,
+        profileName: trustProfile.name,
+        profilePath: trustProfile.path,
     })) cleanupAndFail('Could not persist Codex worktree session metadata');
 
-    const sessionQuery = spawnSync('tmux', ['display-message', '-p', '-t', `=${sessionName}`, '#{session_id}'], {
+    const sessionQuery = spawnSync('tmux', ['list-sessions', '-F', '#{session_name}\t#{session_id}'], {
         stdio: 'pipe', encoding: 'utf8',
     });
-    const tmuxIdentity = parseLiveTmuxSessionId(sessionQuery.status, sessionQuery.stdout ?? '');
+    const tmuxIdentity = parseLiveTmuxSessionListing(sessionQuery.status, sessionQuery.stdout ?? '', sessionName);
     if (!tmuxIdentity.ok) return cleanupAndFail(tmuxIdentity.error);
     removeSignalCleanup();
 
@@ -378,6 +395,7 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
                 worktreePath,
                 branchName,
                 safetyProfile: runtimePlan.safetyProfile,
+                profileName: trustProfile.name,
                 insideTmux: Boolean(process.env.TMUX),
             });
             process.stdout.write(`${JSON.stringify(outcome)}\n`);

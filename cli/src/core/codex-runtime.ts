@@ -21,6 +21,8 @@ const OWNED_OR_FORBIDDEN_FLAGS = new Set([
     '-s',
     '--ask-for-approval',
     '-a',
+    '--profile',
+    '-p',
 ]);
 
 export function checkCodexPassthrough(argv: readonly string[]):
@@ -28,7 +30,7 @@ export function checkCodexPassthrough(argv: readonly string[]):
     | { ok: false; error: string } {
     for (const arg of argv) {
         const attachedShort = !arg.startsWith('--')
-            ? (arg.startsWith('-s') ? '-s' : arg.startsWith('-a') ? '-a' : null)
+            ? (arg.startsWith('-s') ? '-s' : arg.startsWith('-a') ? '-a' : arg.startsWith('-p') ? '-p' : null)
             : null;
         const flag = attachedShort ?? arg.split('=', 1)[0] ?? arg;
         if (OWNED_OR_FORBIDDEN_FLAGS.has(flag)) {
@@ -51,6 +53,7 @@ function composeTurnOne(skillNames: readonly string[], prompt: string | undefine
 
 export function buildCodexRuntimeArgs(input: {
     yolo: boolean;
+    profileName: string;
     model?: string;
     developerInstructions?: string;
     prompt?: string;
@@ -73,9 +76,10 @@ export function buildCodexRuntimeArgs(input: {
             approvals: 'on-request',
             hook_trust: 'preserved',
         };
-    const argv = input.yolo
+    if (!/^xtrm-[0-9a-f]{16}$/.test(input.profileName)) throw new Error('invalid Codex profile name');
+    const argv = ['--profile', input.profileName, ...(input.yolo
         ? ['--dangerously-bypass-approvals-and-sandbox']
-        : ['--sandbox', 'workspace-write', '--ask-for-approval', 'on-request'];
+        : ['--sandbox', 'workspace-write', '--ask-for-approval', 'on-request'])];
 
     if (input.model) argv.push('--model', input.model);
     if (input.developerInstructions) {
@@ -93,12 +97,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 export function buildCodexResumeArgs(
     threadId: string,
     safetyProfile: CodexSafetyProfile['name'],
+    profileName: string,
 ): string[] {
     if (!UUID.test(threadId)) throw new Error('invalid Codex thread id');
+    if (!/^xtrm-[0-9a-f]{16}$/.test(profileName)) throw new Error('invalid Codex profile name');
     const safetyArgs = safetyProfile === 'codex-yolo'
         ? ['--dangerously-bypass-approvals-and-sandbox']
         : ['--sandbox', 'workspace-write', '--ask-for-approval', 'on-request'];
-    return ['resume', ...safetyArgs, threadId];
+    return ['--profile', profileName, 'resume', ...safetyArgs, threadId];
 }
 
 export function parseCodexSessionMeta(
@@ -147,6 +153,7 @@ export function buildCodexDetachedOutcome(input: {
     worktreePath: string;
     branchName: string;
     safetyProfile: CodexSafetyProfile;
+    profileName: string;
     insideTmux: boolean;
 }): CommandOutcomeV1 {
     return {
@@ -180,7 +187,7 @@ export function buildCodexDetachedOutcome(input: {
             ),
             outcomeAction(
                 'resume',
-                ['codex', ...buildCodexResumeArgs(input.threadId, input.safetyProfile.name)],
+                ['codex', ...buildCodexResumeArgs(input.threadId, input.safetyProfile.name, input.profileName)],
                 input.worktreePath,
                 'Resume this exact Codex thread after the tmux session ends.',
             ),

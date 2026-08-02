@@ -95,6 +95,22 @@ export function parseLiveTmuxSessionId(status: number | null, stdout: string):
         : { ok: false, error: 'detached tmux session returned an invalid identity' };
 }
 
+export function parseLiveTmuxSessionListing(
+    status: number | null,
+    stdout: string,
+    expectedName: string,
+): ReturnType<typeof parseLiveTmuxSessionId> {
+    if (status !== 0) return { ok: false, error: 'detached tmux session is no longer live' };
+    const matches = stdout.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+        const separator = line.indexOf('\t');
+        if (separator < 1 || line.slice(0, separator) !== expectedName) return [];
+        return [line.slice(separator + 1)];
+    });
+    if (matches.length === 0) return { ok: false, error: 'detached tmux session is no longer live' };
+    if (matches.length !== 1) return { ok: false, error: 'detached tmux session returned an invalid identity' };
+    return parseLiveTmuxSessionId(0, matches[0] ?? '');
+}
+
 function assertDetachedLaunchInput(input: DetachedLaunchOutcomeInput): void {
     if (input.runtimeVersion !== null) assertOutcomeString('runtimeVersion', input.runtimeVersion, 128);
     assertOutcomeString('sessionSlug', input.sessionSlug, 256);
