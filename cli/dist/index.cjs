@@ -62105,7 +62105,7 @@ function buildDetachedLaunchOutcome(input) {
     next_actions: [
       action(
         "attach",
-        ["tmux", "attach-session", "-t", input.sessionName],
+        ["tmux", input.insideTmux ? "switch-client" : "attach-session", "-t", input.sessionName],
         input.worktreePath,
         "Attach to the live detached session."
       ),
@@ -63624,7 +63624,8 @@ async function launchTmuxSession(args) {
         tmuxSessionId,
         paneId,
         worktreePath,
-        branchName
+        branchName,
+        insideTmux
       });
       process.stdout.write(`${JSON.stringify(outcome)}
 `);

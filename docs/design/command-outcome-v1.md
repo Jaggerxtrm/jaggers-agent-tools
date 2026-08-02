@@ -39,7 +39,7 @@ These fields characterize released behavior. The future Codex adapter will use i
 
 The detached result includes four optional actions:
 
-1. attach to the live tmux session;
+1. attach to the live tmux session, or switch the current client when invoked from inside tmux;
 2. resume through `xt attach <slug>` after the tmux session ends;
 3. inspect drift with `xt doctor`;
 4. close through `xt end` from the owned worktree.
