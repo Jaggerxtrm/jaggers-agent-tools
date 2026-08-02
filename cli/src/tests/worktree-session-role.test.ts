@@ -1275,6 +1275,8 @@ describe('buildBufferedRuntimeCommand', () => {
         expect(command).toContain('SIGINT');
         expect(command).toContain('SIGTERM');
         expect(command).toContain('SIGHUP');
+        expect(command).toContain('node:path');
+        expect(command).toContain('path.basename(payload.runtimeCmd)');
         expect(command).toContain('xtrm-role-safe');
         expect(command).not.toContain('rendered bead body');
     });

@@ -619,6 +619,15 @@ function shellQuote(s: string): string {
     return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+function resolveRuntimeExecutable(runtime: 'pi' | 'claude'): string | null {
+    const result = spawnSync('sh', ['-c', 'command -v "$1"', 'xtrm', runtime], {
+        encoding: 'utf8',
+        stdio: 'pipe',
+    });
+    const executable = (result.stdout ?? '').trim();
+    return result.status === 0 && path.isAbsolute(executable) ? executable : null;
+}
+
 export function createRuntimeBufferName(): string {
     return `xtrm-role-${randomBytes(16).toString('hex')}`;
 }
@@ -633,6 +642,7 @@ export function buildBufferedRuntimeCommand(
 ): string {
     const script = [
         "const { execFileSync, spawnSync } = require('node:child_process')",
+        "const path = require('node:path')",
         'const buffer = process.argv[1]',
         "const cleanup = () => spawnSync('tmux', ['delete-buffer', '-b', buffer], { stdio: 'ignore' })",
         "for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => { cleanup(); process.exit(1) })",
@@ -645,7 +655,7 @@ export function buildBufferedRuntimeCommand(
         '  cleanup()',
         '}',
         'const payload = JSON.parse(raw)',
-        "if (!['pi', 'claude'].includes(payload.runtimeCmd) || !Array.isArray(payload.runtimeArgs) || payload.runtimeArgs.some((arg) => typeof arg !== 'string')) process.exit(2)",
+        "if (typeof payload.runtimeCmd !== 'string' || !['pi', 'claude'].includes(path.basename(payload.runtimeCmd)) || (!['pi', 'claude'].includes(payload.runtimeCmd) && !path.isAbsolute(payload.runtimeCmd)) || !Array.isArray(payload.runtimeArgs) || payload.runtimeArgs.some((arg) => typeof arg !== 'string')) process.exit(2)",
         "const result = spawnSync(payload.runtimeCmd, payload.runtimeArgs, { stdio: 'inherit' })",
         'if (result.error) throw result.error',
         'process.exit(result.status ?? 1)',
@@ -1755,6 +1765,12 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         process.exit(1);
     }
 
+    const runtimeExecutable = structuredOutput ? resolveRuntimeExecutable(runtime) : runtime;
+    if (!runtimeExecutable) {
+        console.error(kleur.red(`\n  ✗ Could not resolve an absolute ${runtime} executable for structured launch\n`));
+        process.exit(1);
+    }
+
     if (!structuredOutput) {
         console.log(kleur.bold(`\n  Launching ${runtime} session`));
         console.log(kleur.dim(`  worktree: ${worktreePath}`));
@@ -1894,6 +1910,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // those still gets a plain runtime in the current terminal. xtrm-3xgs5.
     const common = {
         runtime,
+        runtimeExecutable,
         sessionSlug: slug,
         bead,
         attach,
@@ -1987,6 +2004,7 @@ function emitAgentRoleLaunched(fields: Record<string, string>): void {
  */
 type TmuxLaunchArgs = {
     runtime: 'pi' | 'claude';
+    runtimeExecutable: string;
     sessionSlug: string;
     bead?: string;
     attach: boolean;
@@ -2016,7 +2034,7 @@ type TmuxLaunchArgs = {
 
 async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     const {
-        runtime, sessionSlug, bead, attach, worktreePath, branchName, metadataPersisted, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
+        runtime, runtimeExecutable, sessionSlug, bead, attach, worktreePath, branchName, metadataPersisted, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
         newSession, parent, child, reuse, json: structuredOutput = false,
     } = args;
 
@@ -2071,6 +2089,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     const plan = args.mode === 'role'
         ? buildRoleTmuxPlan({ ...planCommon, role: args.role })
         : buildBareTmuxPlan({ ...planCommon, sessionSlug });
+    const runtimeCmdString = [runtimeExecutable, ...plan.runtimeArgs].map(shellQuote).join(' ');
 
     const agentEnv = buildAgentEnv(plan.paneOptions);
 
@@ -2112,7 +2131,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
         }
 
         if (!bead) {
-            const runtimeResult = spawnSync(plan.runtimeCmd, plan.runtimeArgs, {
+            const runtimeResult = spawnSync(runtimeExecutable, plan.runtimeArgs, {
                 cwd: worktreePath,
                 stdio: 'inherit',
                 env: { ...process.env, ...agentEnv },
@@ -2123,7 +2142,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
         // Before spawn, not after: the runtime's agent.ready fires once, and a
         // watermark taken later could reject it. See AssignBeadOptions.readyAfterMs.
         const readyAfterMs = Date.now();
-        const runtimeProcess = spawn(plan.runtimeCmd, plan.runtimeArgs, {
+        const runtimeProcess = spawn(runtimeExecutable, plan.runtimeArgs, {
             cwd: worktreePath,
             stdio: 'inherit',
             env: { ...process.env, ...agentEnv },
@@ -2230,7 +2249,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             '-s', plan.sessionName,
             '-c', worktreePath,
             ...envArgs,
-            plan.runtimeCmdString,
+            runtimeCmdString,
         ], { stdio: 'pipe', encoding: 'utf8' });
         if (newSess.status !== 0) failNewSession((newSess.stderr ?? '').trim());
     } else {
@@ -2259,7 +2278,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
         }
 
         const bufferedPayload = JSON.stringify({
-            runtimeCmd: plan.runtimeCmd,
+            runtimeCmd: runtimeExecutable,
             runtimeArgs: plan.runtimeArgs,
         });
         const loaded = spawnSync('tmux', ['load-buffer', '-b', runtimeBuffer, '-'], {
@@ -2324,7 +2343,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             const tmuxSessionId = sessionIdResult.status === 0
                 ? (sessionIdResult.stdout ?? '').trim() || null
                 : null;
-            const versionResult = spawnSync(runtime, ['--version'], {
+            const versionResult = spawnSync(runtimeExecutable, ['--version'], {
                 stdio: 'pipe',
                 encoding: 'utf8',
                 timeout: 5_000,
