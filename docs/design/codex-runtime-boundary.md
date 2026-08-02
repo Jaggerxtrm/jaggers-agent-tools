@@ -5,7 +5,7 @@ Status: K1 evidence for `xtrm-ozknq.5`. This document records observed behavior.
 ## Evidence and provenance
 
 - Core commit: `9b823f80d373a4cb82173ec594f525b1f20caa39`.
-- Codex: `codex-cli 0.146.0`, resolved from `/home/dawid/.local/bin/codex` to the standalone `0.146.0-x86_64-unknown-linux-musl` release.
+- Codex: `codex-cli 0.146.0`, resolved from `<USER_BIN>/codex` to the standalone `0.146.0-x86_64-unknown-linux-musl` release.
 - Pi and Claude behavior: characterized by `cli/src/tests/worktree-session-role.test.ts`, `cli/src/tests/worktree-session-bare-slash.test.ts`, `cli/src/tests/worktree-session-beads-noise.test.ts`, `cli/src/tests/end-worktree.test.ts`, and `cli/src/tests/pi-launch-self-heal-regression.test.ts`.
 - Codex lifecycle payload: `cli/src/tests/fixtures/codex/0.146.0/exec-success.jsonl`, captured on 2026-08-02 with the exact argv recorded in its metadata.
 - Codex product reference: the current OpenAI Codex manual fetched on 2026-08-02. Runtime observations take precedence for this installed version.

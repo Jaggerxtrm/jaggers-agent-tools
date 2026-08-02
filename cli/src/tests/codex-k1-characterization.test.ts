@@ -128,7 +128,9 @@ describe('K1 runtime characterization', () => {
     });
 
     const serialized = JSON.stringify({ metadata, events });
+    const userHomePath = /\/(?:home|Users)\/[^/"\s]+/;
     expect(serialized).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    expect(serialized).not.toMatch(/\/(?:home|Users)\/[^/"\\s]+/);
+    expect(serialized).not.toMatch(userHomePath);
+    expect('/home/sam/.codex').toMatch(userHomePath);
   });
 });
