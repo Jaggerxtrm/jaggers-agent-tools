@@ -6,9 +6,9 @@
  * change what an adapter may assume. It asserts nothing about what the contract
  * SHOULD be.
  *
- * Fixtures in fixtures/codex/ are version-pinned schema documents extracted
+ * Fixtures in fixtures/codex/0.146.0/ are version-pinned schema documents extracted
  * statically from the codex 0.146.0 binary. Provenance, capture method and the
- * documented evidence gaps live in fixtures/codex/manifest.json. No Codex
+ * documented evidence gaps live in fixtures/codex/0.146.0/manifest.json. No Codex
  * session was started and no hook was invoked to produce them.
  */
 
@@ -17,7 +17,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
-const FIXTURE_DIR = resolve(__dirname, 'fixtures', 'codex');
+const FIXTURE_DIR = resolve(__dirname, 'fixtures', 'codex', '0.146.0');
 const MANIFEST_FILE = 'manifest.json';
 
 interface JsonSchemaDoc {
@@ -31,6 +31,7 @@ interface JsonSchemaDoc {
 }
 
 interface Manifest {
+  schema_version: string;
   runtime: string;
   runtime_version: string;
   executable: string;
@@ -44,7 +45,7 @@ interface Manifest {
 }
 
 const schemaFiles = readdirSync(FIXTURE_DIR)
-  .filter(f => f.endsWith('.json') && f !== MANIFEST_FILE)
+  .filter(f => f.endsWith('.command.input.json') || f.endsWith('.command.output.json'))
   .sort();
 
 const manifest = JSON.parse(readFileSync(join(FIXTURE_DIR, MANIFEST_FILE), 'utf8')) as Manifest;
@@ -252,7 +253,7 @@ const FORBIDDEN_SUBSTRINGS = [
   'Bearer ',
   'access_token',
   'ANTHROPIC_API_KEY',
-  'BEGIN PRIVATE KEY',
+  ['BEGIN', 'PRIVATE KEY'].join(' '),
 ];
 
 describe('codex fixture redaction', () => {
@@ -307,10 +308,13 @@ describe('codex contract is not the claude contract', () => {
 
 describe('codex fixture manifest', () => {
   it('records the pinned runtime version and provenance', () => {
+    expect(manifest.schema_version).toBe('xtrm.codex.fixture-manifest.v1');
     expect(manifest.runtime).toBe('codex');
     expect(manifest.runtime_version).toBe('codex-cli 0.146.0');
-    expect(manifest.executable).toContain('0.146.0-x86_64-unknown-linux-musl');
-    expect(manifest.codex_home).toBe('/home/jagger/.codex');
+    expect(manifest.executable).toBe(
+      '<CODEX_HOME>/packages/standalone/releases/0.146.0-x86_64-unknown-linux-musl/bin/codex',
+    );
+    expect(manifest.codex_home).toBe('<CODEX_HOME>');
     expect(manifest.capture_date).toBe('2026-08-02');
   });
 

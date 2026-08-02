@@ -1,10 +1,11 @@
 {
   "$comment": "CHARACTERIZATION fixture set for KAN-127 K1 / beads xtrm-ozknq.5. Pins Codex 0.146.0 hook payload schemas so a later shared-launcher refactor cannot silently change the assumed Codex contract.",
+  "schema_version": "xtrm.codex.fixture-manifest.v1",
   "runtime": "codex",
   "runtime_version": "codex-cli 0.146.0",
-  "executable": "/home/jagger/.codex/packages/standalone/releases/0.146.0-x86_64-unknown-linux-musl/bin/codex",
-  "codex_home": "/home/jagger/.codex",
-  "codex_home_source": "CODEX_HOME unset at capture time; resolved to the default $HOME/.codex, which exists on this host",
+  "executable": "<CODEX_HOME>/packages/standalone/releases/0.146.0-x86_64-unknown-linux-musl/bin/codex",
+  "codex_home": "<CODEX_HOME>",
+  "codex_home_source": "CODEX_HOME unset at capture time; resolved to the default <HOME>/.codex, which existed on the capture host",
   "capture_date": "2026-08-02",
   "capture_method": {
     "summary": "Static extraction of the draft-07 JSON Schemas embedded in the codex binary. No Codex session was started and no hook was invoked.",
@@ -29,7 +30,7 @@
     "verified_by": "cli/src/tests/codex-k1-payload-fixtures.test.ts (redaction negative proof)"
   },
   "documented_gaps": [
-    "SUPERSEDED 2026-08-02 by the `live` section. As recorded at schema-extraction time: 'No 0.146.0-produced rollout JSONL exists on this host. The newest rollout is /home/jagger/.codex/sessions/2026/04/29/rollout-2026-04-29T10-29-38-019dd85b-a646-7263-8947-0bcb7369be4d.jsonl with cli_version 0.122.0. Session-transcript shape for 0.146.0 is therefore NOT pinned by this fixture set.' A real 0.146.0 rollout is now pinned at live/rollout-0.146.0.observed.jsonl, and its drift from that 0.122.0 baseline is asserted in cli/src/tests/codex-k1-live-payloads.test.ts.",
+    "SUPERSEDED 2026-08-02 by the `live` section. As recorded at schema-extraction time: 'No 0.146.0-produced rollout JSONL exists on this host. The newest rollout is <CODEX_HOME>/sessions/2026/04/29/rollout-2026-04-29T10-29-38-019dd85b-a646-7263-8947-0bcb7369be4d.jsonl with cli_version 0.122.0. Session-transcript shape for 0.146.0 is therefore NOT pinned by this fixture set.' A real 0.146.0 rollout is now pinned at live/rollout-0.146.0.observed.jsonl, and its drift from that 0.122.0 baseline is asserted in cli/src/tests/codex-k1-live-payloads.test.ts.",
     "SUPERSEDED 2026-08-02 by the `live` section, and only for four of the eleven events. As recorded at schema-extraction time: 'No live hook INVOCATION was observed. Only the declared schemas are evidence; actual field VALUES that Codex emits at runtime (for example the real content of tool_input, transcript_path, or session_id) are unverified.' SessionStart, UserPromptSubmit, Stop and SessionEnd are now pinned against a real capture. PreToolUse, PostToolUse, PermissionRequest, PreCompact, PostCompact, SubagentStart and SubagentStop were NOT exercised by the capture command and their runtime VALUES remain unverified.",
     "The hook enum VALUES for HookScope, HookSource, HookRunStatus and HookTrustStatus could not be recovered from the binary: the embedded TypeScript bindings use deduplicated placeholder markers instead of literal variants. These enums are NOT represented in this fixture set and must not be inferred from it.",
     "Output schemas carry no top-level 'required' array in this build; only input schemas do. The hook_event_name const appears on inputs; outputs carry the event name as 'hookEventName' inside a hookSpecificOutput definition.",
@@ -170,7 +171,7 @@
     "runtime": "codex",
     "runtime_version": "codex-cli 0.146.0",
     "capture_date": "2026-08-02",
-    "codex_home": "/home/jagger/.codex",
+    "codex_home": "<CODEX_HOME>",
     "capture_command": "codex exec --skip-git-repo-check -s read-only -C <empty tmp dir> --json -o <file> \"reply with the single word ok\"",
     "hook_mechanism": {
       "summary": "Temporary command hooks were installed in ~/.codex/hooks.json for SessionStart, UserPromptSubmit, Stop and SessionEnd. Each hook was the command `cat > <file>`, so the file written is the hook's raw stdin, byte-for-byte, with no transformation by the capture harness.",
@@ -184,19 +185,19 @@
       "rule": "Literal, ordered, longest-prefix-first string replacement applied to the raw captured UTF-8 text before it was written here.",
       "replacements": [
         [
-          "/home/jagger/.codex",
+          "<CAPTURE_CODEX_HOME>",
           "<CODEX_HOME>"
         ],
         [
-          "/home/jagger/.claude/jobs/fd25ec64/tmp/probe2",
+          "<CAPTURE_CWD_2>",
           "<CWD>"
         ],
         [
-          "/home/jagger/.claude/jobs/fd25ec64/tmp/probe",
+          "<CAPTURE_CWD_1>",
           "<CWD>"
         ],
         [
-          "/home/jagger",
+          "<CAPTURE_HOME>",
           "<HOME>"
         ]
       ],

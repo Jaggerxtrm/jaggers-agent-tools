@@ -6,10 +6,10 @@
  * actually EMITTED during an operator-approved capture window on 2026-08-02, and
  * checks the two against each other.
  *
- * Evidence: fixtures/codex/live/*.observed.json (raw hook stdin, redacted) and
- * fixtures/codex/live/rollout-0.146.0.observed.jsonl (a real 0.146.0 rollout).
+ * Evidence: fixtures/codex/0.146.0/live/*.observed.json (raw hook stdin, redacted) and
+ * fixtures/codex/0.146.0/live/rollout-0.146.0.observed.jsonl (a real 0.146.0 rollout).
  * Provenance, the exact capture command, the hook mechanism, the redaction rule
- * and the remaining evidence gaps live in fixtures/codex/manifest.json -> live.
+ * and the remaining evidence gaps live in fixtures/codex/0.146.0/manifest.json -> live.
  *
  * CHARACTERIZATION ONLY: these assertions describe the contract as it is today so
  * that a shared-launcher refactor or a Codex version bump cannot change it
@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
-const FIXTURE_DIR = resolve(__dirname, 'fixtures', 'codex');
+const FIXTURE_DIR = resolve(__dirname, 'fixtures', 'codex', '0.146.0');
 const LIVE_DIR = join(FIXTURE_DIR, 'live');
 
 const manifest = JSON.parse(readFileSync(join(FIXTURE_DIR, 'manifest.json'), 'utf8'));
@@ -64,7 +64,7 @@ describe('codex live capture provenance', () => {
     expect(live.runtime).toBe('codex');
     expect(live.runtime_version).toBe('codex-cli 0.146.0');
     expect(live.capture_date).toBe('2026-08-02');
-    expect(live.codex_home).toBe('/home/jagger/.codex');
+    expect(live.codex_home).toBe('<CODEX_HOME>');
     expect(live.capture_command).toBe(
       'codex exec --skip-git-repo-check -s read-only -C <empty tmp dir> --json -o <file> "reply with the single word ok"',
     );
@@ -549,14 +549,14 @@ const LIVE_FILES = [
 ];
 
 const FORBIDDEN_LITERALS = [
-  '/home/jagger',
   'Bearer ',
   'OPENAI_API_KEY',
   'ANTHROPIC_API_KEY',
   'access_token',
   'auth.json',
-  'BEGIN PRIVATE KEY',
+  ['BEGIN', 'PRIVATE KEY'].join(' '),
 ];
+const HOST_HOME_PATH = /\/(?:home|Users)\/[^/"\s]+/;
 
 describe('live fixture redaction', () => {
   it.each(LIVE_FILES)('live/%s contains no host path and no credential-shaped substring', (file) => {
@@ -565,6 +565,7 @@ describe('live fixture redaction', () => {
       expect(raw.includes(needle), `live/${file} contains forbidden substring ${JSON.stringify(needle)}`)
         .toBe(false);
     }
+    expect(raw, `live/${file} contains a host home path`).not.toMatch(HOST_HOME_PATH);
   });
 
   it.each(LIVE_FILES)('live/%s contains no OpenAI sk- key prefix', (file) => {
@@ -583,7 +584,7 @@ describe('live fixture redaction', () => {
 
   it('applied the documented placeholders instead of dropping the values', () => {
     // Redaction must be a substitution, not a deletion: the placeholders have to be
-    // present, otherwise "no /home/jagger" would also pass on an empty file.
+    // present, otherwise a host-path negative assertion would also pass on an empty file.
     expect(readLive('stop.observed.json')).toContain('<CODEX_HOME>/sessions/');
     expect(observed.stop.cwd).toBe('<CWD>');
     // The rollout carries a SECOND redaction pass beyond path replacement: xtrm-dev/core is a
@@ -602,34 +603,25 @@ describe('live fixture redaction', () => {
 
   it('records the redaction rule in the manifest', () => {
     expect(live.redaction.replacements).toEqual([
-      ['/home/jagger/.codex', '<CODEX_HOME>'],
-      ['/home/jagger/.claude/jobs/fd25ec64/tmp/probe2', '<CWD>'],
-      ['/home/jagger/.claude/jobs/fd25ec64/tmp/probe', '<CWD>'],
-      ['/home/jagger', '<HOME>'],
+      ['<CAPTURE_CODEX_HOME>', '<CODEX_HOME>'],
+      ['<CAPTURE_CWD_2>', '<CWD>'],
+      ['<CAPTURE_CWD_1>', '<CWD>'],
+      ['<CAPTURE_HOME>', '<HOME>'],
     ]);
     expect(live.redaction.kept_deliberately).toContain('UUIDs are NOT redacted');
     expect(live.redaction.verified_by).toContain('cli/src/tests/codex-k1-live-payloads.test.ts');
   });
 
-  it('holds manifest.json to the credential rule but not to the host-path rule', () => {
-    // SCOPE NOTE, stated rather than hidden: manifest.json is the only file under
-    // fixtures/codex/ that still contains the literal string /home/jagger. That is
-    // deliberate provenance -- the codex executable path, CODEX_HOME, and the path
-    // of the 0.122.0 rollout used as the drift baseline. It is host metadata about
-    // where the evidence came from, not captured instance data, and
-    // codex-k1-payload-fixtures.test.ts already asserts
-    // manifest.codex_home === '/home/jagger/.codex' as a provenance pin. So
-    // manifest.json is exempt from the host-path rule and subject to every other
-    // rule.
+  it('holds manifest.json to the same credential and host-path rules', () => {
     const raw = readFileSync(join(FIXTURE_DIR, 'manifest.json'), 'utf8');
-    for (const needle of FORBIDDEN_LITERALS.filter(n => n !== '/home/jagger')) {
+    for (const needle of FORBIDDEN_LITERALS) {
       expect(raw.includes(needle), `manifest.json contains forbidden substring ${JSON.stringify(needle)}`)
         .toBe(false);
     }
+    expect(raw, 'manifest.json contains a host home path').not.toMatch(HOST_HOME_PATH);
     expect(raw.match(/(?<![A-Za-z0-9_])sk-/g), 'manifest.json contains an sk- key prefix').toBeNull();
-    // The host paths that ARE allowed are confined to provenance fields.
-    expect(manifest.executable).toContain('/home/jagger');
-    expect(manifest.codex_home).toBe('/home/jagger/.codex');
+    expect(manifest.executable).toContain('<CODEX_HOME>');
+    expect(manifest.codex_home).toBe('<CODEX_HOME>');
   });
 
   it('keeps the UUIDs that prove the join', () => {
