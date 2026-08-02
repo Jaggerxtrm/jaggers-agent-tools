@@ -42,6 +42,48 @@
             }
         ]
     },
+    "xtrm.command-outcome.v1": {
+        "schema_version": "xtrm.command-outcome.v1",
+        "status": "ok",
+        "reason_code": "session_created_readiness_unverified",
+        "summary": "Detached Pi session created; runtime readiness is not asserted.",
+        "runtime": { "name": "pi", "version": "0.74.2" },
+        "identity": {
+            "thread_id": null,
+            "session_name": "pi-contract-smoke",
+            "tmux_session_id": "$42",
+            "pane_id": "%17"
+        },
+        "worktree": {
+            "path": "/srv/project/.xtrm/worktrees/project-xt-contract-smoke",
+            "branch": "xt/contract-smoke",
+            "owner": "core"
+        },
+        "readiness": { "status": "unverified", "source": "tmux-pane" },
+        "safety_profile": {
+            "name": "pi-native",
+            "sandbox": "runtime-defined",
+            "approvals": "runtime-defined",
+            "hook_trust": "preserved"
+        },
+        "persistence": { "completed": true, "kind": "worktree.session-metadata" },
+        "authoritative_mutation": { "completed": true, "kind": "interactive-session.created" },
+        "side_effects": [
+            { "kind": "worktree.created", "status": "ok", "id": "xt/contract-smoke" },
+            { "kind": "tmux.session.created", "status": "ok", "id": "$42" },
+            { "kind": "runtime.readiness", "status": "skipped", "id": null }
+        ],
+        "next_actions": [
+            {
+                "kind": "attach",
+                "required": false,
+                "argv": ["tmux", "attach-session", "-t", "pi-contract-smoke"],
+                "display": "tmux attach-session -t pi-contract-smoke",
+                "cwd": "/srv/project/.xtrm/worktrees/project-xt-contract-smoke",
+                "why": "Attach to the live detached session."
+            }
+        ]
+    },
     "xtrm.runtime-matrix.v1": {
         "schema_version": "xtrm.runtime-matrix.v1",
         "core": { "primary_runtime": "node", "minimum": ">=24.0.0", "node_usage": ["CLI entrypoint"], "bun_usage": [], "notes": "Pinned to Node 24 LTS." },

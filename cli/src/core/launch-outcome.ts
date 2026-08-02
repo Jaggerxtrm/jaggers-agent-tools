@@ -1,0 +1,138 @@
+import type { CommandOutcomeAction, CommandOutcomeV1 } from '@xtrm/contracts';
+
+export interface DetachedLaunchOutcomeInput {
+    runtime: 'pi' | 'claude';
+    runtimeVersion: string | null;
+    sessionSlug: string;
+    sessionName: string;
+    tmuxSessionId: string | null;
+    paneId: string;
+    worktreePath: string;
+    branchName: string;
+}
+
+export function checkStructuredLaunchOptions(input: {
+    json: boolean;
+    attach: boolean;
+    reuse: boolean;
+}): { ok: true } | { ok: false; error: string } {
+    if (!input.json) return { ok: true };
+    if (input.attach) return { ok: false, error: '--json requires --no-attach' };
+    if (input.reuse) return { ok: false, error: '--json cannot be combined with --reuse' };
+    return { ok: true };
+}
+
+function quoteArg(arg: string): string {
+    if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(arg)) return arg;
+    return `'${arg.replaceAll("'", `'"'"'`)}'`;
+}
+
+export function renderOutcomeArgv(argv: readonly string[]): string {
+    return argv.map(quoteArg).join(' ');
+}
+
+const CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
+
+function assertOutcomeString(label: string, value: string, maxLength: number): void {
+    if (value.length === 0 || value.length > maxLength || CONTROL_CHARACTER.test(value)) {
+        throw new Error(`xtrm.command-outcome.v1: invalid ${label}`);
+    }
+}
+
+function assertDetachedLaunchInput(input: DetachedLaunchOutcomeInput): void {
+    if (input.runtimeVersion !== null) assertOutcomeString('runtimeVersion', input.runtimeVersion, 128);
+    assertOutcomeString('sessionSlug', input.sessionSlug, 256);
+    assertOutcomeString('sessionName', input.sessionName, 256);
+    assertOutcomeString('worktreePath', input.worktreePath, 4096);
+    assertOutcomeString('branchName', input.branchName, 4096);
+    if (input.tmuxSessionId !== null && !/^\$[0-9]+$/.test(input.tmuxSessionId)) {
+        throw new Error('xtrm.command-outcome.v1: invalid tmuxSessionId');
+    }
+    if (!/^%[0-9]+$/.test(input.paneId)) {
+        throw new Error('xtrm.command-outcome.v1: invalid paneId');
+    }
+}
+
+function action(
+    kind: CommandOutcomeAction['kind'],
+    argv: string[],
+    cwd: string,
+    why: string,
+): CommandOutcomeAction {
+    return {
+        kind,
+        required: false,
+        argv,
+        display: renderOutcomeArgv(argv),
+        cwd,
+        why,
+    };
+}
+
+export function buildDetachedLaunchOutcome(input: DetachedLaunchOutcomeInput): CommandOutcomeV1 {
+    assertDetachedLaunchInput(input);
+    const safetyProfile = input.runtime === 'pi'
+        ? {
+            name: 'pi-native',
+            sandbox: 'runtime-defined',
+            approvals: 'runtime-defined',
+            hook_trust: 'preserved' as const,
+        }
+        : {
+            name: 'claude-bypass-permissions',
+            sandbox: 'disabled',
+            approvals: 'bypassed',
+            hook_trust: 'preserved' as const,
+        };
+
+    const outcome: CommandOutcomeV1 = {
+        schema_version: 'xtrm.command-outcome.v1',
+        status: 'ok',
+        reason_code: 'session_created_readiness_unverified',
+        summary: `Detached ${input.runtime} session created; runtime readiness is not asserted.`,
+        runtime: { name: input.runtime, version: input.runtimeVersion },
+        identity: {
+            thread_id: null,
+            session_name: input.sessionName,
+            tmux_session_id: input.tmuxSessionId,
+            pane_id: input.paneId,
+        },
+        worktree: { path: input.worktreePath, branch: input.branchName, owner: 'core' },
+        readiness: { status: 'unverified', source: 'tmux-pane' },
+        safety_profile: safetyProfile,
+        persistence: { completed: true, kind: 'worktree.session-metadata' },
+        authoritative_mutation: { completed: true, kind: 'interactive-session.created' },
+        side_effects: [
+            { kind: 'worktree.created', status: 'ok', id: input.branchName },
+            { kind: 'tmux.session.created', status: 'ok', id: input.tmuxSessionId },
+            { kind: 'runtime.readiness', status: 'skipped', id: null },
+        ],
+        next_actions: [
+            action(
+                'attach',
+                ['tmux', 'attach-session', '-t', input.sessionName],
+                input.worktreePath,
+                'Attach to the live detached session.',
+            ),
+            action(
+                'resume',
+                ['xt', 'attach', input.sessionSlug],
+                input.worktreePath,
+                'Resume the runtime in this worktree after the tmux session ends.',
+            ),
+            action(
+                'repair',
+                ['xt', 'doctor'],
+                input.worktreePath,
+                'Inspect runtime and managed configuration drift.',
+            ),
+            action(
+                'end',
+                ['xt', 'end'],
+                input.worktreePath,
+                'Close the worktree session through the existing Core lifecycle.',
+            ),
+        ],
+    };
+    return outcome;
+}

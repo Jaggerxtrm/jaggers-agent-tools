@@ -46,6 +46,7 @@ export function createClaudeCommand(): Command {
         .option('--bead <id>', 'Bind a bead to the session and auto-populate its assignee as claude/<slug> from runtime-origin. With --role it renders the tracked task as the initial user prompt (mutually exclusive with --prompt there); without --role it is metadata only — @agent_bead pane option + XTMUX_AGENT_BEAD — and combines freely with --prompt')
         .option('--prompt <text>', 'Use <text> as the initial user prompt. A leading /<skill-name> is the supported way to load a skill on turn 1')
         .option('--no-attach', 'Create tmux session detached; print `session_name:pane_id` on stdout and exit (default: attach)')
+        .option('--json', 'With --no-attach: emit one xtrm.command-outcome.v1 JSON object instead of human launch output')
         .option('--model <name>', 'Forward `--model <name>` to claude; with --role, overrides specialist.execution.model')
         .option('--thinking <level>', 'Warn-and-drop — claude has no --thinking flag; set thinking on the underlying model config instead')
         .option('--skill <name-or-path>', 'Load an additional skill at startup (repeatable)', (value: string, previous: string[]) => [...previous, value], [])
@@ -80,6 +81,7 @@ Examples:
             bead?: string;
             prompt?: string;
             attach?: boolean;
+            json?: boolean;
             model?: string;
             thinking?: string;
             skill?: string[];
@@ -107,6 +109,7 @@ Examples:
                 bead: opts.bead,
                 prompt: opts.prompt,
                 attach: opts.attach,
+                json: Boolean(opts.json),
                 model: opts.model,
                 thinking: opts.thinking,
                 skills: opts.skill,

@@ -9,6 +9,7 @@ export const SCHEMA_ID = {
     interactiveRoleEnvelope: 'xtrm.interactive-role-envelope.v1',
     piExtensionManifest: 'xtrm.pi-extension-manifest.v1',
     commandDeprecations: 'xtrm.command-deprecations.v1',
+    commandOutcome: 'xtrm.command-outcome.v1',
     runtimeMatrix: 'xtrm.runtime-matrix.v1',
     runtimeOrigin: 'xtrm.runtime-origin.v1',
     branchIntegration: 'xtrm.branch.integration.v1',
@@ -67,6 +68,37 @@ export interface CommandDeprecationsV1 {
     schema_version: 'xtrm.command-deprecations.v1';
     notes?: string[];
     entries: CommandDeprecationEntry[];
+}
+
+// --- xtrm.command-outcome.v1 ---
+export type CommandOutcomeStatus = 'ok' | 'degraded' | 'noop' | 'rejected' | 'failed';
+export interface CommandOutcomeAction {
+    kind: 'attach' | 'resume' | 'repair' | 'end' | 'wait' | 'inspect';
+    required: boolean;
+    argv: string[];
+    display: string;
+    cwd?: string;
+    why: string;
+}
+export interface CommandOutcomeV1 {
+    schema_version: 'xtrm.command-outcome.v1';
+    status: CommandOutcomeStatus;
+    reason_code: string;
+    summary: string;
+    runtime?: { name: 'pi' | 'claude' | 'codex'; version: string | null };
+    identity?: {
+        thread_id: string | null;
+        session_name: string | null;
+        tmux_session_id: string | null;
+        pane_id: string | null;
+    };
+    worktree?: { path: string; branch: string; owner: 'core' };
+    readiness?: { status: 'ready' | 'unverified' | 'not_ready'; source: 'agent.ready' | 'tmux-pane' | 'none' };
+    safety_profile?: { name: string; sandbox: string; approvals: string; hook_trust: 'preserved' };
+    persistence?: { completed: boolean; kind: string };
+    authoritative_mutation: { completed: boolean; kind: string };
+    side_effects: Array<{ kind: string; status: 'ok' | 'degraded' | 'failed' | 'skipped'; id?: string | null }>;
+    next_actions: CommandOutcomeAction[];
 }
 
 // --- xtrm.runtime-matrix.v1 ---
@@ -444,6 +476,7 @@ export interface ContractTypeMap {
     'xtrm.interactive-role-envelope.v1': InteractiveRoleEnvelopeV1;
     'xtrm.pi-extension-manifest.v1': PiExtensionManifestV1;
     'xtrm.command-deprecations.v1': CommandDeprecationsV1;
+    'xtrm.command-outcome.v1': CommandOutcomeV1;
     'xtrm.runtime-matrix.v1': RuntimeMatrixV1;
     'xtrm.runtime-origin.v1': RuntimeOriginV1;
     'xtrm.branch.integration.v1': BranchIntegrationV1;

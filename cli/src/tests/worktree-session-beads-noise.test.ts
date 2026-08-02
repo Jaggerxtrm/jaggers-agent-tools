@@ -266,6 +266,70 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
+  it('emits one valid structured outcome for an opt-in detached launch', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-json');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        fs.ensureDirSync(worktreePath);
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'has-session') {
+        return { status: 1, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'list-panes') {
+        return { status: 0, stdout: '%42\n', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'display-message' && args.includes('#{session_id}')) {
+        return { status: 0, stdout: '$7\n', stderr: '' };
+      }
+      if (command === 'pi' && args[0] === '--version') {
+        return { status: 0, stdout: 'pi 0.74.2\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const exitSpy = mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      name: 'json',
+      prompt: 'echo hi',
+      attach: false,
+      json: true,
+    })).rejects.toThrow('exit:0');
+
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(stdoutSpy).toHaveBeenCalledTimes(1);
+    const outcome = JSON.parse(String(stdoutSpy.mock.calls[0][0]));
+    expect(outcome).toMatchObject({
+      schema_version: 'xtrm.command-outcome.v1',
+      runtime: { name: 'pi', version: 'pi 0.74.2' },
+      identity: { session_name: 'pi-json', tmux_session_id: '$7', pane_id: '%42' },
+      worktree: { path: worktreePath, branch: 'xt/json', owner: 'core' },
+      readiness: { status: 'unverified', source: 'tmux-pane' },
+    });
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      'bd',
+      ['worktree', 'create', worktreePath, '--branch', 'xt/json'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
   it('transports a 100KB rendered bead through a tmux buffer without putting it in the new-session command', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-claude-large');

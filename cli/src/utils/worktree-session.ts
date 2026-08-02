@@ -9,6 +9,10 @@ import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 import { runPiLaunchPreflight } from '../core/pi-runtime.js';
 import { runtimeCompatibilityError } from '../core/runtime-compat.js';
+import {
+    buildDetachedLaunchOutcome,
+    checkStructuredLaunchOptions,
+} from '../core/launch-outcome.js';
 
 /**
  * Hard ceiling for the turn-1 shell command length. tmux new-session refuses
@@ -183,6 +187,8 @@ export interface WorktreeSessionOptions {
     /** Explicit turn-1 body text (case ii). Mutually exclusive with --bead. */
     prompt?: string;
     attach?: boolean;
+    /** Emit one xtrm.command-outcome.v1 object. Valid only with detached, non-reuse launches. */
+    json?: boolean;
     /** Explicit runtime --model override; with --role, wins over the specialist default. */
     model?: string;
     /** Explicit Pi --thinking override; with --role, wins over the specialist default. */
@@ -1490,6 +1496,17 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         child = subordinate.child;
     }
 
+    const structuredOutput = Boolean(opts.json);
+    const structuredCheck = checkStructuredLaunchOptions({
+        json: structuredOutput,
+        attach,
+        reuse: Boolean(opts.reuse),
+    });
+    if (!structuredCheck.ok) {
+        console.error(kleur.red(`\n  ✗ ${structuredCheck.error}\n`));
+        process.exit(1);
+    }
+
     // Mutual exclusion: in role mode --bead renders a tracked task and
     // --prompt supplies a literal turn-1 body; the two contract different
     // composition paths and can't stack. Rejected at the launcher rather than
@@ -1721,9 +1738,11 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // Branch name
     const branchName = `xt/${slug}`;
 
-    console.log(kleur.bold(`\n  Launching ${runtime} session`));
-    console.log(kleur.dim(`  worktree: ${worktreePath}`));
-    console.log(kleur.dim(`  branch:   ${branchName}\n`));
+    if (!structuredOutput) {
+        console.log(kleur.bold(`\n  Launching ${runtime} session`));
+        console.log(kleur.dim(`  worktree: ${worktreePath}`));
+        console.log(kleur.dim(`  branch:   ${branchName}\n`));
+    }
 
     // Use bd worktree create — sets up git worktree + canonical .beads/redirect in one step.
     // Falls back to plain git worktree add if bd is unavailable or the project has no .beads/.
@@ -1737,13 +1756,13 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     }
 
     const bdResult = spawnSync('bd', ['worktree', 'create', worktreePath, '--branch', branchName], {
-        cwd: mainRepoRoot, stdio: 'inherit',
+        cwd: mainRepoRoot, stdio: structuredOutput ? 'pipe' : 'inherit',
     });
 
     if (bdResult.error || bdResult.status !== 0) {
         // Fall back to plain git worktree add (bd not found or no .beads/ in project)
         if (bdResult.status !== 0 && !bdResult.error) {
-            console.log(kleur.dim('  beads: no database found, creating worktree without redirect'));
+            if (!structuredOutput) console.log(kleur.dim('  beads: no database found, creating worktree without redirect'));
         }
         const branchExists = spawnSync('git', ['rev-parse', '--verify', branchName], {
             cwd: mainRepoRoot, stdio: 'pipe',
@@ -1753,7 +1772,10 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             ? ['worktree', 'add', worktreePath, branchName]
             : ['worktree', 'add', '-b', branchName, worktreePath];
 
-        const gitResult = spawnSync('git', gitArgs, { cwd: mainRepoRoot, stdio: 'inherit' });
+        const gitResult = spawnSync('git', gitArgs, {
+            cwd: mainRepoRoot,
+            stdio: structuredOutput ? 'pipe' : 'inherit',
+        });
         if (gitResult.status !== 0) {
             console.error(kleur.red(`\n  ✗ Failed to create worktree at ${worktreePath}\n`));
             process.exit(1);
@@ -1782,9 +1804,11 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     }
 
     writeSessionMeta(worktreePath, runtime);
-    console.log(kleur.green(`\n  ✓ Worktree ready — launching ${runtime}...\n`));
-    console.log(kleur.dim('  note: clean git worktrees do not include ignored dependency dirs like node_modules/ or .venv/'));
-    console.log(kleur.dim('        if lint/tests need them, run this repo\'s normal bootstrap inside the worktree (make bootstrap, just setup, npm ci, uv sync, etc.)\n'));
+    if (!structuredOutput) {
+        console.log(kleur.green(`\n  ✓ Worktree ready — launching ${runtime}...\n`));
+        console.log(kleur.dim('  note: clean git worktrees do not include ignored dependency dirs like node_modules/ or .venv/'));
+        console.log(kleur.dim('        if lint/tests need them, run this repo\'s normal bootstrap inside the worktree (make bootstrap, just setup, npm ci, uv sync, etc.)\n'));
+    }
 
     // Pi runtime bootstrap is handled globally. Project dependency setup is still repo-owned.
     // - Extensions: globally linked (~/.pi/agent/extensions/ → repo)
@@ -1806,7 +1830,8 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.log(kleur.dim(`  warning: could not reconcile runtime skills (${message})`));
+            const warning = kleur.dim(`  warning: could not reconcile runtime skills (${message})`);
+            if (structuredOutput) console.error(warning); else console.log(warning);
         }
 
         // 2. Symlink specialist definition directories into worktree so
@@ -1815,7 +1840,8 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             ensureWorktreeSpecialists(worktreePath, mainRepoRoot);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.log(kleur.dim(`  warning: could not provision specialist definitions (${message})`));
+            const warning = kleur.dim(`  warning: could not provision specialist definitions (${message})`);
+            if (structuredOutput) console.error(warning); else console.log(warning);
         }
 
         // 3. Write settings.local.json with statusLine bound to this worktree's
@@ -1865,6 +1891,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         reuse: opts.reuse,
         parent: opts.parent,
         child,
+        json: structuredOutput,
     };
 
     if (resolvedRole) {
@@ -1957,6 +1984,7 @@ type TmuxLaunchArgs = {
     parent?: string;
     child?: boolean;
     reuse?: boolean;
+    json?: boolean;
 } & (
     | {
         mode: 'role';
@@ -1970,7 +1998,7 @@ type TmuxLaunchArgs = {
 async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     const {
         runtime, sessionSlug, bead, attach, worktreePath, branchName, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
-        newSession, parent, child, reuse,
+        newSession, parent, child, reuse, json: structuredOutput = false,
     } = args;
 
     const insideTmux = Boolean(process.env.TMUX);
@@ -2268,8 +2296,37 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     }
 
     if (!attach) {
-        // Contract: exactly one line on stdout, session_name:pane_id
-        process.stdout.write(`${plan.sessionName}:${paneId}\n`);
+        // Detached output remains exactly one line: the released
+        // session_name:pane_id text, or the opt-in versioned JSON object.
+        if (structuredOutput) {
+            const sessionIdResult = spawnSync('tmux', [
+                'display-message', '-p', '-t', `=${plan.sessionName}`, '#{session_id}',
+            ], { stdio: 'pipe', encoding: 'utf8' });
+            const tmuxSessionId = sessionIdResult.status === 0
+                ? (sessionIdResult.stdout ?? '').trim() || null
+                : null;
+            const versionResult = spawnSync(runtime, ['--version'], {
+                stdio: 'pipe',
+                encoding: 'utf8',
+                timeout: 5_000,
+            });
+            const runtimeVersion = versionResult.status === 0
+                ? (versionResult.stdout ?? '').trim().split(/\r?\n/, 1)[0]?.slice(0, 128) || null
+                : null;
+            const outcome = buildDetachedLaunchOutcome({
+                runtime,
+                runtimeVersion,
+                sessionSlug,
+                sessionName: plan.sessionName,
+                tmuxSessionId,
+                paneId,
+                worktreePath,
+                branchName,
+            });
+            process.stdout.write(`${JSON.stringify(outcome)}\n`);
+        } else {
+            process.stdout.write(`${plan.sessionName}:${paneId}\n`);
+        }
         process.exit(0);
     }
 

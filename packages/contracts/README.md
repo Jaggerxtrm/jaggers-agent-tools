@@ -33,7 +33,8 @@ Consumers who only want the raw schemas can read `@xtrm/contracts/schemas/<id>.j
 ## Contracts
 
 Core: `xtrm.runtime-compatibility.v1`, `xtrm.interactive-role-envelope.v1`,
-`xtrm.pi-extension-manifest.v1`, `xtrm.command-deprecations.v1`, `xtrm.runtime-matrix.v1`.
+`xtrm.pi-extension-manifest.v1`, `xtrm.command-deprecations.v1`,
+`xtrm.command-outcome.v1`, `xtrm.runtime-matrix.v1`.
 Lineage/observability: `xtrm.runtime-origin.v1`, `xtrm.branch.integration.v1`,
 `xtrm.beads.lifecycle-event.v1`.
 xtmux runtime: `xtrm.xtmux.topology.v1`, `xtrm.xtmux.message.v1`, `xtrm.xtmux.obligation.v1`,
