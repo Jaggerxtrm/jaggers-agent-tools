@@ -1,0 +1,263 @@
+import fs from 'fs-extra';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocked = vi.hoisted(() => ({ spawnSync: vi.fn() }));
+
+vi.mock('node:child_process', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:child_process')>();
+    return { ...actual, spawnSync: mocked.spawnSync };
+});
+
+const roots: string[] = [];
+const originalCwd = process.cwd();
+
+function exitByThrow(): ReturnType<typeof vi.spyOn> {
+    return vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+        throw new Error(`exit:${code}`);
+    }) as never);
+}
+
+beforeEach(() => mocked.spawnSync.mockReset());
+afterEach(() => {
+    vi.restoreAllMocks();
+    delete process.env.CODEX_HOME;
+    process.chdir(originalCwd);
+    for (const root of roots.splice(0)) fs.removeSync(root);
+});
+
+describe('Codex worktree launcher', () => {
+    it('rejects hook-trust bypass before any worktree mutation', async () => {
+        const exitSpy = exitByThrow();
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { launchCodexWorktreeSession } = await import('../utils/codex-worktree-session.js');
+
+        await expect(launchCodexWorktreeSession({
+            name: 'unsafe',
+            attach: false,
+            json: true,
+            yolo: true,
+            passthrough: ['--dangerously-bypass-hook-trust'],
+        })).rejects.toThrow('exit:1');
+
+        expect(errorSpy.mock.calls.flat().join(' ')).toContain('persisted hook trust is required');
+        expect(mocked.spawnSync).not.toHaveBeenCalledWith('bd', expect.anything(), expect.anything());
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('persists an explicit thread and emits one structured outcome', async () => {
+        const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-codex-launch-'));
+        roots.push(repoRoot);
+        const codexHome = path.join(repoRoot, 'codex-home');
+        const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', `${path.basename(repoRoot)}-xt-codex-demo`);
+        process.env.CODEX_HOME = codexHome;
+        process.chdir(repoRoot);
+        fs.ensureDirSync(path.join(repoRoot, '.beads'));
+
+        mocked.spawnSync.mockImplementation((command: string, args: string[] = []) => {
+            const joined = args.join(' ');
+            if (command === 'sh') return { status: 0, stdout: 'bin/codex\n', stderr: '' };
+            if (command === 'git' && joined === 'rev-parse --show-toplevel') {
+                return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+            }
+            if (command === 'git' && joined === 'rev-parse --git-common-dir') {
+                return { status: 0, stdout: '.git\n', stderr: '' };
+            }
+            if (command === 'git' && joined === 'show-ref --verify --quiet refs/heads/xt/demo') {
+                return { status: 1, stdout: '', stderr: '' };
+            }
+            if (command === 'bd' && args[0] === 'worktree') {
+                fs.ensureDirSync(worktreePath);
+                return { status: 0, stdout: '', stderr: '' };
+            }
+            if (command === 'tmux' && args[0] === 'has-session') return { status: 1, stdout: '', stderr: '' };
+            if (command === 'tmux' && args[0] === 'wait-for' && args[1] === '-S') {
+                const sessions = path.join(codexHome, 'sessions', '2026', '08', '02');
+                fs.ensureDirSync(sessions);
+                fs.writeFileSync(path.join(sessions, 'rollout.jsonl'), `${JSON.stringify({
+                    type: 'session_meta',
+                    payload: {
+                        session_id: '019fc3bc-fb7a-7ae0-9536-125624bf726b',
+                        id: '019fc3bc-fb7a-7ae0-9536-125624bf726b',
+                        timestamp: new Date().toISOString(),
+                        cwd: worktreePath,
+                        cli_version: '0.146.0',
+                    },
+                })}\n`);
+                return { status: 0, stdout: '', stderr: '' };
+            }
+            if (command === 'tmux' && args[0] === 'list-panes') return { status: 0, stdout: '%17\n', stderr: '' };
+            if (command === 'tmux' && args[0] === 'display-message') return { status: 0, stdout: '$42\n', stderr: '' };
+            if (command === path.join(repoRoot, 'bin', 'codex') && args[0] === '--version') {
+                return { status: 0, stdout: 'codex-cli 0.146.0\n', stderr: '' };
+            }
+            return { status: 0, stdout: '', stderr: '' };
+        });
+
+        const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const exitSpy = exitByThrow();
+        const { launchCodexWorktreeSession } = await import('../utils/codex-worktree-session.js');
+        await expect(launchCodexWorktreeSession({
+            name: 'demo',
+            prompt: 'inspect the launcher',
+            attach: false,
+            json: true,
+            yolo: false,
+        })).rejects.toThrow('exit:0');
+
+        expect(stdoutSpy).toHaveBeenCalledTimes(1);
+        const outcome = JSON.parse(String(stdoutSpy.mock.calls[0][0]));
+        expect(outcome).toMatchObject({
+            runtime: { name: 'codex', version: 'codex-cli 0.146.0' },
+            identity: { thread_id: '019fc3bc-fb7a-7ae0-9536-125624bf726b' },
+            safety_profile: { name: 'codex-workspace-write' },
+        });
+        expect(fs.readJsonSync(path.join(worktreePath, '.xtrm', 'session-meta.json'))).toMatchObject({
+            runtime: 'codex',
+            threadId: '019fc3bc-fb7a-7ae0-9536-125624bf726b',
+        });
+        expect(mocked.spawnSync).toHaveBeenCalledWith(
+            'tmux',
+            expect.arrayContaining(['-e', 'XTMUX_AGENT_RUNTIME=codex']),
+            expect.objectContaining({ stdio: 'pipe' }),
+        );
+        expect(mocked.spawnSync).toHaveBeenCalledWith(
+            path.join(repoRoot, 'bin', 'codex'),
+            ['--version'],
+            expect.objectContaining({ cwd: worktreePath, stdio: 'pipe' }),
+        );
+        const payloadCall = mocked.spawnSync.mock.calls.find(([, args]) => args[0] === 'load-buffer');
+        expect(JSON.parse(payloadCall?.[2]?.input as string)).toMatchObject({
+            runtimeCmd: path.join(repoRoot, 'bin', 'codex'),
+        });
+        expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('removes the worktree and branch after a post-creation tmux failure', async () => {
+        const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-codex-cleanup-'));
+        roots.push(repoRoot);
+        const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', `${path.basename(repoRoot)}-xt-codex-fail`);
+        process.chdir(repoRoot);
+
+        mocked.spawnSync.mockImplementation((command: string, args: string[] = []) => {
+            const joined = args.join(' ');
+            if (command === 'sh') return { status: 0, stdout: '/opt/xtrm/bin/codex\n', stderr: '' };
+            if (command === 'git' && joined === 'rev-parse --show-toplevel') return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+            if (command === 'git' && joined === 'rev-parse --git-common-dir') return { status: 0, stdout: '.git\n', stderr: '' };
+            if (command === 'git' && joined === 'show-ref --verify --quiet refs/heads/xt/fail') {
+                return { status: 1, stdout: '', stderr: '' };
+            }
+            if (command === 'bd' && args[0] === 'worktree') {
+                fs.ensureDirSync(worktreePath);
+                return { status: 0, stdout: '', stderr: '' };
+            }
+            if (command === 'tmux' && args[0] === 'has-session') return { status: 1, stdout: '', stderr: '' };
+            if (command === 'tmux' && args[0] === 'new-session') return { status: 1, stdout: '', stderr: 'launch failed' };
+            return { status: 0, stdout: '', stderr: '' };
+        });
+
+        exitByThrow();
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { launchCodexWorktreeSession } = await import('../utils/codex-worktree-session.js');
+        await expect(launchCodexWorktreeSession({
+            name: 'fail',
+            attach: false,
+            json: true,
+            yolo: true,
+        })).rejects.toThrow('exit:1');
+
+        expect(mocked.spawnSync).toHaveBeenCalledWith(
+            'git', ['worktree', 'remove', '--force', worktreePath], expect.objectContaining({ cwd: repoRoot }),
+        );
+        expect(mocked.spawnSync).toHaveBeenCalledWith(
+            'git', ['branch', '-D', 'xt/fail'], expect.objectContaining({ cwd: repoRoot }),
+        );
+        expect(mocked.spawnSync).toHaveBeenCalledWith(
+            'tmux', ['delete-buffer', '-b', expect.stringMatching(/^xtrm-codex-[0-9a-f]{32}$/)],
+            expect.objectContaining({ stdio: 'ignore' }),
+        );
+    });
+
+    it('rejects a pre-existing branch before any worktree mutation', async () => {
+        const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-codex-existing-'));
+        roots.push(repoRoot);
+        process.chdir(repoRoot);
+
+        mocked.spawnSync.mockImplementation((command: string, args: string[] = []) => {
+            const joined = args.join(' ');
+            if (command === 'sh') return { status: 0, stdout: '/opt/xtrm/bin/codex\n', stderr: '' };
+            if (command === 'git' && joined === 'rev-parse --show-toplevel') return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+            if (command === 'git' && joined === 'rev-parse --git-common-dir') return { status: 0, stdout: '.git\n', stderr: '' };
+            if (command === 'git' && joined === 'check-ref-format --branch xt/existing') {
+                return { status: 0, stdout: '', stderr: '' };
+            }
+            if (command === 'git' && joined === 'show-ref --verify --quiet refs/heads/xt/existing') {
+                return { status: 0, stdout: '', stderr: '' };
+            }
+            return { status: 1, stdout: '', stderr: '' };
+        });
+
+        exitByThrow();
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { launchCodexWorktreeSession } = await import('../utils/codex-worktree-session.js');
+        await expect(launchCodexWorktreeSession({
+            name: 'existing',
+            attach: false,
+            json: true,
+            yolo: true,
+        })).rejects.toThrow('exit:1');
+
+        expect(errorSpy.mock.calls.flat().join(' ')).toContain('Worktree branch already exists: xt/existing');
+        expect(mocked.spawnSync).not.toHaveBeenCalledWith('bd', expect.anything(), expect.anything());
+        expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+            'git', expect.arrayContaining(['worktree', 'add']), expect.anything(),
+        );
+    });
+
+    it('cleans partial state from a failed bd worktree creation before fallback', async () => {
+        const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-codex-partial-'));
+        roots.push(repoRoot);
+        const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', `${path.basename(repoRoot)}-xt-codex-partial`);
+        process.chdir(repoRoot);
+        let branchChecks = 0;
+
+        mocked.spawnSync.mockImplementation((command: string, args: string[] = []) => {
+            const joined = args.join(' ');
+            if (command === 'sh') return { status: 0, stdout: '/opt/xtrm/bin/codex\n', stderr: '' };
+            if (command === 'git' && joined === 'rev-parse --show-toplevel') return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+            if (command === 'git' && joined === 'rev-parse --git-common-dir') return { status: 0, stdout: '.git\n', stderr: '' };
+            if (command === 'git' && joined === 'check-ref-format --branch xt/partial') return { status: 0, stdout: '', stderr: '' };
+            if (command === 'git' && joined === 'show-ref --verify --quiet refs/heads/xt/partial') {
+                branchChecks += 1;
+                return { status: branchChecks === 1 ? 1 : 0, stdout: '', stderr: '' };
+            }
+            if (command === 'tmux' && args[0] === 'has-session') return { status: 1, stdout: '', stderr: '' };
+            if (command === 'bd' && args[0] === 'worktree') {
+                fs.ensureDirSync(worktreePath);
+                return { status: 1, stdout: '', stderr: 'partial failure' };
+            }
+            return { status: 0, stdout: '', stderr: '' };
+        });
+
+        exitByThrow();
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { launchCodexWorktreeSession } = await import('../utils/codex-worktree-session.js');
+        await expect(launchCodexWorktreeSession({
+            name: 'partial',
+            attach: false,
+            json: true,
+            yolo: true,
+        })).rejects.toThrow('exit:1');
+
+        expect(mocked.spawnSync).toHaveBeenCalledWith(
+            'git', ['worktree', 'remove', '--force', worktreePath], expect.objectContaining({ cwd: repoRoot }),
+        );
+        expect(mocked.spawnSync).toHaveBeenCalledWith(
+            'git', ['branch', '-D', 'xt/partial'], expect.objectContaining({ cwd: repoRoot }),
+        );
+        expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+            'git', expect.arrayContaining(['worktree', 'add']), expect.anything(),
+        );
+    });
+});

@@ -343,7 +343,7 @@ export function createEndCommand(): Command {
             if (!branch.startsWith('xt/')) {
                 console.error(kleur.red(
                     `\n  ✗ Not in an xt worktree (current branch: ${branch})\n` +
-                    `  xt end must be run from inside a worktree created by xt claude/pi\n`
+                    `  xt end must be run from inside a worktree created by xt claude/pi/codex\n`
                 ));
                 process.exit(1);
             }
