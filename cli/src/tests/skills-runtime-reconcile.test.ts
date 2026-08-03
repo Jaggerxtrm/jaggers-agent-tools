@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { reconcileRuntimeLinks } from '../core/skills-runtime-reconcile.js';
+import { reconcileRuntimeLinks, selectRuntimeSkills } from '../core/skills-runtime-reconcile.js';
 import { createDefaultSkillsState, readSkillsState, type SkillsState } from '../core/skills-state.js';
 import type { DiscoveredPack } from '../core/skill-discovery.js';
 
@@ -32,6 +32,12 @@ async function run(runtime: 'claude' | 'pi' = 'claude', state: SkillsState = { .
 }
 
 describe('reconcileRuntimeLinks', () => {
+  it('selects each Codex default skill exactly once', async () => {
+    const selection = await selectRuntimeSkills('codex', globalRoot, createDefaultSkillsState());
+
+    expect(selection.skills.map((skill) => skill.runtimeName)).toEqual(['base']);
+  });
+
   it('creates idempotent direct Claude links and persists only relative manifest ownership', async () => {
     const first = await run();
     const second = await run('claude', first.state);
