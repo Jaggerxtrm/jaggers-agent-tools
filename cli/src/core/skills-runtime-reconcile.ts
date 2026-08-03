@@ -140,8 +140,9 @@ export async function selectRuntimeSkills(runtime: SkillsRuntime, skillsRoot: st
     ...(await discoverTierPacks(root, 'user')),
   ]))).flat();
   const defaults = await discoverDefaultSkills(skillsRoot);
-  const skills = resolveDesiredSkills({ projectRoot: path.dirname(path.dirname(skillsRoot)), state: normalizedState, runtime, discoveredPacks: packs, globalDefaultRoot: skillsRoot, globalOptionalRoot: path.join(skillsRoot, 'optional') }, defaults);
-  return { runtime, enabledPacks: [...normalizedState.enabledPacks[runtime]], skills: [...defaults, ...skills] };
+  const desired = resolveDesiredSkills({ projectRoot: path.dirname(path.dirname(skillsRoot)), state: normalizedState, runtime, discoveredPacks: packs, globalDefaultRoot: skillsRoot, globalOptionalRoot: path.join(skillsRoot, 'optional') }, defaults);
+  const skills = runtime === 'codex' ? desired : [...defaults, ...desired];
+  return { runtime, enabledPacks: [...normalizedState.enabledPacks[runtime]], skills };
 }
 
 export async function reconcileRuntimeLinks(options: ReconcileRuntimeLinksOptions): Promise<RuntimeLinksReconcileResult> {
