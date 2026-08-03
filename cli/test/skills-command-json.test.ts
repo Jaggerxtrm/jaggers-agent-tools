@@ -87,7 +87,7 @@ describe('xt skills JSON CLI integration', () => {
       runtimeStatus: Array<{ runtime: string; enabledPacks: string[]; activeSkills: string[] }>;
     };
 
-    expect(payload.runtimes).toEqual(['claude', 'pi']);
+    expect(payload.runtimes).toEqual(['claude', 'pi', 'codex']);
     expect(payload.defaultSkills).toEqual(['always-on']);
     expect(payload.packs.map(pack => pack.name)).toEqual(['opt-pack', 'user-pack']);
 
@@ -98,14 +98,17 @@ describe('xt skills JSON CLI integration', () => {
 
     const claudeRuntime = payload.runtimeStatus.find(runtime => runtime.runtime === 'claude');
     const piRuntime = payload.runtimeStatus.find(runtime => runtime.runtime === 'pi');
+    const codexRuntime = payload.runtimeStatus.find(runtime => runtime.runtime === 'codex');
 
     expect(claudeRuntime?.enabledPacks).toEqual(['opt-pack']);
     expect(claudeRuntime?.activeSkills).toEqual(['always-on', 'opt-skill']);
     expect(piRuntime?.enabledPacks).toEqual(['user-pack']);
     expect(piRuntime?.activeSkills).toEqual(['always-on', 'user-skill']);
+    expect(codexRuntime?.enabledPacks).toEqual([]);
+    expect(codexRuntime?.activeSkills).toEqual(['always-on']);
   });
 
-  it('enables pack for both runtimes by default and mutates active views correctly', () => {
+  it('enables a pack for all runtimes by default and supports a Pi-only disable', () => {
     const skillsRoot = path.join(tmpHome, '.xtrm', 'skills');
     createSkill(path.join(skillsRoot, 'default'), 'always-on');
     createPack(path.join(skillsRoot, 'optional'), 'alpha-pack', ['alpha-skill']);
@@ -124,10 +127,11 @@ describe('xt skills JSON CLI integration', () => {
     expect(enable.status).toBe(0);
 
     const afterEnable = JSON.parse(fs.readFileSync(path.join(skillsRoot, 'state.json'), 'utf8')) as {
-      enabledPacks: { claude: string[]; pi: string[] };
+      enabledPacks: { claude: string[]; pi: string[]; codex: string[] };
     };
     expect(afterEnable.enabledPacks.claude).toEqual(['alpha-pack']);
     expect(afterEnable.enabledPacks.pi).toEqual(['alpha-pack']);
+    expect(afterEnable.enabledPacks.codex).toEqual(['alpha-pack']);
 
     expect(fs.existsSync(path.join(skillsRoot, 'active'))).toBe(false);
 
@@ -137,15 +141,16 @@ describe('xt skills JSON CLI integration', () => {
     expect(disablePiOnly.status).toBe(0);
 
     const afterDisablePiOnly = JSON.parse(fs.readFileSync(path.join(skillsRoot, 'state.json'), 'utf8')) as {
-      enabledPacks: { claude: string[]; pi: string[] };
+      enabledPacks: { claude: string[]; pi: string[]; codex: string[] };
     };
     expect(afterDisablePiOnly.enabledPacks.claude).toEqual(['alpha-pack']);
     expect(afterDisablePiOnly.enabledPacks.pi).toEqual([]);
+    expect(afterDisablePiOnly.enabledPacks.codex).toEqual(['alpha-pack']);
 
     expect(fs.existsSync(path.join(skillsRoot, 'active'))).toBe(false);
   });
 
-  it('disable all clears both runtimes atomically', () => {
+  it('disable all clears all runtimes atomically', () => {
     const skillsRoot = path.join(tmpHome, '.xtrm', 'skills');
     createSkill(path.join(skillsRoot, 'default'), 'always-on');
     createPack(path.join(skillsRoot, 'optional'), 'alpha-pack', ['alpha-skill']);
@@ -171,16 +176,16 @@ describe('xt skills JSON CLI integration', () => {
     const payload = JSON.parse(disableAll.stdout) as {
       resolvedPacks: string[];
       runtimes: string[];
-      state: { enabledPacks: { claude: string[]; pi: string[] } };
+      state: { enabledPacks: { claude: string[]; pi: string[]; codex: string[] } };
     };
     expect(payload.resolvedPacks).toEqual(['alpha-pack', 'beta-pack']);
-    expect(payload.runtimes).toEqual(['claude', 'pi']);
-    expect(payload.state.enabledPacks).toEqual({ claude: [], pi: [] });
+    expect(payload.runtimes).toEqual(['claude', 'pi', 'codex']);
+    expect(payload.state.enabledPacks).toEqual({ claude: [], pi: [], codex: [] });
 
     const persistedState = JSON.parse(fs.readFileSync(path.join(skillsRoot, 'state.json'), 'utf8')) as {
-      enabledPacks: { claude: string[]; pi: string[] };
+      enabledPacks: { claude: string[]; pi: string[]; codex: string[] };
     };
-    expect(persistedState.enabledPacks).toEqual({ claude: [], pi: [] });
+    expect(persistedState.enabledPacks).toEqual({ claude: [], pi: [], codex: [] });
 
     expect(fs.existsSync(path.join(skillsRoot, 'active'))).toBe(false);
   });
@@ -209,10 +214,11 @@ describe('xt skills JSON CLI integration', () => {
     expect(enablePayload.resolvedPacks).toEqual(['mypack']);
 
     const state = JSON.parse(fs.readFileSync(path.join(skillsRoot, 'state.json'), 'utf8')) as {
-      enabledPacks: { claude: string[]; pi: string[] };
+      enabledPacks: { claude: string[]; pi: string[]; codex: string[] };
     };
     expect(state.enabledPacks.claude).toEqual(['mypack']);
     expect(state.enabledPacks.pi).toEqual(['mypack']);
+    expect(state.enabledPacks.codex).toEqual(['mypack']);
   });
 
   it('ignores retired PACK.json metadata in flat packs', () => {
@@ -285,11 +291,14 @@ describe('xt skills JSON CLI integration', () => {
 
     const claudeRuntime = payload.runtimeStatus.find(runtime => runtime.runtime === 'claude');
     const piRuntime = payload.runtimeStatus.find(runtime => runtime.runtime === 'pi');
+    const codexRuntime = payload.runtimeStatus.find(runtime => runtime.runtime === 'codex');
 
     expect(claudeRuntime?.enabledPacks).toEqual(['new-pack']);
     expect(claudeRuntime?.activeSkills).toContain('new-pack-skill');
     expect(piRuntime?.enabledPacks).toEqual([]);
     expect(piRuntime?.activeSkills).not.toContain('new-pack-skill');
+    expect(codexRuntime?.enabledPacks).toEqual([]);
+    expect(codexRuntime?.activeSkills).not.toContain('new-pack-skill');
   });
 
   it('defaults to --global for list and --local for create-pack when no scope flag is provided', () => {

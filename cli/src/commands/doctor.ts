@@ -238,6 +238,7 @@ function formatRuntimeView(check: RuntimeViewCheckResult): string {
     `globalPiPointerReady=${check.globalPiPointerReady}`,
     `projectClaudePointerState=${check.projectClaudePointerState}`,
     `projectPiPointerState=${check.projectPiPointerState}`,
+    `projectCodexPointerState=${check.projectCodexPointerState}`,
   ].join(' ');
 }
 
@@ -257,6 +258,7 @@ async function buildCatBJson(registry: RegistryManifest, cwd: string, drift: Dri
     || !runtimeView.globalPiPointerReady
     || runtimeView.projectClaudePointerState === 'missing'
     || runtimeView.projectPiPointerState === 'missing'
+    || runtimeView.projectCodexPointerState === 'missing'
   ) {
     summary.errors += 1;
   } else {
@@ -287,9 +289,13 @@ function renderCatB(report: CatBJson): void {
   section('Cat B — Runtime view');
   console.log(`  ${formatRuntimeView(report.runtimeView)}`);
   console.log(`  ${report.runtimeView.globalClaudePointerReady && report.runtimeView.globalPiPointerReady ? kleur.green('✓') : kleur.yellow('○')} Global skills pointer: ${report.runtimeView.globalClaudePointerReady && report.runtimeView.globalPiPointerReady ? 'ok' : 'missing'}`);
-  const projectPointerState = report.runtimeView.projectClaudePointerState === 'missing' || report.runtimeView.projectPiPointerState === 'missing'
+  const projectPointerState = report.runtimeView.projectClaudePointerState === 'missing'
+    || report.runtimeView.projectPiPointerState === 'missing'
+    || report.runtimeView.projectCodexPointerState === 'missing'
     ? 'missing'
-    : (report.runtimeView.projectClaudePointerState === 'skipped' && report.runtimeView.projectPiPointerState === 'skipped' ? 'skipped (empty)' : 'ok');
+    : (report.runtimeView.projectClaudePointerState === 'skipped'
+      && report.runtimeView.projectPiPointerState === 'skipped'
+      && report.runtimeView.projectCodexPointerState === 'skipped' ? 'skipped (empty)' : 'ok');
   console.log(`  ${projectPointerState === 'ok' ? kleur.green('✓') : kleur.yellow('○')} Project skills pointer: ${projectPointerState}`);
 
   section('Cat B — Duplicate canonical names');

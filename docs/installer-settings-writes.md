@@ -16,7 +16,7 @@ writes are still load-bearing, and which now duplicate something global?*
 | `claude-runtime-sync.ts:reconcileProjectClaudeHooks` | project `.claude/settings.json` | `hooks` | Yes | No — calls `planLegacyHookDedupe` at `:204` |
 | `claude-runtime-sync.ts:reconcileGlobalClaudeHooks` | home `~/.claude/settings.json` | `hooks`, `statusLine` | Yes — this is the canonical global block | n/a (it *is* global) |
 | `claude-runtime-sync.ts:ensureGlobalStatusLine` | home `~/.claude/settings.json` | `statusLine` | Yes, but see below | n/a |
-| `pi-runtime.ts:updatePiSettings` | project `.pi/settings.json` | `packages`, `extensions`, `skills`, `serena`, `theme`; deletes `xtrmExternalCompact` | Yes | ~~Yes (`packages`)~~ **No** — gated on the global declaration (xtrm-tzzud) |
+| `pi-runtime.ts:updatePiSettings` | project `.pi/settings.json` | `packages`, `extensions`, `skills`, `theme`; deletes `xtrmExternalCompact`; preserves unowned keys | Yes | ~~Yes (`packages`)~~ **No** — gated on the global declaration (xtrm-tzzud) |
 | `pi-runtime.ts:pruneConflictingPiPackageEntries` | home + project `.pi/settings.json` | `packages`, `theme`, `xtrmExternalCompact` | Yes — removal only | No |
 | `pi-runtime-hooks.ts:reconcileGlobalPiHooks` | home `~/.pi/agent/settings.json` | `hooks` | Yes | n/a (it *is* global) |
 | `plugin-era-cleanup.ts` | home + project `.claude/settings.json` | `enabledPlugins[xtrm-tools@xtrm-tools]`, `extraKnownMarketplaces[xtrm-tools]` | Yes — removal only | No |

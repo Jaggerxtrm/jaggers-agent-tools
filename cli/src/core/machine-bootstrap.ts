@@ -43,7 +43,7 @@ interface InstallStep {
     sudo?: boolean;
 }
 
-const OFFICIAL_CLAUDE_PLUGINS = ['serena', 'context7'] as const;
+const OFFICIAL_CLAUDE_PLUGINS = ['context7'] as const;
 const OFFICIAL_MARKETPLACE = 'claude-plugins-official';
 
 const MANAGED_DEPS: ManagedDependency[] = [
@@ -444,7 +444,7 @@ function ensureOfficialPlugins(dryRun: boolean): void {
 
     const missing = OFFICIAL_CLAUDE_PLUGINS.filter(pluginName => !installed.has(pluginName));
     if (missing.length === 0) {
-        console.log(kleur.dim('  ✓ Official Claude plugins already installed: serena, context7'));
+        console.log(kleur.dim(`  ✓ Official Claude plugins already installed: ${OFFICIAL_CLAUDE_PLUGINS.join(', ')}`));
         return;
     }
 

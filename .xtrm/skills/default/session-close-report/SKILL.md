@@ -62,10 +62,9 @@ sp stop <job-id>                   # for any leftover running/waiting job
 # clean its worktree, but verify.
 
 # 0c. Stale background processes from the session
-ps -ef | grep -E '(serena|gitnexus|specialists|sp-serve|sp-script|pi[ -]|claude)' | grep -v grep
+ps -ef | grep -E '(gitnexus|specialists|sp-serve|sp-script|pi[ -]|claude)' | grep -v grep
 # Kill anything you launched that is still running and no longer needed.
 # Be especially careful with:
-#   - serena MCP servers (often leak when an MCP host crashes)
 #   - gitnexus index processes (`npx gitnexus analyze` can outlive its terminal)
 #   - sp-serve / sp-script tmux sessions
 #   - orphaned `pi` or `claude` processes from interactive sessions
@@ -83,7 +82,7 @@ the **Problems Encountered** section of the report so the next agent knows.
 A clean session ends with:
 - `git worktree list` showing only the main worktree (plus any intentional ones)
 - `sp ps` showing 0 jobs (or only intentional keep-alive)
-- no leaked `serena` / `gitnexus` / `specialists` / `sp-serve` / `sp-script`
+- no leaked `gitnexus` / `specialists` / `sp-serve` / `sp-script`
   processes from this session
 - no orphaned tmux sessions matching `sp-*` or `xt-*`
 
@@ -385,7 +384,7 @@ After committing and filing the handoff bead, re-run the Step 0 checks one more 
 ```bash
 git worktree list
 sp ps
-ps -ef | grep -E '(serena|gitnexus|specialists|sp-serve|sp-script)' | grep -v grep
+ps -ef | grep -E '(gitnexus|specialists|sp-serve|sp-script)' | grep -v grep
 tmux ls 2>/dev/null
 ```
 

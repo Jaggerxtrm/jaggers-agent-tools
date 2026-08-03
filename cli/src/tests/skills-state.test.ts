@@ -112,8 +112,8 @@ describe('skills-state', () => {
 
     expect(state).toEqual({
       schemaVersion: '2',
-      enabledPacks: { claude: ['alpha'], pi: [] },
-      managedLinks: { claude: {}, pi: {} },
+      enabledPacks: { claude: ['alpha'], pi: [], codex: [] },
+      managedLinks: { claude: {}, pi: {}, codex: {} },
     });
     expect(await fs.readJson(path.join(skillsRoot, 'state.json'))).toEqual({
       schemaVersion: '1',
@@ -131,7 +131,7 @@ describe('skills-state', () => {
 
     await expect(writeSkillsState(skillsRoot, {
       ...createDefaultSkillsState(),
-      managedLinks: { claude: { '../outside': '.xtrm/skills/old' }, pi: {} },
+      managedLinks: { claude: { '../outside': '.xtrm/skills/old' }, pi: {}, codex: {} },
     })).rejects.toThrow();
     expect(await fs.pathExists(skillsRoot)).toBe(false);
   });

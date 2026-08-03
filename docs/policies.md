@@ -64,7 +64,7 @@ Other event groups retain the standard wrapper shape without the `script` field.
 | `beads.json` | both | Edit/commit/memory/compact enforcement. Includes `PreCompact` (save) and `SessionStart` (restore) hooks for beads-compact state persistence. |
 | `quality-gates.json` | both | JS/TS + Python quality checks after mutating edits |
 | `quality-gates-env.json` | claude | Session-start check for required quality binaries |
-| `gitnexus.json` | claude | GitNexus augmentation for Bash/Grep/Read/Glob + Serena tools |
+| `gitnexus.json` | claude | GitNexus augmentation for Bash/Grep/Read/Glob |
 | `xtrm-debug-logger.json` | claude | Session/tool lifecycle logging into `.xtrm/debug.db` |
 | `specialists-agent-guard.json` | claude | Blocks raw Agent tool calls when a using-specialists workflow is active — routes work through specialists CLI |
 | `service-skills.json` | pi | Service skill catalog + drift checks in Pi extension runtime. Resolves via composed active view (`.xtrm/skills/active/` → global + local). |

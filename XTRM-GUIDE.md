@@ -251,7 +251,7 @@ Enable with `xt skills enable <pack-name>`.
 |-------|---------|
 | `using-xtrm` | Session operating manual — read at session start |
 | `test-planning` | Plan test issues alongside implementation work |
-| `documenting` | SSOT documentation with drift detection |
+| `sync-docs` | Single-document synchronization with drift checks |
 | `delegating` | Task delegation to cost-optimized agents |
 | `orchestrating-agents` | Multi-model collaboration (Gemini, Qwen) |
 | `clean-code` | Pragmatic coding standards |
@@ -259,7 +259,6 @@ Enable with `xt skills enable <pack-name>`.
 | `skill-creator` | Create and evaluate new skills |
 | `find-skills` | Discover and install skills |
 | `prompt-improving` | Claude XML prompt optimization |
-| `using-serena-lsp` | Serena LSP workflow guide |
 | `using-TDD` | TDD workflow enforcement |
 | `python-testing` | Pytest strategies and TDD |
 | `senior-backend` | Backend development expertise |
@@ -337,7 +336,6 @@ For the docs command suite, use:
 
 | Server | Purpose |
 |--------|---------|
-| `serena` | Code analysis via LSP |
 | `context7` | Documentation lookup |
 | `github-grep` | Code search |
 | `deepwiki` | Technical documentation |

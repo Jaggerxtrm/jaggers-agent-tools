@@ -12,11 +12,11 @@ A policy compiler produces hooks for both Claude Code and Pi from a single sourc
 
 ### Skills — reusable agent behaviors
 
-A library of composable skills covers the full development lifecycle: session management (`using-xtrm`), structured planning (`planning`), test coverage strategy (`test-planning`), autonomous session close (`xt-end`), PR queue management (`xt-merge`), documentation maintenance (`documenting`), and domain expertise (backend, devops, security, data science). Skills are injected into the agent context on demand and work identically in Claude Code and Pi.
+A library of composable skills covers the full development lifecycle: session management (`using-xtrm`), structured planning (`planning`), test coverage strategy (`test-planning`), autonomous session close (`xt-end`), PR queue management (`xt-merge`), documentation synchronization (`sync-docs`), and domain expertise (backend, devops, security, data science). Skills are injected into the agent context on demand.
 
 ### Planning mode
 
-The `planning` skill generates a structured issue board from any spec or idea — epics, tasks, dependencies, test coverage annotations — using `bd create` in parallel. Agents can pick up and continue planned work across sessions with full context. GitNexus impact analysis and Serena code intelligence are integrated into the planning flow so blast radius is assessed before a single line is written.
+The `planning` skill generates a structured issue board from any spec or idea — epics, tasks, dependencies, test coverage annotations — using `bd create` in parallel. Agents can pick up and continue planned work across sessions with full context. GitNexus impact analysis is integrated into the planning flow so blast radius is assessed before a single line is written.
 
 ### Statusline
 
@@ -196,7 +196,6 @@ These skills implement the xtrm-specific development workflow — session manage
 |-------|---------|
 | `using-xtrm` | Session operating manual — when to use which tool |
 | `using-quality-gates` | Quality gate workflow — TDD guard, lint/typecheck cycle |
-| `using-serena-lsp` | Code exploration and surgical edits via Serena LSP |
 | `using-tdd` | Test-driven development with 80%+ coverage enforcement |
 | `using-service-skills` | Service catalog discovery and expert persona activation |
 | `xt-end` | Autonomous session close — rebase, push, PR, cleanup |
@@ -214,7 +213,6 @@ These skills implement the xtrm-specific development workflow — session manage
 | `init-session` | Session bootstrap and context setup |
 | `session-close-report` | End-of-session report generation and handoff |
 | `orchestrating-agents` | Multi-model orchestration (Gemini, Qwen handshake) |
-| `documenting` | SSOT doc maintenance with drift detection |
 | `sync-docs` | Doc audit and structural sync across a sprint |
 | `skill-creator` | Create, improve, and evaluate skills |
 | `specialists-creator` | Create and validate `.specialist.yaml` definitions |
@@ -326,7 +324,7 @@ See [docs/cli-architecture.md](docs/cli-architecture.md) for internals.
 | `github-grep` | Code search |
 | `deepwiki` | Repository documentation |
 
-Official Claude plugins installed by `xtrm init`: `serena`, `context7`, `github`, `ralph-loop`.
+Official Claude plugins installed by `xtrm init`: `context7`.
 
 See [docs/mcp-servers.md](docs/mcp-servers.md) for configuration details.
 

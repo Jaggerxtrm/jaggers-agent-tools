@@ -209,7 +209,7 @@ See [skills-tier-architecture.md](skills-tier-architecture.md) for full CLI refe
 | `planning` | Create bd issue board from spec/feature/idea |
 | `test-planning` | Attach test coverage to implementation issues |
 | `session-close-report` | Generate structured session handoff reports |
-| `documenting` | SSOT documentation + drift workflow |
+| `sync-docs` | Single-document synchronization + drift workflow |
 | `delegating` | Delegation routing and model strategy |
 | `using-specialists` | Specialist routing and execution workflow (`specialists run/feed/result`) |
 | `using-specialists` | Legacy specialist orchestration (v2 contract) |

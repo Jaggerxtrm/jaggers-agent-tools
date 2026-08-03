@@ -6,10 +6,13 @@ import { ensureAgentsSkillsSymlink } from '../src/core/skills-scaffold.js';
 import { checkRuntimeSkillsViews, assertRuntimeSkillsViews } from '../src/core/skills-runtime-views.js';
 
 const tempDirs: string[] = [];
+const originalHome = process.env.HOME;
 
 const SYMLINK_UNSUPPORTED = process.platform === 'win32';
 
 afterEach(async () => {
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
   for (const tempDir of tempDirs.splice(0)) {
     await fs.remove(tempDir);
   }
@@ -18,6 +21,7 @@ afterEach(async () => {
 async function createTempProjectRoot(): Promise<string> {
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-runtime-sync-test-'));
   tempDirs.push(projectRoot);
+  process.env.HOME = path.join(projectRoot, 'home');
   return projectRoot;
 }
 
@@ -63,7 +67,7 @@ async function writeState(skillsRoot: string, claudePacks: readonly string[], pi
 }
 
 describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', () => {
-  it('materializes direct Claude and Pi child symlinks and persists manifest ownership', async () => {
+  it('materializes direct Claude, Pi, and Codex child symlinks and persists manifest ownership', async () => {
     const projectRoot = await createTempProjectRoot();
     const skillsRoot = path.join(projectRoot, '.xtrm', 'skills');
 
@@ -78,8 +82,13 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', 
     for (const [runtime, expectedSkills] of [
       ['claude', ['delta', 'gamma']],
       ['pi', ['delta']],
+      ['codex', []],
     ] as const) {
-      const runtimeRoot = path.join(projectRoot, runtime === 'claude' ? '.claude' : '.pi', 'skills');
+      const runtimeRoot = path.join(
+        projectRoot,
+        runtime === 'claude' ? '.claude' : runtime === 'pi' ? '.pi' : '.agents',
+        'skills',
+      );
       expect((await fs.readdir(runtimeRoot)).sort()).toEqual(expectedSkills);
       for (const entryName of expectedSkills) {
         const entryPath = path.join(runtimeRoot, entryName);
@@ -97,6 +106,7 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', 
     expect(check.activeReady).toBe(true);
     expect(check.projectClaudePointerState).toBe('ready');
     expect(check.projectPiPointerState).toBe('ready');
+    expect(check.projectCodexPointerState).toBe('ready');
   });
 
   it('uses enabled optional skill when default has same runtime name', async () => {
@@ -121,8 +131,8 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', 
     await fs.ensureDir(path.join(projectRoot, '.claude', 'skills'));
     await fs.writeJson(path.join(skillsRoot, 'state.json'), {
       schemaVersion: '2',
-      enabledPacks: { claude: [], pi: [] },
-      managedLinks: { claude: { alpha: '.xtrm/skills/missing' }, pi: {} },
+      enabledPacks: { claude: [], pi: [], codex: [] },
+      managedLinks: { claude: { alpha: '.xtrm/skills/missing' }, pi: {}, codex: {} },
     });
     await fs.ensureDir(path.join(projectRoot, '.pi'));
     await fs.writeFile(path.join(projectRoot, '.pi', 'settings.json'), '{ malformed', 'utf8');
@@ -130,6 +140,7 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills runtime sync filesystem contract', 
     const check = await checkRuntimeSkillsViews(projectRoot);
     expect(check.activeReady).toBe(false);
     expect(check.projectPiPointerState).toBe('skipped');
+    expect(check.projectCodexPointerState).toBe('skipped');
 
     await expect(assertRuntimeSkillsViews(projectRoot, { scope: 'project' })).rejects.toThrow(
       /\.claude\/skills is not a real reconciled directory/,

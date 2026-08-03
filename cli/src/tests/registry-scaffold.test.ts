@@ -948,7 +948,7 @@ describe('ensureAgentsSkillsSymlink', () => {
     return path.join(packRoot, 'beta');
   }
 
-  itIfSymlinkSupported('reconciles direct Claude and Pi skill links with managed manifest ownership', async () => {
+  itIfSymlinkSupported('reconciles direct Claude, Pi, and Codex skill links with managed manifest ownership', async () => {
     const tempDir = await createTempDir();
     const previousHome = process.env.HOME;
     process.env.HOME = path.join(tempDir, 'home');
@@ -959,17 +959,24 @@ describe('ensureAgentsSkillsSymlink', () => {
 
       const activation = await ensureAgentsSkillsSymlink(tempDir);
 
-      expect(activation).toEqual({ activatedClaudeSkills: 1, activatedPiSkills: 1 });
+      expect(activation).toEqual({ activatedClaudeSkills: 1, activatedPiSkills: 1, activatedCodexSkills: 1 });
       for (const runtime of ['.claude', '.pi']) {
         const runtimeSkills = path.join(tempDir, runtime, 'skills');
         expect((await fs.lstat(runtimeSkills)).isDirectory()).toBe(true);
         expect((await fs.lstat(path.join(runtimeSkills, 'beta'))).isSymbolicLink()).toBe(true);
         expect(await fs.readlink(path.join(runtimeSkills, 'beta'))).toBe(betaRoot);
       }
+      const codexSkills = path.join(tempDir, '.agents', 'skills');
+      expect((await fs.lstat(codexSkills)).isDirectory()).toBe(true);
+      expect((await fs.lstat(path.join(codexSkills, 'alpha'))).isSymbolicLink()).toBe(true);
+      expect(await fs.readlink(path.join(codexSkills, 'alpha'))).toBe(
+        path.join(process.env.HOME, '.xtrm', 'skills', 'default', 'alpha'),
+      );
       const state = await fs.readJson(path.join(tempDir, '.xtrm', 'skills', 'state.json'));
       expect(state.managedLinks).toEqual({
         claude: { beta: '.xtrm/skills/optional/pack-one/beta' },
         pi: { beta: '.xtrm/skills/optional/pack-one/beta' },
+        codex: { alpha: path.relative(tempDir, path.join(process.env.HOME, '.xtrm', 'skills', 'default', 'alpha')) },
       });
       expect(await fs.pathExists(path.join(tempDir, '.xtrm', 'skills', 'active'))).toBe(false);
       expect(await fs.pathExists(path.join(tempDir, '.pi', 'settings.json'))).toBe(false);

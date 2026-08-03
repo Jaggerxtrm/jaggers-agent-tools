@@ -16,11 +16,6 @@ beforeEach(async () => {
 
   await fs.writeJson(path.join(projectRoot, '.xtrm', 'config', 'claude.mcp.json'), {
     mcpServers: {
-      serena: {
-        type: 'stdio',
-        command: 'uvx',
-        args: ['serena', 'start-mcp-server'],
-      },
       context7: {
         type: 'http',
         url: 'https://mcp.context7.com/mcp',
@@ -98,7 +93,6 @@ describe('syncProjectMcpConfig', () => {
     expect(result.createdFile).toBe(true);
     expect(result.wroteFile).toBe(true);
     expect(result.addedServers).toEqual(expect.arrayContaining([
-      'serena',
       'context7',
       'github-grep',
       'deepwiki',
@@ -108,7 +102,6 @@ describe('syncProjectMcpConfig', () => {
 
     const content = await fs.readJson(mcpPath);
     expect(Object.keys(content.mcpServers)).toEqual(expect.arrayContaining([
-      'serena',
       'context7',
       'github-grep',
       'deepwiki',
@@ -135,7 +128,7 @@ describe('syncProjectMcpConfig', () => {
     const second = await fs.readJson(mcpPath);
     expect(second.mcpServers.custom).toEqual(first.mcpServers.custom);
 
-    const canonicalKeys = Object.keys(second.mcpServers).filter((name) => name === 'serena');
+    const canonicalKeys = Object.keys(second.mcpServers).filter((name) => name === 'gitnexus');
     expect(canonicalKeys).toHaveLength(1);
   });
 

@@ -71,11 +71,11 @@ function assertNoRuntimeCollisions(runtime: SkillsRuntime, skills: readonly Disc
 export async function selectRuntimeSkills(
   runtime: SkillsRuntime,
   skillsRoot: string,
-  providedState?: { enabledPacks: { claude: string[]; pi: string[] } },
+  providedState?: { enabledPacks: { claude: string[]; pi: string[]; codex?: string[] } },
   additionalSkillsRoots?: readonly string[],
 ): Promise<RuntimeSkillSelection> {
   const state = providedState ?? await readSkillsState(skillsRoot);
-  const enabledPacks = state.enabledPacks[runtime];
+  const enabledPacks = state.enabledPacks[runtime] ?? [];
 
   const defaultSkills = await discoverDefaultSkills(skillsRoot);
   const rootsToSearch = additionalSkillsRoots ? [skillsRoot, ...additionalSkillsRoots] : [skillsRoot];
@@ -204,6 +204,7 @@ export async function rebuildActiveViewInternal(
   const mergedEnabledPacks = [...new Set([
     ...state.enabledPacks.claude,
     ...state.enabledPacks.pi,
+    ...state.enabledPacks.codex,
   ])].sort((a, b) => a.localeCompare(b));
 
   const defaultSkills = await discoverDefaultSkills(skillsRoot);

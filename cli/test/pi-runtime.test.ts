@@ -126,17 +126,22 @@ describe('updatePiSettings', () => {
     });
 
     it.each([
-        [undefined, []],
-        [{ blockedTools: ['read', 'write', 'edit', 'ls', 'find', 'grep'] }, []],
-        [{ blockedTools: ['execute_shell_command'] }, ['execute_shell_command']],
-    ])('repairs Serena native-tool blocking while preserving custom blocks', async (serena, blockedTools) => {
+        undefined,
+        { blockedTools: ['read', 'write', 'edit', 'ls', 'find', 'grep'] },
+        { blockedTools: ['execute_shell_command'] },
+    ])('preserves unowned Serena settings without managing them', async (serena) => {
         const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-settings-'));
         await fs.ensureDir(path.join(projectRoot, '.pi'));
         await fs.writeJson(path.join(projectRoot, '.pi', 'settings.json'), { serena });
 
         try {
             await updatePiSettings(projectRoot, false);
-            expect((await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'))).serena.blockedTools).toEqual(blockedTools);
+            const settings = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
+            if (serena === undefined) {
+                expect(settings).not.toHaveProperty('serena');
+            } else {
+                expect(settings.serena).toEqual(serena);
+            }
         } finally {
             await fs.remove(projectRoot);
         }
@@ -362,10 +367,10 @@ describe('executePiSync', () => {
 
         expect(result.extensionsAdded).toHaveLength(0);
         expect(logs).toEqual(expect.arrayContaining([
-            '[DRY RUN] + serena-pool',
             '[DRY RUN] + sp-terminal-overlay',
             '[DRY RUN] + xtprompt',
         ]));
+        expect(logs.join('\n')).not.toContain('serena-pool');
         expect(logs.join('\n')).not.toContain('core');
         expect(logs.join('\n')).not.toContain('pi-serena-compact');
         expect(logs.join('\n')).not.toContain('quality-gates');

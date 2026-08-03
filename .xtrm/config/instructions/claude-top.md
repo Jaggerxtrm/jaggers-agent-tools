@@ -87,7 +87,7 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 | about to `sp run` | check `bd state <id> contract`; promote `draft` → `ready` first |
 | just capturing an idea, not working it | `bd create --labels contract:draft` with real PROBLEM + rough SCOPE |
 | tmux/xtmux coordination or reply-required msg | `/multiplexing`; preserve returned `messageKey`; use `message-reply --in-reply-to` |
-| reading code | `find_symbol` / `get_symbols_overview` (Serena) — never whole files |
+| reading code | GitNexus context/query first, then targeted file reads |
 | memory is wrong / superseded | `bd forget <key>` — beats leaving stale entries to poison future `bd memories` searches |
 | stale session claim blocking commit gate | `bd kv clear "claimed:<pid>"` (note: `bd kv clear`, NOT `bd kv delete`) |
 | session end | memory gate fires — evaluate `bd remember` per closed issue; ack with `bd kv set "memory-acked:<id>" "saved:<key>"` or `"nothing novel:<reason>"` |
@@ -114,7 +114,6 @@ xtrm-loader no longer embeds project bodies in every request. Read them when the
 - For unfamiliar code, query GitNexus execution flows before broad grep-heavy reads.
 - Before commit or handoff, run `gitnexus_detect_changes()` to verify affected scope.
 - Prefer targeted symbol/file reads and precise edits over whole-tree dumps.
-- When Serena is available, prefer symbolic tools (`find_symbol` → `get_symbols_overview` → `replace_symbol_body`; `find_referencing_symbols`/`rename_symbol` for LSP-accurate references) over grep-read-sed for code reads and edits.
 
 ## Context and output management
 

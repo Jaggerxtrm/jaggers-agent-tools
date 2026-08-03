@@ -110,7 +110,6 @@ describe('pi runtime safeguards', () => {
     expect(getXtManagedPiPackages().map(pkg => pkg.id)).toEqual([
       'npm:@jaggerxtrm/pi-extensions',
       'npm:pi-gitnexus',
-      'npm:pi-serena-tools',
       'npm:@zenobius/pi-worktrees',
       'npm:@robhowley/pi-structured-return',
       'npm:@aliou/pi-guardrails',
@@ -130,7 +129,7 @@ describe('pi runtime safeguards', () => {
 
     expect(report.hasIssues).toBe(false);
     expect(report.issues).toEqual([]);
-    expect(versionProvider).toHaveBeenCalledTimes(8);
+    expect(versionProvider).toHaveBeenCalledTimes(7);
   });
 
   it('marks globally installed scoped packages as current or outdated, never missing', async () => {
@@ -163,7 +162,7 @@ describe('pi runtime safeguards', () => {
     const { getXtManagedPiPackageDoctorReport } = await import('../core/pi-runtime.js');
 
     const report = await getXtManagedPiPackageDoctorReport(async (piPackageId) => {
-      if (piPackageId === 'npm:pi-serena-tools') {
+      if (piPackageId === 'npm:@zenobius/pi-worktrees') {
         return { installedVersion: null, expectedVersion: '1.1.0' };
       }
       if (piPackageId === 'npm:pi-gitnexus') {
@@ -177,7 +176,7 @@ describe('pi runtime safeguards', () => {
 
     expect(report.hasIssues).toBe(true);
     expect(report.missing.map(issue => [issue.pkg.id, issue.remediation])).toEqual([
-      ['npm:pi-serena-tools', 'pi install npm:pi-serena-tools'],
+      ['npm:@zenobius/pi-worktrees', 'pi install npm:@zenobius/pi-worktrees'],
     ]);
     expect(report.outdated.map(issue => [issue.pkg.id, issue.installedVersion, issue.expectedVersion, issue.remediation])).toEqual([
       ['npm:pi-gitnexus', '1.0.0', '1.1.0', 'pi install npm:pi-gitnexus'],
@@ -226,8 +225,7 @@ describe('pi runtime safeguards', () => {
     const agentDir = path.join(tempRoot, 'global-agent');
     const packageVersions: Record<string, { installedVersion: string | null; expectedVersion: string | null }> = {
       'npm:pi-gitnexus': { installedVersion: null, expectedVersion: '1.0.0' },
-      'npm:pi-serena-tools': { installedVersion: '1.0.0', expectedVersion: '1.1.0' },
-      'npm:@zenobius/pi-worktrees': { installedVersion: '1.0.0', expectedVersion: '1.0.0' },
+      'npm:@zenobius/pi-worktrees': { installedVersion: '1.0.0', expectedVersion: '1.1.0' },
       'npm:@robhowley/pi-structured-return': { installedVersion: '1.0.0', expectedVersion: '1.0.0' },
       'npm:@aliou/pi-guardrails': { installedVersion: '1.0.0', expectedVersion: '1.0.0' },
       'npm:@aliou/pi-processes': { installedVersion: '1.0.0', expectedVersion: '1.0.0' },
@@ -248,10 +246,10 @@ describe('pi runtime safeguards', () => {
     );
 
     expect(result.missing.map(status => status.pkg.id)).toEqual(['npm:pi-gitnexus']);
-    expect(result.outdated.map(status => status.pkg.id)).toEqual(['npm:pi-serena-tools']);
-    expect(installCalls).toEqual(['npm:pi-gitnexus', 'npm:pi-serena-tools']);
+    expect(result.outdated.map(status => status.pkg.id)).toEqual(['npm:@zenobius/pi-worktrees']);
+    expect(installCalls).toEqual(['npm:pi-gitnexus', 'npm:@zenobius/pi-worktrees']);
     expect(result.installed).toEqual(['npm:pi-gitnexus']);
-    expect(result.refreshed).toEqual(['npm:pi-serena-tools']);
+    expect(result.refreshed).toEqual(['npm:@zenobius/pi-worktrees']);
     expect(result.failed).toEqual([]);
   });
 
@@ -386,6 +384,23 @@ describe('pi runtime safeguards', () => {
       await updatePiSettings(projectRoot, true);
 
       expect(await fs.pathExists(path.join(projectRoot, '.pi', 'settings.json'))).toBe(false);
+    });
+
+    it('preserves user-owned Serena settings without creating new Serena configuration', async () => {
+      const { updatePiSettings } = await import('../core/pi-runtime.js');
+      const projectRoot = path.join(tempRoot, 'serena-user-settings');
+      await fs.outputJson(path.join(projectRoot, '.pi', 'settings.json'), {
+        serena: { blockedTools: ['custom_tool'], endpoint: 'http://127.0.0.1:9999' },
+      });
+
+      await updatePiSettings(projectRoot, false);
+      const existing = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
+      expect(existing.serena).toEqual({ blockedTools: ['custom_tool'], endpoint: 'http://127.0.0.1:9999' });
+
+      const freshRoot = path.join(tempRoot, 'serena-fresh-settings');
+      await updatePiSettings(freshRoot, false);
+      const fresh = await fs.readJson(path.join(freshRoot, '.pi', 'settings.json'));
+      expect(fresh).not.toHaveProperty('serena');
     });
   });
 });

@@ -28,7 +28,7 @@ describe('interactivePlan', () => {
                         { name: 'drifted.ts', status: 'drifted', category: 'src' },
                     ],
                     mcpCore: [
-                        { name: 'serena', installed: false },
+                        { name: 'github-grep', installed: false },
                         { name: 'old-server', installed: true },
                     ],
                 },
@@ -49,7 +49,7 @@ describe('interactivePlan', () => {
                 { name: 'outdated.ts', status: 'outdated' },
             ],
             mcpCore: [
-                { name: 'serena', agent: 'claude' },
+                { name: 'github-grep', agent: 'claude' },
             ],
             optionalServers: [],
         });

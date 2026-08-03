@@ -36,7 +36,7 @@ beforeEach(() => {
   fs.ensureDirSync(path.join(tmpDir, '.xtrm'));
   fs.writeJsonSync(path.join(tmpDir, '.xtrm', 'registry.json'), { version: '1', assets: {} }, { spaces: 2 });
   checkDriftMock.mockResolvedValue({ missing: [], upToDate: [], drifted: [] });
-  checkRuntimeSkillsViewsMock.mockResolvedValue({ activeReady: true, globalClaudePointerReady: true, globalPiPointerReady: true, projectClaudePointerState: 'ready', projectPiPointerState: 'ready', hasDeprecatedAgentsSkillsPath: false });
+  checkRuntimeSkillsViewsMock.mockResolvedValue({ activeReady: true, globalClaudePointerReady: true, globalPiPointerReady: true, projectClaudePointerState: 'ready', projectPiPointerState: 'ready', projectCodexPointerState: 'ready', hasDeprecatedAgentsSkillsPath: false });
   discoverDefaultSkillsMock.mockResolvedValue([]);
   getXtManagedPiPackageDoctorReportMock.mockReset();
 });
@@ -87,22 +87,22 @@ describe('xt doctor command', () => {
     expect(parsed.piPackages.issues).toEqual([]);
   });
 
-  it('reports missing pi-serena-tools in text and json without installing anything', async () => {
+  it('reports a missing managed Pi package in text and json without installing anything', async () => {
     getXtManagedPiPackageDoctorReportMock.mockResolvedValue(buildReport({
-      issues: [{ pkg: { id: 'npm:pi-serena-tools', displayName: 'pi-serena-tools', required: true }, npmPackageName: 'pi-serena-tools', installedVersion: null, expectedVersion: '1.1.0', state: 'missing', remediation: 'pi install npm:pi-serena-tools' }],
-      missing: [{ pkg: { id: 'npm:pi-serena-tools', displayName: 'pi-serena-tools', required: true }, npmPackageName: 'pi-serena-tools', installedVersion: null, expectedVersion: '1.1.0', state: 'missing', remediation: 'pi install npm:pi-serena-tools' }],
+      issues: [{ pkg: { id: 'npm:@zenobius/pi-worktrees', displayName: 'pi-worktrees', required: true }, npmPackageName: '@zenobius/pi-worktrees', installedVersion: null, expectedVersion: '1.1.0', state: 'missing', remediation: 'pi install npm:@zenobius/pi-worktrees' }],
+      missing: [{ pkg: { id: 'npm:@zenobius/pi-worktrees', displayName: 'pi-worktrees', required: true }, npmPackageName: '@zenobius/pi-worktrees', installedVersion: null, expectedVersion: '1.1.0', state: 'missing', remediation: 'pi install npm:@zenobius/pi-worktrees' }],
       hasIssues: true,
     }));
 
     const textLogs = await runDoctorCli([]);
     expect(textLogs.join('\n')).toContain('missing');
-    expect(textLogs.join('\n')).toContain('pi install npm:pi-serena-tools');
+    expect(textLogs.join('\n')).toContain('pi install npm:@zenobius/pi-worktrees');
     expect(getXtManagedPiPackageDoctorReportMock).toHaveBeenCalled();
 
     const jsonLogs = await runDoctorCli(['--json']);
     const parsed = JSON.parse(jsonLogs[0]);
     expect(parsed.piPackages.hasIssues).toBe(true);
-    expect(parsed.piPackages.missing[0].pkg.id).toBe('npm:pi-serena-tools');
+    expect(parsed.piPackages.missing[0].pkg.id).toBe('npm:@zenobius/pi-worktrees');
   });
 
   it('reports outdated and version-unknown packages with visible warnings', async () => {

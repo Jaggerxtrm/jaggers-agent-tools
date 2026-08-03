@@ -30,6 +30,7 @@ import {
     parseSpecialistJson,
     resolveRequestedSkills,
 } from './worktree-session.js';
+import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 
 export interface CodexWorktreeSessionOptions {
     name?: string;
@@ -331,6 +332,11 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
     process.once('SIGINT', cleanupOnSignal);
     process.once('SIGTERM', cleanupOnSignal);
     process.once('SIGHUP', cleanupOnSignal);
+    try {
+        await ensureAgentsSkillsSymlink(worktreePath);
+    } catch (error) {
+        cleanupAndFail(error instanceof Error ? error.message : String(error));
+    }
     const launched = spawnSync('tmux', [
         'new-session', '-d', '-s', sessionName, '-c', worktreePath,
         ...envArgs,

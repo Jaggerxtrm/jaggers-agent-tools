@@ -13,7 +13,7 @@ const mocked = vi.hoisted(() => {
     }));
     const runInitVerification = vi.fn(async () => ({
         machineBootstrap: { allRequiredPresent: true, missingRequired: [] },
-        claudeRuntime: { xtrmToolsPlugin: true, officialPlugins: ['serena'], missingPlugins: [] },
+        claudeRuntime: { xtrmToolsPlugin: true, officialPlugins: ['context7'], missingPlugins: [] },
         piRuntime: { allRequiredPresent: true, missingExtensions: [], missingPackages: [] },
         projectBootstrap: { beadsInitialized: true, gitnexusIndexed: true, instructionHeaders: true },
         allPassed: true,
@@ -41,10 +41,11 @@ const mocked = vi.hoisted(() => {
     const ensureAgentsSkillsSymlink = vi.fn(async () => ({
         activatedClaudeSkills: 0,
         activatedPiSkills: 0,
+        activatedCodexSkills: 0,
     }));
     const assertRuntimeSkillsViews = vi.fn(async () => undefined);
     const syncProjectMcpConfig = vi.fn(async () => ({
-        addedServers: ['serena'],
+        addedServers: ['github-grep'],
         missingEnvWarnings: [],
         wroteFile: true,
         createdFile: true,
@@ -339,13 +340,14 @@ describe('xtrm init phased orchestrator', () => {
             return {
                 activatedClaudeSkills: 1,
                 activatedPiSkills: 1,
+                activatedCodexSkills: 1,
             };
         });
         mocked.runInitVerification.mockImplementation(async () => {
             calls.push('runInitVerification');
             return {
                 machineBootstrap: { allRequiredPresent: true, missingRequired: [] },
-                claudeRuntime: { xtrmToolsPlugin: true, officialPlugins: ['serena'], missingPlugins: [] },
+                claudeRuntime: { xtrmToolsPlugin: true, officialPlugins: ['context7'], missingPlugins: [] },
                 piRuntime: { allRequiredPresent: true, missingExtensions: [], missingPackages: [] },
                 projectBootstrap: { beadsInitialized: true, gitnexusIndexed: true, instructionHeaders: true },
                 allPassed: true,

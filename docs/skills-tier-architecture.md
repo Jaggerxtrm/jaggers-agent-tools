@@ -53,7 +53,7 @@ See [docs/plans/global-skills-migration.md](plans/global-skills-migration.md) fo
 ~/.xtrm/skills/
 ├── default/                   # Tier 1: baseline skills (copied from xtrm package)
 │   ├── using-xtrm/SKILL.md
-│   ├── documenting/SKILL.md
+│   ├── sync-docs/SKILL.md
 │   └── ...                    # ~30 skills
 │
 ├── optional/                  # Tier 2: managed optional packs
@@ -111,7 +111,7 @@ The global `default/` entry is **no longer a symlink** to the repo `skills/` dir
 - **Mutability**: Read-only — managed by xtrm updates
 - **Discovery**: Direct child directories with `SKILL.md`
 
-Contains baseline skills required for bootstrapping and core workflows: `using-xtrm`, `documenting`, `planning`, `test-planning`, `xt-end`, `xt-merge`, `deepwiki`, `specialists-creator`, `using-specialists`, GitNexus skills, senior-* specialists, etc.
+Contains baseline skills required for bootstrapping and core workflows: `using-xtrm`, `sync-docs`, `planning`, `test-planning`, `xt-end`, `xt-merge`, `deepwiki`, `specialists-creator`, `using-specialists`, GitNexus skills, senior-* specialists, etc.
 
 ### Global optional (Tier 2)
 

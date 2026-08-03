@@ -255,7 +255,6 @@ export interface ManagedPackage {
 
 const MANAGED_PACKAGES: ManagedPackage[] = [
     { id: 'npm:pi-gitnexus', displayName: 'pi-gitnexus', required: true },
-    { id: 'npm:pi-serena-tools', displayName: 'pi-serena-tools', required: true },
     { id: 'npm:@zenobius/pi-worktrees', displayName: 'pi-worktrees', required: true },
     { id: 'npm:@robhowley/pi-structured-return', displayName: 'pi-structured-return', required: true },
     { id: 'npm:@aliou/pi-guardrails', displayName: 'pi-guardrails', required: false },
@@ -1133,7 +1132,6 @@ type PiSettingsShape = Record<string, unknown> & {
     extensions?: unknown;
     skills?: unknown;
     packages?: unknown;
-    serena?: unknown;
     theme?: unknown;
 };
 
@@ -1148,8 +1146,6 @@ function normalizeXtrmTheme(theme: unknown): unknown {
     return typeof theme === 'string' ? LEGACY_XTRM_THEMES[theme] ?? theme : theme;
 }
 
-const SERENA_DEFAULT_BLOCKED_TOOLS = new Set(['read', 'write', 'edit', 'ls', 'find', 'grep']);
-
 function normalizeStringArray(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
     return value.filter((entry): entry is string => typeof entry === 'string');
@@ -1159,22 +1155,6 @@ function normalizeRecord(value: unknown): Record<string, unknown> {
     return value && typeof value === 'object' && !Array.isArray(value)
         ? { ...(value as Record<string, unknown>) }
         : {};
-}
-
-function normalizeSerenaSettings(value: unknown): Record<string, unknown> {
-    const serena = normalizeRecord(value);
-    const blockedTools = normalizeStringArray(serena.blockedTools);
-    const hasCustomBlocklist = blockedTools.some((toolName) => !SERENA_DEFAULT_BLOCKED_TOOLS.has(toolName));
-
-    // pi-serena-tools defaults to blocking native read/write/edit/ls/find/grep
-    // when this key is missing, forcing agents onto Serena read_file and
-    // surfacing relative_path/root errors. Seed [] for fresh projects and migrate
-    // legacy built-in-only lists, but preserve custom lists blocking Serena tools.
-    if (!Array.isArray(serena.blockedTools) || !hasCustomBlocklist) {
-        serena.blockedTools = [];
-    }
-
-    return serena;
 }
 
 function normalizePiSkillsEntries(existingSkills: readonly string[]): string[] {
@@ -1401,7 +1381,6 @@ export async function updatePiSettings(
         ...existingSettings,
         extensions: existingExtensions,
         packages: existingPackages,
-        serena: normalizeSerenaSettings(existingSettings.serena),
         theme: normalizeXtrmTheme(existingSettings.theme),
     };
     if (normalizedSkills.length > 0) {

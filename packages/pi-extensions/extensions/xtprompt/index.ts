@@ -371,7 +371,7 @@ function simpleIntentInstruction(intent: Intent): string {
         "Rewrite into planning-ready Markdown with exact headers:",
         PLANNING_HEADERS,
         "Clarify missing facts before planning.",
-        "Direct agent to inspect relevant code with GitNexus or Serena before proposing phases.",
+        "Direct agent to inspect relevant code with GitNexus before proposing phases.",
         "Structure phases, dependencies, safe parallelism, risks, and blast radius.",
       ].join("\n");
     case "analysis":
@@ -391,7 +391,7 @@ function structuredIntentInstruction(intent: Intent): string {
       return [
         "Rewrite into planning-compatible task contract.",
         "Clarify missing facts instead of guessing.",
-        "Direct code inspection with GitNexus or Serena for relevant files and execution flow.",
+        "Direct code inspection with GitNexus for relevant files and execution flow.",
         "Structure phases, dependencies, parallel work, risks, and blast radius.",
         "Produce 7-section bd contract using exact planning headers.",
         "Include telemetry, smoke coverage, E2E checks, and invoke test-planning or handoff when task shape calls for them.",
