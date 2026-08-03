@@ -885,10 +885,11 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
     const skillsActivation = opts.force
         ? await ensureAgentsSkillsSymlink(projectRoot, { force: true })
         : await ensureAgentsSkillsSymlink(projectRoot);
-    if (skillsActivation.activatedClaudeSkills === skillsActivation.activatedPiSkills) {
+    if (skillsActivation.activatedClaudeSkills === skillsActivation.activatedPiSkills
+        && skillsActivation.activatedPiSkills === skillsActivation.activatedCodexSkills) {
         console.log(kleur.green(`  ✓ Reconciled ${skillsActivation.activatedClaudeSkills} runtime skills`));
     } else {
-        console.log(kleur.green(`  ✓ Activated runtime skills → claude:${skillsActivation.activatedClaudeSkills}, pi:${skillsActivation.activatedPiSkills}`));
+        console.log(kleur.green(`  ✓ Activated runtime skills → claude:${skillsActivation.activatedClaudeSkills}, pi:${skillsActivation.activatedPiSkills}, codex:${skillsActivation.activatedCodexSkills}`));
     }
     await assertRuntimeSkillsViews(projectRoot, { scope: 'both' });
 
@@ -912,7 +913,7 @@ export async function runProjectInit(opts: InstallOpts = {}): Promise<void> {
     if (verification.allPassed) {
         console.log(kleur.bold('  Next steps:'));
         console.log(kleur.white('    • Quality gates are active globally'));
-        console.log(kleur.white('    • Run `xt pi` or `xt claude` to start a worktree session'));
+        console.log(kleur.white('    • Run `xt pi`, `xt claude`, or `xt codex` to start a worktree session'));
         if (inventory.projectTypes.length > 0) {
             console.log(kleur.white(`    • Project types: ${inventory.projectTypes.join(', ')}`));
         }

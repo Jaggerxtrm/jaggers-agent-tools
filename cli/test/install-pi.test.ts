@@ -44,11 +44,11 @@ describe('createInstallPiCommand', () => {
         expect(content).not.toMatch(/ya29\.[a-zA-Z0-9_-]{20,}/);
     });
 
-    it('settings.json.template includes pi-serena-tools package', () => {
+    it('settings.json.template excludes retired pi-serena-tools package', () => {
         const fs = require('node:fs');
         const p = require('node:path');
         const settings = JSON.parse(fs.readFileSync(p.resolve(__dirname, '..', '..', 'config', 'pi', 'settings.json.template'), 'utf8'));
-        expect(settings.packages).toContain('npm:pi-serena-tools');
+        expect(settings.packages).not.toContain('npm:pi-serena-tools');
     });
 
     it('settings.json.template includes @zenobius/pi-worktrees package', () => {

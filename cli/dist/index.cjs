@@ -45664,7 +45664,7 @@ var import_node_path7 = __toESM(require("path"), 1);
 var import_node_os3 = __toESM(require("os"), 1);
 var import_node_path5 = __toESM(require("path"), 1);
 var SKILLS_STATE_SCHEMA_VERSION = "2";
-var SKILLS_RUNTIMES = ["claude", "pi"];
+var SKILLS_RUNTIMES = ["claude", "pi", "codex"];
 var RUNTIME_ROOT_MARKERS = [".claude", ".agents", ".pi"];
 var SKILL_FILE_NAME = "SKILL.md";
 var PACK_FILE_NAME = "PACK.json";
@@ -60328,7 +60328,8 @@ config(en_default());
 // src/core/skills-state.ts
 var runtimeEnabledPacksSchema = external_exports.object({
   claude: external_exports.array(external_exports.string().min(1)).default([]),
-  pi: external_exports.array(external_exports.string().min(1)).default([])
+  pi: external_exports.array(external_exports.string().min(1)).default([]),
+  codex: external_exports.array(external_exports.string().min(1)).default([])
 });
 function isSafeRuntimeLinkName(name) {
   if (name.length === 0 || name.includes("\0") || /[\\/]/.test(name)) return false;
@@ -60352,12 +60353,13 @@ var managedLinksMapSchema = external_exports.record(external_exports.string(), e
 });
 var managedLinksSchema = external_exports.object({
   claude: managedLinksMapSchema.default({}),
-  pi: managedLinksMapSchema.default({})
+  pi: managedLinksMapSchema.default({}),
+  codex: managedLinksMapSchema.default({})
 });
 var skillsStateSchema = external_exports.object({
   schemaVersion: external_exports.union([external_exports.literal("1"), external_exports.literal("2")]),
   enabledPacks: runtimeEnabledPacksSchema,
-  managedLinks: managedLinksSchema.default({ claude: {}, pi: {} }),
+  managedLinks: managedLinksSchema.default({ claude: {}, pi: {}, codex: {} }),
   installedVersion: external_exports.string().min(1).optional(),
   installedFrom: external_exports.string().min(1).optional(),
   installedAt: external_exports.string().datetime().optional()
@@ -60369,12 +60371,24 @@ function normalizeState(state) {
   return {
     ...state,
     schemaVersion: SKILLS_STATE_SCHEMA_VERSION,
-    enabledPacks: { claude: normalizePackList(state.enabledPacks.claude), pi: normalizePackList(state.enabledPacks.pi) },
-    managedLinks: { claude: { ...state.managedLinks?.claude ?? {} }, pi: { ...state.managedLinks?.pi ?? {} } }
+    enabledPacks: {
+      claude: normalizePackList(state.enabledPacks.claude),
+      pi: normalizePackList(state.enabledPacks.pi),
+      codex: normalizePackList(state.enabledPacks.codex ?? [])
+    },
+    managedLinks: {
+      claude: { ...state.managedLinks?.claude ?? {} },
+      pi: { ...state.managedLinks?.pi ?? {} },
+      codex: { ...state.managedLinks?.codex ?? {} }
+    }
   };
 }
 function createDefaultSkillsState() {
-  return { schemaVersion: SKILLS_STATE_SCHEMA_VERSION, enabledPacks: { claude: [], pi: [] }, managedLinks: { claude: {}, pi: {} } };
+  return {
+    schemaVersion: SKILLS_STATE_SCHEMA_VERSION,
+    enabledPacks: { claude: [], pi: [], codex: [] },
+    managedLinks: { claude: {}, pi: {}, codex: {} }
+  };
 }
 async function ensureSkillsTreeStructure(skillsRoot) {
   await import_fs_extra8.default.ensureDir(skillsRoot);
@@ -60402,7 +60416,11 @@ async function readSkillsState(skillsRoot) {
   const hasManagedLinks = typeof raw === "object" && raw !== null && Object.prototype.hasOwnProperty.call(raw, "managedLinks");
   const legacy = external_exports.object({ schemaVersion: external_exports.union([external_exports.literal("1"), external_exports.literal(SKILLS_STATE_SCHEMA_VERSION)]), enabledPacks: runtimeEnabledPacksSchema }).safeParse(raw);
   if (hasManagedLinks || !legacy.success) throw new Error(`Invalid skills state at ${statePath}: ${parsed.error.message}`);
-  return writeSkillsState(skillsRoot, { schemaVersion: SKILLS_STATE_SCHEMA_VERSION, enabledPacks: legacy.data.enabledPacks, managedLinks: { claude: {}, pi: {} } });
+  return writeSkillsState(skillsRoot, {
+    schemaVersion: SKILLS_STATE_SCHEMA_VERSION,
+    enabledPacks: legacy.data.enabledPacks,
+    managedLinks: { claude: {}, pi: {}, codex: {} }
+  });
 }
 async function setRuntimeEnabledPacks(skillsRoot, runtime, packNames) {
   const state = await readSkillsState(skillsRoot);
@@ -60657,7 +60675,12 @@ function resolveDesiredSkills(options, defaults) {
     }
     seen.set(skill.runtimeName, skill.path);
   }
-  return selected;
+  return options.runtime === "codex" ? [...defaults, ...selected] : selected;
+}
+function runtimeSkillsDirectory(projectRoot, runtime) {
+  if (runtime === "claude") return import_node_path11.default.join(projectRoot, ".claude", "skills");
+  if (runtime === "pi") return import_node_path11.default.join(projectRoot, ".pi", "skills");
+  return import_node_path11.default.join(projectRoot, ".agents", "skills");
 }
 async function ensureRuntimeDirectory(directory) {
   const existing = await import_fs_extra11.default.lstat(directory).catch(() => null);
@@ -60694,7 +60717,7 @@ async function discoverManagedLinks(projectRoot, directory, expected, roots) {
 }
 async function reconcileRuntimeLinks(options) {
   const { projectRoot, runtime, state, globalDefaultRoot, globalOptionalRoot } = options;
-  const runtimeDirectory = import_node_path11.default.join(projectRoot, runtime === "claude" ? ".claude" : ".pi", "skills");
+  const runtimeDirectory = runtimeSkillsDirectory(projectRoot, runtime);
   const defaults = await discoverDirectSkills(globalDefaultRoot);
   const selected = resolveDesiredSkills(options, defaults);
   const desiredLinks = {};
@@ -60705,7 +60728,7 @@ async function reconcileRuntimeLinks(options) {
   const oldManifest = state.managedLinks?.[runtime] ?? {};
   for (const name of Object.keys(oldManifest)) resolveRuntimeLinkPath(runtimeDirectory, name);
   await ensureRuntimeDirectory(runtimeDirectory);
-  const roots = [import_node_path11.default.join(projectRoot, ".xtrm", "skills"), globalOptionalRoot];
+  const roots = [import_node_path11.default.join(projectRoot, ".xtrm", "skills"), globalDefaultRoot, globalOptionalRoot];
   const bootstrapped = Object.keys(oldManifest).length === 0 ? await discoverManagedLinks(projectRoot, runtimeDirectory, desiredLinks, roots) : {};
   const managed = { ...bootstrapped, ...oldManifest };
   const removedLinks = [];
@@ -60777,7 +60800,7 @@ async function ensureAgentsSkillsSymlink(projectRoot, _options = {}) {
   ];
   const state = await readSkillsState(skillsRoot);
   const results = [];
-  for (const runtime of ["claude", "pi"]) {
+  for (const runtime of SKILLS_RUNTIMES) {
     results.push(await reconcileRuntimeLinks({
       projectRoot,
       state,
@@ -60789,7 +60812,8 @@ async function ensureAgentsSkillsSymlink(projectRoot, _options = {}) {
   }
   return {
     activatedClaudeSkills: Object.keys(results[0].desiredLinks).length,
-    activatedPiSkills: Object.keys(results[1].desiredLinks).length
+    activatedPiSkills: Object.keys(results[1].desiredLinks).length,
+    activatedCodexSkills: Object.keys(results[2].desiredLinks).length
   };
 }
 
@@ -60957,7 +60981,6 @@ var MANAGED_PI_EXTENSION_OWNED_IDS = /* @__PURE__ */ new Set([
 ]);
 var MANAGED_PACKAGES = [
   { id: "npm:pi-gitnexus", displayName: "pi-gitnexus", required: true },
-  { id: "npm:pi-serena-tools", displayName: "pi-serena-tools", required: true },
   { id: "npm:@zenobius/pi-worktrees", displayName: "pi-worktrees", required: true },
   { id: "npm:@robhowley/pi-structured-return", displayName: "pi-structured-return", required: true },
   { id: "npm:@aliou/pi-guardrails", displayName: "pi-guardrails", required: false },
@@ -61477,22 +61500,9 @@ var LEGACY_XTRM_THEMES = {
 function normalizeXtrmTheme(theme) {
   return typeof theme === "string" ? LEGACY_XTRM_THEMES[theme] ?? theme : theme;
 }
-var SERENA_DEFAULT_BLOCKED_TOOLS = /* @__PURE__ */ new Set(["read", "write", "edit", "ls", "find", "grep"]);
 function normalizeStringArray(value) {
   if (!Array.isArray(value)) return [];
   return value.filter((entry) => typeof entry === "string");
-}
-function normalizeRecord(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
-}
-function normalizeSerenaSettings(value) {
-  const serena = normalizeRecord(value);
-  const blockedTools = normalizeStringArray(serena.blockedTools);
-  const hasCustomBlocklist = blockedTools.some((toolName) => !SERENA_DEFAULT_BLOCKED_TOOLS.has(toolName));
-  if (!Array.isArray(serena.blockedTools) || !hasCustomBlocklist) {
-    serena.blockedTools = [];
-  }
-  return serena;
 }
 function normalizePiSkillsEntries(existingSkills) {
   return existingSkills.filter((entry, index) => existingSkills.indexOf(entry) === index && !LEGACY_XTRM_SKILLS_ENTRIES.has(entry));
@@ -61643,7 +61653,6 @@ async function updatePiSettings(projectRoot, dryRun, log) {
     ...existingSettings,
     extensions: existingExtensions,
     packages: existingPackages,
-    serena: normalizeSerenaSettings(existingSettings.serena),
     theme: normalizeXtrmTheme(existingSettings.theme)
   };
   if (normalizedSkills.length > 0) {
@@ -63772,7 +63781,7 @@ async function confirmDestructiveAction(opts) {
 var import_child_process4 = require("child_process");
 var import_node_path14 = __toESM(require("path"), 1);
 init_kleur();
-var OFFICIAL_CLAUDE_PLUGINS = ["serena", "context7"];
+var OFFICIAL_CLAUDE_PLUGINS = ["context7"];
 var OFFICIAL_MARKETPLACE = "claude-plugins-official";
 var MANAGED_DEPS = [
   {
@@ -64087,7 +64096,7 @@ function ensureOfficialPlugins(dryRun) {
   }
   const missing = OFFICIAL_CLAUDE_PLUGINS.filter((pluginName) => !installed.has(pluginName));
   if (missing.length === 0) {
-    console.log(kleur_default.dim("  \u2713 Official Claude plugins already installed: serena, context7"));
+    console.log(kleur_default.dim(`  \u2713 Official Claude plugins already installed: ${OFFICIAL_CLAUDE_PLUGINS.join(", ")}`));
     return;
   }
   console.log(kleur_default.bold("\n  Ensuring official Claude plugins..."));
@@ -65769,6 +65778,11 @@ async function launchCodexWorktreeSession(opts) {
   process.once("SIGINT", cleanupOnSignal);
   process.once("SIGTERM", cleanupOnSignal);
   process.once("SIGHUP", cleanupOnSignal);
+  try {
+    await ensureAgentsSkillsSymlink(worktreePath);
+  } catch (error51) {
+    cleanupAndFail(error51 instanceof Error ? error51.message : String(error51));
+  }
   const launched = (0, import_node_child_process6.spawnSync)("tmux", [
     "new-session",
     "-d",
@@ -66636,7 +66650,7 @@ var import_fs_extra23 = __toESM(require_lib(), 1);
 var import_node_os13 = __toESM(require("os"), 1);
 var import_node_path22 = __toESM(require("path"), 1);
 function getRuntimePointerTarget(options) {
-  return options.scope === "global" ? resolveDefaultTierRoot(resolveGlobalSkillsRoot()) : "real .claude/skills and .pi/skills directories";
+  return options.scope === "global" ? resolveDefaultTierRoot(resolveGlobalSkillsRoot()) : "real .claude/skills, .pi/skills, and .agents/skills directories";
 }
 async function pointsTo(link, target) {
   const stat = await import_fs_extra23.default.lstat(link).catch(() => null);
@@ -66649,7 +66663,7 @@ async function isRealDirectory(dir) {
 }
 async function managedEntries(projectRoot, runtime) {
   const state = await readSkillsState(resolveSkillsRoot(projectRoot));
-  const dir = import_node_path22.default.join(projectRoot, runtime === "claude" ? ".claude" : ".pi", "skills");
+  const dir = import_node_path22.default.join(projectRoot, runtime === "claude" ? ".claude" : runtime === "pi" ? ".pi" : ".agents", "skills");
   for (const [name, relativeTarget] of Object.entries(state.managedLinks[runtime])) {
     const linkPath = import_node_path22.default.join(dir, name);
     const stat = await import_fs_extra23.default.lstat(linkPath).catch(() => null);
@@ -66666,17 +66680,21 @@ async function checkRuntimeSkillsViews(projectRoot) {
   const globalPiPointerReady = await pointsTo(import_node_path22.default.join(import_node_os13.default.homedir(), ".pi", "agent", "skills"), globalDefault);
   const projectClaudeSkillsReady = await isRealDirectory(import_node_path22.default.join(projectRoot, ".claude", "skills")) && await managedEntries(projectRoot, "claude");
   const projectPiSkillsReady = await isRealDirectory(import_node_path22.default.join(projectRoot, ".pi", "skills")) && await managedEntries(projectRoot, "pi");
+  const projectCodexSkillsReady = await isRealDirectory(import_node_path22.default.join(projectRoot, ".agents", "skills")) && await managedEntries(projectRoot, "codex");
   const projectClaudePointerState = projectClaudeSkillsReady ? "ready" : "skipped";
   const projectPiPointerState = projectPiSkillsReady ? "ready" : "skipped";
+  const projectCodexPointerState = projectCodexSkillsReady ? "ready" : "skipped";
   return {
-    activeReady: projectClaudeSkillsReady && projectPiSkillsReady,
+    activeReady: projectClaudeSkillsReady && projectPiSkillsReady && projectCodexSkillsReady,
     globalClaudePointerReady,
     globalPiPointerReady,
     projectClaudePointerState,
     projectPiPointerState,
+    projectCodexPointerState,
     activeEntries: [],
     projectClaudeSkillsReady,
-    projectPiSkillsReady
+    projectPiSkillsReady,
+    projectCodexSkillsReady
   };
 }
 async function assertRuntimeSkillsViews(projectRoot, options = {}) {
@@ -66687,6 +66705,7 @@ async function assertRuntimeSkillsViews(projectRoot, options = {}) {
   if ((scope === "global" || scope === "both") && !check2.globalPiPointerReady) failures.push(`~/.pi/agent/skills is not linked to ${getRuntimePointerTarget({ scope: "global" })}`);
   if ((scope === "project" || scope === "both") && !check2.projectClaudeSkillsReady) failures.push(".claude/skills is not a real reconciled directory");
   if ((scope === "project" || scope === "both") && !check2.projectPiSkillsReady) failures.push(".pi/skills is not a real reconciled directory");
+  if ((scope === "project" || scope === "both") && !check2.projectCodexSkillsReady) failures.push(".agents/skills is not a real reconciled directory");
   if (failures.length > 0) throw new Error(`Runtime skills validation failed: ${failures.join("; ")}`);
 }
 
@@ -66796,7 +66815,7 @@ async function runInitVerification(projectRoot) {
   const piPlan = await verifyPiRuntime(projectRoot);
   const projectResult = verifyProjectBootstrap(projectRoot);
   const skillsRuntimeResult = await checkRuntimeSkillsViews(projectRoot);
-  const allPassed = machinePlan.allRequiredPresent && claudeResult.hooksWired && piPlan.allRequiredPresent && skillsRuntimeResult.activeReady && skillsRuntimeResult.globalClaudePointerReady && skillsRuntimeResult.globalPiPointerReady && skillsRuntimeResult.projectClaudePointerState !== "missing" && skillsRuntimeResult.projectPiPointerState !== "missing" && projectResult.beadsInitialized;
+  const allPassed = machinePlan.allRequiredPresent && claudeResult.hooksWired && piPlan.allRequiredPresent && skillsRuntimeResult.activeReady && skillsRuntimeResult.globalClaudePointerReady && skillsRuntimeResult.globalPiPointerReady && skillsRuntimeResult.projectClaudePointerState !== "missing" && skillsRuntimeResult.projectPiPointerState !== "missing" && skillsRuntimeResult.projectCodexPointerState !== "missing" && projectResult.beadsInitialized;
   return {
     machineBootstrap: {
       allRequiredPresent: machinePlan.allRequiredPresent,
@@ -66813,7 +66832,8 @@ async function runInitVerification(projectRoot) {
       globalClaudePointerReady: skillsRuntimeResult.globalClaudePointerReady,
       globalPiPointerReady: skillsRuntimeResult.globalPiPointerReady,
       projectClaudePointerState: skillsRuntimeResult.projectClaudePointerState,
-      projectPiPointerState: skillsRuntimeResult.projectPiPointerState
+      projectPiPointerState: skillsRuntimeResult.projectPiPointerState,
+      projectCodexPointerState: skillsRuntimeResult.projectCodexPointerState
     },
     projectBootstrap: projectResult,
     allPassed
@@ -66857,6 +66877,7 @@ function renderVerificationSummary(result) {
   if (!result.skillsRuntime.globalPiPointerReady) skillsParts.push("~/.pi/agent/skills pointer");
   if (result.skillsRuntime.projectClaudePointerState === "missing") skillsParts.push(".claude/skills pointer");
   if (result.skillsRuntime.projectPiPointerState === "missing") skillsParts.push(".pi settings skills pointer");
+  if (result.skillsRuntime.projectCodexPointerState === "missing") skillsParts.push(".agents/skills directory");
   const srIcon = skillsParts.length === 0 ? sym.ok : sym.warn;
   if (skillsParts.length === 0) {
     console.log(`  ${srIcon} Skills Runtime`);
@@ -69100,10 +69121,10 @@ async function runProjectInit(opts = {}) {
     await ensureUserAgentsSkillsSymlink();
   }
   const skillsActivation = opts.force ? await ensureAgentsSkillsSymlink(projectRoot, { force: true }) : await ensureAgentsSkillsSymlink(projectRoot);
-  if (skillsActivation.activatedClaudeSkills === skillsActivation.activatedPiSkills) {
+  if (skillsActivation.activatedClaudeSkills === skillsActivation.activatedPiSkills && skillsActivation.activatedPiSkills === skillsActivation.activatedCodexSkills) {
     console.log(kleur_default.green(`  \u2713 Reconciled ${skillsActivation.activatedClaudeSkills} runtime skills`));
   } else {
-    console.log(kleur_default.green(`  \u2713 Activated runtime skills \u2192 claude:${skillsActivation.activatedClaudeSkills}, pi:${skillsActivation.activatedPiSkills}`));
+    console.log(kleur_default.green(`  \u2713 Activated runtime skills \u2192 claude:${skillsActivation.activatedClaudeSkills}, pi:${skillsActivation.activatedPiSkills}, codex:${skillsActivation.activatedCodexSkills}`));
   }
   await assertRuntimeSkillsViews(projectRoot, { scope: "both" });
   await runProjectBootstrap(projectRoot, isGitRepo2);
@@ -69114,7 +69135,7 @@ async function runProjectInit(opts = {}) {
   if (verification.allPassed) {
     console.log(kleur_default.bold("  Next steps:"));
     console.log(kleur_default.white("    \u2022 Quality gates are active globally"));
-    console.log(kleur_default.white("    \u2022 Run `xt pi` or `xt claude` to start a worktree session"));
+    console.log(kleur_default.white("    \u2022 Run `xt pi`, `xt claude`, or `xt codex` to start a worktree session"));
     if (inventory.projectTypes.length > 0) {
       console.log(kleur_default.white(`    \u2022 Project types: ${inventory.projectTypes.join(", ")}`));
     }
@@ -73391,7 +73412,7 @@ function assertNoRuntimeCollisions(runtime, skills) {
 }
 async function selectRuntimeSkills(runtime, skillsRoot, providedState, additionalSkillsRoots) {
   const state = providedState ?? await readSkillsState(skillsRoot);
-  const enabledPacks = state.enabledPacks[runtime];
+  const enabledPacks = state.enabledPacks[runtime] ?? [];
   const defaultSkills = await discoverDefaultSkills(skillsRoot);
   const rootsToSearch = additionalSkillsRoots ? [skillsRoot, ...additionalSkillsRoots] : [skillsRoot];
   const enabledPackSkills = await collectEnabledPackSkills(rootsToSearch, enabledPacks);
@@ -73430,13 +73451,8 @@ async function resolveScopeRoot(scope) {
   return findProjectRoot();
 }
 function resolveTargetRuntimes(opts) {
-  if (opts.claude && !opts.pi) {
-    return ["claude"];
-  }
-  if (opts.pi && !opts.claude) {
-    return ["pi"];
-  }
-  return [...SKILLS_RUNTIMES];
+  const selected = SKILLS_RUNTIMES.filter((runtime) => opts[runtime]);
+  return selected.length > 0 ? selected : [...SKILLS_RUNTIMES];
 }
 async function readStateOrDefault(skillsRoot) {
   const statePath = resolveStateFilePath(skillsRoot);
@@ -73543,7 +73559,8 @@ function composeState(globalState, localState) {
   return {
     enabledPacks: {
       claude: [.../* @__PURE__ */ new Set([...globalState.enabledPacks.claude, ...localState.enabledPacks.claude])].sort((a, b) => a.localeCompare(b)),
-      pi: [.../* @__PURE__ */ new Set([...globalState.enabledPacks.pi, ...localState.enabledPacks.pi])].sort((a, b) => a.localeCompare(b))
+      pi: [.../* @__PURE__ */ new Set([...globalState.enabledPacks.pi, ...localState.enabledPacks.pi])].sort((a, b) => a.localeCompare(b)),
+      codex: [.../* @__PURE__ */ new Set([...globalState.enabledPacks.codex, ...localState.enabledPacks.codex])].sort((a, b) => a.localeCompare(b))
     }
   };
 }
@@ -73619,7 +73636,7 @@ async function mutatePacks(opts) {
   if (action2 === "disable" && scope === "local") {
     const globalSkillsRoot = resolveSkillsRoot(import_node_os16.default.homedir());
     const globalState = await readStateOrDefault(globalSkillsRoot);
-    const isGloballyEnabled = globalState.enabledPacks.claude.includes(packArg) || globalState.enabledPacks.pi.includes(packArg);
+    const isGloballyEnabled = globalState.enabledPacks.claude.includes(packArg) || globalState.enabledPacks.pi.includes(packArg) || globalState.enabledPacks.codex.includes(packArg);
     if (isGloballyEnabled) {
       throw new Error(
         `Pack "${packArg}" is globally enabled; use --global to disable everywhere, or leave alone and add a local override.`
@@ -73677,7 +73694,7 @@ async function createUserPack(skillsRoot, packName) {
 }
 function createSkillsCommand() {
   const skills = new Command("skills").description("List installed skills and manage skill packs");
-  skills.command("list").description("Show tiered skill inventory and runtime active resolution (default: --global)").option("--global", "Use user-global scope (~/.xtrm/skills)", false).option("--local", "Use project-local scope (./.xtrm/skills) with global composition", false).option("--claude", "Show Claude runtime view", false).option("--pi", "Show Pi runtime view", false).option("--json", "Output JSON", false).action(async (opts) => {
+  skills.command("list").description("Show tiered skill inventory and runtime active resolution (default: --global)").option("--global", "Use user-global scope (~/.xtrm/skills)", false).option("--local", "Use project-local scope (./.xtrm/skills) with global composition", false).option("--claude", "Show Claude runtime view", false).option("--pi", "Show Pi runtime view", false).option("--codex", "Show Codex runtime view", false).option("--json", "Output JSON", false).action(async (opts) => {
     try {
       const scope = resolveScope(opts, "global");
       const scopeRoot = await resolveScopeRoot(scope);
@@ -73731,7 +73748,7 @@ function createSkillsCommand() {
       process.exit(1);
     }
   });
-  skills.command("enable <pack>").description("Enable a skill pack (default: --global)").option("--global", "Use user-global scope (~/.xtrm/skills)", false).option("--local", "Use project-local scope (./.xtrm/skills)", false).option("--claude", "Target Claude runtime", false).option("--pi", "Target Pi runtime", false).option("--json", "Output JSON", false).action(async (pack, opts) => {
+  skills.command("enable <pack>").description("Enable a skill pack (default: --global)").option("--global", "Use user-global scope (~/.xtrm/skills)", false).option("--local", "Use project-local scope (./.xtrm/skills)", false).option("--claude", "Target Claude runtime", false).option("--pi", "Target Pi runtime", false).option("--codex", "Target Codex runtime", false).option("--json", "Output JSON", false).action(async (pack, opts) => {
     try {
       const scope = resolveScope(opts, "global");
       const scopeRoot = await resolveScopeRoot(scope);
@@ -73765,7 +73782,7 @@ function createSkillsCommand() {
       process.exit(1);
     }
   });
-  skills.command("disable <pack>").description("Disable a skill pack (default: --global)").option("--global", "Use user-global scope (~/.xtrm/skills)", false).option("--local", "Use project-local scope (./.xtrm/skills)", false).option("--claude", "Target Claude runtime", false).option("--pi", "Target Pi runtime", false).option("--json", "Output JSON", false).action(async (pack, opts) => {
+  skills.command("disable <pack>").description("Disable a skill pack (default: --global)").option("--global", "Use user-global scope (~/.xtrm/skills)", false).option("--local", "Use project-local scope (./.xtrm/skills)", false).option("--claude", "Target Claude runtime", false).option("--pi", "Target Pi runtime", false).option("--codex", "Target Codex runtime", false).option("--json", "Output JSON", false).action(async (pack, opts) => {
     try {
       const scope = resolveScope(opts, "global");
       const scopeRoot = await resolveScopeRoot(scope);
@@ -74768,7 +74785,8 @@ function formatRuntimeView(check2) {
     `globalClaudePointerReady=${check2.globalClaudePointerReady}`,
     `globalPiPointerReady=${check2.globalPiPointerReady}`,
     `projectClaudePointerState=${check2.projectClaudePointerState}`,
-    `projectPiPointerState=${check2.projectPiPointerState}`
+    `projectPiPointerState=${check2.projectPiPointerState}`,
+    `projectCodexPointerState=${check2.projectCodexPointerState}`
   ].join(" ");
 }
 async function buildCatBJson(registry2, cwd, drift, runtimeView, duplicates, sharedBeadsServerState) {
@@ -74780,7 +74798,7 @@ async function buildCatBJson(registry2, cwd, drift, runtimeView, duplicates, sha
     else acc.warnings += 1;
     return acc;
   }, { ok: 0, warnings: 0, errors: 0 });
-  if (!runtimeView.activeReady || !runtimeView.globalClaudePointerReady || !runtimeView.globalPiPointerReady || runtimeView.projectClaudePointerState === "missing" || runtimeView.projectPiPointerState === "missing") {
+  if (!runtimeView.activeReady || !runtimeView.globalClaudePointerReady || !runtimeView.globalPiPointerReady || runtimeView.projectClaudePointerState === "missing" || runtimeView.projectPiPointerState === "missing" || runtimeView.projectCodexPointerState === "missing") {
     summary.errors += 1;
   } else {
     summary.ok += 1;
@@ -74806,7 +74824,7 @@ function renderCatB(report) {
   section2("Cat B \u2014 Runtime view");
   console.log(`  ${formatRuntimeView(report.runtimeView)}`);
   console.log(`  ${report.runtimeView.globalClaudePointerReady && report.runtimeView.globalPiPointerReady ? kleur_default.green("\u2713") : kleur_default.yellow("\u25CB")} Global skills pointer: ${report.runtimeView.globalClaudePointerReady && report.runtimeView.globalPiPointerReady ? "ok" : "missing"}`);
-  const projectPointerState = report.runtimeView.projectClaudePointerState === "missing" || report.runtimeView.projectPiPointerState === "missing" ? "missing" : report.runtimeView.projectClaudePointerState === "skipped" && report.runtimeView.projectPiPointerState === "skipped" ? "skipped (empty)" : "ok";
+  const projectPointerState = report.runtimeView.projectClaudePointerState === "missing" || report.runtimeView.projectPiPointerState === "missing" || report.runtimeView.projectCodexPointerState === "missing" ? "missing" : report.runtimeView.projectClaudePointerState === "skipped" && report.runtimeView.projectPiPointerState === "skipped" && report.runtimeView.projectCodexPointerState === "skipped" ? "skipped (empty)" : "ok";
   console.log(`  ${projectPointerState === "ok" ? kleur_default.green("\u2713") : kleur_default.yellow("\u25CB")} Project skills pointer: ${projectPointerState}`);
   section2("Cat B \u2014 Duplicate canonical names");
   if (report.duplicates.length === 0) {

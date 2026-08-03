@@ -26,10 +26,6 @@ const WRITE_TOOLS = [
   'Write',
   'MultiEdit',
   'NotebookEdit',
-  'mcp__serena__rename_symbol',
-  'mcp__serena__replace_symbol_body',
-  'mcp__serena__insert_after_symbol',
-  'mcp__serena__insert_before_symbol',
 ];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

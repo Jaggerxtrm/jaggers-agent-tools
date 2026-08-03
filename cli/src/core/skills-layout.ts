@@ -3,7 +3,7 @@ import path from 'node:path';
 
 export const SKILLS_STATE_SCHEMA_VERSION = '2' as const;
 
-export const SKILLS_RUNTIMES = ['claude', 'pi'] as const;
+export const SKILLS_RUNTIMES = ['claude', 'pi', 'codex'] as const;
 export type SkillsRuntime = typeof SKILLS_RUNTIMES[number];
 
 export const SKILLS_TIERS = ['default', 'optional', 'user'] as const;

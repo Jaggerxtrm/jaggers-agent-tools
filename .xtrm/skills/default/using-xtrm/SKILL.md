@@ -106,9 +106,8 @@ bd ready                                                        # find the issue
 bd update bd-xyz --claim                                        # claim it
 gitnexus_impact({target: "parseComposeServices", direction: "upstream"})
 # → 2 callers, LOW risk — safe to edit
-get_symbols_overview("hooks/init.ts")                           # map file
-find_symbol("parseComposeServices", include_body=True)          # read just this
-replace_symbol_body("parseComposeServices", newBody)            # Serena edit
+sed -n '<start>,<end>p' hooks/init.ts                            # targeted read
+# Apply the verified edit with the runtime's native edit tool.
 bd close bd-xyz --reason="Fix YAML parse edge case"            # close issue
 xt end                                                         # push, PR, merge, cleanup
 ```
@@ -118,8 +117,7 @@ xt end                                                         # push, PR, merge
 gitnexus_query({query: "session claim enforcement"})
 # → beads-gate-core.mjs, resolveClaimAndWorkState, decideCommitGate
 gitnexus_context({name: "resolveClaimAndWorkState"})            # callers + callees
-get_symbols_overview("hooks/beads-gate-core.mjs")               # map the file
-find_symbol("resolveClaimAndWorkState", include_body=True)      # read only this
+sed -n '<start>,<end>p' hooks/beads-gate-core.mjs                # targeted read
 ```
 
 **Persisting an insight:**
@@ -148,7 +146,7 @@ Vague prompt (under 8 words, no specifics)? Ask one clarifying question before p
 
 | Need | Use |
 |------|-----|
-| Code read / edit | Serena — `get_symbols_overview` → `find_symbol` → `replace_symbol_body` |
+| Code read / edit | GitNexus context/query, then targeted reads and native edit tools |
 | Blast radius before edit | `gitnexus-impact-analysis` |
 | Navigate unfamiliar code | `gitnexus-exploring` |
 | Trace a bug | `gitnexus-debugging` |

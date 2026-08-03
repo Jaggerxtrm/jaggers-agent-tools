@@ -53,12 +53,6 @@ Project skills covered:
 - `tdd-guard`
 - `service-skills`
 
-Serena edit-tool matchers covered:
-- `mcp__serena__rename_symbol`
-- `mcp__serena__replace_symbol_body`
-- `mcp__serena__insert_after_symbol`
-- `mcp__serena__insert_before_symbol`
-
 ---
 
 ## Global Preflight
@@ -84,9 +78,9 @@ Serena edit-tool matchers covered:
 ## Hook Wiring Verification
 
 - [ ] Open `.claude/settings.json` and verify these hook entries exist:
-  - [ ] `PostToolUse` matcher for `quality-gates` includes all Serena tool names.
-  - [ ] `PreToolUse` matcher for `tdd-guard` includes all Serena tool names.
-  - [ ] `PreToolUse` and `PostToolUse` matchers for `service-skills` include all Serena tool names.
+  - [ ] `PostToolUse` matcher for `quality-gates` includes native edit tools.
+  - [ ] `PreToolUse` matcher for `tdd-guard` includes native edit tools.
+  - [ ] `PreToolUse` and `PostToolUse` matchers for `service-skills` include native edit tools.
 - [ ] Confirm bridge script exists:
   - [ ] `.claude/hooks/tdd-guard-pretool-bridge.cjs`
 
@@ -101,14 +95,12 @@ Serena edit-tool matchers covered:
 - [ ] Hook runs after edit (`PostToolUse`) and reports issue.
 - [ ] Auto-fix applies where possible (`ruff format` / lint autofix).
 - [ ] Blocking behavior occurs for unresolved critical issues.
-- [ ] Repeat using Serena edit tool and confirm same behavior.
 
 **TypeScript:**
 - [ ] Edit a TS/JS file with lint/type/format issues.
 - [ ] Hook runs after edit (`PostToolUse`) and reports issues.
 - [ ] ESLint/Prettier autofix path works when configured.
 - [ ] Blocking behavior occurs for unresolved critical issues.
-- [ ] Repeat using Serena edit tool and confirm same behavior.
 
 ### 2) TDD Guard
 
@@ -117,12 +109,6 @@ Serena edit-tool matchers covered:
 - [ ] `tdd-guard --session-init` runs on session start.
 - [ ] **Non-code bypass check**: edit a `.md` file and confirm no false TDD block.
 - [ ] Code-file check: edit a `.ts`/`.py` file and confirm TDD guard still enforces.
-- [ ] Serena edit check: run one of:
-  - [ ] `mcp__serena__rename_symbol`
-  - [ ] `mcp__serena__replace_symbol_body`
-  - [ ] `mcp__serena__insert_after_symbol`
-  - [ ] `mcp__serena__insert_before_symbol`
-  and confirm TDD behavior is applied to code files.
 
 ### 3) Service Skills Set
 
@@ -132,14 +118,12 @@ Serena edit-tool matchers covered:
 - [ ] Git hooks installed and executable:
   - [ ] `.githooks/pre-commit`
   - [ ] `.githooks/pre-push`
-- [ ] Serena edit check: modify service code with Serena tool and confirm activation/drift hooks still trigger.
 
 ---
 
 ## Main-Guard / Beads Gate (Global Hook Sanity)
 
 - [ ] On protected branch (`main`/`master`), file-edit attempts are blocked.
-- [ ] Serena edit tools are treated as edit-equivalent by matcher routing.
 - [ ] In `.beads` project without active claim, edit gate blocks as expected.
 - [ ] After claim (`bd update <id> --status=in_progress` + kv claim), edit is allowed.
 
@@ -203,7 +187,6 @@ scripts/security-scan.sh
 ## Pass Criteria
 
 - [ ] All project skills execute their intended hooks.
-- [ ] All Serena edit operations trigger the same hook class as normal edits.
 - [ ] No false-positive TDD block on markdown/non-code edits.
 - [ ] No missing hook script path errors.
 - [ ] Team can reproduce results on a clean machine following this guide.

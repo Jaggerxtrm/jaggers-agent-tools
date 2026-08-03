@@ -28,10 +28,9 @@ describe('config schema integrity', () => {
             expect(schema.packages).toContain('npm:@robhowley/pi-structured-return');
         });
 
-                it('contains all expected canonical packages', () => {
+        it('contains all expected canonical packages and excludes retired Serena tooling', () => {
             const expected = [
                 'npm:pi-gitnexus',
-                'npm:pi-serena-tools',
                 'npm:@zenobius/pi-worktrees',
                 'npm:@robhowley/pi-structured-return',
                 'npm:@aliou/pi-processes',
@@ -39,6 +38,7 @@ describe('config schema integrity', () => {
             for (const pkg of expected) {
                 expect(schema.packages).toContain(pkg);
             }
+            expect(schema.packages).not.toContain('npm:pi-serena-tools');
         });
 
         it('packages is an array with no duplicates', () => {

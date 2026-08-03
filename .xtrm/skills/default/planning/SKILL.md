@@ -33,7 +33,7 @@ enough for any agent or human to work independently.
 
 ```
 Phase 1  Clarify intent          → understand what, why, constraints
-Phase 2  Explore codebase        → GitNexus + Serena, read-only
+Phase 2  Explore codebase        → GitNexus + targeted reads, read-only
 Phase 3  Structure the plan      → phases, deps, CoT reasoning
 Phase 4  Create bd issues        → epic + tasks with logs + validation contracts
 Phase 5  test-planning           → companion test, smoke, and E2E issues per layer
@@ -80,7 +80,7 @@ LIBRARIES: TBD — needs exploration"
 
 ## Phase 2 — Explore Codebase (Read-Only)
 
-Use GitNexus and Serena to understand the landscape. No file edits.
+Use GitNexus and targeted file reads to understand the landscape. No file edits.
 
 ### Recent-work check (mandatory)
 
@@ -130,16 +130,6 @@ gitnexus_context({name: "<symbol to extract/split>"})
 gitnexus_impact({target: "<symbol to extract/split>", direction: "upstream"})
 ```
 
-### Serena symbol-level inspection (targeted reads)
-
-```bash
-# Map a file without reading all of it
-get_symbols_overview("path/to/relevant/file.ts")
-
-# Read just the relevant function
-find_symbol("SymbolName", include_body=true)
-```
-
 ### Library-first survey (mandatory before Phase 3)
 
 Before proposing a new component, module, or non-trivial function, run four
@@ -185,7 +175,7 @@ or new function is on the table.
 
 ### Fallback when GitNexus MCP tools are unavailable
 
-If MCP GitNexus tools are unavailable, use the GitNexus CLI first, then Serena symbol exploration if needed.
+If MCP GitNexus tools are unavailable, use the GitNexus CLI first, then targeted repository search and file reads.
 
 ```bash
 # Verify index freshness / repository indexing
@@ -205,13 +195,11 @@ npx gitnexus analyze
 
 Notes:
 - In this environment, `detect_changes` and `rename` are available via MCP tools, not GitNexus CLI subcommands.
-- If both MCP and CLI are unavailable, fall back to Serena search + symbols and state this explicitly in your plan output.
+- If both MCP and CLI are unavailable, fall back to `rg` plus targeted file reads and state this explicitly in your plan output.
 
 ```bash
-search_for_pattern("<concept or symbol>")
-get_symbols_overview("path/to/relevant/file.ts")
-find_symbol("<candidate symbol>", include_body=true)
-find_referencing_symbols("<symbol>", "path/to/file.ts")
+rg -n '<concept or symbol>' src/ lib/
+sed -n '<start>,<end>p' path/to/relevant/file.ts
 ```
 
 **Capture from exploration:**

@@ -16,26 +16,6 @@ Planned improvements and feature additions for Claude Code skills.
 
 
 
-## Serena MCP Tool Compaction — `pi-serena-compact`
-
-### Status: ✅ Completed (2026-03-22)
-
-Created a Pi extension that compacts verbose output from Serena/GitNexus MCP tools, reducing CLI bloat while preserving essential information.
-
-**Problem:** Serena MCP tools produce detailed output that spans dozens of lines. Unlike native tool renderers, MCP tool output appeared in full.
-
-**Solution:** `pi-serena-compact` intercepts `tool_result` events for Serena/GitNexus tools and truncates output:
-- Default: 6 lines max, 180 chars per line
-- Preserved tools (`read_file`, `execute_shell_command`): 12 lines max
-- Respects expanded view toggle (press `e` in TUI)
-
-**Location:** `packages/pi-extensions/extensions/pi-serena-compact/`
-
-**Documentation:** [pi-extensions.md](docs/pi-extensions.md#pi-serena-compact)
-
-**Survives reinstalls:** Synced from `packages/pi-extensions/extensions/` → `~/.pi/agent/extensions/` during `xtrm install`.
-
-
 ## Pi UI Ownership
 
 ### Status: ✅ Completed (2026-07-10)
@@ -256,10 +236,6 @@ AskUserQuestion({
 
 
 
-## `documenting` Skill
-
-Add more metadata for clear identification of involved scripts/files in the documentations, so that a script referenced by the skill can find them more easily.
-
 ## `delegating` Skill
 
 ### Current State (v6.0.0)
@@ -388,7 +364,7 @@ Add more metadata for clear identification of involved scripts/files in the docu
 Suggest roadmap items by creating issues in:
 
 - `ROADMAP.md` (this file)
-- Or discuss in `.serena/memories/skills-evolution.md`
+- Or the repository issue tracker
 
 
 
@@ -402,22 +378,19 @@ Suggest roadmap items by creating issues in:
 - CLI (TypeScript, tsup bundle)
 - Skills (SKILL.md with YAML frontmatter)
 - Hooks (event-driven Python/JS scripts)
-- Documentation (SSOT pattern in `.serena/memories/` and root .md files)
+- Documentation (repository files plus Beads-backed project memory)
 - Project Skills (modular, plug-and-play packages)
 
 **Strengths:**
 - Zero-cloning install via `npx github:Jaggerxtrm/xtrm-tools`
-- Claude Code exclusive focus (no fragile cross-agent translation)
+- Runtime-specific adapters for Claude, Pi, and experimental Codex support
 - Transactional sync with rollback protection
 - Manifest tracking for drift detection
-- Token efficiency (75-80% via serena-lsp)
+- Compact tool output and routing-oriented skills
 - Professional UX (spinners, themed output, clean errors)
 
 **Architecture Decision (v2.0.0):**
-Removed multi-agent hook translation for Gemini/Qwen due to:
-- Fragile, undocumented hook ecosystems
-- Technical debt from maintaining translations
-- Focus on robust, well-tested Claude Code support
+Removed the earlier generic hook-translation layer. Current multi-runtime support uses explicit, payload-verified adapters for each harness.
 
 
 

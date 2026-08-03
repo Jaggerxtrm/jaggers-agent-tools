@@ -156,7 +156,8 @@ describe("xtprompt", () => {
     });
     expect(request.systemPrompt).toContain("<output_format>");
     expect(request.systemPrompt).toContain("## PROBLEM");
-    expect(request.systemPrompt).toContain("GitNexus or Serena");
+    expect(request.systemPrompt).toContain("GitNexus");
+    expect(request.systemPrompt).not.toContain("Serena");
     expect(request.systemPrompt).toContain("phases, dependencies, parallel work, risks, and blast radius");
     expect(request.systemPrompt).toContain("telemetry, smoke coverage, E2E checks");
   });

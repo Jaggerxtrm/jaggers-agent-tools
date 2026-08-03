@@ -21,7 +21,6 @@
     "cli/package.json",
     "docs/runtime-compatibility.json",
     "scripts/ghgrep.mjs",
-    "scripts/patch-external-pi-tools.mjs",
     ".xtrm/config",
     ".xtrm/hooks",
     "packages/pi-extensions",
@@ -113,7 +112,6 @@
     ],
     "packages": [
       "npm:pi-gitnexus",
-      "npm:pi-serena-tools",
       "npm:@zenobius/pi-worktrees",
       "npm:@robhowley/pi-structured-return",
       "npm:@aliou/pi-guardrails",

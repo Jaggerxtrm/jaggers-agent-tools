@@ -32,10 +32,11 @@ async function setupCleanRepo(): Promise<void> {
   await fs.writeFile(path.join(tmpDir, '.xtrm', 'hooks', 'hook-b.mjs'), 'export default 2;\n');
   await fs.ensureDir(path.join(tmpDir, '.claude', 'skills'));
   await fs.ensureDir(path.join(tmpDir, '.pi', 'skills'));
+  await fs.ensureDir(path.join(tmpDir, '.agents', 'skills'));
   await fs.writeJson(path.join(tmpDir, '.xtrm', 'skills', 'state.json'), {
     schemaVersion: '2',
-    enabledPacks: { claude: [], pi: [] },
-    managedLinks: { claude: {}, pi: {} },
+    enabledPacks: { claude: [], pi: [], codex: [] },
+    managedLinks: { claude: {}, pi: {}, codex: {} },
   });
   await fs.writeJson(path.join(tmpDir, '.xtrm', 'registry.json'), {
     version: '1',
@@ -103,7 +104,7 @@ describe('doctor command', () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed.catB.skills.every((row: { status: string }) => row.status === 'in-sync')).toBe(true);
     expect(parsed.catB.hooks.every((row: { status: string }) => row.status === 'in-sync')).toBe(true);
-    expect(parsed.catB.runtimeView).toMatchObject({ activeReady: true, globalClaudePointerReady: true, globalPiPointerReady: true, projectClaudePointerState: 'ready', projectPiPointerState: 'ready' });
+    expect(parsed.catB.runtimeView).toMatchObject({ activeReady: true, globalClaudePointerReady: true, globalPiPointerReady: true, projectClaudePointerState: 'ready', projectPiPointerState: 'ready', projectCodexPointerState: 'ready' });
     expect(parsed.catB.duplicates).toEqual([]);
   });
 

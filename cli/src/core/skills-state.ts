@@ -14,6 +14,7 @@ import {
 const runtimeEnabledPacksSchema = z.object({
   claude: z.array(z.string().min(1)).default([]),
   pi: z.array(z.string().min(1)).default([]),
+  codex: z.array(z.string().min(1)).default([]),
 });
 
 export function isSafeRuntimeLinkName(name: string): boolean {
@@ -41,35 +42,51 @@ const managedLinksMapSchema = z.record(z.string(), z.string()).superRefine((link
 const managedLinksSchema = z.object({
   claude: managedLinksMapSchema.default({}),
   pi: managedLinksMapSchema.default({}),
+  codex: managedLinksMapSchema.default({}),
 });
 const skillsStateSchema = z.object({
   schemaVersion: z.union([z.literal('1'), z.literal('2')]),
   enabledPacks: runtimeEnabledPacksSchema,
-  managedLinks: managedLinksSchema.default({ claude: {}, pi: {} }),
+  managedLinks: managedLinksSchema.default({ claude: {}, pi: {}, codex: {} }),
   installedVersion: z.string().min(1).optional(),
   installedFrom: z.string().min(1).optional(),
   installedAt: z.string().datetime().optional(),
 });
 
-export type ManagedLinks = { claude: Record<string, string>; pi: Record<string, string> };
+export type ManagedLinks = { claude: Record<string, string>; pi: Record<string, string>; codex: Record<string, string> };
 export type SkillsState = z.infer<typeof skillsStateSchema>;
 
 function normalizePackList(names: readonly string[]): string[] {
   return [...new Set(names)].sort((a, b) => a.localeCompare(b));
 }
-type SkillsStateInput = Omit<SkillsState, 'managedLinks'> & { managedLinks?: ManagedLinks };
+type SkillsStateInput = Omit<SkillsState, 'enabledPacks' | 'managedLinks'> & {
+  enabledPacks: { claude: string[]; pi: string[]; codex?: string[] };
+  managedLinks?: { claude: Record<string, string>; pi: Record<string, string>; codex?: Record<string, string> };
+};
 
 function normalizeState(state: SkillsStateInput): SkillsState {
   return {
     ...state,
     schemaVersion: SKILLS_STATE_SCHEMA_VERSION,
-    enabledPacks: { claude: normalizePackList(state.enabledPacks.claude), pi: normalizePackList(state.enabledPacks.pi) },
-    managedLinks: { claude: { ...(state.managedLinks?.claude ?? {}) }, pi: { ...(state.managedLinks?.pi ?? {}) } },
+    enabledPacks: {
+      claude: normalizePackList(state.enabledPacks.claude),
+      pi: normalizePackList(state.enabledPacks.pi),
+      codex: normalizePackList(state.enabledPacks.codex ?? []),
+    },
+    managedLinks: {
+      claude: { ...(state.managedLinks?.claude ?? {}) },
+      pi: { ...(state.managedLinks?.pi ?? {}) },
+      codex: { ...(state.managedLinks?.codex ?? {}) },
+    },
   };
 }
 
 export function createDefaultSkillsState(): SkillsState {
-  return { schemaVersion: SKILLS_STATE_SCHEMA_VERSION, enabledPacks: { claude: [], pi: [] }, managedLinks: { claude: {}, pi: {} } };
+  return {
+    schemaVersion: SKILLS_STATE_SCHEMA_VERSION,
+    enabledPacks: { claude: [], pi: [], codex: [] },
+    managedLinks: { claude: {}, pi: {}, codex: {} },
+  };
 }
 
 export async function ensureSkillsTreeStructure(skillsRoot: string): Promise<void> {
@@ -104,7 +121,11 @@ export async function readSkillsState(skillsRoot: string): Promise<SkillsState> 
   const hasManagedLinks = typeof raw === 'object' && raw !== null && Object.prototype.hasOwnProperty.call(raw, 'managedLinks');
   const legacy = z.object({ schemaVersion: z.union([z.literal('1'), z.literal(SKILLS_STATE_SCHEMA_VERSION)]), enabledPacks: runtimeEnabledPacksSchema }).safeParse(raw);
   if (hasManagedLinks || !legacy.success) throw new Error(`Invalid skills state at ${statePath}: ${parsed.error.message}`);
-  return writeSkillsState(skillsRoot, { schemaVersion: SKILLS_STATE_SCHEMA_VERSION, enabledPacks: legacy.data.enabledPacks, managedLinks: { claude: {}, pi: {} } });
+  return writeSkillsState(skillsRoot, {
+    schemaVersion: SKILLS_STATE_SCHEMA_VERSION,
+    enabledPacks: legacy.data.enabledPacks,
+    managedLinks: { claude: {}, pi: {}, codex: {} },
+  });
 }
 
 export async function setRuntimeEnabledPacks(skillsRoot: string, runtime: SkillsRuntime, packNames: readonly string[]): Promise<SkillsState> {

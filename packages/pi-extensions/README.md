@@ -48,4 +48,5 @@ Notable bundled extensions include:
 
 - `xtrm-ui` — XTRM Pi chrome, native tool summaries, selectable external tool chrome (`/xtrm-ui chrome background|box`).
 - `sp-terminal-overlay` — `/sp-feed` streaming overlay, `/sp-ps` snapshot overlay, and `/xtrm-terminal` shell overlay for specialist monitoring.
-- `serena-pool` — shared Serena MCP daemon per repo root; sets `SERENA_MCP_PORT` for `pi-serena-tools`, reuses daemons across sessions, and safely cleans up owned orphan process groups.
+
+Retired extension sources can remain in the package for migration compatibility. Entries in `src/manifest.json.disabled` are not enrolled or managed by XTRM.

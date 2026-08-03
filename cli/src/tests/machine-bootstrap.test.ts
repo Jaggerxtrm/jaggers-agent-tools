@@ -14,16 +14,12 @@ describe('runMachineBootstrapPhase official plugin install', () => {
     mocked.spawnSync.mockReset();
   });
 
-  it('installs serena and context7 when missing', async () => {
+  it('installs context7 without re-enrolling the retired Serena plugin', async () => {
     mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
       const key = `${command} ${args.join(' ')}`;
 
       if (key === 'claude plugin list --json') {
         return { status: 0, stdout: '[]', stderr: '' };
-      }
-
-      if (key === 'claude plugin install serena --scope user') {
-        return { status: 0, stdout: '', stderr: '' };
       }
 
       if (key === 'claude plugin install context7 --scope user') {
@@ -38,8 +34,8 @@ describe('runMachineBootstrapPhase official plugin install', () => {
 
     const called = mocked.spawnSync.mock.calls.map(([cmd, args]) => `${cmd} ${(args as string[]).join(' ')}`);
     expect(called).toContain('claude plugin list --json');
-    expect(called).toContain('claude plugin install serena --scope user');
     expect(called).toContain('claude plugin install context7 --scope user');
+    expect(called.some(call => call.includes('claude plugin install serena'))).toBe(false);
   });
 
   it('skips install when official plugins are already present', async () => {

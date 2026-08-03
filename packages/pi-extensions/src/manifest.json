@@ -8,7 +8,6 @@
     { "id": "custom-provider-qwen-cli", "displayName": "custom-provider-qwen-cli", "required": false, "ownership": "xtrm" },
     { "id": "git-checkpoint", "displayName": "git-checkpoint", "required": false, "ownership": "xtrm" },
     { "id": "lsp-bootstrap", "displayName": "lsp-bootstrap", "required": false, "ownership": "xtrm" },
-    { "id": "serena-pool", "displayName": "serena-pool", "required": false, "ownership": "xtrm" },
     { "id": "service-skills", "displayName": "service-skills", "required": false, "ownership": "xtrm" },
     { "id": "session-flow", "displayName": "session-flow", "required": true, "ownership": "xtrm" },
     { "id": "sp-terminal-overlay", "displayName": "sp-terminal-overlay", "required": false, "ownership": "xtrm" },
@@ -21,6 +20,7 @@
     "pi-serena-compact": "Passive legacy extension superseded by pi-serena-tools; do not enroll it as a global directory.",
     "core": "Library source lives under src/core; it is not an extension directory.",
     "gitnexus": "Retired extension; functionality is provided by the npm:pi-gitnexus package.",
-    "serena": "Retired extension; functionality is provided by the npm:pi-serena-tools package."
+    "serena": "Retired extension; XTRM no longer manages Serena MCP integration.",
+    "serena-pool": "Retired extension; XTRM no longer manages Serena MCP integration."
   }
 }

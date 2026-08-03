@@ -113,7 +113,6 @@ xtrm-loader no longer embeds project bodies in every request. Read them when the
 - For unfamiliar code, inspect execution flows before broad grep-heavy reads.
 - Before commit or handoff, verify affected scope.
 - Prefer targeted symbol/file reads and precise edits over whole-tree dumps.
-- When Serena is available, prefer symbolic tools (`find_symbol` → `get_symbols_overview` → `replace_symbol_body`; `find_referencing_symbols`/`rename_symbol` for LSP-accurate references) over grep-read-sed for code reads and edits.
 
 ## Context and output management
 
