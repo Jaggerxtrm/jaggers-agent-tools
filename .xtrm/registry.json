@@ -770,7 +770,7 @@
           "version": "0.11.4"
         },
         "specialists-creator/SKILL.md": {
-          "hash": "f825f500e531e3a04b252c0f9a22b8acaa396f9d093368338d13e21ac43c30d4",
+          "hash": "636c6d90e55b9d14fed26f93d1e66296a0a48e706d1ce4c067ccebc2638b69bd",
           "version": "0.11.4"
         },
         "sre-triage/scripts/alert_history.py": {
@@ -914,7 +914,7 @@
           "version": "0.11.4"
         },
         "using-specialists/SKILL.md": {
-          "hash": "74fb9a29fdcb679c90b34e614c9e43645da5a12ad8cb1d44d10d9a723a2d792d",
+          "hash": "8ba5c2fc32044ee44f689b565da4dbd275fd5dbcc8d75df127a26c29e040c8d0",
           "version": "0.11.4"
         },
         "using-tdd/SKILL.md": {
@@ -1302,8 +1302,8 @@
     "version": 1,
     "source": {
       "kind": "ref",
-      "ref": "master",
-      "resolved_sha": "c1e660ab4e6ec4369e890074d822cd9ef1eb6e83",
+      "ref": "7053236fcac9b5d244fd8edf9c9a08979c2491fe",
+      "resolved_sha": "7053236fcac9b5d244fd8edf9c9a08979c2491fe",
       "repo_path": "../specialists",
       "source_path": "config/skills"
     },
@@ -1321,7 +1321,7 @@
         "scripts/audit-spec-uniformity.mjs": "0ada06784cfd5c3adfa9c9908a9cd23380e8278fb57329fc616a83140a47fb33",
         "scripts/scaffold-specialist.ts": "c1bfa3693d644072e6d387d2519e131624d99c5b85521ae638680d7485267403",
         "scripts/validate-specialist.ts": "3a5f5a3a77c50e98ecf9188634ff2882f8143b19d0f28a53aff5c42e1bd09dfa",
-        "SKILL.md": "f825f500e531e3a04b252c0f9a22b8acaa396f9d093368338d13e21ac43c30d4"
+        "SKILL.md": "636c6d90e55b9d14fed26f93d1e66296a0a48e706d1ce4c067ccebc2638b69bd"
       },
       "update-specialists": {
         "SKILL.md": "fdf8c680cf3e5dce80c9426f52b56c953f4f7f663c23a33a3378b2b6e4bab5a9"
@@ -1349,7 +1349,7 @@
         "references/merge-and-integration.md": "7884a445b5ee7031fd0cf2b548a6f6bf4df8daa2ab1db5ec28f32c47cbc4d6dd",
         "references/monitoring.md": "4871fca2072cffd73ba0932ce0f4514ab2dcbab974ce7bd17e77dc73c1807465",
         "references/registry-and-locations.md": "d02cb1c2e68f59e14f57d8fda7e80e109fe5666bbd33cae4c0ab8f9b10814460",
-        "SKILL.md": "74fb9a29fdcb679c90b34e614c9e43645da5a12ad8cb1d44d10d9a723a2d792d"
+        "SKILL.md": "8ba5c2fc32044ee44f689b565da4dbd275fd5dbcc8d75df127a26c29e040c8d0"
       },
       "using-specialists-auto": {
         "SKILL.md": "0668f03dc701d3895defc1e3f3973fa41976355db5a1c38278b6272c95f145c4"
