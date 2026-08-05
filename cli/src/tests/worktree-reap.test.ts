@@ -215,6 +215,54 @@ describe('tiered reclaim', () => {
     });
 });
 
+describe('apply re-checks liveness', () => {
+    it('holds a worktree that became live between planning and applying', async () => {
+        const root = makeRepo();
+        fs.mkdirSync(path.join(root, 'node_modules'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'node_modules', 'a.js'), 'x', 'utf8');
+
+        const { applyReap } = await import('../commands/worktree.js');
+
+        // Planned as reapable while nothing was using it, but live by apply time. The apply
+        // pass re-reads /proc rather than trusting the plan, so the candidate points at this
+        // test process's own cwd — a genuinely live path, not an injected fake map.
+        const plan = {
+            component: 'xt.worktree_reap' as const,
+            checked_at_ms: Date.now(),
+            mode: 'dry_run' as const,
+            artifact_threshold_days: 7,
+            worktree_threshold_days: 14,
+            repos: [root],
+            candidates: [{
+                component: 'xt.worktree_reap.candidate' as const,
+                repo: root,
+                path: process.cwd(), // a path that provably has this process's cwd inside it
+                branch: 'xt/stale',
+                isMainWorktree: false,
+                conditions: [],
+                failed: [],
+                reapable: true,
+                artifactsReclaimable: true,
+                idleDays: 30,
+                totalBytes: 100,
+                artifactBytes: 50,
+                artifacts: [],
+                blockedBytes: 0,
+                rootOwnedPaths: [],
+                scanTruncated: false,
+                livePids: [], // stale reading: empty at plan time
+            }],
+            summary: summarize([]),
+        };
+
+        const { outcomes } = applyReap(plan);
+
+        expect(outcomes[0]?.action).toBe('held');
+        expect(outcomes[0]?.detail).toContain('became live during the scan');
+        expect(outcomes[0]?.freed_bytes).toBe(0);
+    });
+});
+
 describe('summary accounting', () => {
     it('separates reclaimable bytes from bytes blocked by root-owned trees', () => {
         const base = {

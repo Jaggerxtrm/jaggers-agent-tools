@@ -71839,7 +71839,20 @@ function planReap(opts) {
 function applyReap(plan) {
   const outcomes = [];
   const removed = [];
+  const cwdsNow = readProcessCwds();
   for (const candidate of plan.candidates) {
+    const livePids = livePidsFor(candidate.path, cwdsNow);
+    if (livePids.length > 0 && (candidate.reapable || candidate.artifactsReclaimable)) {
+      outcomes.push({
+        component: "xt.worktree_reap.outcome",
+        path: candidate.path,
+        action: "held",
+        freed_bytes: 0,
+        blocked_bytes: 0,
+        detail: `became live during the scan: pids ${livePids.join(",")} have cwd inside`
+      });
+      continue;
+    }
     if (removed.some((parent) => candidate.path.startsWith(`${parent}${import_node_path33.sep}`))) {
       outcomes.push({
         component: "xt.worktree_reap.outcome",

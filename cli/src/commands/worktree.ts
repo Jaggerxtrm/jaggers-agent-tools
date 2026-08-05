@@ -12,6 +12,7 @@ import type { ReapCandidate, ReapPlan } from '../core/worktree-reap.js';
 import {
     evaluateWorktree,
     formatBytes,
+    livePidsFor,
     parseDurationDays,
     readProcessCwds,
     summarize,
@@ -991,7 +992,27 @@ export function applyReap(plan: ReapPlan): { plan: ReapPlan; outcomes: ReapOutco
     const outcomes: ReapOutcome[] = [];
     const removed: string[] = [];
 
+    // Re-read process cwds now. Scanning the host takes tens of seconds, so the reading
+    // taken during planning is already stale by the time anything is deleted: an agent that
+    // attached to an idle worktree mid-scan would have it removed underneath them. This is
+    // the one condition that can flip inside that window — idle age, cleanliness and push
+    // state cannot become unsafe in a minute, but "in use right now" can.
+    const cwdsNow = readProcessCwds();
+
     for (const candidate of plan.candidates) {
+        const livePids = livePidsFor(candidate.path, cwdsNow);
+        if (livePids.length > 0 && (candidate.reapable || candidate.artifactsReclaimable)) {
+            outcomes.push({
+                component: 'xt.worktree_reap.outcome',
+                path: candidate.path,
+                action: 'held',
+                freed_bytes: 0,
+                blocked_bytes: 0,
+                detail: `became live during the scan: pids ${livePids.join(',')} have cwd inside`,
+            });
+            continue;
+        }
+
         // A worktree nested under one already removed went with its parent. Reporting that
         // as a failure would understate the reclaim and invent a problem that does not exist.
         if (removed.some(parent => candidate.path.startsWith(`${parent}${sep}`))) {
