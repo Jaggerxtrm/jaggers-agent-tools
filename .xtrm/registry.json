@@ -102,6 +102,10 @@
           "hash": "4a0daf11ca6733d620bcf60f0411ecffd81dfc086a22f84a6a9c5ff452567d37",
           "version": "0.11.4"
         },
+        "worktree-reap-sweep.mjs": {
+          "hash": "2cdaa6d86bd2f54cb8a3dffe9a58f94d24977720d65ee5567da7845943c2da08",
+          "version": "0.11.4"
+        },
         "xtrm-logger.mjs": {
           "hash": "865592b9490f47da087f09b872284b7d281a9333a4e2a51f40e0535cf6334854",
           "version": "0.11.4"
@@ -1252,7 +1256,7 @@
           "version": "0.11.4"
         },
         "hooks.json": {
-          "hash": "23091eeba2d4c33f62c97f6626c58e01c6377f9ba08fd1f1befe0bc5c0252a79",
+          "hash": "6593b00c25ce425897ab0b7d806a08f8c913bc3c5bc99fb00e7491c38f9f4f37",
           "version": "0.11.4"
         },
         "instructions/agents-top.md": {

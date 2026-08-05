@@ -7,6 +7,30 @@ import { t } from '../utils/theme.js';
 import { unregisterPluginsForWorktree } from '../utils/worktree-session.js';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
 import { readCodexWorktreeSession, removeCodexTrustProfile } from '../core/codex-session.js';
+import { dirtyPaths, unpushedCommits } from '../core/worktree-reap.js';
+
+/**
+ * The removal half of the reap predicate that applies at session close.
+ *
+ * The idle-age condition is deliberately absent: the work was just pushed to a PR, so
+ * age proves nothing here. What still protects work is that nothing is uncommitted and
+ * nothing is unpushed, both measured after the scaffolding exclusions — agent tooling
+ * rewrites AGENTS.md, CLAUDE.md and .beads/* on every session, and counting that churn
+ * as work is why cleanup never fired.
+ */
+function worktreeHoldsWork(cwd: string): { holds: boolean; reason: string } {
+    const dirty = dirtyPaths(cwd);
+    if (dirty.length > 0) {
+        return { holds: true, reason: `${dirty.length} uncommitted path(s): ${dirty.slice(0, 3).join(', ')}` };
+    }
+
+    const unpushed = unpushedCommits(cwd);
+    if (unpushed.count !== 0) {
+        return { holds: true, reason: unpushed.detail };
+    }
+
+    return { holds: false, reason: 'clean after scaffolding exclusions; nothing unpushed' };
+}
 
 interface EndOptions {
     draft: boolean;
@@ -508,11 +532,21 @@ export function createEndCommand(): Command {
 
             // 12. Worktree cleanup
             if (!opts.keep) {
-                const doRemove = await confirmDestructiveAction({
-                    yes: opts.yes,
-                    message: `Remove local worktree at ${cwd}?`,
-                    initial: false,
-                });
+                // Removal used to sit behind a prompt that defaulted to "no", so a killed or
+                // unattended session always left its worktree behind. Default to removal when
+                // the predicate proves no work is at risk; keep the prompt only when it does not.
+                const work = worktreeHoldsWork(cwd);
+                const doRemove = work.holds
+                    ? await confirmDestructiveAction({
+                        yes: opts.yes,
+                        message: `Worktree still holds work (${work.reason}). Remove ${cwd} anyway?`,
+                        initial: false,
+                    })
+                    : true;
+
+                if (!work.holds) {
+                    console.log(kleur.dim(`  Removing worktree — ${work.reason}`));
+                }
 
                 if (doRemove) {
                     const repoRoot = resolveMainRepoRoot(cwd);

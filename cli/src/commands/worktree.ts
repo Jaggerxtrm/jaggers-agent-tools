@@ -1,12 +1,22 @@
 import { Command } from 'commander';
 import kleur from 'kleur';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, rmSync, statSync, unlinkSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, unlinkSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path';
 import type { SessionMeta } from '../utils/worktree-session.js';
 import { unregisterPluginsForWorktree } from '../utils/worktree-session.js';
 import { t } from '../utils/theme.js';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
+import type { ReapCandidate, ReapPlan } from '../core/worktree-reap.js';
+import {
+    evaluateWorktree,
+    formatBytes,
+    livePidsFor,
+    parseDurationDays,
+    readProcessCwds,
+    summarize,
+} from '../core/worktree-reap.js';
 
 export interface WorktreeInfo {
     path: string;
@@ -872,6 +882,359 @@ function printRestartAuditHuman(report: RestartAuditReport): void {
     console.log('');
 }
 
+/** Every worktree registered in this repo, including specialist `.worktrees/<beadId>/*` trees. */
+function listAllWorktrees(repoRoot: string): { path: string; branch: string | null; isMain: boolean }[] {
+    const raw = parseGitWorktreeList(repoRoot);
+    const mainPath = resolve(repoRoot);
+
+    return raw.map(wt => ({
+        path: wt.path,
+        branch: wt.branch ? normalizeBranchName(wt.branch) : null,
+        isMain: resolve(wt.path) === mainPath,
+    }));
+}
+
+/** Git repositories one level under each root. Worktrees span repos, so a per-repo sweep leaks. */
+function discoverRepos(roots: string[]): string[] {
+    const repos: string[] = [];
+
+    for (const root of roots) {
+        if (!existsSync(root)) continue;
+
+        let entries: string[];
+        try {
+            entries = readdirSync(root);
+        } catch {
+            continue;
+        }
+
+        for (const entry of entries) {
+            const candidate = join(root, entry);
+            try {
+                if (!statSync(candidate).isDirectory()) continue;
+            } catch {
+                continue;
+            }
+            if (existsSync(join(candidate, '.git'))) repos.push(candidate);
+        }
+    }
+
+    return [...new Set(repos)].sort();
+}
+
+export interface ReapOptions {
+    repos: string[];
+    currentPath: string;
+    artifactThresholdDays: number;
+    worktreeThresholdDays: number;
+    now?: number;
+}
+
+export function planReap(opts: ReapOptions): ReapPlan {
+    const cwds = readProcessCwds();
+    const checkedAtMs = opts.now ?? Date.now();
+    const candidates: ReapCandidate[] = [];
+
+    // Two repo directories can register the same worktree path — a clone and a copy of the
+    // same repo both list it. Evaluating it twice double-counts its bytes and makes the
+    // second removal fail against a path the first one already removed.
+    const seen = new Set<string>();
+
+    for (const repoRoot of opts.repos) {
+        for (const wt of listAllWorktrees(repoRoot)) {
+            if (!existsSync(wt.path)) continue;
+
+            const key = resolve(wt.path);
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            candidates.push(evaluateWorktree({
+                repoRoot,
+                worktreePath: wt.path,
+                branch: wt.branch,
+                isMainWorktree: wt.isMain,
+                currentPath: opts.currentPath,
+                cwds,
+                artifactThresholdDays: opts.artifactThresholdDays,
+                worktreeThresholdDays: opts.worktreeThresholdDays,
+                now: checkedAtMs,
+            }));
+        }
+    }
+
+    return {
+        component: 'xt.worktree_reap',
+        checked_at_ms: checkedAtMs,
+        mode: 'dry_run',
+        artifact_threshold_days: opts.artifactThresholdDays,
+        worktree_threshold_days: opts.worktreeThresholdDays,
+        repos: opts.repos,
+        candidates,
+        summary: summarize(candidates),
+    };
+}
+
+export interface ReapOutcome {
+    component: 'xt.worktree_reap.outcome';
+    path: string;
+    action: 'worktree-removed' | 'artifacts-reclaimed' | 'held' | 'failed';
+    freed_bytes: number;
+    blocked_bytes: number;
+    detail: string;
+}
+
+/**
+ * Execute the plan bottom-up on the risk ladder: regenerable artifacts first, whole
+ * worktrees second. Root-owned trees are reported and escalated, never absorbed into
+ * the reclaim total.
+ */
+export function applyReap(plan: ReapPlan): { plan: ReapPlan; outcomes: ReapOutcome[] } {
+    const outcomes: ReapOutcome[] = [];
+    const removed: string[] = [];
+
+    // Re-read process cwds now. Scanning the host takes tens of seconds, so the reading
+    // taken during planning is already stale by the time anything is deleted: an agent that
+    // attached to an idle worktree mid-scan would have it removed underneath them. This is
+    // the one condition that can flip inside that window — idle age, cleanliness and push
+    // state cannot become unsafe in a minute, but "in use right now" can.
+    const cwdsNow = readProcessCwds();
+
+    for (const candidate of plan.candidates) {
+        const livePids = livePidsFor(candidate.path, cwdsNow);
+        if (livePids.length > 0 && (candidate.reapable || candidate.artifactsReclaimable)) {
+            outcomes.push({
+                component: 'xt.worktree_reap.outcome',
+                path: candidate.path,
+                action: 'held',
+                freed_bytes: 0,
+                blocked_bytes: 0,
+                detail: `became live during the scan: pids ${livePids.join(',')} have cwd inside`,
+            });
+            continue;
+        }
+
+        // A worktree nested under one already removed went with its parent. Reporting that
+        // as a failure would understate the reclaim and invent a problem that does not exist.
+        if (removed.some(parent => candidate.path.startsWith(`${parent}${sep}`))) {
+            outcomes.push({
+                component: 'xt.worktree_reap.outcome',
+                path: candidate.path,
+                action: 'worktree-removed',
+                freed_bytes: 0,
+                blocked_bytes: 0,
+                detail: 'removed together with its parent worktree; bytes counted there',
+            });
+            continue;
+        }
+
+        if (candidate.reapable) {
+            if (candidate.blockedBytes > 0) {
+                outcomes.push({
+                    component: 'xt.worktree_reap.outcome',
+                    path: candidate.path,
+                    action: 'held',
+                    freed_bytes: 0,
+                    blocked_bytes: candidate.blockedBytes,
+                    detail: `root-owned tree blocks unprivileged removal: ${candidate.rootOwnedPaths.slice(0, 3).join(', ')}`,
+                });
+                continue;
+            }
+
+            const result = removeWorktreeEntry(candidate.repo, candidate.path);
+            if (result.ok) removed.push(candidate.path);
+
+            outcomes.push({
+                component: 'xt.worktree_reap.outcome',
+                path: candidate.path,
+                action: result.ok ? 'worktree-removed' : 'failed',
+                freed_bytes: result.ok ? candidate.totalBytes : 0,
+                blocked_bytes: 0,
+                detail: result.message,
+            });
+            continue;
+        }
+
+        if (candidate.artifactsReclaimable) {
+            let freed = 0;
+            let blocked = 0;
+            const failures: string[] = [];
+
+            for (const artifact of candidate.artifacts) {
+                try {
+                    rmSync(artifact.path, { recursive: true, force: true });
+                    freed += artifact.bytes;
+                } catch (error) {
+                    blocked += artifact.bytes;
+                    failures.push(`${artifact.path}: ${error instanceof Error ? error.message : String(error)}`);
+                }
+            }
+
+            outcomes.push({
+                component: 'xt.worktree_reap.outcome',
+                path: candidate.path,
+                action: failures.length === candidate.artifacts.length && failures.length > 0 ? 'failed' : 'artifacts-reclaimed',
+                freed_bytes: freed,
+                blocked_bytes: blocked,
+                detail: failures.length > 0
+                    ? `held by: ${failures.slice(0, 2).join('; ')}`
+                    : `reclaimed ${candidate.artifacts.length} artifact dir(s); held by ${candidate.failed.join(', ')}`,
+            });
+            continue;
+        }
+
+        outcomes.push({
+            component: 'xt.worktree_reap.outcome',
+            path: candidate.path,
+            action: 'held',
+            freed_bytes: 0,
+            blocked_bytes: candidate.blockedBytes,
+            detail: candidate.failed.length > 0 ? `failed: ${candidate.failed.join(', ')}` : 'nothing to reclaim',
+        });
+    }
+
+    // Children removed with a parent leave stale admin entries behind. Without this the
+    // next sweep re-lists paths that no longer exist and reports them as failures.
+    if (removed.length > 0) {
+        for (const repoRoot of plan.repos) runGitWorktreePrune(repoRoot);
+    }
+
+    return { plan: { ...plan, mode: 'apply' }, outcomes };
+}
+
+function resolveXtBinary(): string {
+    const which = spawnSync('which', ['xt'], { encoding: 'utf8', stdio: 'pipe' });
+    if (which.status === 0 && which.stdout.trim()) return which.stdout.trim();
+    return `${process.execPath} ${process.argv[1] ?? 'xt'}`;
+}
+
+export interface ReapTimerUnit {
+    path: string;
+    content: string;
+}
+
+/**
+ * Install the out-of-band sweep.
+ *
+ * Modes are set explicitly with chmod, never inherited and never via `cp -p`: this
+ * shell runs umask 077 and a preserved mode has already caused a production outage.
+ */
+export function installReapTimer(opts: {
+    artifactsOlderThan: string;
+    worktreesOlderThan: string;
+    roots: string;
+    dryRun: boolean;
+}): { units: ReapTimerUnit[]; messages: string[] } {
+    const unitDir = join(homedir(), '.config', 'systemd', 'user');
+    const exec = `${resolveXtBinary()} worktree reap --all-repos --roots ${opts.roots} --artifacts-older-than ${opts.artifactsOlderThan} --worktrees-older-than ${opts.worktreesOlderThan} --apply --yes`;
+
+    const units: ReapTimerUnit[] = [
+        {
+            path: join(unitDir, 'xt-worktree-reap.service'),
+            content: `[Unit]
+Description=xt worktree reap — reclaim abandoned worktrees and regenerable artifacts
+Documentation=https://github.com/xtrm-dev/core
+
+[Service]
+Type=oneshot
+Nice=10
+IOSchedulingClass=idle
+ExecStart=${exec}
+`,
+        },
+        {
+            path: join(unitDir, 'xt-worktree-reap.timer'),
+            content: `[Unit]
+Description=Run xt worktree reap daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+`,
+        },
+    ];
+
+    if (opts.dryRun) return { units, messages: [] };
+
+    mkdirSync(unitDir, { recursive: true, mode: 0o755 });
+    chmodSync(unitDir, 0o755);
+
+    for (const unit of units) {
+        writeFileSync(unit.path, unit.content, 'utf8');
+        chmodSync(unit.path, 0o644);
+    }
+
+    const messages: string[] = [];
+    for (const args of [['--user', 'daemon-reload'], ['--user', 'enable', '--now', 'xt-worktree-reap.timer']]) {
+        const r = spawnSync('systemctl', args, { encoding: 'utf8', stdio: 'pipe' });
+        messages.push(r.status === 0
+            ? `systemctl ${args.join(' ')} ok`
+            : `systemctl ${args.join(' ')} failed: ${(r.stderr ?? '').trim() || 'unknown error'}`);
+    }
+
+    return { units, messages };
+}
+
+function printReapHuman(plan: ReapPlan, outcomes: ReapOutcome[] | null): void {
+    console.log(t.bold('\n  xt worktree reap\n'));
+    console.log(kleur.dim(`  mode: ${plan.mode}`));
+    console.log(kleur.dim(`  repos: ${plan.repos.length}`));
+    console.log(kleur.dim(`  thresholds: artifacts ${plan.artifact_threshold_days}d, worktrees ${plan.worktree_threshold_days}d`));
+    console.log(kleur.dim(`  worktrees checked: ${plan.summary.checked}`));
+
+    for (const candidate of plan.candidates) {
+        const label = candidate.reapable
+            ? kleur.yellow('reap')
+            : candidate.artifactsReclaimable ? kleur.cyan('artifacts') : kleur.dim('hold');
+        const idle = candidate.idleDays === null ? 'no work files' : `${candidate.idleDays.toFixed(1)}d idle`;
+
+        console.log(`\n  ${label} ${kleur.bold(candidate.branch ?? candidate.path)}`);
+        console.log(kleur.dim(`    path: ${candidate.path}`));
+        console.log(kleur.dim(`    ${idle} · total ${formatBytes(candidate.totalBytes)} · artifacts ${formatBytes(candidate.artifactBytes)}`));
+
+        for (const condition of candidate.conditions) {
+            const mark = condition.pass ? kleur.green('✓') : kleur.red('✗');
+            console.log(kleur.dim(`    ${mark} ${condition.name}: ${condition.detail}`));
+        }
+
+        if (candidate.rootOwnedPaths.length > 0) {
+            console.log(kleur.red(`    ⚠ root-owned: ${formatBytes(candidate.blockedBytes)} blocked — escalate`));
+            for (const path of candidate.rootOwnedPaths.slice(0, 3)) {
+                console.log(kleur.dim(`      ${path}`));
+            }
+        }
+    }
+
+    console.log(t.bold('\n  summary'));
+    console.log(kleur.dim(`    reapable worktrees:  ${plan.summary.reapable}`));
+    console.log(kleur.dim(`    artifact-only:       ${plan.summary.artifacts_only}`));
+    console.log(kleur.dim(`    held:                ${plan.summary.held}`));
+    console.log(kleur.dim(`    reclaimable:         ${formatBytes(plan.summary.reclaimable_bytes)}`));
+    console.log(kleur.dim(`    artifacts on disk:   ${formatBytes(plan.summary.artifact_bytes)}`));
+
+    if (plan.summary.blocked_bytes > 0) {
+        console.log(kleur.red(`    BLOCKED (root-owned): ${formatBytes(plan.summary.blocked_bytes)} across ${plan.summary.root_owned_trees} tree(s) — escalate, not reclaimable unprivileged`));
+    }
+    if (plan.summary.scan_truncated > 0) {
+        console.log(kleur.yellow(`    scan truncated:      ${plan.summary.scan_truncated} worktree(s) exceeded the entry bound and were held`));
+    }
+
+    if (outcomes) {
+        const freed = outcomes.reduce((sum, outcome) => sum + outcome.freed_bytes, 0);
+        console.log(t.boldGreen(`\n  ✓ freed ${formatBytes(freed)}`));
+        for (const outcome of outcomes.filter(o => o.action !== 'held')) {
+            console.log(kleur.dim(`    ${outcome.action} ${outcome.path} (${formatBytes(outcome.freed_bytes)}) ${outcome.detail}`));
+        }
+        console.log('');
+        return;
+    }
+
+    console.log(kleur.yellow('\n  Dry run — nothing removed. Re-run with --apply --yes to reclaim.\n'));
+}
+
 function removeWorktreeEntry(repoRoot: string, worktreePath: string): { ok: boolean; message: string } {
     const remove = git(['worktree', 'remove', worktreePath, '--force'], repoRoot);
     if (!remove.ok) {
@@ -1145,6 +1508,91 @@ export function createWorktreeCommand(): Command {
             }
 
             console.log(t.boldGreen(`\n  ✓ Cleanup complete (${removedCount} item(s) removed)\n`));
+        });
+
+    cmd.command('reap')
+        .description('Reclaim abandoned worktrees and regenerable artifacts under a validated safety predicate')
+        .option('--artifacts-older-than <age>', 'Reclaim node_modules/.venv/.gitnexus past this idle age', '7d')
+        .option('--worktrees-older-than <age>', 'Remove whole worktrees past this idle age', '14d')
+        .option('--all-repos', 'Sweep every git repo under --roots, not just the current one', false)
+        .option('--roots <dirs>', 'Comma-separated parents to discover repos in with --all-repos', join(homedir(), 'dev'))
+        .option('--apply', 'Reclaim (default is dry-run)', false)
+        .option('-y, --yes', 'Skip confirmation with --apply', false)
+        .option('--dry-run', 'Explicit dry run (default)', false)
+        .option('--json', 'Print machine-readable reap plan', false)
+        .action(async (opts: {
+            artifactsOlderThan: string;
+            worktreesOlderThan: string;
+            allRepos: boolean;
+            roots: string;
+            apply: boolean;
+            yes: boolean;
+            dryRun: boolean;
+            json: boolean;
+        }) => {
+            const currentPath = process.cwd();
+            const repos = opts.allRepos
+                ? discoverRepos(opts.roots.split(',').map(root => root.trim()).filter(Boolean))
+                : [getRepoRoot(currentPath)];
+
+            let plan = planReap({
+                repos,
+                currentPath,
+                artifactThresholdDays: parseDurationDays(opts.artifactsOlderThan, 7),
+                worktreeThresholdDays: parseDurationDays(opts.worktreesOlderThan, 14),
+            });
+
+            let outcomes: ReapOutcome[] | null = null;
+            const hasWork = plan.summary.reapable > 0 || plan.summary.artifacts_only > 0;
+
+            if (opts.apply && !opts.dryRun && hasWork) {
+                const proceed = await confirmDestructiveAction({
+                    yes: opts.yes,
+                    message: `Reap ${plan.summary.reapable} worktree(s) and artifacts from ${plan.summary.artifacts_only} more (${formatBytes(plan.summary.reclaimable_bytes)})?`,
+                    initial: false,
+                });
+
+                if (proceed) {
+                    const applied = applyReap(plan);
+                    plan = applied.plan;
+                    outcomes = applied.outcomes;
+                }
+            }
+
+            if (opts.json) {
+                console.log(JSON.stringify({ ...plan, ...(outcomes ? { outcomes } : {}) }, null, 2));
+                return;
+            }
+
+            printReapHuman(plan, outcomes);
+        });
+
+    cmd.command('install-timer')
+        .description('Install the systemd user timer that runs xt worktree reap out of band')
+        .option('--artifacts-older-than <age>', 'Artifact reclaim threshold for the timer', '7d')
+        .option('--worktrees-older-than <age>', 'Worktree reclaim threshold for the timer', '14d')
+        .option('--roots <dirs>', 'Comma-separated repo parents to sweep', join(homedir(), 'dev'))
+        .option('--dry-run', 'Print the unit files without writing them', false)
+        .action((opts: { artifactsOlderThan: string; worktreesOlderThan: string; roots: string; dryRun: boolean }) => {
+            const result = installReapTimer(opts);
+
+            if (opts.dryRun) {
+                console.log(t.bold('\n  xt worktree reap timer (dry run)\n'));
+                for (const unit of result.units) {
+                    console.log(kleur.dim(`  ── ${unit.path} (mode 0644)`));
+                    console.log(unit.content);
+                }
+                return;
+            }
+
+            console.log(t.bold('\n  xt worktree reap timer\n'));
+            for (const unit of result.units) {
+                console.log(t.success(`  ✓ wrote ${unit.path}`));
+            }
+            for (const message of result.messages) {
+                console.log(kleur.dim(`    ${message}`));
+            }
+            console.log('');
         });
 
     cmd.command('remove <name>')
