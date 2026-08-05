@@ -145,6 +145,10 @@
           "hash": "a80ff7960f24889f49e3a213cc7f5a191319aa04fbecca2fd1681c8323c09f63",
           "version": "0.11.4"
         },
+        "capacity-reclaim/SKILL.md": {
+          "hash": "f732ede49107017eb117a7a24669ea6ac4dca069e1c6cd1096a937bbf8472a62",
+          "version": "0.11.4"
+        },
         "clean-code/SKILL.md": {
           "hash": "1b212a0a59f8162587a681b16e20af5bd793e4f6c7fb7c7af2d32a7deef553fb",
           "version": "0.11.4"
