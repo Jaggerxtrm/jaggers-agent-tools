@@ -14,7 +14,8 @@ const BUDGETS = {
   // 'using-specialists' is specialists-owned and vendored via specialists-source.json.
   // Its slim must land in the specialists repo first, then re-vendor here. Re-add
   // with { max: 150 } once that lands.
-  'deploy-monitor':   { max: 180 },
+  // 180 → 190 for the committed-artifact deploy-gap case (xtrm-7tjik).
+  'deploy-monitor':   { max: 190 },
   'pr-reviewer':      { max: 160 },
 };
 
