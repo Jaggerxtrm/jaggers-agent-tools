@@ -179,3 +179,10 @@ cli/.gemini/
 
 # gitnexus analyze runtime output (regenerated on demand)
 .xtrm/skills/default/gitnexus/
+
+# xtrm runtime state (per-machine, do not track)
+.xtrm/skills/state.json
+.xtrm/worktrees/
+.xtrm/cache/
+.xtrm/statusline-claim
+.pi/skills/

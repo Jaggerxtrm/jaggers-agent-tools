@@ -159,4 +159,71 @@ describe('Codex runtime descriptor', () => {
         ]);
         expect(outcome.next_actions.flatMap((next) => next.argv)).not.toContain('--last');
     });
+
+    // Regression: xtrm-7edzx. A bare `xt codex` launches Codex into an idle TUI.
+    // Codex writes no rollout record until its first turn, so there is no thread
+    // id to discover. The launcher used to destroy the whole session over this,
+    // making bare launch unusable. A live session with no resume handle is
+    // degraded, not failed.
+    it('degrades instead of failing when Codex has not opened a thread yet', () => {
+        const outcome = buildCodexDetachedOutcome({
+            runtimeVersion: 'codex-cli 0.147.0',
+            threadId: null,
+            sessionSlug: 'demo',
+            sessionName: 'codex-demo',
+            tmuxSessionId: '$42',
+            paneId: '%17',
+            worktreePath: '/srv/project/.xtrm/worktrees/project-xt-codex-demo',
+            branchName: 'xt/demo',
+            safetyProfile: {
+                name: 'codex-yolo',
+                sandbox: 'disabled',
+                approvals: 'bypassed',
+                hook_trust: 'preserved',
+            },
+            profileName: 'xtrm-0123456789abcdef',
+            insideTmux: false,
+        });
+
+        expect(validate('xtrm.command-outcome.v1', outcome)).toMatchObject({ valid: true, errors: [] });
+        expect(outcome.status).toBe('degraded');
+        expect(outcome.reason_code).toBe('session_created_thread_id_unresolved');
+        expect(outcome.identity?.thread_id).toBeNull();
+        // Status and persistence must agree; a degraded outcome that claims
+        // persistence completed would misreport on-disk state.
+        expect(outcome.persistence).toMatchObject({ completed: false });
+        // The session is real and still attachable — that is the whole point.
+        expect(outcome.authoritative_mutation).toMatchObject({ completed: true });
+        expect(outcome.next_actions.map((next) => next.kind)).toEqual(['attach', 'repair', 'end']);
+    });
+
+    // A resume command needs the exact thread id. Advertising one we cannot
+    // fill would make the contract non-deterministic, so it must be absent.
+    it('omits the resume action entirely when no thread id exists', () => {
+        const outcome = buildCodexDetachedOutcome({
+            runtimeVersion: null,
+            threadId: null,
+            sessionSlug: 'demo',
+            sessionName: 'codex-demo',
+            tmuxSessionId: '$42',
+            paneId: '%17',
+            worktreePath: '/srv/project/.xtrm/worktrees/project-xt-codex-demo',
+            branchName: 'xt/demo',
+            safetyProfile: {
+                name: 'codex-yolo',
+                sandbox: 'disabled',
+                approvals: 'bypassed',
+                hook_trust: 'preserved',
+            },
+            profileName: 'xtrm-0123456789abcdef',
+            insideTmux: false,
+        });
+
+        expect(outcome.next_actions.some((next) => next.kind === 'resume')).toBe(false);
+        expect(outcome.next_actions.flatMap((next) => next.argv)).not.toContain('resume');
+        // Hook trust is never bargained away, degraded or not.
+        expect(outcome.safety_profile.hook_trust).toBe('preserved');
+        expect(outcome.next_actions.flatMap((next) => next.argv))
+            .not.toContain('--dangerously-bypass-hook-trust');
+    });
 });
