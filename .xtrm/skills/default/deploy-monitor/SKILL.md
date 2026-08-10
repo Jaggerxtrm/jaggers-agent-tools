@@ -89,7 +89,18 @@ docker inspect --format '{{.Name}} {{.State.StartedAt}} {{.Image}}' <container>
 # GitOps / Kubernetes
 kubectl rollout status deployment/<name> --timeout=10m
 # PASS the guard only if observed generation/revision > mergedAt or matches merge SHA.
+
+# Committed-artifact CLI — npm link into a dev checkout; no container, no rollout
+bin=$(readlink -f "$(command -v <cmd>)"); repo=$(git -C "$(dirname "$bin")" rev-parse --show-toplevel)
+git -C "$repo" fetch -q origin
+git -C "$repo" merge-base --is-ancestor <mergeSha> HEAD  # 0 → merge is in the checkout
+git -C "$repo" rev-list --count HEAD..origin/main        # 0 → checkout not behind origin
+git -C "$repo" ls-files --error-unmatch "$bin"           # 0 → artifact is committed
+# PASS the guard only if all three hold. If the artifact is NOT committed, additionally
+# require its mtime > mergedAt. Any one failing → BLOCKED, same as a stale StartedAt.
 ```
+
+**Committed-artifact trap** — `xt` resolves to `dev/core/cli/dist/index.cjs`, `xtmux` to `dev/xtmux/bin/tmux-session-picker`. Nothing is running, so `verify-deploy-applied` has nothing to inspect and the guard passes on a deploy that never happened. When the artifact is committed, `git pull` **is** the deployment — no rebuild. When it is not committed, the orchestrator must rebuild before the window; `/update-xt` carries the caveat that building from `.xtrm/worktrees/*` contaminates `dist` with absolute paths.
 
 **docker-compose `.env` trap** — a fresh `StartedAt` isn't proof of a healthy deploy. `docker compose up` from a CWD without `.env` (worktrees, cron scripts) silently interpolates `${VAR}` refs to empty strings. Reject:
 
