@@ -1,6 +1,7 @@
 ---
 name: agent-docs-maintainer
 description: Audit, clean, and rewrite CLAUDE.md / AGENTS.md / agent instruction templates so they stay compact, current, and routing-oriented instead of becoming dumped CLI manuals. Use whenever the user asks to update CLAUDE.md or AGENTS.md, clean bloated agent docs, align agent prompts with current project structure, create project agent guide templates, or fix stale xtrm/beads/specialists/GitNexus guidance.
+disable-model-invocation: true
 ---
 
 # Agent Docs Maintainer

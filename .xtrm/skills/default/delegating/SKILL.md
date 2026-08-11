@@ -8,6 +8,7 @@ description: >-
   or multi-agent orchestration (review, feature dev, bug hunt). Never suggest for:
   architecture decisions, security-critical code, unknown-cause bugs, performance optimization.
 allowed-tools: Bash
+disable-model-invocation: true
 ---
 
 # Delegating Tasks

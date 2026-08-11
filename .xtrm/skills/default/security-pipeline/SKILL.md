@@ -1,6 +1,7 @@
 ---
 name: security-pipeline
 description: Bootstrap a complete security pipeline (Dependabot + OSV + Semgrep + gitleaks + pre-commit hooks + Codex review) on any GitHub repo. Designed for free user-private repos where GitHub Advanced Security is unavailable. Reusable across Python/TypeScript/Go/Rust stacks.
+disable-model-invocation: true
 ---
 
 # Security Pipeline

@@ -1,6 +1,7 @@
 ---
 name: multiplexing-team
 description: Team-member operating guide for delegated tmux pane agents working under an orchestrator/judge. Teaches subordinate agents how to identify their contract from pane metadata, report back through beads and xtmux messages (short pointer, not payload), inspect siblings without interfering, use xtmux primitives safely, and spawn their own specialists only when the subproblem truly needs them.
+disable-model-invocation: true
 ---
 
 # Multiplexing Team Member

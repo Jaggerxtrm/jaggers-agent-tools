@@ -9,6 +9,7 @@ description: >-
   syncing after code changes — never for whole-tree audits.
 gemini-command: sync-docs
 version: 3.1.0
+disable-model-invocation: true
 ---
 
 # sync-docs

@@ -9,6 +9,7 @@ description: >-
   bump, advisory, or vulnerability scan needs a risk-grounded merge/block
   decision instead of ad-hoc scanner triage. Distinguishes advisory vs blocking
   findings and never lets community signals block alone.
+disable-model-invocation: true
 ---
 
 # Updating Dependencies

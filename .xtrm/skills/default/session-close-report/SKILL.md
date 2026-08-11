@@ -5,6 +5,7 @@ description: |
   Prefer one same-day SSOT report: update the latest report for today when it
   exists, otherwise run `xt report generate`, then fill every `<!-- FILL -->`
   section from orchestrator context.
+disable-model-invocation: true
 ---
 
 # session-close-report

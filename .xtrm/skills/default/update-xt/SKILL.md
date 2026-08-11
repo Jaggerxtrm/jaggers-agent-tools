@@ -10,6 +10,7 @@ description: >
   source-repo guard, and repairing broken `local-legacy` packs. Triggers when the
   agent detects stale paths like .claude/skills → active/claude or .pi/settings.json
   pointing to active/pi. Proactively suggest after any xtrm-tools upgrade.
+disable-model-invocation: true
 ---
 
 # update-xt

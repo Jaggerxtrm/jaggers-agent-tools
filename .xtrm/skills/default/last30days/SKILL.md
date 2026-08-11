@@ -57,6 +57,7 @@ metadata:
       - web-search
       - ai-skill
       - clawhub
+disable-model-invocation: true
 ---
 
 # last30days v2.9.5: Research Any Topic from the Last 30 Days

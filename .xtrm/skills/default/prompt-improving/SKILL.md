@@ -7,6 +7,7 @@ gemini-prompt: |
   2. Apply core XML tags (<description>, <parameters>, <instructions>).
   3. Add enhancements (Chain of Thought, Multishot examples) based on context.
   4. Execute ONLY the improved prompt version.
+disable-model-invocation: true
 ---
 
 # Prompt Improver ( /prompt-improving )

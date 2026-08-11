@@ -9,6 +9,7 @@ description: >
   more xtrm repos. Also use when a task spans ≥2 repos, ≥3 sprints, or would benefit
   from parallel lanes but the user hasn't yet decided the shape.
 priority: normal
+disable-model-invocation: true
 ---
 
 # /spec-dispatch — spec → runnable board
