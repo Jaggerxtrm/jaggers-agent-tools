@@ -1,6 +1,7 @@
 ---
 name: pr-reviewer
 description: PR review helper for multiplexed sprints. You are a HELPER, not an orchestrator. Fetch Codex (openai-codex / chatgpt-codex-connector) review comments on the PR, weigh them as high-signal-but-not-authoritative, cross-check against the actual diff, emit one verdict from the fixed vocabulary (PASS / PASS_WITH_NOTES / NEEDS_CHANGES / BLOCKED). Report upward via `xtmux message-send` (pane-addressed) and persist reasoning in the bead notes. Use when a delegated pane is the sprint's judge, or when a single-pane orchestrator wants a Codex-informed PR verdict without re-doing the review by hand.
+disable-model-invocation: true
 ---
 
 # Judge with Codex

@@ -13,6 +13,7 @@ description: >
   issues", "what should I work on next", or starts a session with a board
   that has > 15 open issues and weak structure. Never skip when the user
   reports duplicate/overlapping work or asks for board orientation.
+disable-model-invocation: true
 ---
 
 # Issue Triage

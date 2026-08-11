@@ -1,6 +1,7 @@
 ---
 name: gitnexus-exploring
 description: "Use when the user asks how code works, wants to understand architecture, trace execution flows, or explore unfamiliar parts of the codebase. Examples: \"How does X work?\", \"What calls this function?\", \"Show me the auth flow\""
+disable-model-invocation: true
 ---
 
 # Exploring Codebases with GitNexus

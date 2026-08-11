@@ -13,6 +13,7 @@ description: >-
   past-alert triage. Falls back to per-repo SERVICE_HEALTH.md files only when
   the mcpq sidecars are unreachable.
 allowed-tools: Bash(mcpq *), Bash(python3 *), Bash(docker *), Bash(ls *), Read
+disable-model-invocation: true
 ---
 
 # SRE Triage ( /sre-triage )

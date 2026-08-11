@@ -23,7 +23,7 @@ import {
   createReadTool,
   createWriteTool,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { Box, Text, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -903,11 +903,76 @@ function renderNamedToolTree(
   ], outputLines, meta);
 }
 
-function renderPendingCall(toolName: string, args: Record<string, unknown>, theme: any): Text {
-  if (toolName === "bash") {
-    return new Text(renderBashTree(theme, "accent", String(args.command ?? "")), 0, 0);
+type ToolLineWrap = {
+  prefixWidth: number;
+  continuationPrefix: string;
+};
+
+const ANSI_CODE_PATTERN = /^\x1b\[[0-9;?]*[ -/]*[@-~]/u;
+
+function splitToolLine(line: string, prefixWidth: number): { prefix: string; content: string } {
+  let prefix = "";
+  let content = "";
+  let visible = 0;
+  let offset = 0;
+
+  while (offset < line.length) {
+    const ansi = line.slice(offset).match(ANSI_CODE_PATTERN)?.[0];
+    if (ansi) {
+      if (visible < prefixWidth) prefix += ansi;
+      else content += ansi;
+      offset += ansi.length;
+      continue;
+    }
+
+    const character = Array.from(line.slice(offset))[0] ?? "";
+    if (visible < prefixWidth) prefix += character;
+    else content += character;
+    visible += visibleWidth(character);
+    offset += character.length;
   }
-  return new Text(renderNamedToolTree(theme, "accent", toolName, summarizeToolSubject(toolName, args) ?? ""), 0, 0);
+
+  return { prefix, content };
+}
+
+function toolLineWrap(line: string): ToolLineWrap | undefined {
+  const plain = stripAnsi(line);
+  if (plain.startsWith("  │ ")) return { prefixWidth: 4, continuationPrefix: "  │ " };
+  if (plain.startsWith("  └ ")) return { prefixWidth: 4, continuationPrefix: "    " };
+  if (plain.startsWith("    ")) return { prefixWidth: 4, continuationPrefix: "    " };
+  if (plain.startsWith("• Ran ")) return { prefixWidth: 6, continuationPrefix: "  │ " };
+  if (plain.startsWith("• ")) return { prefixWidth: 2, continuationPrefix: "  " };
+  return undefined;
+}
+
+export function wrapToolTreeText(text: string, width: number): string {
+  const renderWidth = Math.max(1, width);
+  return text.split("\n").flatMap((line) => {
+    const wrapping = toolLineWrap(line);
+    if (!wrapping) return wrapTextWithAnsi(line, renderWidth);
+
+    const { prefix, content } = splitToolLine(line, wrapping.prefixWidth);
+    const chunks = wrapTextWithAnsi(content, Math.max(1, renderWidth - wrapping.prefixWidth));
+    return chunks.map((chunk, index) => index === 0
+      ? `${prefix}${chunk}`
+      : `${wrapping.continuationPrefix}${chunk}`);
+  }).join("\n");
+}
+
+function createToolText(text: string, customBgFn?: (line: string) => string) {
+  return {
+    invalidate() {},
+    render(width: number): string[] {
+      return new Text(wrapToolTreeText(text, width), 0, 0, customBgFn).render(width);
+    },
+  };
+}
+
+function renderPendingCall(toolName: string, args: Record<string, unknown>, theme: any) {
+  if (toolName === "bash") {
+    return createToolText(renderBashTree(theme, "accent", String(args.command ?? "")));
+  }
+  return createToolText(renderNamedToolTree(theme, "accent", toolName, summarizeToolSubject(toolName, args) ?? ""));
 }
 
 function summarizeToolSubject(toolName: string, args: Record<string, unknown>): string | undefined {
@@ -1058,13 +1123,10 @@ const XTRM_BUILTIN_TOOLS = new Set(["bash", "read", "edit", "write", "find", "gr
 
 function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): void {
   const tools = getTools(process.cwd());
-  const toolRowText = (theme: any, text: string) =>
-    new Text(
-      text,
-      0,
-      0,
-      getPrefs().toolRowBg ? (line: string) => theme.bg("selectedBg", line) : undefined,
-    );
+  const toolRowText = (theme: any, text: string) => createToolText(
+    text,
+    getPrefs().toolRowBg ? (line: string) => theme.bg("selectedBg", line) : undefined,
+  );
   const renderCall = (
     toolName: string,
     args: Record<string, unknown>,

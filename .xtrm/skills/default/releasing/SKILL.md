@@ -7,6 +7,7 @@ description: >-
   publishes to a package registry (if the repo publishes one). Works for npm
   and non-npm repos alike.
 version: 2.2.0
+disable-model-invocation: true
 ---
 
 # releasing

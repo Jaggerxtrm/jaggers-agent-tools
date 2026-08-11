@@ -1,6 +1,7 @@
 ---
 name: code-review
 description: Portable PR-review discipline usable from any harness (Claude Code, pi, Codex, raw shell). Fetches the PR narrative, the diff, existing review threads, and Codex findings via `gh`; produces a structured issue list under a confidence rubric; and either prints the review or files it back via `gh pr comment`. This is the harness-agnostic sibling of the Claude-Code `/code-review` slash-command (which uses parallel subagents); use this SKILL when you're on pi/Codex and the plugin registry doesn't resolve the slash-command.
+disable-model-invocation: true
 ---
 
 # Code Review — portable

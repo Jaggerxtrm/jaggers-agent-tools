@@ -1,6 +1,7 @@
 ---
 name: deploy-monitor
 description: Post-merge deploy verification helper. Use whenever a PR has been merged, a service/container has been rebuilt or redeployed, or an orchestrator asks for a 30-60 minute observability window. Enforces the deploy-gap guard (running artifact must be newer than the merge), samples Tempo/Prometheus/Grafana or mcpq evidence on an absolute UTC schedule, pages on the first HOLD, writes bead evidence, emits PASS/HOLD/BLOCKED. Not the orchestrator, not the PR judge, not the implementer.
+disable-model-invocation: true
 ---
 
 # Deploy Monitor

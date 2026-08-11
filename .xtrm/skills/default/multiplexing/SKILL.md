@@ -1,6 +1,7 @@
 ---
 name: multiplexing
 description: Help the operator coordinate work across N concurrent tmux sessions (Claude Code, pi, raw shells, vim, REPLs). Inventory state, hand off tasks cleanly, prevent messy-run failure modes, keep hygiene. Not an agent harness; not a /using-specialists replacement; tool-agnostic. Invoked explicitly via /multiplexing — do not rely on auto-activation.
+disable-model-invocation: true
 ---
 
 # Multiplexing

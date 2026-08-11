@@ -146,7 +146,11 @@
           "version": "0.11.4"
         },
         "agent-docs-maintainer/SKILL.md": {
-          "hash": "a80ff7960f24889f49e3a213cc7f5a191319aa04fbecca2fd1681c8323c09f63",
+          "hash": "b1402e0364344b1d7d4ef5bcd667a6984b4ea107e9504136527050d78ffdf532",
+          "version": "0.11.4"
+        },
+        "authoring-workflows/SKILL.md": {
+          "hash": "bb956c624f4e8ce603f6d6abf3557e5aedf3521f621fb9555bf630c201260aab",
           "version": "0.11.4"
         },
         "capacity-reclaim/SKILL.md": {
@@ -158,7 +162,7 @@
           "version": "0.11.4"
         },
         "code-review/SKILL.md": {
-          "hash": "e6ebc4c4d7f123dda215f18ce3fa111b21dbe2bf211ce9b7fc976a3b9e742196",
+          "hash": "5154c0b8cb66e194fa14bf6f0dce05a63f5872eab6bde09285298c89d9ae5f0c",
           "version": "0.11.4"
         },
         "deepwiki/SKILL.md": {
@@ -174,15 +178,15 @@
           "version": "0.11.4"
         },
         "delegating/SKILL.md": {
-          "hash": "bb1c8ed316735afb98d1d5b8f32e07f869091f8a56d079c9a1ac359f8ee67a9b",
+          "hash": "77856b7a122b0abae0d87249c149d05e781b526615ebedf9568abb2d2f5a12c5",
           "version": "0.11.4"
         },
         "deploy-monitor/SKILL.md": {
-          "hash": "41f9a3c50a32ca5f2f3aaadd74a1c964abe65aae1c98b08bff90402ad3bed506",
+          "hash": "e13d16c37edf4177eac3b576f9605bfd9dbf252ff78068fca39d880b340cc1b2",
           "version": "0.11.4"
         },
         "find-docs/SKILL.md": {
-          "hash": "344d9b44f573c1ef28ab56754a9cf6f08cf4521fb95babbc2e509be38f65333f",
+          "hash": "43b2991568f843a9e9250007833b0ab9c76c734f6f800fcd93b9f4ec553acd28",
           "version": "0.11.4"
         },
         "find-skills/SKILL.md": {
@@ -194,31 +198,31 @@
           "version": "0.11.4"
         },
         "gitnexus-cli/SKILL.md": {
-          "hash": "e28f79d4ea2473efa0f197611a75bc25428fb4296aeeb54d1e31de2e39ccd8ad",
+          "hash": "ddbf6c8cb6c6774bf80b98075de64e3ec1c7ea1dd85173c851dc077be2b6a238",
           "version": "0.11.4"
         },
         "gitnexus-debugging/SKILL.md": {
-          "hash": "4a1e82aa835c52e38227d853c20ef05ea33be1dfb6aa6511474d15357f1d3f2e",
+          "hash": "4129b1b0db14ab587347b6b75ddd365c8df00045271dd76490fbf9bb4534b6aa",
           "version": "0.11.4"
         },
         "gitnexus-exploring/SKILL.md": {
-          "hash": "ffafeaa0ce52be079e4d4b3a48c0a166728c009380a243c394c4e08f728527bb",
+          "hash": "0435e0fc6afac3f8376b966e1020029d574d2d445d29e31a24580c1266c61170",
           "version": "0.11.4"
         },
         "gitnexus-guide/SKILL.md": {
-          "hash": "40b047beeb9a7c5d47f17426b4061d2c2562c85c11288fa7f8da376d910e4f91",
+          "hash": "2825d715e4abe1b250665ab8fbde26eff0efbe0b4ced1e081f706337175d84fd",
           "version": "0.11.4"
         },
         "gitnexus-impact-analysis/SKILL.md": {
-          "hash": "a4d6e8003c4a822c380b0e81b2fa0d642612236c734a9d51834e362c4be52f33",
+          "hash": "4a9f72974daca06d54945d8f7a647da3f47e948a63ba9c18e39f4c7c2cb068a3",
           "version": "0.11.4"
         },
         "gitnexus-pr-review/SKILL.md": {
-          "hash": "f7bac200a4752191d2e3aa7a2273720ca436d25df88cb2ef48dc19f92ae0934e",
+          "hash": "b88ebe5d7866ef779febab1df8b05c0196e6f25667feb93470ad06352679237c",
           "version": "0.11.4"
         },
         "gitnexus-refactoring/SKILL.md": {
-          "hash": "6aab994ee0266063245245483ee3280645aca66c0c5e56730ffad3f32ecbbc5c",
+          "hash": "1845724b4f19998df74e4d17a3d450d3db2103386ba9e2871702df9797a04915",
           "version": "0.11.4"
         },
         "hook-development/examples/load-context.sh": {
@@ -266,7 +270,7 @@
           "version": "0.11.4"
         },
         "hook-development/SKILL.md": {
-          "hash": "5d2c2d85e7bbe091ba394817f4a1b200570e259af765131440f80f270b7fe0ee",
+          "hash": "70470d501ff104feb4a1b02bfae285877895a1e34d5af729be066d7620c8001e",
           "version": "0.11.4"
         },
         "init-session/SKILL.md": {
@@ -282,7 +286,7 @@
           "version": "0.11.4"
         },
         "issue-triage/SKILL.md": {
-          "hash": "2cb0bfcc991ed4473345e4a30d30dc48a91f2b32afaa09d2c924096d443ddda6",
+          "hash": "9b43a7b62e5f8dc0e0b4b09bd8c0a62228d76c03704ccfedd325daaf4759b24f",
           "version": "0.11.4"
         },
         "last30days/scripts/briefing.py": {
@@ -546,11 +550,11 @@
           "version": "0.11.4"
         },
         "last30days/SKILL.md": {
-          "hash": "a437a67e7ae741b2ceaee35740a535a65e8f8aadf14d479d378616c7ccc46232",
+          "hash": "712d2974d0b7879b8d2ef9e2e425a2aa070a00169597a8d5c912fb994f9e7574",
           "version": "0.11.4"
         },
         "multiplexing-team/SKILL.md": {
-          "hash": "45254e45a90c705cbad83098a6354b31e1dc4196627f672a5a5e3221795ecc22",
+          "hash": "b271b56a8634672213a0e98cd2c361f53c13bba1d1d75bf2d5c569f9b1324f3e",
           "version": "0.11.4"
         },
         "multiplexing/scripts/verify-deploy-applied.sh": {
@@ -558,7 +562,7 @@
           "version": "0.11.4"
         },
         "multiplexing/SKILL.md": {
-          "hash": "9a048006c435f752e67014210883005c4bea939c823586b94b76c94515b22c2b",
+          "hash": "61905f1c4320540bc389b3f26145b98adc13284f1cd8a939a4e0240f4dff1a97",
           "version": "0.11.4"
         },
         "planning/SKILL.md": {
@@ -566,11 +570,11 @@
           "version": "0.11.4"
         },
         "pr-reviewer/SKILL.md": {
-          "hash": "76c1446187877ef129fda3f6410a38a50c58225605dc81765b4eea22bf56ee8d",
+          "hash": "f2775ff4a5781c9d37d3e4a4dab52c79a962cb7a4303e1e7d817800d2ad242ff",
           "version": "0.11.4"
         },
         "premortem/SKILL.md": {
-          "hash": "25890f164b64076865f504c943b3890ebd73140f16c1f54726163ddfac709fc6",
+          "hash": "a6e48119ad22cd28d8f26efe87d220fb0f346dee1b5441771dfc6702cb89000b",
           "version": "0.11.4"
         },
         "prompt-improving/README.md": {
@@ -598,7 +602,7 @@
           "version": "0.11.4"
         },
         "prompt-improving/SKILL.md": {
-          "hash": "3eb21391e4512e6dfa47051159cb6f68d130bba068dbe5b6b4744c422ed18387",
+          "hash": "ed51a641768dacbba6bb935e3ea0447a6bb1e7a0fc565e27df302d958f01d35f",
           "version": "0.11.4"
         },
         "quality-gates/.claude/hooks/hook-config.json": {
@@ -634,7 +638,7 @@
           "version": "0.11.4"
         },
         "releasing/SKILL.md": {
-          "hash": "0a2370a274fd07e977eceab2ea229e9db6560254da2c81a15ddf698d049c88c9",
+          "hash": "60198b666de7c24a73c0cfb5d57eba28de08f7c1b9df35915e30eae14f93c6a7",
           "version": "0.11.4"
         },
         "security-pipeline/scripts/security-bootstrap.sh": {
@@ -642,7 +646,7 @@
           "version": "0.11.4"
         },
         "security-pipeline/SKILL.md": {
-          "hash": "cfd328ce7a831270a393fcc12e0a0645d2dab101eb81cde0ac4c7d599e13c90f",
+          "hash": "e1329218df3800290950b458822946240ef2c15a848a7bfc43984d552a1bbfd6",
           "version": "0.11.4"
         },
         "security-pipeline/templates/.githooks/pre-push.template": {
@@ -682,7 +686,7 @@
           "version": "0.11.4"
         },
         "session-close-report/SKILL.md": {
-          "hash": "787cc87c0900031c4ce191928d258e3e7751ce2115a8eaa78dd9b70a693556f5",
+          "hash": "9156ca72def6ef252697d5edbb5dc30a9e704c3026c19854d1c19af61983d3ee",
           "version": "0.11.4"
         },
         "skill-creator/agents/analyzer.md": {
@@ -754,11 +758,11 @@
           "version": "0.11.4"
         },
         "skill-creator/SKILL.md": {
-          "hash": "ba8bebb2c085444120743af8dc859dd7c2592d6290e93aa5e1c08403109bdce7",
+          "hash": "3a6c8a4707ef9d222f74cc96d39610740d470fa3c8b64806c7ad4070494a2b58",
           "version": "0.11.4"
         },
         "spec-dispatch/SKILL.md": {
-          "hash": "d9cbf714d250f11b5c6616a417c7c70ab11a4a8387f65f285f41a408cd188187",
+          "hash": "4d8bfbeb4d0bbdceca8ddde8c48dc04909d75624fd962a31d68444d3ef240c03",
           "version": "0.11.4"
         },
         "specialists-creator/scripts/audit-spec-uniformity.mjs": {
@@ -774,7 +778,7 @@
           "version": "0.11.4"
         },
         "specialists-creator/SKILL.md": {
-          "hash": "636c6d90e55b9d14fed26f93d1e66296a0a48e706d1ce4c067ccebc2638b69bd",
+          "hash": "59fe74927988a339ea3ba2b73ebf7fa06e57b73a1e07ef288c306177f99a14f7",
           "version": "0.11.4"
         },
         "sre-triage/scripts/alert_history.py": {
@@ -786,7 +790,15 @@
           "version": "0.11.4"
         },
         "sre-triage/SKILL.md": {
-          "hash": "45441920ac6666b91e31420c9409fc5a7b2ac1517126339185a0c3b003b7b513",
+          "hash": "082bec60123b07abe275a4eff5ecc7e35f205bb25dae783e140a274ccd9e6175",
+          "version": "0.11.4"
+        },
+        "starting-and-resuming-work/references/surfaces.md": {
+          "hash": "0670476a6afbafcfdd7184fd26f4c1d32163882733a22faa362baf2b832c7712",
+          "version": "0.11.4"
+        },
+        "starting-and-resuming-work/SKILL.md": {
+          "hash": "8469b7e8eba3b5b20cb341cd64f2c6ec3c7d24b114be3589f922549da6c2bf27",
           "version": "0.11.4"
         },
         "sync-docs/references/doc-structure.md": {
@@ -826,7 +838,7 @@
           "version": "0.11.4"
         },
         "sync-docs/SKILL.md": {
-          "hash": "ebcdfe1f4d8e752e1a594ac32fcac2cf7d7817f65202b90fe4d58b266cf8fd33",
+          "hash": "4a5d3bebc3a3d7d64b6193e18dea45fa8ae6459c08b5f61fed7627169662d7e9",
           "version": "0.11.4"
         },
         "test-planning/SKILL.md": {
@@ -834,11 +846,11 @@
           "version": "0.11.4"
         },
         "update-specialists/SKILL.md": {
-          "hash": "fdf8c680cf3e5dce80c9426f52b56c953f4f7f663c23a33a3378b2b6e4bab5a9",
+          "hash": "dfaf2e3d4fd38989ccfbbb52054dbc66f80bbc82084b387b05cd0b6a5aa51e87",
           "version": "0.11.4"
         },
         "update-xt/SKILL.md": {
-          "hash": "93e3fa59acb53fff32502b12a39f41dc23882aa10061c9e14ba6cded4ae1ecd4",
+          "hash": "dca2fe45c0b3a1e0e64af5091c0cea7a6953820b06ea8df549024cf2106a179e",
           "version": "0.11.4"
         },
         "updating-dependencies/schemas/dependency_update_case.schema.json": {
@@ -850,7 +862,7 @@
           "version": "0.11.4"
         },
         "updating-dependencies/SKILL.md": {
-          "hash": "0121ffef95ea24ef4dc3edad69d3e8d5b42d2e53b9928bbee6c54d3cc101b4f8",
+          "hash": "9c7b991afc3c0b8d99ed45cd4687f02f321d8a3c8087d63139c92656285b558f",
           "version": "0.11.4"
         },
         "updating-dependencies/templates/post-deploy-watch-spec.md": {
@@ -870,11 +882,11 @@
           "version": "0.11.4"
         },
         "using-kpi/SKILL.md": {
-          "hash": "dc22c51783b5bfb787c5bb10f46d3585151a33a3486e76ae38e3f43fb09f03bb",
+          "hash": "42a8ba4c992b1d2991e7a65222e076f5f7f63b93fdff8e570f3d7296aacb5a79",
           "version": "0.11.4"
         },
         "using-nodes/SKILL.md": {
-          "hash": "742e9d2ad512a05c86855b88ae65f9065370876d9e7c1b10db2b68958248bc7b",
+          "hash": "a421597c787514e5442bfe4bdcd0ecf0ded1413a33a432eca40778c314195509",
           "version": "0.11.4"
         },
         "using-quality-gates/SKILL.md": {
@@ -886,7 +898,7 @@
           "version": "0.11.4"
         },
         "using-specialists-auto/SKILL.md": {
-          "hash": "0668f03dc701d3895defc1e3f3973fa41976355db5a1c38278b6272c95f145c4",
+          "hash": "7b63cb642f414a86b278f47dc9cc539a19c80d06f63093e2ab8e3ddadf6fb9b7",
           "version": "0.11.4"
         },
         "using-specialists/references/bead-contracts.md": {
@@ -934,7 +946,7 @@
           "version": "0.11.4"
         },
         "verified-audit/SKILL.md": {
-          "hash": "1a5e071705a63e37bd5464635856a668884b527411b9577b147fcbf36d122d4a",
+          "hash": "5541f4945763e8e02fa8b987f3045df2e71653d10ed57e8477aa830b6cc99617",
           "version": "0.11.4"
         },
         "xt-debugging/SKILL.md": {
@@ -1306,8 +1318,8 @@
     "version": 1,
     "source": {
       "kind": "ref",
-      "ref": "7053236fcac9b5d244fd8edf9c9a08979c2491fe",
-      "resolved_sha": "7053236fcac9b5d244fd8edf9c9a08979c2491fe",
+      "ref": "6437e6984166b564fe680ef30752a8ade8d37d6f",
+      "resolved_sha": "6437e6984166b564fe680ef30752a8ade8d37d6f",
       "repo_path": "../specialists",
       "source_path": "config/skills"
     },
@@ -1325,16 +1337,16 @@
         "scripts/audit-spec-uniformity.mjs": "0ada06784cfd5c3adfa9c9908a9cd23380e8278fb57329fc616a83140a47fb33",
         "scripts/scaffold-specialist.ts": "c1bfa3693d644072e6d387d2519e131624d99c5b85521ae638680d7485267403",
         "scripts/validate-specialist.ts": "3a5f5a3a77c50e98ecf9188634ff2882f8143b19d0f28a53aff5c42e1bd09dfa",
-        "SKILL.md": "636c6d90e55b9d14fed26f93d1e66296a0a48e706d1ce4c067ccebc2638b69bd"
+        "SKILL.md": "59fe74927988a339ea3ba2b73ebf7fa06e57b73a1e07ef288c306177f99a14f7"
       },
       "update-specialists": {
-        "SKILL.md": "fdf8c680cf3e5dce80c9426f52b56c953f4f7f663c23a33a3378b2b6e4bab5a9"
+        "SKILL.md": "dfaf2e3d4fd38989ccfbbb52054dbc66f80bbc82084b387b05cd0b6a5aa51e87"
       },
       "using-kpi": {
-        "SKILL.md": "dc22c51783b5bfb787c5bb10f46d3585151a33a3486e76ae38e3f43fb09f03bb"
+        "SKILL.md": "42a8ba4c992b1d2991e7a65222e076f5f7f63b93fdff8e570f3d7296aacb5a79"
       },
       "using-nodes": {
-        "SKILL.md": "742e9d2ad512a05c86855b88ae65f9065370876d9e7c1b10db2b68958248bc7b"
+        "SKILL.md": "a421597c787514e5442bfe4bdcd0ecf0ded1413a33a432eca40778c314195509"
       },
       "using-script-specialists": {
         "SKILL.md": "e87511d685eb7bc95c374641056194931a9da79434b624fdfb2805bd9dbac7b6"
@@ -1356,7 +1368,7 @@
         "SKILL.md": "8ba5c2fc32044ee44f689b565da4dbd275fd5dbcc8d75df127a26c29e040c8d0"
       },
       "using-specialists-auto": {
-        "SKILL.md": "0668f03dc701d3895defc1e3f3973fa41976355db5a1c38278b6272c95f145c4"
+        "SKILL.md": "7b63cb642f414a86b278f47dc9cc539a19c80d06f63093e2ab8e3ddadf6fb9b7"
       }
     }
   }

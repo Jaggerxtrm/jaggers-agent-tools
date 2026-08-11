@@ -1,6 +1,7 @@
 ---
 name: verified-audit
 description: "Audit a file, subsystem, or repo for over-engineering and inefficiency, and verify every candidate cut with call-graph impact analysis before proposing it. Use whenever the user says \"audit this\", \"what can I delete\", \"find slop\", \"find bloat\", \"is this over-engineered\", \"sweep for waste\", \"reduce complexity\", \"hunt for redundant code\", \"find performance slop\", \"latency review\", \"find hot-path waste\", or asks for a whole-file / cross-file / repo-wide review of code quality. Two orthogonal axes are covered: line-count slop (dead code, one-line wrappers, reinvented stdlib, duplicated helpers, dead enum branches) and efficiency slop (sync fork in hot path, unmemoized deterministic computation, redundant I/O, N+1, regex-per-call, object alloc in loops, sequential-independent awaits). Every finding carries verified blast-radius receipts — never propose a cut without them. Diff-scope review is out of scope (use reviewer/seconder for that); this skill is for whole-file audits and repo sweeps."
+disable-model-invocation: true
 ---
 
 # Verified Audit

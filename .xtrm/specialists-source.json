@@ -2,8 +2,8 @@
   "version": 1,
   "source": {
     "kind": "ref",
-    "ref": "7053236fcac9b5d244fd8edf9c9a08979c2491fe",
-    "resolved_sha": "7053236fcac9b5d244fd8edf9c9a08979c2491fe",
+    "ref": "6437e6984166b564fe680ef30752a8ade8d37d6f",
+    "resolved_sha": "6437e6984166b564fe680ef30752a8ade8d37d6f",
     "repo_path": "../specialists",
     "source_path": "config/skills"
   },
@@ -21,16 +21,16 @@
       "scripts/audit-spec-uniformity.mjs": "0ada06784cfd5c3adfa9c9908a9cd23380e8278fb57329fc616a83140a47fb33",
       "scripts/scaffold-specialist.ts": "c1bfa3693d644072e6d387d2519e131624d99c5b85521ae638680d7485267403",
       "scripts/validate-specialist.ts": "3a5f5a3a77c50e98ecf9188634ff2882f8143b19d0f28a53aff5c42e1bd09dfa",
-      "SKILL.md": "636c6d90e55b9d14fed26f93d1e66296a0a48e706d1ce4c067ccebc2638b69bd"
+      "SKILL.md": "59fe74927988a339ea3ba2b73ebf7fa06e57b73a1e07ef288c306177f99a14f7"
     },
     "update-specialists": {
-      "SKILL.md": "fdf8c680cf3e5dce80c9426f52b56c953f4f7f663c23a33a3378b2b6e4bab5a9"
+      "SKILL.md": "dfaf2e3d4fd38989ccfbbb52054dbc66f80bbc82084b387b05cd0b6a5aa51e87"
     },
     "using-kpi": {
-      "SKILL.md": "dc22c51783b5bfb787c5bb10f46d3585151a33a3486e76ae38e3f43fb09f03bb"
+      "SKILL.md": "42a8ba4c992b1d2991e7a65222e076f5f7f63b93fdff8e570f3d7296aacb5a79"
     },
     "using-nodes": {
-      "SKILL.md": "742e9d2ad512a05c86855b88ae65f9065370876d9e7c1b10db2b68958248bc7b"
+      "SKILL.md": "a421597c787514e5442bfe4bdcd0ecf0ded1413a33a432eca40778c314195509"
     },
     "using-script-specialists": {
       "SKILL.md": "e87511d685eb7bc95c374641056194931a9da79434b624fdfb2805bd9dbac7b6"
@@ -52,7 +52,7 @@
       "SKILL.md": "8ba5c2fc32044ee44f689b565da4dbd275fd5dbcc8d75df127a26c29e040c8d0"
     },
     "using-specialists-auto": {
-      "SKILL.md": "0668f03dc701d3895defc1e3f3973fa41976355db5a1c38278b6272c95f145c4"
+      "SKILL.md": "7b63cb642f414a86b278f47dc9cc539a19c80d06f63093e2ab8e3ddadf6fb9b7"
     }
   }
 }
