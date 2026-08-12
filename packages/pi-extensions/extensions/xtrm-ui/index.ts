@@ -883,10 +883,11 @@ function renderBashTree(
   outputLines: string[] = [],
   meta?: string,
 ): string {
+  const commandColor = statusColor === "success" ? "text" : "dim";
   const [firstCommand = "", ...continuedCommands] = command.split("\n");
   return appendToolTree(theme, [
-    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${theme.fg(statusColor, firstCommand)}`,
-    ...continuedCommands.map((line) => `  ${theme.fg("muted", "│")} ${theme.fg(statusColor, line)}`),
+    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${theme.fg(commandColor, firstCommand)}`,
+    ...continuedCommands.map((line) => `  ${theme.fg("muted", "│")} ${theme.fg(commandColor, line)}`),
   ], outputLines, meta);
 }
 
@@ -898,8 +899,9 @@ function renderNamedToolTree(
   outputLines: string[] = [],
   meta?: string,
 ): string {
+  const subjectColor = statusColor === "success" ? "text" : "dim";
   return appendToolTree(theme, [
-    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold(label))}${subject ? ` ${theme.fg(statusColor, subject)}` : ""}`,
+    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold(label))}${subject ? ` ${theme.fg(subjectColor, subject)}` : ""}`,
   ], outputLines, meta);
 }
 

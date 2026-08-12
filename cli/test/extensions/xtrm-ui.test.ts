@@ -296,6 +296,41 @@ describe("xtrm-ui built-in tool rendering", () => {
     expect(lines.at(-1)).toContain("showing 6/8 lines (ctrl+o expand)");
   });
 
+  it("colors only the Ran prefix with phase status and dims the command unless success", () => {
+    const { tools } = loadExtension();
+    const colors: string[] = [];
+    const spyTheme = {
+      ...theme,
+      fg: (color: string, text: string) => {
+        colors.push(color);
+        return text;
+      },
+    };
+    const result = { content: [{ type: "text", text: "" }], details: {} };
+    const renderOptions = { expanded: false, isPartial: false };
+
+    colors.length = 0;
+    tools.bash.renderResult(result, renderOptions, spyTheme, context({ command: "echo ok" }));
+    expect(colors.slice(0, 3)).toEqual(["success", "success", "text"]); // • , Ran, command
+
+    colors.length = 0;
+    tools.bash.renderResult(
+      result,
+      renderOptions,
+      spyTheme,
+      context({ command: "echo fail" }, { isError: true }),
+    );
+    expect(colors.slice(0, 3)).toEqual(["error", "error", "dim"]); // • , Ran, command
+
+    colors.length = 0;
+    tools.bash.renderCall(
+      { command: "echo pending" },
+      spyTheme,
+      context({ command: "echo pending" }, { executionStarted: false, isPartial: true }),
+    );
+    expect(colors).toEqual(["accent", "accent", "dim"]); // • , Ran, command
+  });
+
   it("keeps tree indentation when a tool line wraps", () => {
     const text = [
       "• Ran set -u",
