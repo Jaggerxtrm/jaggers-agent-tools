@@ -143,9 +143,14 @@ function outcomeAction(
     return { kind, required: false, argv, display: renderOutcomeArgv(argv), cwd, why };
 }
 
+// threadId is null when Codex started but never opened a thread. An idle TUI
+// session writes no rollout record until its first turn, so a bare `xt codex`
+// has nothing to discover. That is a live, attachable session missing only its
+// exact resume handle — degraded, not failed. Destroying it would throw away a
+// working session over absent metadata. Mirrors buildDetachedLaunchOutcome.
 export function buildCodexDetachedOutcome(input: {
     runtimeVersion: string | null;
-    threadId: string;
+    threadId: string | null;
     sessionSlug: string;
     sessionName: string;
     tmuxSessionId: string;
@@ -156,14 +161,19 @@ export function buildCodexDetachedOutcome(input: {
     profileName: string;
     insideTmux: boolean;
 }): CommandOutcomeV1 {
+    const threadId = input.threadId;
     return {
         schema_version: 'xtrm.command-outcome.v1',
-        status: 'ok',
-        reason_code: 'session_created_readiness_unverified',
-        summary: 'Detached codex session created with an explicit persisted thread id.',
+        status: threadId ? 'ok' : 'degraded',
+        reason_code: threadId
+            ? 'session_created_readiness_unverified'
+            : 'session_created_thread_id_unresolved',
+        summary: threadId
+            ? 'Detached codex session created with an explicit persisted thread id.'
+            : 'Detached codex session created, but Codex has not opened a thread yet, so no exact resume handle exists.',
         runtime: { name: 'codex', version: input.runtimeVersion },
         identity: {
-            thread_id: input.threadId,
+            thread_id: threadId,
             session_name: input.sessionName,
             tmux_session_id: input.tmuxSessionId,
             pane_id: input.paneId,
@@ -171,7 +181,7 @@ export function buildCodexDetachedOutcome(input: {
         worktree: { path: input.worktreePath, branch: input.branchName, owner: 'core' },
         readiness: { status: 'unverified', source: 'tmux-pane' },
         safety_profile: input.safetyProfile,
-        persistence: { completed: true, kind: 'worktree.session-metadata' },
+        persistence: { completed: Boolean(threadId), kind: 'worktree.session-metadata' },
         authoritative_mutation: { completed: true, kind: 'interactive-session.created' },
         side_effects: [
             { kind: 'worktree.created', status: 'ok', id: input.sessionSlug },
@@ -185,12 +195,14 @@ export function buildCodexDetachedOutcome(input: {
                 input.worktreePath,
                 'Attach to the live detached Codex session.',
             ),
-            outcomeAction(
+            // Omitted without a thread id: a resume command needs the exact
+            // handle, and advertising one we cannot fill is non-deterministic.
+            ...(threadId ? [outcomeAction(
                 'resume',
-                ['codex', ...buildCodexResumeArgs(input.threadId, input.safetyProfile.name, input.profileName)],
+                ['codex', ...buildCodexResumeArgs(threadId, input.safetyProfile.name, input.profileName)],
                 input.worktreePath,
                 'Resume this exact Codex thread after the tmux session ends.',
-            ),
+            )] : []),
             outcomeAction('repair', ['xt', 'doctor'], input.worktreePath, 'Inspect managed runtime drift.'),
             outcomeAction('end', ['xt', 'end'], input.worktreePath, 'Close the xt-owned worktree session.'),
         ],

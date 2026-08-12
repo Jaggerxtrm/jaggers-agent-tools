@@ -367,10 +367,15 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
         spawnSync('tmux', ['set-option', '-p', '-t', paneId, key, value], { stdio: 'pipe' });
     }
 
+    // Codex only writes a rollout record once a thread opens, which does not
+    // happen until the first turn. A bare launch therefore has nothing to
+    // discover, and tearing the session down here destroyed a session that had
+    // started correctly. Absent metadata degrades the outcome; it is not a
+    // launch failure. Only a metadata WRITE failure is still fatal, because
+    // that means the on-disk state would disagree with what we report.
     const session = await waitForCodexSession(path.join(codexHome, 'sessions'), worktreePath, launchedAfterMs);
-    if (!session) return cleanupAndFail('Codex did not persist a discoverable thread id');
     const launchedAt = new Date(launchedAfterMs).toISOString();
-    if (!writeCodexWorktreeSession(worktreePath, {
+    if (session && !writeCodexWorktreeSession(worktreePath, {
         runtime: 'codex',
         launchedAt,
         threadId: session.threadId,
@@ -393,7 +398,7 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
             });
             const outcome = buildCodexDetachedOutcome({
                 runtimeVersion: version.status === 0 ? sanitizeRuntimeVersion((version.stdout ?? '').trim()) : null,
-                threadId: session.threadId,
+                threadId: session?.threadId ?? null,
                 sessionSlug: slug,
                 sessionName,
                 tmuxSessionId: tmuxIdentity.sessionId,

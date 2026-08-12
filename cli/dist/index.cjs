@@ -65339,14 +65339,15 @@ function outcomeAction(kind, argv, cwd, why) {
   return { kind, required: false, argv, display: renderOutcomeArgv(argv), cwd, why };
 }
 function buildCodexDetachedOutcome(input) {
+  const threadId = input.threadId;
   return {
     schema_version: "xtrm.command-outcome.v1",
-    status: "ok",
-    reason_code: "session_created_readiness_unverified",
-    summary: "Detached codex session created with an explicit persisted thread id.",
+    status: threadId ? "ok" : "degraded",
+    reason_code: threadId ? "session_created_readiness_unverified" : "session_created_thread_id_unresolved",
+    summary: threadId ? "Detached codex session created with an explicit persisted thread id." : "Detached codex session created, but Codex has not opened a thread yet, so no exact resume handle exists.",
     runtime: { name: "codex", version: input.runtimeVersion },
     identity: {
-      thread_id: input.threadId,
+      thread_id: threadId,
       session_name: input.sessionName,
       tmux_session_id: input.tmuxSessionId,
       pane_id: input.paneId
@@ -65354,7 +65355,7 @@ function buildCodexDetachedOutcome(input) {
     worktree: { path: input.worktreePath, branch: input.branchName, owner: "core" },
     readiness: { status: "unverified", source: "tmux-pane" },
     safety_profile: input.safetyProfile,
-    persistence: { completed: true, kind: "worktree.session-metadata" },
+    persistence: { completed: Boolean(threadId), kind: "worktree.session-metadata" },
     authoritative_mutation: { completed: true, kind: "interactive-session.created" },
     side_effects: [
       { kind: "worktree.created", status: "ok", id: input.sessionSlug },
@@ -65368,12 +65369,14 @@ function buildCodexDetachedOutcome(input) {
         input.worktreePath,
         "Attach to the live detached Codex session."
       ),
-      outcomeAction(
+      // Omitted without a thread id: a resume command needs the exact
+      // handle, and advertising one we cannot fill is non-deterministic.
+      ...threadId ? [outcomeAction(
         "resume",
-        ["codex", ...buildCodexResumeArgs(input.threadId, input.safetyProfile.name, input.profileName)],
+        ["codex", ...buildCodexResumeArgs(threadId, input.safetyProfile.name, input.profileName)],
         input.worktreePath,
         "Resume this exact Codex thread after the tmux session ends."
-      ),
+      )] : [],
       outcomeAction("repair", ["xt", "doctor"], input.worktreePath, "Inspect managed runtime drift."),
       outcomeAction("end", ["xt", "end"], input.worktreePath, "Close the xt-owned worktree session.")
     ]
@@ -65818,9 +65821,8 @@ async function launchCodexWorktreeSession(opts) {
     (0, import_node_child_process6.spawnSync)("tmux", ["set-option", "-p", "-t", paneId, key, value], { stdio: "pipe" });
   }
   const session = await waitForCodexSession(import_node_path18.default.join(codexHome, "sessions"), worktreePath, launchedAfterMs);
-  if (!session) return cleanupAndFail("Codex did not persist a discoverable thread id");
   const launchedAt = new Date(launchedAfterMs).toISOString();
-  if (!writeCodexWorktreeSession(worktreePath, {
+  if (session && !writeCodexWorktreeSession(worktreePath, {
     runtime: "codex",
     launchedAt,
     threadId: session.threadId,
@@ -65845,7 +65847,7 @@ async function launchCodexWorktreeSession(opts) {
       });
       const outcome = buildCodexDetachedOutcome({
         runtimeVersion: version3.status === 0 ? sanitizeRuntimeVersion((version3.stdout ?? "").trim()) : null,
-        threadId: session.threadId,
+        threadId: session?.threadId ?? null,
         sessionSlug: slug,
         sessionName,
         tmuxSessionId: tmuxIdentity.sessionId,
