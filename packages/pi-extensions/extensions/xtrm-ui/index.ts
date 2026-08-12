@@ -23,7 +23,7 @@ import {
   createReadTool,
   createWriteTool,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Text, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { Box, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -905,80 +905,11 @@ function renderNamedToolTree(
   ], outputLines, meta);
 }
 
-type ToolLineWrap = {
-  prefixWidth: number;
-  continuationPrefix: string;
-};
-
-const ANSI_CODE_PATTERN = /^\x1b\[[0-9;?]*[ -/]*[@-~]/u;
-
-function splitToolLine(line: string, prefixWidth: number): { prefix: string; content: string } {
-  let prefix = "";
-  let content = "";
-  let visible = 0;
-  let offset = 0;
-
-  while (offset < line.length) {
-    // ESC is rare; only regex-slice at escape positions, not per character.
-    if (line.charCodeAt(offset) === 0x1b) {
-      const ansi = ANSI_CODE_PATTERN.exec(line.slice(offset))?.[0];
-      if (ansi) {
-        if (visible < prefixWidth) prefix += ansi;
-        else content += ansi;
-        offset += ansi.length;
-        continue;
-      }
-    }
-    const codePoint = line.codePointAt(offset) ?? 0;
-    const character = String.fromCodePoint(codePoint);
-    if (visible < prefixWidth) prefix += character;
-    else content += character;
-    visible += visibleWidth(character);
-    offset += character.length;
-  }
-
-  return { prefix, content };
-}
-
-function toolLineWrap(plain: string): ToolLineWrap | undefined {
-  if (plain.startsWith("  │ ")) return { prefixWidth: 4, continuationPrefix: "  │ " };
-  if (plain.startsWith("  └ ")) return { prefixWidth: 4, continuationPrefix: "    " };
-  if (plain.startsWith("    ")) return { prefixWidth: 4, continuationPrefix: "    " };
-  if (plain.startsWith("• Ran ")) return { prefixWidth: 6, continuationPrefix: "  │ " };
-  if (plain.startsWith("• ")) return { prefixWidth: 2, continuationPrefix: "  " };
-  return undefined;
-}
-
-export function wrapToolTreeText(text: string, width: number): string {
-  const renderWidth = Math.max(1, width);
-  return text.split("\n").flatMap((line) => {
-    const plain = stripAnsi(line);
-    const wrapping = toolLineWrap(plain);
-    if (!wrapping) return wrapTextWithAnsi(line, renderWidth);
-    // Fast path: whole line fits — skip the split/wrap machinery entirely.
-    if (visibleWidth(plain) <= renderWidth) return [line];
-    const { prefix, content } = splitToolLine(line, wrapping.prefixWidth);
-    const chunks = wrapTextWithAnsi(content, Math.max(1, renderWidth - wrapping.prefixWidth));
-    return chunks.map((chunk, index) => index === 0
-      ? `${prefix}${chunk}`
-      : `${wrapping.continuationPrefix}${chunk}`);
-  }).join("\n");
-}
-
-function createToolText(text: string, customBgFn?: (line: string) => string) {
-  return {
-    invalidate() {},
-    render(width: number): string[] {
-      return new Text(wrapToolTreeText(text, width), 0, 0, customBgFn).render(width);
-    },
-  };
-}
-
-function renderPendingCall(toolName: string, args: Record<string, unknown>, theme: any) {
+function renderPendingCall(toolName: string, args: Record<string, unknown>, theme: any): Text {
   if (toolName === "bash") {
-    return createToolText(renderBashTree(theme, "accent", String(args.command ?? "")));
+    return new Text(renderBashTree(theme, "accent", String(args.command ?? "")), 0, 0);
   }
-  return createToolText(renderNamedToolTree(theme, "accent", toolName, summarizeToolSubject(toolName, args) ?? ""));
+  return new Text(renderNamedToolTree(theme, "accent", toolName, summarizeToolSubject(toolName, args) ?? ""), 0, 0);
 }
 
 function summarizeToolSubject(toolName: string, args: Record<string, unknown>): string | undefined {
@@ -1129,10 +1060,13 @@ const XTRM_BUILTIN_TOOLS = new Set(["bash", "read", "edit", "write", "find", "gr
 
 function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): void {
   const tools = getTools(process.cwd());
-  const toolRowText = (theme: any, text: string) => createToolText(
-    text,
-    getPrefs().toolRowBg ? (line: string) => theme.bg("selectedBg", line) : undefined,
-  );
+  const toolRowText = (theme: any, text: string) =>
+    new Text(
+      text,
+      0,
+      0,
+      getPrefs().toolRowBg ? (line: string) => theme.bg("selectedBg", line) : undefined,
+    );
   const renderCall = (
     toolName: string,
     args: Record<string, unknown>,

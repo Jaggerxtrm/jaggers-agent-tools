@@ -45,7 +45,6 @@ const {
   DEFAULT_PREFS,
   default: xtrmUiExtension,
   renderExternalToolBackgroundLines,
-  wrapToolTreeText,
 } = await import("../../../packages/pi-extensions/extensions/xtrm-ui/index");
 
 function loadExtension() {
@@ -329,30 +328,6 @@ describe("xtrm-ui built-in tool rendering", () => {
       context({ command: "echo pending" }, { executionStarted: false, isPartial: true }),
     );
     expect(colors).toEqual(["accent", "accent", "dim"]); // • , Ran, command
-  });
-
-  it("keeps tree indentation when a tool line wraps", () => {
-    const text = [
-      "• Ran set -u",
-      '  │ s=color-env-check; tmux kill-session -t "$s" 2>/dev/null || true',
-    ].join("\n");
-
-    const lines = wrapToolTreeText(text, 32).split("\n");
-
-    expect(lines[0]).toBe("• Ran set -u");
-    expect(lines.slice(1).length).toBeGreaterThan(1);
-    expect(lines.slice(1).every((line) => line.startsWith("  │ "))).toBe(true);
-    expect(Math.max(...lines.map((line) => line.length))).toBeLessThanOrEqual(32);
-  });
-
-  it("uses the command tree marker for a wrapped single-line command", () => {
-    const text = "• Ran stat -c '%F %N' /home/dawid/.pi/agent/npm/node_modules/@jaggerxtrm/pi-extensions; cmp -s /home/dawid/dev/core/packages/pi-extensions/extensions/xtrm-ui/index.ts /home/dawid/.pi/agent/npm/node_modules/@jaggerxtrm/pi-extensions/extensions/xtrm-ui/index.ts; echo cmp=$?; grep -n 'wrapToolTreeText\|function renderPendingCall' /home/dawid/.pi/agent/npm/node_modules/@jaggerxtrm/pi-extensions/extensions/xtrm-ui/index.ts | head";
-    const lines = wrapToolTreeText(text, 32).split("\n");
-
-    expect(lines[0]).toMatch(/^• Ran /);
-    expect(lines.slice(1).length).toBeGreaterThan(1);
-    expect(lines.slice(1).every((line) => line.startsWith("  │ "))).toBe(true);
-    expect(Math.max(...lines.map((line) => line.length))).toBeLessThanOrEqual(32);
   });
 
   it.each([
