@@ -284,7 +284,7 @@ type PatchableToolExecutionComponent = {
 type ExternalToolFrameKind = "serena" | "gitnexus" | "structured" | "process" | "external";
 
 const PATCHED_EXTERNAL_TOOL_FRAME = "__xtrmUiExternalToolFrame";
-const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 19;
+const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 20;
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 
 function stripAnsi(text: string): string {
@@ -485,7 +485,11 @@ async function installExternalToolFramePatch(): Promise<void> {
   const themeMod = await import(pathToFileURL(join(dirname(entryPath), "modes", "interactive", "theme", "theme.js")).href) as {
     theme: { bg: (token: string, text: string) => string };
   };
-  const themeLike = { bg: themeMod.theme.bg };
+  const themeLike = {
+    // Keep the call through the proxy: theme.bg reads this.bgColors off the
+    // Theme instance, so a detached method reference crashes (this = caller).
+    bg: (token: string, text: string) => themeMod.theme.bg(token, text),
+  };
   const proto = mod.ToolExecutionComponent?.prototype as
     | (ToolExecutionComponentCtor["prototype"] & { [PATCHED_EXTERNAL_TOOL_FRAME]?: number })
     | undefined;
@@ -511,20 +515,26 @@ async function installExternalToolFramePatch(): Promise<void> {
     }
     const firstContentIndex = rendered.findIndex((line) => !isBlankRenderedLine(line));
     const leading = firstContentIndex > 0 ? rendered.slice(0, firstContentIndex) : [];
-    const content = extractResultTextLines(this) ?? rendered;
     const state: ExternalToolState = this.isPartial
       ? "running"
       : this.result?.isError ? "failure" : "success";
-    const styled = renderExternalToolLines(
-      content,
-      width,
-      kind,
-      Boolean(this.expanded),
-      this.toolName,
-      this.__xtrmExternalDurationMs,
-      state,
-      themeLike,
-    );
+    const content = extractResultTextLines(this) ?? rendered;
+    let styled: string[];
+    try {
+      styled = renderExternalToolLines(
+        content,
+        width,
+        kind,
+        Boolean(this.expanded),
+        this.toolName,
+        this.__xtrmExternalDurationMs,
+        state,
+        themeLike,
+      );
+    } catch {
+      // A patched renderer must never take the interactive mode down.
+      return rendered;
+    }
     return styled.length > 0 ? [...leading, ...styled] : rendered;
   };
 
