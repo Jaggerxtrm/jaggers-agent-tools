@@ -136,7 +136,7 @@ type PatchableAssistantMessage = {
 	updateContent?: (message: AssistantMessageLike) => void;
 };
 
-const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview";
+const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview2";
 
 const THINKING_RECAP_MAX = 120;
 
@@ -306,9 +306,12 @@ async function installThinkingPreviewPatch(): Promise<void> {
 				const compact = this.hideThinkingBlock === true || !thinkingFollowsToggle;
 				const content = message.content.map((block) => {
 					if (block.type !== "thinking" || !block.thinking?.trim()) return block;
-					return compact
-						? { type: "text", text: buildCollapsedThinkingRow(buildThinkingRecap(block.thinking), style) }
-						: { type: "text", text: buildExpandedThinkingBlock(block.thinking, style) };
+					const row = compact
+						? buildCollapsedThinkingRow(buildThinkingRecap(block.thinking), style)
+						: buildExpandedThinkingBlock(block.thinking, style);
+					// Keep type "thinking" so pi's assistant-message layout adds its
+					// Spacer(1) after the thinking run when a visible block follows.
+					return { ...block, thinking: row };
 				});
 				updateContent.call(this, { ...message, content });
 				return;
@@ -1475,9 +1478,11 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
   void installExternalToolFramePatch().catch(() => undefined);
 
   // Keep collapsed thinking rows to one line: the recap is truncated to the
-  // render width so the expand hint never wraps or disappears.
+  // render width so the expand hint never wraps or disappears. Runs for both
+  // plain assistant text and 'assistant-thinking' blocks (the collapsed row is
+  // a thinking block again so pi can add its post-thinking spacer).
   pi.registerMarkdownTransformer((markdown, context) => {
-    if (context.messageType !== "assistant" || !markdown.includes("Thinking...")) return markdown;
+    if (!markdown.includes("Thinking...")) return markdown;
     return fitThinkingRowToWidth(markdown, context.availableWidth);
   });
 
