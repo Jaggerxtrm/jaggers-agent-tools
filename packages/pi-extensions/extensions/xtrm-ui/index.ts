@@ -411,7 +411,7 @@ function externalToolBadgeColor(kind: ExternalToolFrameKind, text: string): stri
     external: [178, 190, 210],
   };
   const [badgeR, badgeG, badgeB] = bgColors[kind];
-  return `\x1b[38;2;3;8;12m\x1b[48;2;${badgeR};${badgeG};${badgeB}m${text}\x1b[39m\x1b[49m`;
+  return `\x1b[38;2;3;8;12m\x1b[48;2;${badgeR};${badgeG};${badgeB}m ${text} \x1b[39m\x1b[49m`;
 }
 
 export function collapsedExternalToolLines(contentLines: string[], expanded: boolean): string[] {
