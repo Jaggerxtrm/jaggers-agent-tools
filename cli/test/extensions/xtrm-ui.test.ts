@@ -526,7 +526,7 @@ describe("xtrm-ui external tool rendering", () => {
       "find_symbol",
     );
 
-    expect(rendered[0]).toContain("\x1b[38;2;82;210;255m• Serena\x1b[39m \x1b[1mfind_symbol\x1b[22m");
+    expect(rendered[0]).toContain("\x1b[38;2;3;8;12m\x1b[48;2;82;210;255mSerena\x1b[39m\x1b[49m \x1b[1mfind_symbol\x1b[22m");
     expect(rendered.length).toBeGreaterThan(2);
     expect(rendered.join("\n")).toContain('"name_path": "highlightExternalToolBadge"');
   });
@@ -540,7 +540,7 @@ describe("xtrm-ui external tool rendering", () => {
       "mcp_custom_tool",
     );
 
-    expect(rendered[0]).toContain("\x1b[38;2;178;190;210m• mcp\x1b[39m \x1b[1mcustom_tool\x1b[22m");
+    expect(rendered[0]).toContain("\x1b[38;2;3;8;12m\x1b[48;2;178;190;210mmcp\x1b[39m\x1b[49m \x1b[1mcustom_tool\x1b[22m");
   });
 
   it("keeps a colored provider label and action for raw GitNexus output", () => {
@@ -552,38 +552,28 @@ describe("xtrm-ui external tool rendering", () => {
       "gitnexus_query",
     );
 
-    expect(rendered[0]).toContain("\x1b[38;2;178;154;255m• GitNexus\x1b[39m \x1b[1mquery\x1b[22m");
+    expect(rendered[0]).toContain("\x1b[38;2;3;8;12m\x1b[48;2;178;154;255mGitNexus\x1b[39m\x1b[49m \x1b[1mquery\x1b[22m");
   });
 
-  it("keeps the kind-colored label stable across states; failure dims the action; bg follows the phase", () => {
+  it("keeps the static chip identical across lifecycle states (no color changing)", () => {
     const stripAnsi = (value: string) => value.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
-    const bgTokens: string[] = [];
-    const bgTheme = {
-      bg: (token: string, text: string) => { bgTokens.push(token); return text; },
-    };
     const states = [
-      ["running", "toolPendingBg", "\x1b[1mexecute_shell_command\x1b[22m"],
-      ["success", "toolSuccessBg", "\x1b[1mexecute_shell_command\x1b[22m"],
-      ["failure", "toolErrorBg", "\x1b[2mexecute_shell_command\x1b[22m"],
+      "› [Serena] execute_shell_command",
+      "[Serena] execute_shell_command",
+      "[Serena] execute_shell_command",
     ] as const;
+    const expected = "› Serena execute_shell_command";
 
-    for (const [state, bgToken, actionStyled] of states) {
-      bgTokens.length = 0;
+    for (const header of states) {
       const rendered = renderExternalToolBackgroundLines(
-        ["[Serena] execute_shell_command", "result"],
+        [header, "result"],
         200,
         "serena",
         false,
         "execute_shell_command",
-        undefined,
-        state,
-        bgTheme,
       );
-      expect(stripAnsi(rendered[0] ?? "").trim()).toBe("• Serena execute_shell_command");
-      expect(rendered[0]).toContain("\x1b[38;2;82;210;255m• Serena\x1b[39m");
-      expect(rendered[0]).toContain(actionStyled);
-      expect(bgTokens.length).toBeGreaterThan(0);
-      expect(bgTokens.every((token) => token === bgToken)).toBe(true);
+      expect(stripAnsi(rendered[0] ?? "")).toBe(expected);
+      expect(rendered[0]).toContain("\x1b[38;2;3;8;12m\x1b[48;2;82;210;255mSerena\x1b[39m\x1b[49m \x1b[1mexecute_shell_command\x1b[22m");
     }
   });
 

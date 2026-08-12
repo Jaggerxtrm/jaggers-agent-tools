@@ -341,7 +341,7 @@ type PatchableToolExecutionComponent = {
 type ExternalToolFrameKind = "serena" | "gitnexus" | "structured" | "process" | "external";
 
 const PATCHED_EXTERNAL_TOOL_FRAME = "__xtrmUiExternalToolFrame";
-const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 20;
+const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 21;
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 
 function stripAnsi(text: string): string {
@@ -402,28 +402,16 @@ function trimRenderedToolLines(lines: string[]): string[] {
   return lines.slice(start, end).map((line) => line.replace(/\s+$/u, ""));
 }
 
-type ExternalToolState = "running" | "success" | "failure";
-
-function externalToolKindColor(kind: ExternalToolFrameKind, text: string): string {
-  const fgColors: Record<ExternalToolFrameKind, [number, number, number]> = {
+function externalToolBadgeColor(kind: ExternalToolFrameKind, text: string): string {
+  const bgColors: Record<ExternalToolFrameKind, [number, number, number]> = {
     serena: [82, 210, 255],
     gitnexus: [178, 154, 255],
     structured: [205, 166, 255],
     process: [92, 226, 255],
     external: [178, 190, 210],
   };
-  const [fgR, fgG, fgB] = fgColors[kind];
-  return `\x1b[38;2;${fgR};${fgG};${fgB}m${text}\x1b[39m`;
-}
-
-function externalToolStateBgToken(state: ExternalToolState): string {
-  if (state === "running") return "toolPendingBg";
-  return state === "failure" ? "toolErrorBg" : "toolSuccessBg";
-}
-
-function padToRenderWidth(line: string, width: number): string {
-  const fitted = truncateToWidth(line, width);
-  return fitted + " ".repeat(Math.max(0, width - visibleWidth(fitted)));
+  const [badgeR, badgeG, badgeB] = bgColors[kind];
+  return `\x1b[38;2;3;8;12m\x1b[48;2;${badgeR};${badgeG};${badgeB}m${text}\x1b[39m\x1b[49m`;
 }
 
 export function collapsedExternalToolLines(contentLines: string[], expanded: boolean): string[] {
@@ -473,8 +461,6 @@ export function renderExternalToolBackgroundLines(
   expanded: boolean,
   toolName?: string,
   durationMs?: number,
-  state: ExternalToolState = "success",
-  themeLike?: { bg: (token: string, text: string) => string },
 ): string[] {
   let displayLines = contentLines;
   const raw = contentLines.length === 1 ? contentLines[0]?.trim() : undefined;
@@ -491,10 +477,8 @@ export function renderExternalToolBackgroundLines(
     || /^[•›]\s+\S+/u.test(firstLine);
   const header = externalToolHeader(kind, toolName, firstLine);
   const payloadLines = hasHeader ? displayLines.slice(1) : displayLines;
-  const action = header.action
-    ? ` ${state === "failure" ? `\x1b[2m${header.action}\x1b[22m` : `\x1b[1m${header.action}\x1b[22m`}`
-    : "";
-  const headerLine = `${externalToolKindColor(kind, `• ${header.provider}`)}${action}`;
+  const action = header.action ? ` \x1b[1m${header.action}\x1b[22m` : "";
+  const headerLine = `${TOOL_ROW_MARKER} ${externalToolBadgeColor(kind, header.provider)}${action}`;
   displayLines = [headerLine, ...payloadLines];
 
   const renderedHeader = displayLines[0] ?? "";
@@ -514,12 +498,9 @@ export function renderExternalToolBackgroundLines(
     truncateToWidth(renderedHeader, renderWidth),
     ...visiblePayload.map((rawLine) => truncateToWidth(rawLine, renderWidth)),
   ];
-  const bgFn = themeLike
-    ? (line: string) => themeLike.bg(externalToolStateBgToken(state), padToRenderWidth(line, renderWidth))
-    : (line: string) => line;
   return footerMeta
-    ? [...body.map(bgFn), bgFn(`\x1b[2m${truncateToWidth(`└─ ${footerMeta}`, renderWidth)}\x1b[22m`)]
-    : body.map(bgFn);
+    ? [...body, `\x1b[2m${truncateToWidth(`└─ ${footerMeta}`, renderWidth)}\x1b[22m`]
+    : body;
 }
 
 function renderExternalToolLines(
@@ -529,12 +510,10 @@ function renderExternalToolLines(
   expanded = false,
   toolName?: string,
   durationMs?: number,
-  state: ExternalToolState = "success",
-  themeLike?: { bg: (token: string, text: string) => string },
 ): string[] {
   const contentLines = trimRenderedToolLines(lines).filter((line) => !isBlankRenderedLine(line));
   return contentLines.length > 0
-    ? renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs, state, themeLike)
+    ? renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs)
     : [];
 }
 
@@ -543,14 +522,6 @@ async function installExternalToolFramePatch(): Promise<void> {
   const componentPath = join(dirname(entryPath), "modes", "interactive", "components", "tool-execution.js");
   const mod = await import(pathToFileURL(componentPath).href) as {
     ToolExecutionComponent?: ToolExecutionComponentCtor;
-  };
-  const themeMod = await import(pathToFileURL(join(dirname(entryPath), "modes", "interactive", "theme", "theme.js")).href) as {
-    theme: { bg: (token: string, text: string) => string };
-  };
-  const themeLike = {
-    // Keep the call through the proxy: theme.bg reads this.bgColors off the
-    // Theme instance, so a detached method reference crashes (this = caller).
-    bg: (token: string, text: string) => themeMod.theme.bg(token, text),
   };
   const proto = mod.ToolExecutionComponent?.prototype as
     | (ToolExecutionComponentCtor["prototype"] & { [PATCHED_EXTERNAL_TOOL_FRAME]?: number })
@@ -577,9 +548,6 @@ async function installExternalToolFramePatch(): Promise<void> {
     }
     const firstContentIndex = rendered.findIndex((line) => !isBlankRenderedLine(line));
     const leading = firstContentIndex > 0 ? rendered.slice(0, firstContentIndex) : [];
-    const state: ExternalToolState = this.isPartial
-      ? "running"
-      : this.result?.isError ? "failure" : "success";
     const content = extractResultTextLines(this) ?? rendered;
     let styled: string[];
     try {
@@ -590,8 +558,6 @@ async function installExternalToolFramePatch(): Promise<void> {
         Boolean(this.expanded),
         this.toolName,
         this.__xtrmExternalDurationMs,
-        state,
-        themeLike,
       );
     } catch {
       // A patched renderer must never take the interactive mode down.
