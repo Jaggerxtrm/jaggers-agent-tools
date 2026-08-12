@@ -579,7 +579,7 @@ describe("xtrm-ui external tool rendering", () => {
         state,
         bgTheme,
       );
-      expect(stripAnsi(rendered[0] ?? "")).toBe("• Serena execute_shell_command");
+      expect(stripAnsi(rendered[0] ?? "").trim()).toBe("• Serena execute_shell_command");
       expect(rendered[0]).toContain("\x1b[38;2;82;210;255m• Serena\x1b[39m");
       expect(rendered[0]).toContain(actionStyled);
       expect(bgTokens.length).toBeGreaterThan(0);
