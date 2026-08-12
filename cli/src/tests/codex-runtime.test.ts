@@ -222,7 +222,7 @@ describe('Codex runtime descriptor', () => {
         expect(outcome.next_actions.some((next) => next.kind === 'resume')).toBe(false);
         expect(outcome.next_actions.flatMap((next) => next.argv)).not.toContain('resume');
         // Hook trust is never bargained away, degraded or not.
-        expect(outcome.safety_profile.hook_trust).toBe('preserved');
+        expect(outcome.safety_profile?.hook_trust).toBe('preserved');
         expect(outcome.next_actions.flatMap((next) => next.argv))
             .not.toContain('--dangerously-bypass-hook-trust');
     });

@@ -1,0 +1,163 @@
+{
+  "$comment": "CHARACTERIZATION fixture set for KAN-127 K4 / beads xtrm-ozknq.10. Pins Codex 0.147.0 hook payload schemas after the 0.146.0 -> 0.147.0 runtime bump, so a later shared-launcher refactor cannot silently change the assumed Codex contract.",
+  "schema_version": "xtrm.codex.fixture-manifest.v1",
+  "runtime": "codex",
+  "runtime_version": "codex-cli 0.147.0",
+  "executable": "<CODEX_HOME>/packages/standalone/releases/0.147.0-x86_64-unknown-linux-musl/bin/codex",
+  "codex_home": "<CODEX_HOME>",
+  "capture_date": "2026-08-12",
+  "capture_method": {
+    "summary": "Static extraction of the draft-07 JSON Schemas embedded in the codex binary, performed by scripts/capture-codex-schemas.mjs. No Codex session was started and no hook was invoked.",
+    "script": "scripts/capture-codex-schemas.mjs",
+    "provenance": "The script reproduces the hand-run 0.146.0 procedure. It was validated by re-extracting from the retained 0.146.0 binary and confirming all 21 committed 0.146.0 fixtures byte-for-byte before it was used here.",
+    "byte_range_searched": [
+      212391711,
+      212416410
+    ],
+    "occurrence_count": 21,
+    "serialization": "JSON.stringify(recursively key-sorted schema, null, 2) + '\\n'"
+  },
+  "redaction": {
+    "instance_data_captured": false,
+    "assertion": "These fixtures are JSON Schema documents extracted from the binary. They contain no captured instance data, no session transcript, no environment values, and therefore no credentials, tokens, API keys, operator file paths, or prompt text.",
+    "verified_by": "cli/src/tests/codex-k1-payload-fixtures.test.ts (redaction negative proof)"
+  },
+  "compatibility": {
+    "compared_against": "0.146.0",
+    "hook_schemas": "IDENTICAL. All 21 extracted schema documents are byte-for-byte equal to the 0.146.0 set. The hook payload contract did not change across this runtime bump.",
+    "exec_jsonl": "Event types and key sets are unchanged (thread.started, turn.started, item.completed, turn.completed). The 0.146.0 capture carries one additional item.completed advisory (skill-context-budget), which the 0.146.0 metadata already records as a non-contractual observed item. The terminal agent_message payload is identical.",
+    "live_rollout": "IDENTICAL for the exec surface. Compared like-for-like (both captured with the exec command in metadata.capture), 0.147.0 adds and removes no top-level key, no session_meta payload field, and no record type versus 0.146.0.",
+    "verdict": "0.147.0 is backward-compatible with the K1 characterization. Hook schemas and the exec-surface rollout are unchanged; no field or record type was removed on any compared surface.",
+    "session_mode_caveat": "Interactive TUI rollouts carry fields the exec rollouts do not: top-level 'ordinal', session_meta 'git', and record type 'compacted' (the last only once a session compacts). Those are session-MODE differences, not version differences. An earlier pass in this work compared a 0.146.0 exec rollout against a 0.147.0 interactive rollout and wrongly attributed them to the version bump. Only compare captures made with the same command. The interactive surface is not pinned by this fixture set."
+  },
+  "expected_event_count": 11,
+  "expected_file_count": 21,
+  "files": {
+    "permission-request.command.input.json": {
+      "title": "permission-request.command.input",
+      "byte_offset": 212394566,
+      "byte_length": 1279,
+      "sha256": "ffe7200494f1113307efc1c958816fbaa3c16297ce4bb358bc5b22172a437a70"
+    },
+    "permission-request.command.output.json": {
+      "title": "permission-request.command.output",
+      "byte_offset": 212395878,
+      "byte_length": 2346,
+      "sha256": "69c0a581b3f02ec44b22d4f8a7f2f3c15d37dc2df4bb106b3e4395f5e0c70972"
+    },
+    "post-compact.command.input.json": {
+      "title": "post-compact.command.input",
+      "byte_offset": 212398250,
+      "byte_length": 1071,
+      "sha256": "d5cecd14bd2ca18605ba8209108f76291f886ffe3cb4762d70e712c148836f31"
+    },
+    "post-compact.command.output.json": {
+      "title": "post-compact.command.output",
+      "byte_offset": 212399348,
+      "byte_length": 475,
+      "sha256": "811b7ae2a4b277cd51c9df989f347e494fa981d01e346bc2a757506e97734882"
+    },
+    "post-tool-use.command.input.json": {
+      "title": "post-tool-use.command.input",
+      "byte_offset": 212391711,
+      "byte_length": 1386,
+      "sha256": "d569956a287ec0864b514d8ff5dbdf0b70bfbb370d89e61a1207bbdf9208ba7d"
+    },
+    "post-tool-use.command.output.json": {
+      "title": "post-tool-use.command.output",
+      "byte_offset": 212393125,
+      "byte_length": 1441,
+      "sha256": "fe7271d436266554150b2be783ca10da08dded8784eb8af2ffd00fb81668988a"
+    },
+    "pre-compact.command.input.json": {
+      "title": "pre-compact.command.input",
+      "byte_offset": 212403144,
+      "byte_length": 1069,
+      "sha256": "5728b5da4c63e1e07f2d53ac8b2adc18306cd3dc8b01b556fc422e75b32a8734"
+    },
+    "pre-compact.command.output.json": {
+      "title": "pre-compact.command.output",
+      "byte_offset": 212404239,
+      "byte_length": 474,
+      "sha256": "98ba0dbf0848d8283cfe48a85122f4d9122baae1b457f50e239504864900247e"
+    },
+    "pre-tool-use.command.input.json": {
+      "title": "pre-tool-use.command.input",
+      "byte_offset": 212399849,
+      "byte_length": 1336,
+      "sha256": "d5cb38c98a7d931907aa96614c4c52a5bc0c37d61b3f897837e32331842d3100"
+    },
+    "pre-tool-use.command.output.json": {
+      "title": "pre-tool-use.command.output",
+      "byte_offset": 212401212,
+      "byte_length": 1907,
+      "sha256": "1ba5f66f888f5a8362ff8c46883b4cb1297de53d3d802b92d25535460cfdd0fc"
+    },
+    "session-end.command.input.json": {
+      "title": "session-end.command.input",
+      "byte_offset": 212406914,
+      "byte_length": 717,
+      "sha256": "99bf6e75091525b96926dd85a0adf6589dea93fe0d181394027fabda8139402e"
+    },
+    "session-start.command.input.json": {
+      "title": "session-start.command.input",
+      "byte_offset": 212404740,
+      "byte_length": 1060,
+      "sha256": "9a2fe5c4541eb733c1b9a402b28b3c50939bd3d3bb76cf6d7ec7e56cc1441f5d"
+    },
+    "session-start.command.output.json": {
+      "title": "session-start.command.output",
+      "byte_offset": 212405828,
+      "byte_length": 1061,
+      "sha256": "72c8cded2efc7024abfd62692b84934b1b1999cb595665f4a520dc8ebb5eb690"
+    },
+    "stop.command.input.json": {
+      "title": "stop.command.input",
+      "byte_offset": 212415150,
+      "byte_length": 1241,
+      "sha256": "b162ebcae8c3b872aee3725128b436769557fc1fe0c83336c4e76eed62b22626"
+    },
+    "stop.command.output.json": {
+      "title": "stop.command.output",
+      "byte_offset": 212416410,
+      "byte_length": 963,
+      "sha256": "37679d1a933fdc3dc8cea5ff12d7d0e2dacfc036208d134aefc09247e1222d88"
+    },
+    "subagent-start.command.input.json": {
+      "title": "subagent-start.command.input",
+      "byte_offset": 212407659,
+      "byte_length": 1197,
+      "sha256": "e1cacc5cd92217e96e327cf182038fa93099d194c3107439b4dad4b806d414cc"
+    },
+    "subagent-start.command.output.json": {
+      "title": "subagent-start.command.output",
+      "byte_offset": 212408885,
+      "byte_length": 1065,
+      "sha256": "531f7a457ad8430de82388319ff2bf030fd3a1dc0e9a0d4078447bc30948448b"
+    },
+    "subagent-stop.command.input.json": {
+      "title": "subagent-stop.command.input",
+      "byte_offset": 212409977,
+      "byte_length": 1502,
+      "sha256": "27842578768e74fb8bcd86b30156b207011829a81dc01b00cfd55340df8b079f"
+    },
+    "subagent-stop.command.output.json": {
+      "title": "subagent-stop.command.output",
+      "byte_offset": 212411507,
+      "byte_length": 972,
+      "sha256": "a3987dab22b8684ab108bbb76ec5306471d9e01b1b7cac007b1ed90bc9e055cf"
+    },
+    "user-prompt-submit.command.input.json": {
+      "title": "user-prompt-submit.command.input",
+      "byte_offset": 212412479,
+      "byte_length": 1230,
+      "sha256": "31d3d5e094ae9baa9478bc8e3d09f689de5a74228a404d2dffe60fc8fa89e3a0"
+    },
+    "user-prompt-submit.command.output.json": {
+      "title": "user-prompt-submit.command.output",
+      "byte_offset": 212413742,
+      "byte_length": 1390,
+      "sha256": "12a741340d3a5acaf139721ad086d79d6dc0d961f752c6d82bd7a315f374e641"
+    }
+  }
+}

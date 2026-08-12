@@ -1,0 +1,49 @@
+{
+  "schema_version": "xtrm.codex.fixture-metadata.v1",
+  "runtime": {
+    "product": "codex-cli",
+    "version": "0.147.0",
+    "executable_source": "<CODEX_HOME>/packages/standalone/releases/0.147.0-x86_64-unknown-linux-musl/bin/codex"
+  },
+  "capture": {
+    "captured_at": "2026-08-12",
+    "surface": "exec-jsonl",
+    "command": [
+      "codex",
+      "--sandbox",
+      "read-only",
+      "--ask-for-approval",
+      "never",
+      "exec",
+      "--json",
+      "--ephemeral",
+      "--ignore-user-config",
+      "--skip-git-repo-check",
+      "Return exactly CODEX_K1_OK and do not use tools."
+    ],
+    "stdin": "closed (</dev/null). Without this the command blocks on 'Reading additional input from stdin...' and never terminates.",
+    "config_root": "ignored with --ignore-user-config",
+    "redactions": [
+      "operator home path -> <HOME>",
+      "session cwd -> <CWD>",
+      "base_instructions text -> byte-count placeholder"
+    ]
+  },
+  "live": {
+    "rollout": "live/rollout-0.147.0.observed.jsonl",
+    "capture_note": "Captured with the same command minus --ephemeral, which is required because --ephemeral persists no rollout file.",
+    "records": 14
+  },
+  "stderr": [
+    "Reading additional input from stdin..."
+  ],
+  "why_this_version_exists": [
+    "The 0.146.0 fixture set was captured on 2026-08-02. On 2026-08-12 the host runtime was upgraded to 0.147.0 to clear an interactive 'Update available' startup interstitial that prevented Codex from opening a thread, which made bare `xt codex` unusable (bead xtrm-7edzx).",
+    "That upgrade left the K1 fixtures pinned to a runtime no longer installed, so the K4 parity matrix would have certified parity against a version nobody runs. This set restores that provenance.",
+    "Result: the hook payload contract is unchanged. See manifest.json 'compatibility' for the verified per-surface comparison."
+  ],
+  "notes": [
+    "The 0.146.0 capture emitted an extra item.completed advisory about the skill context budget. That advisory is environment-dependent, not version-dependent: it was observed on 0.147.0 in an interactive session during the same work. Its absence here is not a regression.",
+    "The fixture records event shape, not a promise that every successful run emits the same advisory items."
+  ]
+}
