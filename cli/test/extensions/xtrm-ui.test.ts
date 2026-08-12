@@ -23,7 +23,8 @@ vi.mock("@earendil-works/pi-tui", () => ({
     constructor(private text: string) {}
     render() { return this.text.split("\n"); }
   },
-  truncateToWidth: (text: string) => text,
+  truncateToWidth: (text: string, width?: number) =>
+    typeof width === "number" && width > 0 && text.length > width ? text.slice(0, width) : text,
   visibleWidth: (text: string) => text.length,
   wrapTextWithAnsi: (text: string, width: number) => {
     const lines: string[] = [];
@@ -47,6 +48,7 @@ const {
 	collapsedExternalToolLines,
 	DEFAULT_PREFS,
 	default: xtrmUiExtension,
+	fitThinkingRowToWidth,
 	renderExternalToolBackgroundLines,
 } = await import("../../../packages/pi-extensions/extensions/xtrm-ui/index");
 
@@ -274,9 +276,15 @@ describe("xtrm-ui thinking chrome", () => {
     );
   });
 
-  it("prefers the last bold section header when present", () => {
-    const recap = buildThinkingRecap("investigating…\n**Summary**:\nmerged queue is clean");
-    expect(recap).toBe("Summary");
+  it("skips one-word fragments and picks the first substantive line", () => {
+    expect(buildThinkingRecap("**The**\nThe user reports no bold at the render width in the real pipeline")).toBe(
+      "The user reports no bold at the render width in the real pipeline",
+    );
+  });
+
+  it("skips fragment first lines and strips list markers", () => {
+    const recap = buildThinkingRecap("Now:\n- \"toggled compact preview\" PASSES (test bug fixed)");
+    expect(recap).toBe("\"toggled compact preview\" PASSES (test bug fixed)");
   });
 
   it("strips markdown emphasis and collapses whitespace", () => {
@@ -302,6 +310,30 @@ describe("xtrm-ui thinking chrome", () => {
   it("builds the expanded block with collapse hint and full dimmed trace", () => {
     const block = buildExpandedThinkingBlock("Full trace\nsecond line", thinkingStyle);
     expect(block).toBe("B[Thinking...] H[(Ctrl+T to collapse)]\n\nD[Full trace\nsecond line]");
+  });
+  it("keeps the collapsed row on one line and truncates the recap to fit", () => {
+    const row = ` Thinking... · ${'x'.repeat(80)} (Ctrl+T to expand)`;
+    const fitted = fitThinkingRowToWidth(row, 40);
+    expect(fitted.split("\n")).toHaveLength(1);
+    expect(fitted.startsWith(" Thinking... · ")).toBe(true);
+    expect(fitted.endsWith(" (Ctrl+T to expand)")).toBe(true);
+    expect(fitted.length).toBeLessThan(row.length);
+  });
+
+  it("leaves a fitting row untouched", () => {
+    const row = " Thinking... · short recap (Ctrl+T to expand)";
+    expect(fitThinkingRowToWidth(row, 80)).toBe(row);
+  });
+
+  it("leaves expanded and non-row markdown untouched", () => {
+    const expanded = "Thinking... (Ctrl+T to collapse)\n\nfull trace here";
+    expect(fitThinkingRowToWidth(expanded, 40)).toBe(expanded);
+    expect(fitThinkingRowToWidth("regular assistant text", 40)).toBe("regular assistant text");
+  });
+
+  it("passes through when no width is available", () => {
+    const row = " Thinking... · " + "x".repeat(80) + " (Ctrl+T to expand)";
+    expect(fitThinkingRowToWidth(row, undefined)).toBe(row);
   });
 });
 
