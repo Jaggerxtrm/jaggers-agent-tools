@@ -153,25 +153,29 @@ export interface ThinkingRowStyle {
 }
 
 /**
- * One-line recap of a thinking block: the last bold section header when the
- * trace has one (reasoning summaries usually do), otherwise the first
- * non-empty line, stripped of markdown emphasis and truncated. Ported from
- * prime-agent's assistant-message component.
+ * One-line recap of a thinking block: the first substantive line, stripped of
+ * markdown emphasis and list markers, whitespace-collapsed and truncated.
+ * Fragments (a stray `**The**` or a one-word line) are skipped in favor of the
+ * first line with real content.
  */
 export function buildThinkingRecap(thinking: string, fallback = "Thinking..."): string {
-	const lines = thinking.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
-	const lastHeader = [...lines].reverse().find((line) => /^\*\*[^*]+\*\*:?$/.test(line) || /^#{1,6}\s+\S/.test(line));
-	const source = lastHeader ?? lines[0] ?? fallback;
-	const plain = stripAnsi(source)
-		.replace(/^#{1,6}\s+/, "")
-		.replace(/\*\*([^*]+)\*\*/g, "$1")
-		.replace(/\*([^*]+)\*/g, "$1")
-		.replace(/`([^`]+)`/g, "$1")
-		.replace(/\s+/g, " ")
-		.replace(/:$/, "")
-		.trim();
-	if (!plain) return fallback;
-	return plain.length > THINKING_RECAP_MAX ? plain.slice(0, THINKING_RECAP_MAX - 3) + "..." : plain;
+	const cleaned = thinking
+		.split("\n")
+		.map((line) =>
+			stripAnsi(line)
+				.replace(/^#{1,6}\s+/, "")
+				.replace(/\*\*([^*]+)\*\*/g, "$1")
+				.replace(/\*([^*]+)\*/g, "$1")
+				.replace(/`([^`]+)`/g, "$1")
+				.replace(/^[-*+:]\s*/, "")
+				.replace(/\s+/g, " ")
+				.replace(/:$/, "")
+				.trim(),
+		)
+		.filter((line) => line.length > 0);
+	const source = cleaned.find((line) => line.length >= 20) ?? cleaned[0] ?? fallback;
+	if (!source) return fallback;
+	return source.length > THINKING_RECAP_MAX ? source.slice(0, THINKING_RECAP_MAX - 3) + "..." : source;
 }
 
 /** Collapsed row: bold label, dim separator, dimmed recap, expand hint. */
@@ -182,6 +186,59 @@ export function buildCollapsedThinkingRow(recap: string, style: ThinkingRowStyle
 /** Expanded block: bold label row with collapse hint, then the full dimmed trace. */
 export function buildExpandedThinkingBlock(thinking: string, style: ThinkingRowStyle): string {
 	return `${style.label("Thinking...")} ${style.hint("(Ctrl+T to collapse)")}\n\n${style.recap(thinking.trim())}`;
+}
+
+const THINKING_ROW_LABEL = "Thinking...";
+const THINKING_ROW_EXPAND_HINT = "(Ctrl+T to expand)";
+// Pi's renderer reserves ~9-12 visible columns for the terminal-integration
+// (OSC133) zone markers on the final content line; subtract so the row fits.
+const THINKING_ROW_WIDTH_MARGIN = 12;
+
+/** Raw row offset for a given visible-character index (skips ANSI escapes). */
+function rawOffsetForVisibleIndex(row: string, visibleIndex: number): number {
+	let visible = 0;
+	for (let i = 0; i < row.length; i++) {
+		if (row[i] === "\x1b") {
+			const m = row.slice(i).match(/^\x1b\[[0-9;?]*[ -/]*[@-~]/);
+			if (m) {
+				i += m[0].length - 1;
+				continue;
+			}
+		}
+		if (visible === visibleIndex) return i;
+		visible += visibleWidth(row[i]) || 1;
+	}
+	return row.length;
+}
+
+/**
+ * Keeps a collapsed thinking row on ONE line at the given render width,
+ * truncating the recap so the expand hint always survives — the same behavior
+ * as prime-agent's CollapsedThinkingRow. Non-row markdown passes through.
+ */
+export function fitThinkingRowToWidth(row: string, availableWidth: number | undefined): string {
+	if (!availableWidth || availableWidth <= 0) return row;
+	if (!row.includes(THINKING_ROW_LABEL) || row.includes("\n")) return row;
+	const plain = stripAnsi(row);
+	if (!plain.trimStart().startsWith(THINKING_ROW_LABEL) || !plain.includes(THINKING_ROW_EXPAND_HINT)) return row;
+
+	const labelEnd = plain.indexOf(THINKING_ROW_LABEL) + THINKING_ROW_LABEL.length;
+	const sepMatch = plain.slice(labelEnd).match(/^\s*·\s*/);
+	const recapStartPlain = labelEnd + (sepMatch?.[0].length ?? 0);
+	const recapStart = rawOffsetForVisibleIndex(row, recapStartPlain);
+	const hintStart = rawOffsetForVisibleIndex(row, plain.indexOf(THINKING_ROW_EXPAND_HINT) - 1);
+	const labelSepRaw = row.slice(0, recapStart);
+	const recapRaw = row.slice(recapStart, hintStart);
+	const hintRaw = row.slice(hintStart);
+
+	const fixedWidth = visibleWidth(stripAnsi(labelSepRaw)) + visibleWidth(stripAnsi(hintRaw));
+	const recapWidth = Math.max(8, availableWidth - fixedWidth - THINKING_ROW_WIDTH_MARGIN);
+	const recapPlain = stripAnsi(recapRaw).trim();
+	if (visibleWidth(recapPlain) <= recapWidth) return row;
+
+	const colorPrefix = recapRaw.match(/^(\x1b\[[0-9;?]*m)+/)?.[0] ?? "";
+	const colorSuffix = recapRaw.match(/(\x1b\[[0-9;?]*m)+$/)?.[0] ?? "";
+	return labelSepRaw + colorPrefix + truncateToWidth(recapPlain, recapWidth) + colorSuffix + hintRaw;
 }
 
 function maybeFileUrlToPath(value: string): string {
@@ -1445,6 +1502,13 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
 export default function xtrmUiExtension(pi: ExtensionAPI): void {
   void installThinkingPreviewPatch().catch(() => undefined);
   void installExternalToolFramePatch().catch(() => undefined);
+
+  // Keep collapsed thinking rows to one line: the recap is truncated to the
+  // render width so the expand hint never wraps or disappears.
+  pi.registerMarkdownTransformer((markdown, context) => {
+    if (context.messageType !== "assistant" || !markdown.includes("Thinking...")) return markdown;
+    return fitThinkingRowToWidth(markdown, context.availableWidth);
+  });
 
   let prefs: XtrmUiPrefs = { ...DEFAULT_PREFS };
   const getPrefs = () => prefs;
