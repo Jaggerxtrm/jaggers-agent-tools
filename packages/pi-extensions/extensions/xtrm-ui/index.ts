@@ -123,88 +123,143 @@ function persistPrefs(pi: ExtensionAPI, prefs: XtrmUiPrefs): void {
 // ============================================================================
 
 type AssistantMessageComponentCtor = {
-  prototype: {
-    updateContent?: (message: AssistantMessageLike) => void;
-    setExpanded?: (expanded: boolean) => void;
-  };
+	prototype: {
+		updateContent?: (message: AssistantMessageLike) => void;
+	};
 };
 
 type AssistantContentBlock = { type?: string; thinking?: string };
 type AssistantMessageLike = { content?: AssistantContentBlock[] };
 type PatchableAssistantMessage = {
-  hideThinkingBlock?: boolean;
-  hiddenThinkingLabel?: string;
-  lastMessage?: AssistantMessageLike;
-  __xtrmThinkingExpanded?: boolean;
-  updateContent?: (message: AssistantMessageLike) => void;
+	hideThinkingBlock?: boolean;
+	hiddenThinkingLabel?: string;
+	updateContent?: (message: AssistantMessageLike) => void;
 };
 
-const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiSilentHiddenThinking";
+const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview";
+
+const THINKING_RECAP_MAX = 120;
+
+/** Minimal theme surface used to style the thinking rows. */
+export interface ThinkingRowStyle {
+	/** Bold label (SGR bold + thinkingText color; theme.bold is a no-op in pi). */
+	label: (text: string) => string;
+	/** Dimmed trace/recap, e.g. `theme.fg("thinkingText", text)`. */
+	recap: (text: string) => string;
+	/** Dimmed hint, e.g. `theme.fg("dim", text)`. */
+	hint: (text: string) => string;
+	/** Dimmed label separator, e.g. `theme.fg("dim", " · ")`. */
+	sep: string;
+}
+
+/**
+ * One-line recap of a thinking block: the last bold section header when the
+ * trace has one (reasoning summaries usually do), otherwise the first
+ * non-empty line, stripped of markdown emphasis and truncated. Ported from
+ * prime-agent's assistant-message component.
+ */
+export function buildThinkingRecap(thinking: string, fallback = "Thinking..."): string {
+	const lines = thinking.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+	const lastHeader = [...lines].reverse().find((line) => /^\*\*[^*]+\*\*:?$/.test(line) || /^#{1,6}\s+\S/.test(line));
+	const source = lastHeader ?? lines[0] ?? fallback;
+	const plain = stripAnsi(source)
+		.replace(/^#{1,6}\s+/, "")
+		.replace(/\*\*([^*]+)\*\*/g, "$1")
+		.replace(/\*([^*]+)\*/g, "$1")
+		.replace(/`([^`]+)`/g, "$1")
+		.replace(/\s+/g, " ")
+		.replace(/:$/, "")
+		.trim();
+	if (!plain) return fallback;
+	return plain.length > THINKING_RECAP_MAX ? plain.slice(0, THINKING_RECAP_MAX - 3) + "..." : plain;
+}
+
+/** Collapsed row: bold label, dim separator, dimmed recap, expand hint. */
+export function buildCollapsedThinkingRow(recap: string, style: ThinkingRowStyle): string {
+	return ` ${style.label("Thinking...")}${style.sep}${style.recap(recap)} ${style.hint("(Ctrl+T to expand)")}`;
+}
+
+/** Expanded block: bold label row with collapse hint, then the full dimmed trace. */
+export function buildExpandedThinkingBlock(thinking: string, style: ThinkingRowStyle): string {
+	return `${style.label("Thinking...")} ${style.hint("(Ctrl+T to collapse)")}\n\n${style.recap(thinking.trim())}`;
+}
 
 function maybeFileUrlToPath(value: string): string {
-  return value.startsWith("file:") ? fileURLToPath(value) : value;
+	return value.startsWith("file:") ? fileURLToPath(value) : value;
 }
 
 function resolvePiCodingAgentEntryPath(): string {
-  const candidates: string[] = [];
+	const candidates: string[] = [];
 
-  const argvPath = process.argv[1];
-  if (argvPath && existsSync(argvPath)) {
-    const realArgvPath = realpathSync(argvPath);
-    if (realArgvPath.endsWith("/dist/cli.js")) {
-      candidates.push(join(dirname(realArgvPath), "index.js"));
-    }
-  }
+	const argvPath = process.argv[1];
+	if (argvPath && existsSync(argvPath)) {
+		const realArgvPath = realpathSync(argvPath);
+		if (realArgvPath.endsWith("/dist/cli.js")) {
+			candidates.push(join(dirname(realArgvPath), "index.js"));
+		}
+	}
 
-  candidates.push(
-    join(dirname(process.execPath), "..", "lib", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js"),
-  );
+	candidates.push(
+		join(dirname(process.execPath), "..", "lib", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js"),
+	);
 
-  try {
-    candidates.push(maybeFileUrlToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
-  } catch {}
+	try {
+		candidates.push(maybeFileUrlToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
+	} catch {}
 
-  const entryPath = candidates.find((candidate) => existsSync(candidate));
-  if (!entryPath) throw new Error("Could not resolve pi-coding-agent entry path");
-  return entryPath;
+	const entryPath = candidates.find((candidate) => existsSync(candidate));
+	if (!entryPath) throw new Error("Could not resolve pi-coding-agent entry path");
+	return entryPath;
 }
 
-async function installSilentHiddenThinkingPatch(): Promise<void> {
-  const entryPath = resolvePiCodingAgentEntryPath();
-  const componentPath = join(dirname(entryPath), "modes", "interactive", "components", "assistant-message.js");
-  const mod = await import(pathToFileURL(componentPath).href) as {
-    AssistantMessageComponent?: AssistantMessageComponentCtor;
-  };
-  const proto = mod.AssistantMessageComponent?.prototype as
-    | (AssistantMessageComponentCtor["prototype"] & { [PATCHED_ASSISTANT_MESSAGE]?: boolean })
-    | undefined;
-  if (!proto?.updateContent || proto[PATCHED_ASSISTANT_MESSAGE]) return;
+// Pi's initial hideThinkingBlock is false (thinking expanded). We default to
+// compact previews until the user toggles; once a real toggle is visible
+// (a component with hideThinkingBlock === true), follow pi's toggle exactly.
+let thinkingFollowsToggle = false;
 
-  const updateContent = proto.updateContent;
-  proto.updateContent = function patchedUpdateContent(this: PatchableAssistantMessage, message: AssistantMessageLike) {
-    if (this.hiddenThinkingLabel === "" && Array.isArray(message.content)) {
-      if (!this.__xtrmThinkingExpanded) {
-        updateContent.call(this, {
-          ...message,
-          content: message.content.filter((block) => block.type !== "thinking" || !block.thinking?.trim()),
-        });
-        return;
-      }
+async function installThinkingPreviewPatch(): Promise<void> {
+	const entryPath = resolvePiCodingAgentEntryPath();
+	const themeMod = await import(
+		pathToFileURL(join(dirname(entryPath), "modes", "interactive", "theme", "theme.js")).href,
+	) as { theme: { bold: (text: string) => string; fg: (color: string, text: string) => string } };
+	const t = themeMod.theme;
+	const style: ThinkingRowStyle = {
+		// theme.bold() is a chalk no-op in this runtime; emit the SGR escape directly.
+		label: (text) => `\x1b[1m${t.fg("thinkingText", text)}\x1b[22m`,
+		recap: (text) => t.fg("thinkingText", text),
+		hint: (text) => t.fg("dim", text),
+		sep: t.fg("dim", " · "),
+	};
 
-      const previousHideThinking = this.hideThinkingBlock;
-      this.hideThinkingBlock = false;
-      updateContent.call(this, message);
-      this.hideThinkingBlock = previousHideThinking;
-      return;
-    }
-    updateContent.call(this, message);
-  };
+	const componentPath = join(dirname(entryPath), "modes", "interactive", "components", "assistant-message.js");
+	const mod = await import(pathToFileURL(componentPath).href) as {
+		AssistantMessageComponent?: AssistantMessageComponentCtor;
+	};
+	const proto = mod.AssistantMessageComponent?.prototype as
+		| (AssistantMessageComponentCtor["prototype"] & { [PATCHED_ASSISTANT_MESSAGE]?: boolean })
+		| undefined;
+	if (!proto?.updateContent || proto[PATCHED_ASSISTANT_MESSAGE]) return;
 
-  proto.setExpanded = function setExpanded(this: PatchableAssistantMessage, expanded: boolean) {
-    this.__xtrmThinkingExpanded = expanded;
-    if (this.lastMessage) this.updateContent?.(this.lastMessage);
-  };
-  proto[PATCHED_ASSISTANT_MESSAGE] = true;
+	const updateContent = proto.updateContent;
+	proto.updateContent = function patchedUpdateContent(this: PatchableAssistantMessage, message: AssistantMessageLike) {
+		if (this.hiddenThinkingLabel === "" && Array.isArray(message.content)) {
+			const hasThinking = message.content.some((block) => block.type === "thinking" && block.thinking?.trim());
+			if (hasThinking) {
+				if (this.hideThinkingBlock) thinkingFollowsToggle = true;
+				const compact = this.hideThinkingBlock === true || !thinkingFollowsToggle;
+				const content = message.content.map((block) => {
+					if (block.type !== "thinking" || !block.thinking?.trim()) return block;
+					return compact
+						? { type: "text", text: buildCollapsedThinkingRow(buildThinkingRecap(block.thinking), style) }
+						: { type: "text", text: buildExpandedThinkingBlock(block.thinking, style) };
+				});
+				updateContent.call(this, { ...message, content });
+				return;
+			}
+		}
+		updateContent.call(this, message);
+	};
+	proto[PATCHED_ASSISTANT_MESSAGE] = true;
 }
 
 type ToolExecutionComponentCtor = {
@@ -220,6 +275,7 @@ type PatchableToolExecutionComponent = {
   args?: unknown;
   result?: { content?: Array<{ type: string; text?: string }>; details?: unknown; isError?: boolean };
   expanded?: boolean;
+  isPartial?: boolean;
   hasRendererDefinition?: () => boolean;
   __xtrmExternalStartedAt?: number;
   __xtrmExternalDurationMs?: number;
@@ -228,7 +284,7 @@ type PatchableToolExecutionComponent = {
 type ExternalToolFrameKind = "serena" | "gitnexus" | "structured" | "process" | "external";
 
 const PATCHED_EXTERNAL_TOOL_FRAME = "__xtrmUiExternalToolFrame";
-const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 18;
+const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 19;
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 
 function stripAnsi(text: string): string {
@@ -289,40 +345,23 @@ function trimRenderedToolLines(lines: string[]): string[] {
   return lines.slice(start, end).map((line) => line.replace(/\s+$/u, ""));
 }
 
-function externalToolBadgeColor(kind: ExternalToolFrameKind, text: string): string {
-  const bgColors: Record<ExternalToolFrameKind, [number, number, number]> = {
+type ExternalToolState = "running" | "success" | "failure";
+
+function externalToolKindColor(kind: ExternalToolFrameKind, text: string): string {
+  const fgColors: Record<ExternalToolFrameKind, [number, number, number]> = {
     serena: [82, 210, 255],
     gitnexus: [178, 154, 255],
     structured: [205, 166, 255],
     process: [92, 226, 255],
     external: [178, 190, 210],
   };
-  const [badgeR, badgeG, badgeB] = bgColors[kind];
-  return `\x1b[38;2;3;8;12m\x1b[48;2;${badgeR};${badgeG};${badgeB}m${text}\x1b[39m\x1b[49m`;
+  const [fgR, fgG, fgB] = fgColors[kind];
+  return `\x1b[38;2;${fgR};${fgG};${fgB}m${text}\x1b[39m`;
 }
 
-function boldExternalToolAction(action: string): string {
-  return `\x1b[1m${action}\x1b[22m`;
-}
-
-export function highlightExternalToolBadge(kind: ExternalToolFrameKind, line: string): string {
-  const markedHeader = line.match(/^([•›]\s+)(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])(\s+)(\S+)(.*)$/u);
-  if (markedHeader?.[1] && markedHeader[2] && markedHeader[3] && markedHeader[4]) {
-    return `${markedHeader[1]}${externalToolBadgeColor(kind, markedHeader[2])}${markedHeader[3]}${boldExternalToolAction(markedHeader[4])}${markedHeader[5] ?? ""}`;
-  }
-
-  const providerHeader = line.match(/^(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])(\s+)(\S+)(.*)$/u);
-  if (providerHeader?.[1] && providerHeader[2] && providerHeader[3]) {
-    return `${externalToolBadgeColor(kind, providerHeader[1])}${providerHeader[2]}${boldExternalToolAction(providerHeader[3])}${providerHeader[4] ?? ""}`;
-  }
-
-  const marked = line.match(/^([•›]\s+)(\S+)/u);
-  if (marked?.[1] && marked[2]) {
-    return marked[1] + externalToolBadgeColor(kind, marked[2]) + line.slice(marked[1].length + marked[2].length);
-  }
-
-  const provider = line.match(/^(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])/u)?.[1];
-  return provider ? externalToolBadgeColor(kind, provider) + line.slice(provider.length) : line;
+function externalToolStateBgToken(state: ExternalToolState): string {
+  if (state === "running") return "toolPendingBg";
+  return state === "failure" ? "toolErrorBg" : "toolSuccessBg";
 }
 
 export function collapsedExternalToolLines(contentLines: string[], expanded: boolean): string[] {
@@ -372,6 +411,8 @@ export function renderExternalToolBackgroundLines(
   expanded: boolean,
   toolName?: string,
   durationMs?: number,
+  state: ExternalToolState = "success",
+  themeLike?: { bg: (token: string, text: string) => string },
 ): string[] {
   let displayLines = contentLines;
   const raw = contentLines.length === 1 ? contentLines[0]?.trim() : undefined;
@@ -388,10 +429,11 @@ export function renderExternalToolBackgroundLines(
     || /^[•›]\s+\S+/u.test(firstLine);
   const header = externalToolHeader(kind, toolName, firstLine);
   const payloadLines = hasHeader ? displayLines.slice(1) : displayLines;
-  displayLines = [
-    `${TOOL_ROW_MARKER} [${header.provider}]${header.action ? ` ${header.action}` : ""}`,
-    ...payloadLines,
-  ];
+  const action = header.action
+    ? ` ${state === "failure" ? `\x1b[2m${header.action}\x1b[22m` : `\x1b[1m${header.action}\x1b[22m`}`
+    : "";
+  const headerLine = `${externalToolKindColor(kind, `• ${header.provider}`)}${action}`;
+  displayLines = [headerLine, ...payloadLines];
 
   const renderedHeader = displayLines[0] ?? "";
   const visiblePayload = expanded ? payloadLines : payloadLines.slice(0, 6);
@@ -407,12 +449,15 @@ export function renderExternalToolBackgroundLines(
   ]);
   const renderWidth = Math.max(8, width);
   const body = [
-    highlightExternalToolBadge(kind, truncateToWidth(renderedHeader, renderWidth)),
+    truncateToWidth(renderedHeader, renderWidth),
     ...visiblePayload.map((rawLine) => truncateToWidth(rawLine, renderWidth)),
   ];
+  const bgFn = themeLike
+    ? (line: string) => themeLike.bg(externalToolStateBgToken(state), line)
+    : (line: string) => line;
   return footerMeta
-    ? [...body, `\x1b[2m${truncateToWidth(`└─ ${footerMeta}`, renderWidth)}\x1b[22m`]
-    : body;
+    ? [...body.map(bgFn), bgFn(`\x1b[2m${truncateToWidth(`└─ ${footerMeta}`, renderWidth)}\x1b[22m`)]
+    : body.map(bgFn);
 }
 
 function renderExternalToolLines(
@@ -422,10 +467,12 @@ function renderExternalToolLines(
   expanded = false,
   toolName?: string,
   durationMs?: number,
+  state: ExternalToolState = "success",
+  themeLike?: { bg: (token: string, text: string) => string },
 ): string[] {
   const contentLines = trimRenderedToolLines(lines).filter((line) => !isBlankRenderedLine(line));
   return contentLines.length > 0
-    ? renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs)
+    ? renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs, state, themeLike)
     : [];
 }
 
@@ -435,6 +482,10 @@ async function installExternalToolFramePatch(): Promise<void> {
   const mod = await import(pathToFileURL(componentPath).href) as {
     ToolExecutionComponent?: ToolExecutionComponentCtor;
   };
+  const themeMod = await import(pathToFileURL(join(dirname(entryPath), "modes", "interactive", "theme", "theme.js")).href) as {
+    theme: { bg: (token: string, text: string) => string };
+  };
+  const themeLike = { bg: themeMod.theme.bg };
   const proto = mod.ToolExecutionComponent?.prototype as
     | (ToolExecutionComponentCtor["prototype"] & { [PATCHED_EXTERNAL_TOOL_FRAME]?: number })
     | undefined;
@@ -461,6 +512,9 @@ async function installExternalToolFramePatch(): Promise<void> {
     const firstContentIndex = rendered.findIndex((line) => !isBlankRenderedLine(line));
     const leading = firstContentIndex > 0 ? rendered.slice(0, firstContentIndex) : [];
     const content = extractResultTextLines(this) ?? rendered;
+    const state: ExternalToolState = this.isPartial
+      ? "running"
+      : this.result?.isError ? "failure" : "success";
     const styled = renderExternalToolLines(
       content,
       width,
@@ -468,6 +522,8 @@ async function installExternalToolFramePatch(): Promise<void> {
       Boolean(this.expanded),
       this.toolName,
       this.__xtrmExternalDurationMs,
+      state,
+      themeLike,
     );
     return styled.length > 0 ? [...leading, ...styled] : rendered;
   };
@@ -1377,7 +1433,7 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
 // ============================================================================
 
 export default function xtrmUiExtension(pi: ExtensionAPI): void {
-  void installSilentHiddenThinkingPatch().catch(() => undefined);
+  void installThinkingPreviewPatch().catch(() => undefined);
   void installExternalToolFramePatch().catch(() => undefined);
 
   let prefs: XtrmUiPrefs = { ...DEFAULT_PREFS };

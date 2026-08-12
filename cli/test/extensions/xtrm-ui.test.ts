@@ -41,10 +41,13 @@ vi.mock("@earendil-works/pi-tui", () => ({
 }));
 
 const {
-  collapsedExternalToolLines,
-  DEFAULT_PREFS,
-  default: xtrmUiExtension,
-  renderExternalToolBackgroundLines,
+	buildCollapsedThinkingRow,
+	buildExpandedThinkingBlock,
+	buildThinkingRecap,
+	collapsedExternalToolLines,
+	DEFAULT_PREFS,
+	default: xtrmUiExtension,
+	renderExternalToolBackgroundLines,
 } = await import("../../../packages/pi-extensions/extensions/xtrm-ui/index");
 
 function loadExtension() {
@@ -257,6 +260,51 @@ describe("xtrm-ui commands", () => {
   });
 });
 
+const thinkingStyle = {
+	label: (text: string) => `B[${text}]`,
+	recap: (text: string) => `D[${text}]`,
+	hint: (text: string) => `H[${text}]`,
+	sep: " · ",
+};
+
+describe("xtrm-ui thinking chrome", () => {
+  it("recaps the first non-empty thinking line", () => {
+    expect(buildThinkingRecap("\nPR #522 is queued. Only 5 checks listed.\n")).toBe(
+      "PR #522 is queued. Only 5 checks listed.",
+    );
+  });
+
+  it("prefers the last bold section header when present", () => {
+    const recap = buildThinkingRecap("investigating…\n**Summary**:\nmerged queue is clean");
+    expect(recap).toBe("Summary");
+  });
+
+  it("strips markdown emphasis and collapses whitespace", () => {
+    expect(buildThinkingRecap("**bold** and `code` with   spaces\nnext")).toBe("bold and code with spaces");
+  });
+
+  it("truncates long recaps with an ellipsis", () => {
+    const long = "x".repeat(500);
+    const recap = buildThinkingRecap(long);
+    expect(recap.length).toBe(120);
+    expect(recap.endsWith("...")).toBe(true);
+  });
+
+  it("falls back to the label when thinking is blank", () => {
+    expect(buildThinkingRecap("   \n\t\n")).toBe("Thinking...");
+  });
+
+  it("builds the collapsed row with bold label, dim recap and expand hint", () => {
+    const row = buildCollapsedThinkingRow("PR #522 queued", thinkingStyle);
+    expect(row).toBe(" B[Thinking...] · D[PR #522 queued] H[(Ctrl+T to expand)]");
+  });
+
+  it("builds the expanded block with collapse hint and full dimmed trace", () => {
+    const block = buildExpandedThinkingBlock("Full trace\nsecond line", thinkingStyle);
+    expect(block).toBe("B[Thinking...] H[(Ctrl+T to collapse)]\n\nD[Full trace\nsecond line]");
+  });
+});
+
 describe("xtrm-ui built-in tool rendering", () => {
   it("uses one consistent bash row across call phases", () => {
     const { tools } = loadExtension();
@@ -446,8 +494,7 @@ describe("xtrm-ui external tool rendering", () => {
       "find_symbol",
     );
 
-    expect(rendered[0]).toContain("\x1b[48;2;82;210;255m[Serena]");
-    expect(rendered[0]).toContain("\x1b[49m \x1b[1mfind_symbol\x1b[22m");
+    expect(rendered[0]).toContain("\x1b[38;2;82;210;255m• Serena\x1b[39m \x1b[1mfind_symbol\x1b[22m");
     expect(rendered.length).toBeGreaterThan(2);
     expect(rendered.join("\n")).toContain('"name_path": "highlightExternalToolBadge"');
   });
@@ -461,10 +508,10 @@ describe("xtrm-ui external tool rendering", () => {
       "mcp_custom_tool",
     );
 
-    expect(rendered[0]).toContain("› \x1b[38;2;3;8;12m\x1b[48;2;178;190;210m[mcp]\x1b[39m\x1b[49m \x1b[1mcustom_tool\x1b[22m");
+    expect(rendered[0]).toContain("\x1b[38;2;178;190;210m• mcp\x1b[39m \x1b[1mcustom_tool\x1b[22m");
   });
 
-  it("keeps a colored provider badge and action for raw GitNexus output", () => {
+  it("keeps a colored provider label and action for raw GitNexus output", () => {
     const rendered = renderExternalToolBackgroundLines(
       ["[GitNexus]", "{", '  "status": "found"', "}"],
       200,
@@ -473,28 +520,38 @@ describe("xtrm-ui external tool rendering", () => {
       "gitnexus_query",
     );
 
-    expect(rendered[0]).toContain("\x1b[48;2;178;154;255m[GitNexus]");
-    expect(rendered[0]).toContain("\x1b[49m \x1b[1mquery\x1b[22m");
+    expect(rendered[0]).toContain("\x1b[38;2;178;154;255m• GitNexus\x1b[39m \x1b[1mquery\x1b[22m");
   });
 
-  it("keeps the provider header and bold action stable across lifecycle states", () => {
+  it("keeps the kind-colored label stable across states; failure dims the action; bg follows the phase", () => {
     const stripAnsi = (value: string) => value.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
+    const bgTokens: string[] = [];
+    const bgTheme = {
+      bg: (token: string, text: string) => { bgTokens.push(token); return text; },
+    };
     const states = [
-      ["› [Serena] execute_shell_command", "running"],
-      ["[Serena] execute_shell_command", "success"],
-      ["[Serena] execute_shell_command", "failure"],
+      ["running", "toolPendingBg", "\x1b[1mexecute_shell_command\x1b[22m"],
+      ["success", "toolSuccessBg", "\x1b[1mexecute_shell_command\x1b[22m"],
+      ["failure", "toolErrorBg", "\x1b[2mexecute_shell_command\x1b[22m"],
     ] as const;
 
-    for (const [header] of states) {
+    for (const [state, bgToken, actionStyled] of states) {
+      bgTokens.length = 0;
       const rendered = renderExternalToolBackgroundLines(
-        [header, "result"],
+        ["[Serena] execute_shell_command", "result"],
         200,
         "serena",
         false,
         "execute_shell_command",
+        undefined,
+        state,
+        bgTheme,
       );
-      expect(stripAnsi(rendered[0] ?? "")).toBe("› [Serena] execute_shell_command");
-      expect(rendered[0]).toContain("\x1b[1mexecute_shell_command\x1b[22m");
+      expect(stripAnsi(rendered[0] ?? "")).toBe("• Serena execute_shell_command");
+      expect(rendered[0]).toContain("\x1b[38;2;82;210;255m• Serena\x1b[39m");
+      expect(rendered[0]).toContain(actionStyled);
+      expect(bgTokens.length).toBeGreaterThan(0);
+      expect(bgTokens.every((token) => token === bgToken)).toBe(true);
     }
   });
 
