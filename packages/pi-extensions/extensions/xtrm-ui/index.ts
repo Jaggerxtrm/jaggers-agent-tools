@@ -421,6 +421,11 @@ function externalToolStateBgToken(state: ExternalToolState): string {
   return state === "failure" ? "toolErrorBg" : "toolSuccessBg";
 }
 
+function padToRenderWidth(line: string, width: number): string {
+  const fitted = truncateToWidth(line, width);
+  return fitted + " ".repeat(Math.max(0, width - visibleWidth(fitted)));
+}
+
 export function collapsedExternalToolLines(contentLines: string[], expanded: boolean): string[] {
   if (expanded || contentLines.length <= 6) return contentLines;
   return [
@@ -510,7 +515,7 @@ export function renderExternalToolBackgroundLines(
     ...visiblePayload.map((rawLine) => truncateToWidth(rawLine, renderWidth)),
   ];
   const bgFn = themeLike
-    ? (line: string) => themeLike.bg(externalToolStateBgToken(state), line)
+    ? (line: string) => themeLike.bg(externalToolStateBgToken(state), padToRenderWidth(line, renderWidth))
     : (line: string) => line;
   return footerMeta
     ? [...body.map(bgFn), bgFn(`\x1b[2m${truncateToWidth(`└─ ${footerMeta}`, renderWidth)}\x1b[22m`)]
