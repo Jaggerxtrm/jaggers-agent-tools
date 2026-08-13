@@ -302,9 +302,9 @@ describe("xtrm-ui thinking chrome", () => {
     expect(buildThinkingRecap("   \n\t\n")).toBe("Thinking...");
   });
 
-  it("builds the collapsed row with bold label, dim recap and expand hint", () => {
-    const row = buildCollapsedThinkingRow("PR #522 queued", thinkingStyle);
-    expect(row).toBe(" B[Thinking...] · D[PR #522 queued] H[(Ctrl+T to expand)]");
+  it("builds the collapsed row with bold label, dim recap, char count and expand hint", () => {
+    const row = buildCollapsedThinkingRow("PR #522 queued", 14, thinkingStyle);
+    expect(row).toBe(" B[Thinking...] · D[PR #522 queued] · D[14] H[(Ctrl+T to expand)]");
   });
 
   it("builds the expanded block with collapse hint and full dimmed trace", () => {
