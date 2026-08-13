@@ -973,8 +973,12 @@ function appendToolTree(
   outputLines: string[],
   meta?: string,
 ): string {
-  outputLines.forEach((line) => lines.push(theme.fg("toolOutput", line)));
-  if (meta) lines.push(`${theme.fg("muted", "└")} ${theme.fg("dim", meta)}`);
+  outputLines.forEach((line, index) => {
+    lines.push(index === 0
+      ? `${theme.fg("muted", "└")} ${theme.fg("toolOutput", line)}`
+      : `  ${theme.fg("toolOutput", line)}`);
+  });
+  if (meta) lines.push(theme.fg("dim", meta));
   return lines.join("\n");
 }
 
@@ -987,9 +991,11 @@ function renderBashTree(
 ): string {
   const commandColor = statusColor === "success" ? "text" : "dim";
   const [firstCommand = "", ...continuedCommands] = command.split("\n");
+  // theme.bold is a chalk no-op in pi's runtime; emit the SGR escape directly.
+  const boldCommand = (text: string) => `\x1b[1m${text}\x1b[22m`;
   return appendToolTree(theme, [
-    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${theme.fg(commandColor, firstCommand)}`,
-    ...continuedCommands.map((line) => theme.fg(commandColor, line)),
+    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${boldCommand(theme.fg(commandColor, firstCommand))}`,
+    ...continuedCommands.map((line) => boldCommand(theme.fg(commandColor, line))),
   ], outputLines, meta);
 }
 
