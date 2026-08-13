@@ -993,60 +993,9 @@ function renderBashTree(
   const [firstCommand = "", ...continuedCommands] = command.split("\n");
   // theme.bold is a chalk no-op in pi's runtime; emit the SGR escape directly.
   const boldCommand = (text: string) => `\x1b[1m${text}\x1b[22m`;
-  // Command divisors (; && | ||) are hard to spot in long commands; paint them
-  // light magenta (no magenta theme token — swap the RGB for "warning" to get
-  // yellow) only when adjacent to whitespace: | && || need a space before or
-  // after; ; needs a space after (so "cmd;echo" and "2>&1" stay plain).
-  // Uncolored separators still render in commandColor to avoid a default-color
-  // glitch. Regex split is cosmetic; quoted separators with surrounding spaces
-  // are colored too, which is acceptable.
-  const TOOL_SEPARATOR_FG = "\x1b[38;2;255;170;255m";
-  const SEPARATOR_PATTERN = /&&|\|\||[|;]/;
-  const hasSpaceBefore = (part: string) => /\s$/.test(part);
-  const hasSpaceAfter = (part: string) => /^\s/.test(part);
-  // First word of a segment (line start, or after a colored divisor) is the
-  // command name — paint it with the accent token; the rest stays commandColor.
-  // False positive: a --flag leading a backslash-continuation line also gets
-  // accent, which is acceptable.
-  const colorFirstWord = (part: string): string => {
-    const match = part.match(/^(\s*)(\S+)/);
-    if (!match) return theme.fg(commandColor, part);
-    const [, whitespace, word] = match;
-    return (
-      theme.fg(commandColor, whitespace) +
-      theme.fg("accent", word) +
-      theme.fg(commandColor, part.slice(match[0].length))
-    );
-  };
-  const colorCommand = (text: string): string => {
-    const parts = text.split(/(&&|\|\||[|;])/);
-    let result = "";
-    let lastWasColoredDivisor = false;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (!part) continue;
-      if (SEPARATOR_PATTERN.test(part)) {
-        const before = i > 0 ? parts[i - 1] : "";
-        const after = i < parts.length - 1 ? parts[i + 1] : "";
-        const color = part === ";"
-          ? hasSpaceAfter(after)
-          : hasSpaceBefore(before) || hasSpaceAfter(after);
-        result += color
-          ? `${TOOL_SEPARATOR_FG}${part}\x1b[39m`
-          : theme.fg(commandColor, part);
-        lastWasColoredDivisor = color;
-      } else {
-        result += (i === 0 || lastWasColoredDivisor)
-          ? colorFirstWord(part)
-          : theme.fg(commandColor, part);
-        lastWasColoredDivisor = false;
-      }
-    }
-    return result;
-  };
   return appendToolTree(theme, [
-    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${boldCommand(colorCommand(firstCommand))}`,
-    ...continuedCommands.map((line) => boldCommand(colorCommand(line))),
+    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${boldCommand(theme.fg(commandColor, firstCommand))}`,
+    ...continuedCommands.map((line) => boldCommand(theme.fg(commandColor, line))),
   ], outputLines, meta);
 }
 
