@@ -668,8 +668,8 @@ function applyXtrmChrome(
 
 function renderVerticalPreview(theme: any, lines: string[], maxLines: number): string {
   const subset = lines.slice(0, maxLines);
-  let text = subset.map((line) => `${theme.fg("muted", "│")} ${theme.fg("toolOutput", line)}`).join("\n");
-  if (lines.length > maxLines) text += `\n${theme.fg("muted", "│")} ${theme.fg("muted", `… +${lines.length - maxLines} more lines`)}`;
+  let text = subset.map((line) => theme.fg("toolOutput", line)).join("\n");
+  if (lines.length > maxLines) text += `\n${theme.fg("muted", `… +${lines.length - maxLines} more lines`)}`;
   return text;
 }
 
@@ -973,12 +973,8 @@ function appendToolTree(
   outputLines: string[],
   meta?: string,
 ): string {
-  outputLines.forEach((line, index) => {
-    lines.push(index === 0
-      ? `  ${theme.fg("muted", "└")} ${theme.fg("toolOutput", line)}`
-      : `    ${theme.fg("toolOutput", line)}`);
-  });
-  if (meta) lines.push(`${outputLines.length > 0 ? "    " : `  ${theme.fg("muted", "└")} `}${theme.fg("dim", meta)}`);
+  outputLines.forEach((line) => lines.push(theme.fg("toolOutput", line)));
+  if (meta) lines.push(`${theme.fg("muted", "└")} ${theme.fg("dim", meta)}`);
   return lines.join("\n");
 }
 
@@ -993,7 +989,7 @@ function renderBashTree(
   const [firstCommand = "", ...continuedCommands] = command.split("\n");
   return appendToolTree(theme, [
     `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${theme.fg(commandColor, firstCommand)}`,
-    ...continuedCommands.map((line) => `  ${theme.fg("muted", "│")} ${theme.fg(commandColor, line)}`),
+    ...continuedCommands.map((line) => theme.fg(commandColor, line)),
   ], outputLines, meta);
 }
 
