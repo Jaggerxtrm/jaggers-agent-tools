@@ -1004,24 +1004,43 @@ function renderBashTree(
   const SEPARATOR_PATTERN = /&&|\|\||[|;]/;
   const hasSpaceBefore = (part: string) => /\s$/.test(part);
   const hasSpaceAfter = (part: string) => /^\s/.test(part);
+  // First word of a segment (line start, or after a colored divisor) is the
+  // command name — paint it with the accent token; the rest stays commandColor.
+  // False positive: a --flag leading a backslash-continuation line also gets
+  // accent, which is acceptable.
+  const colorFirstWord = (part: string): string => {
+    const match = part.match(/^(\s*)(\S+)/);
+    if (!match) return theme.fg(commandColor, part);
+    const [, whitespace, word] = match;
+    return (
+      theme.fg(commandColor, whitespace) +
+      theme.fg("accent", word) +
+      theme.fg(commandColor, part.slice(match[0].length))
+    );
+  };
   const colorCommand = (text: string): string => {
     const parts = text.split(/(&&|\|\||[|;])/);
     let result = "";
+    let lastWasColoredDivisor = false;
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       if (!part) continue;
-      if (!SEPARATOR_PATTERN.test(part)) {
-        result += theme.fg(commandColor, part);
-        continue;
+      if (SEPARATOR_PATTERN.test(part)) {
+        const before = i > 0 ? parts[i - 1] : "";
+        const after = i < parts.length - 1 ? parts[i + 1] : "";
+        const color = part === ";"
+          ? hasSpaceAfter(after)
+          : hasSpaceBefore(before) || hasSpaceAfter(after);
+        result += color
+          ? `${TOOL_SEPARATOR_FG}${part}\x1b[39m`
+          : theme.fg(commandColor, part);
+        lastWasColoredDivisor = color;
+      } else {
+        result += (i === 0 || lastWasColoredDivisor)
+          ? colorFirstWord(part)
+          : theme.fg(commandColor, part);
+        lastWasColoredDivisor = false;
       }
-      const before = i > 0 ? parts[i - 1] : "";
-      const after = i < parts.length - 1 ? parts[i + 1] : "";
-      const color = part === ";"
-        ? hasSpaceAfter(after)
-        : hasSpaceBefore(before) || hasSpaceAfter(after);
-      result += color
-        ? `${TOOL_SEPARATOR_FG}${part}\x1b[39m`
-        : theme.fg(commandColor, part);
     }
     return result;
   };
