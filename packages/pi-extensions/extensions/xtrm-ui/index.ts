@@ -993,14 +993,15 @@ function renderBashTree(
   const [firstCommand = "", ...continuedCommands] = command.split("\n");
   // theme.bold is a chalk no-op in pi's runtime; emit the SGR escape directly.
   const boldCommand = (text: string) => `\x1b[1m${text}\x1b[22m`;
-  // Command divisors (; && | || &) are hard to spot in long commands; paint them
+  // Command divisors (; && | ||) are hard to spot in long commands; paint them
   // light magenta (no magenta theme token — swap the RGB for "warning" to get
-  // yellow). Regex split is cosmetic; separators inside quoted strings are
-  // colored too, which is acceptable.
+  // yellow). Single & is deliberately excluded so redirections like 2>&1 and
+  // backgrounding & stay plain. Regex split is cosmetic; separators inside
+  // quoted strings are colored too, which is acceptable.
   const TOOL_SEPARATOR_FG = "\x1b[38;2;255;170;255m";
-  const SEPARATOR_PATTERN = /&&|\|\||[|;&]/;
+  const SEPARATOR_PATTERN = /&&|\|\||[|;]/;
   const colorCommand = (text: string): string => text
-    .split(/(&&|\|\||[|;&])/)
+    .split(/(&&|\|\||[|;])/)
     .map((part) => {
       if (!part) return "";
       return SEPARATOR_PATTERN.test(part)
