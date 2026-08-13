@@ -356,7 +356,7 @@ describe("xtrm-ui built-in tool rendering", () => {
     expect(running.render(200).join("\n")).toBe("");
   });
 
-  it("renders multiline bash commands and six collapsed output lines as one tree", () => {
+  it("renders multiline bash commands and six collapsed output lines flat", () => {
     const { tools } = loadExtension();
     const output = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
     const component = tools.bash.renderResult(
@@ -369,8 +369,8 @@ describe("xtrm-ui built-in tool rendering", () => {
     const lines = component.render(200);
     expect(lines.slice(0, 3)).toEqual([
       "• Ran echo one",
-      "  │ echo two",
-      "  └ line 3",
+      "echo two",
+      "line 3",
     ]);
     expect(lines.at(-1)).toContain("showing 6/8 lines (ctrl+o expand)");
   });
@@ -427,8 +427,8 @@ describe("xtrm-ui built-in tool rendering", () => {
 
     const lines = component.render(200);
     expect(lines[0]).toBe(`• ${name} ${subject}`);
-    expect(lines[1]).toBe("  └ line 1");
-    expect(lines[6]).toBe("    line 6");
+    expect(lines[1]).toBe("line 1");
+    expect(lines[6]).toBe("line 6");
     expect(lines.at(-1)).toContain(`showing 6/8 ${noun}s (ctrl+o expand)`);
   });
 
@@ -443,13 +443,13 @@ describe("xtrm-ui built-in tool rendering", () => {
 
     expect(lines).toEqual([
       "• find *.ts",
-      "  └ only.ts",
-      "    1 match · 7B",
+      "only.ts",
+      "└ 1 match · 7B",
     ]);
     expect(lines.join("\n")).not.toContain("ctrl+o expand");
   });
 
-  it("renders edit diffs and new writes as trees", () => {
+  it("renders edit diffs and new writes flat", () => {
     const { tools } = loadExtension();
     const path = join(mkdtempSync(join(tmpdir(), "xtrm-ui-")), "new.txt");
     const content = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
@@ -470,10 +470,10 @@ describe("xtrm-ui built-in tool rendering", () => {
     ).render(200);
 
     expect(write[0]).toBe(`• write ${path}`);
-    expect(write[1]).toBe("  └ line 1");
+    expect(write[1]).toBe("line 1");
     expect(write.at(-1)).toContain("showing 6/8 lines (ctrl+o expand)");
     expect(edit[0]).toBe(`• edit ${path}`);
-    expect(edit[1]).toMatch(/^  └ /);
+    expect(edit[1]).toMatch(/│ /); // diff line-number gutter, not the tool tree
   });
 
   it("keeps pre-write diff data in renderer-local state", () => {
