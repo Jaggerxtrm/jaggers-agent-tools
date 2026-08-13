@@ -136,7 +136,7 @@ type PatchableAssistantMessage = {
 	updateContent?: (message: AssistantMessageLike) => void;
 };
 
-const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview2";
+const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview3";
 
 const THINKING_RECAP_MAX = 120;
 
@@ -304,14 +304,23 @@ async function installThinkingPreviewPatch(): Promise<void> {
 			if (hasThinking) {
 				if (this.hideThinkingBlock) thinkingFollowsToggle = true;
 				const compact = this.hideThinkingBlock === true || !thinkingFollowsToggle;
-				const content = message.content.map((block) => {
-					if (block.type !== "thinking" || !block.thinking?.trim()) return block;
+				const content = message.content.flatMap((block, index) => {
+					if (block.type !== "thinking" || !block.thinking?.trim()) return [block];
 					const row = compact
 						? buildCollapsedThinkingRow(buildThinkingRecap(block.thinking), style)
 						: buildExpandedThinkingBlock(block.thinking, style);
-					// Keep type "thinking" so pi's assistant-message layout adds its
-					// Spacer(1) after the thinking run when a visible block follows.
-					return { ...block, thinking: row };
+					// Text blocks render even when pi's hideThinkingBlock branch is
+					// active (a "thinking" block would be swallowed and replaced by the
+					// empty hidden label). Append an invisible single-line block (a
+					// zero-width space survives pi's text trim and renders as a blank
+					// line) when a visible text/thinking block follows — mirroring pi's
+					// Spacer(1) after thinking runs; none before tool-call blocks.
+					const hasVisibleAfter = message.content
+						.slice(index + 1)
+						.some((c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()));
+					return hasVisibleAfter
+						? [{ type: "text", text: row }, { type: "text", text: "\u200b" }]
+						: [{ type: "text", text: row }];
 				});
 				updateContent.call(this, { ...message, content });
 				return;
