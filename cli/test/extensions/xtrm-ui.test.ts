@@ -390,6 +390,19 @@ describe("xtrm-ui built-in tool rendering", () => {
     );
   });
 
+  it("skips separators without adjacent whitespace", () => {
+    const { tools } = loadExtension();
+    const component = tools.bash.renderResult(
+      { content: [{ type: "text", text: "" }], details: {} },
+      { expanded: false, isPartial: false },
+      theme,
+      context({ command: "echo a&&echo b|c;echo d 2>&1" }),
+    );
+
+    const line = component.render(200)[0];
+    expect(line).toBe("• Ran \x1b[1mecho a&&echo b|c;echo d 2>&1\x1b[22m");
+  });
+
   it("colors only the Ran prefix with phase status and dims the command unless success", () => {
     const { tools } = loadExtension();
     const colors: string[] = [];
