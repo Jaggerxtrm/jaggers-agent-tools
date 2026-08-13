@@ -19,9 +19,24 @@ if [ -x "$HOOKS_DIR/pre-push.local" ]; then
     [ $rc -ne 0 ] && exit $rc
 fi
 
-exit 0
+# --- BEGIN custom: beads/dolt sync before push ---
+# Outside bd's managed markers (bd hooks install/upgrade won't clobber).
+# Commits pending Beads changes, then pulls and pushes the Dolt remote
+# (refs/dolt/data on the GitHub origin). Fails the Git push on sync failure.
+if [ -x "$HOOKS_DIR/pre-push.bd-sync" ]; then
+    _bd_timeout=${BEADS_HOOK_TIMEOUT:-300}
+    if command -v timeout >/dev/null 2>&1; then
+        echo "$REFS" | timeout "$_bd_timeout" "$HOOKS_DIR/pre-push.bd-sync" "$@"
+    else
+        echo "$REFS" | "$HOOKS_DIR/pre-push.bd-sync" "$@"
+    fi
+    rc=$?
+    [ $rc -ne 0 ] && exit $rc
+fi
+# --- END custom ---
 
-# --- BEGIN BEADS INTEGRATION v1.0.5 ---
+# Beads-managed section below runs after the security checks and Dolt sync.
+# --- BEGIN BEADS INTEGRATION v1.1.0 ---
 # This section is managed by beads. Do not remove these markers.
 if command -v bd >/dev/null 2>&1; then
   export BD_GIT_HOOK=1
@@ -52,4 +67,4 @@ if command -v bd >/dev/null 2>&1; then
   fi
   if [ $_bd_exit -ne 0 ]; then exit $_bd_exit; fi
 fi
-# --- END BEADS INTEGRATION v1.0.5 ---
+# --- END BEADS INTEGRATION v1.1.0 ---

@@ -1,5 +1,21 @@
 #!/usr/bin/env sh
-# --- BEGIN BEADS INTEGRATION v1.0.5 ---
+# --- BEGIN custom: beads/dolt pull after merge ---
+# Outside bd's managed markers (bd hooks install/upgrade won't clobber).
+# Pulls the Dolt remote (refs/dolt/data on the GitHub origin) after a
+# Git pull/merge. Reports failure loudly via a non-zero exit.
+if [ -x "$(dirname "$0")/post-merge.bd-sync" ]; then
+    _bd_timeout=${BEADS_HOOK_TIMEOUT:-300}
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$_bd_timeout" "$(dirname "$0")/post-merge.bd-sync" "$@"
+    else
+        "$(dirname "$0")/post-merge.bd-sync" "$@"
+    fi
+    rc=$?
+    [ $rc -ne 0 ] && exit $rc
+fi
+# --- END custom ---
+
+# --- BEGIN BEADS INTEGRATION v1.1.0 ---
 # This section is managed by beads. Do not remove these markers.
 if command -v bd >/dev/null 2>&1; then
   export BD_GIT_HOOK=1
@@ -30,4 +46,4 @@ if command -v bd >/dev/null 2>&1; then
   fi
   if [ $_bd_exit -ne 0 ]; then exit $_bd_exit; fi
 fi
-# --- END BEADS INTEGRATION v1.0.5 ---
+# --- END BEADS INTEGRATION v1.1.0 ---
