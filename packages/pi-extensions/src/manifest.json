@@ -13,7 +13,8 @@
     { "id": "sp-terminal-overlay", "displayName": "sp-terminal-overlay", "required": false, "ownership": "xtrm" },
     { "id": "xtrm-loader", "displayName": "xtrm-loader", "required": true, "ownership": "xtrm" },
     { "id": "xtrm-ui", "displayName": "xtrm-ui", "required": true, "ownership": "xtrm" },
-    { "id": "xtprompt", "displayName": "xtprompt", "required": false, "ownership": "xtrm" }
+    { "id": "xtprompt", "displayName": "xtprompt", "required": false, "ownership": "xtrm" },
+    { "id": "read-line-numbers", "displayName": "read-line-numbers", "required": true, "ownership": "xtrm" }
   ],
   "disabled": {
     "quality-gates": "Hook-script lookup still targets .claude/hooks instead of the managed .xtrm/hooks layout.",
