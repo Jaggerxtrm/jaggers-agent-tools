@@ -136,7 +136,7 @@ type PatchableAssistantMessage = {
 	updateContent?: (message: AssistantMessageLike) => void;
 };
 
-const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview4";
+const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview5";
 
 const THINKING_RECAP_MAX = 120;
 
@@ -299,7 +299,7 @@ async function installThinkingPreviewPatch(): Promise<void> {
 
 	const updateContent = proto.updateContent;
 	proto.updateContent = function patchedUpdateContent(this: PatchableAssistantMessage, message: AssistantMessageLike) {
-		if (this.hiddenThinkingLabel === "" && Array.isArray(message.content)) {
+		if (Array.isArray(message.content)) {
 			const hasThinking = message.content.some((block) => block.type === "thinking" && block.thinking?.trim());
 			if (hasThinking) {
 				if (this.hideThinkingBlock) thinkingFollowsToggle = true;
