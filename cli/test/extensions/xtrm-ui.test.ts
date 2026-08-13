@@ -375,58 +375,6 @@ describe("xtrm-ui built-in tool rendering", () => {
     expect(lines.at(-1)).toContain("showing 6/8 lines (ctrl+o expand)");
   });
 
-  it("paints command separators light magenta inside the bold command", () => {
-    const { tools } = loadExtension();
-    const component = tools.bash.renderResult(
-      { content: [{ type: "text", text: "" }], details: {} },
-      { expanded: false, isPartial: false },
-      theme,
-      context({ command: "echo a && echo b 2>&1 | grep c; echo d" }),
-    );
-
-    const line = component.render(200)[0];
-    expect(line).toBe(
-      "• Ran \x1b[1mecho a \x1b[38;2;255;170;255m&&\x1b[39m echo b 2>&1 \x1b[38;2;255;170;255m|\x1b[39m grep c\x1b[38;2;255;170;255m;\x1b[39m echo d\x1b[22m",
-    );
-  });
-
-  it("skips separators without adjacent whitespace", () => {
-    const { tools } = loadExtension();
-    const component = tools.bash.renderResult(
-      { content: [{ type: "text", text: "" }], details: {} },
-      { expanded: false, isPartial: false },
-      theme,
-      context({ command: "echo a&&echo b|c;echo d 2>&1" }),
-    );
-
-    const line = component.render(200)[0];
-    expect(line).toBe("• Ran \x1b[1mecho a&&echo b|c;echo d 2>&1\x1b[22m");
-  });
-
-  it("accents the command name of each segment after colored divisors", () => {
-    const { tools } = loadExtension();
-    const colors: string[] = [];
-    const spyTheme = {
-      ...theme,
-      fg: (color: string, text: string) => {
-        colors.push(color);
-        return text;
-      },
-    };
-    const result = { content: [{ type: "text", text: "" }], details: {} };
-    const renderOptions = { expanded: false, isPartial: false };
-
-    colors.length = 0;
-    tools.bash.renderResult(
-      result,
-      renderOptions,
-      spyTheme,
-      context({ command: "cd /tmp && python x.py; ls" }),
-    );
-    // cd (line start), python (after &&), ls (after ;) each use the accent token.
-    expect(colors.filter((c) => c === "accent")).toEqual(["accent", "accent", "accent"]);
-  });
-
   it("colors only the Ran prefix with phase status and dims the command unless success", () => {
     const { tools } = loadExtension();
     const colors: string[] = [];
@@ -459,7 +407,7 @@ describe("xtrm-ui built-in tool rendering", () => {
       spyTheme,
       context({ command: "echo pending" }, { executionStarted: false, isPartial: true }),
     );
-    expect(colors).toEqual(["accent", "accent", "dim", "accent", "dim"]); // •, Ran, ws, cmd name, rest
+    expect(colors).toEqual(["accent", "accent", "dim"]); // •, Ran, command
   });
 
   it.each([
