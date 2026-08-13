@@ -993,9 +993,24 @@ function renderBashTree(
   const [firstCommand = "", ...continuedCommands] = command.split("\n");
   // theme.bold is a chalk no-op in pi's runtime; emit the SGR escape directly.
   const boldCommand = (text: string) => `\x1b[1m${text}\x1b[22m`;
+  // Command divisors (; && | || &) are hard to spot in long commands; paint them
+  // light magenta (no magenta theme token — swap the RGB for "warning" to get
+  // yellow). Regex split is cosmetic; separators inside quoted strings are
+  // colored too, which is acceptable.
+  const TOOL_SEPARATOR_FG = "\x1b[38;2;255;170;255m";
+  const SEPARATOR_PATTERN = /&&|\|\||[|;&]/;
+  const colorCommand = (text: string): string => text
+    .split(/(&&|\|\||[|;&])/)
+    .map((part) => {
+      if (!part) return "";
+      return SEPARATOR_PATTERN.test(part)
+        ? `${TOOL_SEPARATOR_FG}${part}\x1b[39m`
+        : theme.fg(commandColor, part);
+    })
+    .join("");
   return appendToolTree(theme, [
-    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${boldCommand(theme.fg(commandColor, firstCommand))}`,
-    ...continuedCommands.map((line) => boldCommand(theme.fg(commandColor, line))),
+    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${boldCommand(colorCommand(firstCommand))}`,
+    ...continuedCommands.map((line) => boldCommand(colorCommand(line))),
   ], outputLines, meta);
 }
 

@@ -375,6 +375,21 @@ describe("xtrm-ui built-in tool rendering", () => {
     expect(lines.at(-1)).toContain("showing 6/8 lines (ctrl+o expand)");
   });
 
+  it("paints command separators light magenta inside the bold command", () => {
+    const { tools } = loadExtension();
+    const component = tools.bash.renderResult(
+      { content: [{ type: "text", text: "" }], details: {} },
+      { expanded: false, isPartial: false },
+      theme,
+      context({ command: "echo a && echo b | grep c; echo d" }),
+    );
+
+    const line = component.render(200)[0];
+    expect(line).toBe(
+      "• Ran \x1b[1mecho a \x1b[38;2;255;170;255m&&\x1b[39m echo b \x1b[38;2;255;170;255m|\x1b[39m grep c\x1b[38;2;255;170;255m;\x1b[39m echo d\x1b[22m",
+    );
+  });
+
   it("colors only the Ran prefix with phase status and dims the command unless success", () => {
     const { tools } = loadExtension();
     const colors: string[] = [];
