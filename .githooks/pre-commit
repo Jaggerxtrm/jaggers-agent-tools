@@ -17,9 +17,10 @@ else
     echo "pre-commit not installed or .pre-commit-config.yaml missing — skipping local commit security checks"
 fi
 
-exit 0
+# Beads-managed section below runs after the security checks above
+# (refreshes the JSONL export; the custom block after it stages the export).
 
-# --- BEGIN BEADS INTEGRATION v1.0.5 ---
+# --- BEGIN BEADS INTEGRATION v1.1.0 ---
 # This section is managed by beads. Do not remove these markers.
 if command -v bd >/dev/null 2>&1; then
   export BD_GIT_HOOK=1
@@ -50,7 +51,7 @@ if command -v bd >/dev/null 2>&1; then
   fi
   if [ $_bd_exit -ne 0 ]; then exit $_bd_exit; fi
 fi
-# --- END BEADS INTEGRATION v1.0.5 ---
+# --- END BEADS INTEGRATION v1.1.0 ---
 
 # --- BEGIN custom: stage freshly-exported JSONL into the commit ---
 # Lives OUTSIDE bd's managed markers so bd hooks install/upgrade won't clobber.
