@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import manifest from "./manifest.json" with { type: "json" };
 import autoSessionNameExtension from "./extensions/auto-session-name.ts";
@@ -11,6 +11,7 @@ import lspBootstrapExtension from "./extensions/lsp-bootstrap.ts";
 import piSerenaCompactExtension from "./extensions/pi-serena-compact.ts";
 import serenaPoolExtension from "./extensions/serena-pool.ts";
 import qualityGatesExtension from "./extensions/quality-gates.ts";
+import readLineNumbersExtension from "./extensions/read-line-numbers.ts";
 import serviceSkillsExtension from "./extensions/service-skills.ts";
 import sessionFlowExtension from "./extensions/session-flow.ts";
 import spTerminalOverlayExtension from "./extensions/sp-terminal-overlay.ts";
@@ -33,6 +34,7 @@ const availableManagedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "lsp-bootstrap", register: lspBootstrapExtension },
   { id: "pi-serena-compact", register: piSerenaCompactExtension },
   { id: "quality-gates", register: qualityGatesExtension },
+  { id: "read-line-numbers", register: readLineNumbersExtension },
   { id: "serena-pool", register: serenaPoolExtension },
   { id: "service-skills", register: serviceSkillsExtension },
   { id: "session-flow", register: sessionFlowExtension },

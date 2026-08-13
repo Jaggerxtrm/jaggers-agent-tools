@@ -26,6 +26,7 @@ mock.module("@earendil-works/pi-coding-agent", () => ({
   createReadTool: () => ({}),
   createWriteTool: () => ({}),
   isBashToolResult: () => false,
+  isReadToolResult: (event: { toolName: string }) => event.toolName === "read",
   isToolCallEventType: () => false,
 }));
 

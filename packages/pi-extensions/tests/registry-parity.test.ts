@@ -16,6 +16,7 @@ mock.module("@earendil-works/pi-coding-agent", () => ({
   createReadTool: () => ({}),
   createWriteTool: () => ({}),
   isBashToolResult: () => false,
+  isReadToolResult: (event: { toolName: string }) => event.toolName === "read",
   isToolCallEventType: () => false,
 }));
 mock.module("@earendil-works/pi-tui", () => ({
@@ -61,5 +62,11 @@ describe("Pi extension ownership parity", () => {
 
     expect(activeIds()).not.toContain("serena-pool");
     expect(manifest.disabled).toHaveProperty("serena-pool");
+  });
+
+  test("read-line-numbers is enrolled as a required active extension", () => {
+    const entry = manifest.active.find((extension) => extension.id === "read-line-numbers");
+    expect(entry).toBeDefined();
+    expect(entry?.required).toBe(true);
   });
 });
