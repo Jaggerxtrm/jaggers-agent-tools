@@ -995,20 +995,36 @@ function renderBashTree(
   const boldCommand = (text: string) => `\x1b[1m${text}\x1b[22m`;
   // Command divisors (; && | ||) are hard to spot in long commands; paint them
   // light magenta (no magenta theme token — swap the RGB for "warning" to get
-  // yellow). Single & is deliberately excluded so redirections like 2>&1 and
-  // backgrounding & stay plain. Regex split is cosmetic; separators inside
-  // quoted strings are colored too, which is acceptable.
+  // yellow) only when adjacent to whitespace: | && || need a space before or
+  // after; ; needs a space after (so "cmd;echo" and "2>&1" stay plain).
+  // Uncolored separators still render in commandColor to avoid a default-color
+  // glitch. Regex split is cosmetic; quoted separators with surrounding spaces
+  // are colored too, which is acceptable.
   const TOOL_SEPARATOR_FG = "\x1b[38;2;255;170;255m";
   const SEPARATOR_PATTERN = /&&|\|\||[|;]/;
-  const colorCommand = (text: string): string => text
-    .split(/(&&|\|\||[|;])/)
-    .map((part) => {
-      if (!part) return "";
-      return SEPARATOR_PATTERN.test(part)
+  const hasSpaceBefore = (part: string) => /\s$/.test(part);
+  const hasSpaceAfter = (part: string) => /^\s/.test(part);
+  const colorCommand = (text: string): string => {
+    const parts = text.split(/(&&|\|\||[|;])/);
+    let result = "";
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (!part) continue;
+      if (!SEPARATOR_PATTERN.test(part)) {
+        result += theme.fg(commandColor, part);
+        continue;
+      }
+      const before = i > 0 ? parts[i - 1] : "";
+      const after = i < parts.length - 1 ? parts[i + 1] : "";
+      const color = part === ";"
+        ? hasSpaceAfter(after)
+        : hasSpaceBefore(before) || hasSpaceAfter(after);
+      result += color
         ? `${TOOL_SEPARATOR_FG}${part}\x1b[39m`
         : theme.fg(commandColor, part);
-    })
-    .join("");
+    }
+    return result;
+  };
   return appendToolTree(theme, [
     `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${boldCommand(colorCommand(firstCommand))}`,
     ...continuedCommands.map((line) => boldCommand(colorCommand(line))),
