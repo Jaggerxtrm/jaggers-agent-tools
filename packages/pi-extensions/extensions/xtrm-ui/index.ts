@@ -136,7 +136,7 @@ type PatchableAssistantMessage = {
 	updateContent?: (message: AssistantMessageLike) => void;
 };
 
-const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview3";
+const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview4";
 
 const THINKING_RECAP_MAX = 120;
 
@@ -178,9 +178,9 @@ export function buildThinkingRecap(thinking: string, fallback = "Thinking..."): 
 	return source.length > THINKING_RECAP_MAX ? source.slice(0, THINKING_RECAP_MAX - 3) + "..." : source;
 }
 
-/** Collapsed row: bold label, dim separator, dimmed recap, expand hint. */
-export function buildCollapsedThinkingRow(recap: string, style: ThinkingRowStyle): string {
-	return ` ${style.label("Thinking...")}${style.sep}${style.recap(recap)} ${style.hint("(Ctrl+T to expand)")}`;
+/** Collapsed row: bold label, dim separator, dimmed recap, raw char count, expand hint. */
+export function buildCollapsedThinkingRow(recap: string, charCount: number, style: ThinkingRowStyle): string {
+	return ` ${style.label("Thinking...")}${style.sep}${style.recap(recap)}${style.sep}${style.recap(String(charCount))} ${style.hint("(Ctrl+T to expand)")}`;
 }
 
 /** Expanded block: bold label row with collapse hint, then the full dimmed trace. */
@@ -307,7 +307,7 @@ async function installThinkingPreviewPatch(): Promise<void> {
 				const content = message.content.flatMap((block, index) => {
 					if (block.type !== "thinking" || !block.thinking?.trim()) return [block];
 					const row = compact
-						? buildCollapsedThinkingRow(buildThinkingRecap(block.thinking), style)
+						? buildCollapsedThinkingRow(buildThinkingRecap(block.thinking), block.thinking.length, style)
 						: buildExpandedThinkingBlock(block.thinking, style);
 					// Text blocks render even when pi's hideThinkingBlock branch is
 					// active (a "thinking" block would be swallowed and replaced by the
