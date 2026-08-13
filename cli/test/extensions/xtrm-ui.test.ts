@@ -381,12 +381,12 @@ describe("xtrm-ui built-in tool rendering", () => {
       { content: [{ type: "text", text: "" }], details: {} },
       { expanded: false, isPartial: false },
       theme,
-      context({ command: "echo a && echo b | grep c; echo d" }),
+      context({ command: "echo a && echo b 2>&1 | grep c; echo d" }),
     );
 
     const line = component.render(200)[0];
     expect(line).toBe(
-      "• Ran \x1b[1mecho a \x1b[38;2;255;170;255m&&\x1b[39m echo b \x1b[38;2;255;170;255m|\x1b[39m grep c\x1b[38;2;255;170;255m;\x1b[39m echo d\x1b[22m",
+      "• Ran \x1b[1mecho a \x1b[38;2;255;170;255m&&\x1b[39m echo b 2>&1 \x1b[38;2;255;170;255m|\x1b[39m grep c\x1b[38;2;255;170;255m;\x1b[39m echo d\x1b[22m",
     );
   });
 
