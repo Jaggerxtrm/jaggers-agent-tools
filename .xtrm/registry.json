@@ -63,7 +63,11 @@
           "version": "0.11.4"
         },
         "project-memory.mjs": {
-          "hash": "4f6094a53b1dca7650c90714497e0fd9be1ad2221a8952517f9c8765f520a442",
+          "hash": "e3e8febfb5f47cf97d4666714d7a9b20667de0df96fc95ffb50f2545a7040059",
+          "version": "0.11.4"
+        },
+        "project-memory.test.mjs": {
+          "hash": "a3dfa64ea48eeb54c6910b4a28d3cad3cbdc1f0356d7b63a3e389e70d85913e8",
           "version": "0.11.4"
         },
         "quality-check-env.mjs": {
@@ -1272,11 +1276,19 @@
           "version": "0.11.4"
         },
         "instructions/agents-top.md": {
-          "hash": "d8ec33c0140c02561a4715891b21339629d224a659fadeda17dc641324c58224",
+          "hash": "4bca28b39d3638f41c527422dc6d1a8db7dad0afd6731b5da17b03ce22913f37",
           "version": "0.11.4"
         },
         "instructions/claude-top.md": {
-          "hash": "276f3938d3167873349789d04c0f645195527415607465b708d09c94459f7dc7",
+          "hash": "160818895707e8bf470750372dcf2405520c6032a2c2f3ba351b32770ac8bc85",
+          "version": "0.11.4"
+        },
+        "instructions/global-system-prompt.md": {
+          "hash": "8f1237caa169d8a085cfd5a362c9dbfe05d495e606e12ec36bbb1fc81c8ec679",
+          "version": "0.11.4"
+        },
+        "instructions/memory-doctrine.md": {
+          "hash": "ab99551cf355b42e6f710f1e4a0380a697a7a59e241381e02d89c00d18c26325",
           "version": "0.11.4"
         },
         "pi.mcp.json": {

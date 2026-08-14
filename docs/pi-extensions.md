@@ -172,6 +172,26 @@ for repainting dashboards, and preserves safe numeric CSI SGR colors for
 append-style feed output. Keys: `Esc`/`q`/`Ctrl+C` close, `r` restarts, arrows
 scroll, and PageUp/PageDown page.
 
+### `python-kernel`
+
+Persistent sequential `python` tool backed by one live python3 process per
+session. State (variables, imports, functions) survives across calls;
+`reset: true` clears the namespace and returns to the working directory. Each
+call is one JSON-lines RPC cell on a small driver script — no pty, no jupyter.
+
+- Cells run with the user's permissions — **not sandboxed**; treat a cell like
+  a shell command.
+- Long cells time out (default 120s), kill the process group, and return a
+  structured timed-out error; the next call restarts with lost state.
+- Abort kills the whole process group (code-spawned children included); a
+  crash or exit is reported as a structured tool error and the next call
+  restarts.
+- Prerequisite: `python3` on PATH (or a `pythonBin` override). A missing
+  interpreter is a structured tool error on every call — never a host crash.
+- Migrated from the user-local `~/.pi/agent/extensions/python-kernel.ts`
+  (xtrm-3ljgz.1): copy customisations forward, then remove the loose file
+  manually — xt never deletes user-owned files.
+
 ### Other Extensions
 
 - `quality-gates` — TypeScript/Python linting on file edit
@@ -179,7 +199,8 @@ scroll, and PageUp/PageDown page.
 - `custom-footer` — 3-line status bar (path/branch, context/model, one compact cached beads line); pure reader of `.xtrm/cache/beads-status.json` with no `bd` subprocess on render/startup and no expandable tree (xtrm-64pl0)
 - `xtrm-ui` — XTRM themes, header, editor density, and native/external tool rendering
 - `sp-terminal-overlay` — centered overlay for streaming `sp feed -f`, snapshot `sp ps`, and arbitrary shell commands
-- `xtrm-loader` — XTRM context injection (using-xtrm skill + `.xtrm/memory.md` + project context)
+- `python-kernel` — persistent sequential `python` tool (state survives across calls; reset/cwd/abort/timeout semantics; runs with user permissions, not sandboxed)
+- `xtrm-loader` — XTRM context injection (shared bd memory doctrine + project context; `.xtrm/memory.md` is never injected)
 - `auto-session-name` — Generates session names from branch/context
 - `compact-header` — Compact header layout
 - `git-checkpoint` — Git state snapshots

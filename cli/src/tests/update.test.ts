@@ -20,6 +20,8 @@ const {
   logBootstrapTriggerMock,
   ensureUserAgentsSkillsSymlinkMock,
   ensureAgentsSkillsSymlinkMock,
+  syncGlobalPromptsMock,
+  printGlobalPromptSyncSummaryMock,
 } = vi.hoisted(() => ({
   checkDriftMock: vi.fn(),
   runInstallMock: vi.fn(),
@@ -37,6 +39,8 @@ const {
   logBootstrapTriggerMock: vi.fn(),
   ensureUserAgentsSkillsSymlinkMock: vi.fn(),
   ensureAgentsSkillsSymlinkMock: vi.fn(),
+  syncGlobalPromptsMock: vi.fn(),
+  printGlobalPromptSyncSummaryMock: vi.fn(),
 }));
 
 vi.mock('../core/drift.js', () => ({
@@ -87,6 +91,11 @@ vi.mock('../core/global-hooks-bootstrap.js', () => ({
 
 vi.mock('../core/pi-runtime-hooks.js', () => ({
   reconcileGlobalPiHooks: reconcileGlobalPiHooksMock,
+}));
+
+vi.mock('../core/global-prompt-sync.js', () => ({
+  syncGlobalPrompts: syncGlobalPromptsMock,
+  printGlobalPromptSyncSummary: printGlobalPromptSyncSummaryMock,
 }));
 
 vi.mock('../core/global-hooks-flag.js', () => ({
@@ -155,6 +164,9 @@ beforeEach(() => {
   });
   ensureAgentsSkillsSymlinkMock.mockReset();
   ensureAgentsSkillsSymlinkMock.mockResolvedValue({ claude: 0, pi: 0 });
+  syncGlobalPromptsMock.mockReset();
+  syncGlobalPromptsMock.mockResolvedValue({ targets: [] });
+  printGlobalPromptSyncSummaryMock.mockReset();
 });
 
 afterEach(() => {
@@ -411,6 +423,7 @@ describe('xtrm update', () => {
         maintenance: { tools: [], bdDoctor: { state: 'checked' }, gitnexusIndex: { state: 'current' } },
       }],
       packages: { statuses: [], missing: [], outdated: [], installed: [], refreshed: [], failed: [] },
+      promptSync: { targets: [] },
     });
   });
 
@@ -496,5 +509,59 @@ describe('xtrm update', () => {
     expect(help).toContain('Routine refresh and repair');
     expect(help).toContain('runtimes, hooks, skills');
     expect(help).toContain('--all-repos');
+  });
+
+  it('per-repo install always defers the global prompt sync (xtrm-3ljgz.2)', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    const repo = writeRepo(tmpDir, 'repo-a');
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+    runInstallMock.mockResolvedValue({ piRuntime: { changed: false, failed: [] } });
+
+    await runUpdateCli(['--apply', '--repo', repo]);
+
+    expect(runInstallMock).toHaveBeenCalledTimes(1);
+    expect(runInstallMock).toHaveBeenCalledWith(expect.objectContaining({
+      skipGlobalPromptSync: true,
+    }));
+  });
+
+  it('fleet update --root runs the global prompt sync exactly once, even for many repos (xtrm-3ljgz.2)', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+    // Scan root is a subdir holding only the two target repos; the package
+    // root itself lives outside the scanned tree.
+    const fleetRoot = path.join(tmpDir, 'fleet');
+    writeRepo(fleetRoot, 'repo-a');
+    writeRepo(fleetRoot, 'repo-b');
+    runInstallMock.mockResolvedValue({ piRuntime: { changed: false, failed: [] } });
+
+    await runUpdateCli(['--apply', '--root', fleetRoot]);
+
+    expect(runInstallMock).toHaveBeenCalledTimes(2);
+    expect(syncGlobalPromptsMock).toHaveBeenCalledTimes(1);
+    expect(syncGlobalPromptsMock).toHaveBeenCalledWith({ dryRun: false });
+  });
+
+  it('fleet update --all-repos dry-run reports the sync without applying it (xtrm-3ljgz.2)', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+    writeRepo(tmpDir, 'repo-a');
+    writeRepo(tmpDir, 'repo-b');
+    runInstallMock.mockResolvedValue({ piRuntime: { changed: false, failed: [] } });
+
+    const previousFleetHome = process.env.HOME;
+    try {
+      process.env.HOME = path.join(tmpDir, 'fleet-home');
+      await runUpdateCli(['--all-repos']);
+    } finally {
+      if (previousFleetHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousFleetHome;
+    }
+
+    expect(syncGlobalPromptsMock).toHaveBeenCalledTimes(1);
+    expect(syncGlobalPromptsMock).toHaveBeenCalledWith({ dryRun: true });
   });
 });

@@ -8,6 +8,7 @@ import customFooterExtension from "./extensions/custom-footer.ts";
 import customProviderQwenCliExtension from "./extensions/custom-provider-qwen-cli.ts";
 import gitCheckpointExtension from "./extensions/git-checkpoint.ts";
 import lspBootstrapExtension from "./extensions/lsp-bootstrap.ts";
+import pythonKernelExtension from "./extensions/python-kernel.ts";
 import piSerenaCompactExtension from "./extensions/pi-serena-compact.ts";
 import serenaPoolExtension from "./extensions/serena-pool.ts";
 import qualityGatesExtension from "./extensions/quality-gates.ts";
@@ -32,6 +33,7 @@ const availableManagedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "custom-provider-qwen-cli", register: customProviderQwenCliExtension },
   { id: "git-checkpoint", register: gitCheckpointExtension },
   { id: "lsp-bootstrap", register: lspBootstrapExtension },
+  { id: "python-kernel", register: pythonKernelExtension },
   { id: "pi-serena-compact", register: piSerenaCompactExtension },
   { id: "quality-gates", register: qualityGatesExtension },
   { id: "read-line-numbers", register: readLineNumbersExtension },

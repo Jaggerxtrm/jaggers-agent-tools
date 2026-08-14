@@ -1,0 +1,16 @@
+{
+  "name": "@xtrm/pi-python-kernel",
+  "version": "1.0.0",
+  "description": "xtrm Pi extension: python-kernel (persistent sequential python3 tool)",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "keywords": [
+    "pi",
+    "extension",
+    "xtrm"
+  ],
+  "author": "xtrm",
+  "license": "MIT"
+}

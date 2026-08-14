@@ -20,6 +20,7 @@ vi.mock('../core/machine-bootstrap.js', async () => {
 });
 
 import { runInstall } from '../commands/install.js';
+import { runPiInstall } from '../commands/pi-install.js';
 
 interface HooksConfig {
   hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> }>>;
@@ -278,5 +279,40 @@ describe('runtime maintenance integration', { timeout: 120_000 }, () => {
     const flattenedCommands = postToolHooks.flatMap(wrapper => wrapper.hooks.map(hook => hook.command));
     expect(flattenedCommands.some(command => command.includes('.xtrm/hooks/'))).toBe(true);
     expect(flattenedCommands.some(command => command.includes('CLAUDE_PLUGIN_ROOT'))).toBe(false);
+  });
+
+  it('forwards skipGlobalPromptSync to runPiInstall so update can sync globals once (xtrm-3ljgz.2)', async () => {
+    (runPiInstall as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    await runInstall({
+      dryRun: false,
+      yes: true,
+      projectRoot: tmpDir,
+      skipMachineBootstrap: true,
+      skipClaudeRuntimeSync: true,
+      skipGlobalPromptSync: true,
+    });
+
+    expect(runPiInstall).toHaveBeenCalledTimes(1);
+    expect(runPiInstall).toHaveBeenCalledWith(false, false, tmpDir, expect.objectContaining({
+      skipGlobalPromptSync: true,
+    }));
+  });
+
+  it('direct install does not skip the global prompt sync by default (xtrm-3ljgz.2)', async () => {
+    (runPiInstall as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    await runInstall({
+      dryRun: false,
+      yes: true,
+      projectRoot: tmpDir,
+      skipMachineBootstrap: true,
+      skipClaudeRuntimeSync: true,
+    });
+
+    expect(runPiInstall).toHaveBeenCalledTimes(1);
+    expect(runPiInstall).toHaveBeenCalledWith(false, false, tmpDir, expect.objectContaining({
+      skipGlobalPromptSync: undefined,
+    }));
   });
 });

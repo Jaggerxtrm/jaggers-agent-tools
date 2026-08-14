@@ -1311,6 +1311,32 @@ async function reconcileProjectExtensionPackageEntry(
     return packages.filter((entry) => entry !== PROJECT_EXTENSION_PACKAGE_ID);
 }
 
+/**
+ * True when a packages[] entry IS the managed pi-extensions package.
+ *
+ * Recognizes the npm id and local source checkouts (e.g.
+ * "../../dev/core/packages/pi-extensions" — the operator's dev checkout) so
+ * the exactly-one-package invariant treats a local registration as already
+ * satisfying the global declaration instead of appending the npm copy beside
+ * it (xtrm-3ljgz.1). Remote refs (npm:/git:/file:) never match by path.
+ */
+export function isManagedPiExtensionsPackageEntry(entry: string): boolean {
+    if (entry === PROJECT_EXTENSION_PACKAGE_ID) return true;
+    if (entry.startsWith('npm:') || entry.startsWith('git:') || entry.startsWith('file:')) return false;
+    const normalized = entry.replace(/\\/g, '/').replace(/\/+$/, '');
+    const segments = normalized.split('/').filter(Boolean);
+    const base = segments[segments.length - 1];
+    if (base !== 'pi-extensions') return false;
+    // Review tightening (xtrm-3ljgz): the managed local source lives at
+    // <repo>/packages/pi-extensions, so for path forms the IMMEDIATE parent
+    // segment must be 'packages' (any checkout of this repo) — not merely a
+    // 'packages' segment somewhere up the path. Pure string test: no fs I/O,
+    // works for relative, absolute, and Windows-style paths.
+    // A bare "pi-extensions" entry (scope-free identity form) still counts:
+    // it cannot be distinguished from a foreign package by string alone.
+    return segments.length === 1 || segments[segments.length - 2] === 'packages';
+}
+
 async function ensureGlobalDeclaresExtensionPackage(
     dryRun: boolean,
     log?: (message: string) => void,
@@ -1332,7 +1358,7 @@ async function ensureGlobalDeclaresExtensionPackage(
     }
 
     const globalPackages = normalizeStringArray(settings.packages);
-    if (globalPackages.includes(PROJECT_EXTENSION_PACKAGE_ID)) return true;
+    if (globalPackages.some((entry) => isManagedPiExtensionsPackageEntry(entry))) return true;
     if (dryRun) return true;
 
     try {

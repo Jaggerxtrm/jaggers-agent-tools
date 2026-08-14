@@ -402,5 +402,50 @@ describe('pi runtime safeguards', () => {
       const fresh = await fs.readJson(path.join(freshRoot, '.pi', 'settings.json'));
       expect(fresh).not.toHaveProperty('serena');
     });
+
+    it('classifies managed pi-extensions entries by pure path/id shape (no fs I/O)', async () => {
+    const { isManagedPiExtensionsPackageEntry } = await import('../core/pi-runtime.js');
+    // Exact managed npm id.
+    expect(isManagedPiExtensionsPackageEntry('npm:@jaggerxtrm/pi-extensions')).toBe(true);
+    // Local source checkouts: relative, bare, and absolute — immediate parent
+    // must be 'packages' (the repo layout), on any platform.
+    expect(isManagedPiExtensionsPackageEntry('../../dev/core/packages/pi-extensions')).toBe(true);
+    expect(isManagedPiExtensionsPackageEntry('packages/pi-extensions')).toBe(true);
+    expect(isManagedPiExtensionsPackageEntry('./packages/pi-extensions')).toBe(true);
+    expect(isManagedPiExtensionsPackageEntry('/abs/home/dev/core/packages/pi-extensions/')).toBe(true);
+    expect(isManagedPiExtensionsPackageEntry('C:\\dev\\core\\packages\\pi-extensions')).toBe(true);
+    // Bare scope-free identity: indistinguishable from a foreign package by
+    // string alone, so it still counts (documented follow-up in pi-runtime).
+    expect(isManagedPiExtensionsPackageEntry('pi-extensions')).toBe(true);
+    // Remote refs and other packages never match.
+    expect(isManagedPiExtensionsPackageEntry('npm:pi-gitnexus')).toBe(false);
+    expect(isManagedPiExtensionsPackageEntry('git:github.com/x/pi-extensions')).toBe(false);
+    expect(isManagedPiExtensionsPackageEntry('file:../packages/pi-extensions')).toBe(false);
+    // 'packages' somewhere up the path is not the managed source layout.
+    expect(isManagedPiExtensionsPackageEntry('a/packages/b/pi-extensions')).toBe(false);
+    expect(isManagedPiExtensionsPackageEntry('other/vendor/pi-extensions')).toBe(false);
+    expect(isManagedPiExtensionsPackageEntry('pi-extension')).toBe(false);
+    expect(isManagedPiExtensionsPackageEntry('npm:@jaggerxtrm/pi-extensions-extra')).toBe(false);
+  });
+
+  it('does not register the npm package beside a local pi-extensions source path (xtrm-3ljgz.1)', async () => {
+      const { updatePiSettings } = await import('../core/pi-runtime.js');
+      const projectRoot = path.join(tempRoot, 'local-source');
+      await fs.ensureDir(projectRoot);
+
+      // The operator's global settings declare the local checkout of the same
+      // managed package; the exactly-one-package invariant must treat it as
+      // already satisfied instead of appending npm:@jaggerxtrm/pi-extensions.
+      const globalSettingsPath = path.join(process.env.PI_AGENT_DIR as string, 'settings.json');
+      await fs.outputJson(globalSettingsPath, {
+        packages: ['npm:pi-gitnexus', '../../dev/core/packages/pi-extensions'],
+      });
+
+      await updatePiSettings(projectRoot, false);
+
+      const globalSettings = await fs.readJson(globalSettingsPath);
+      expect(globalSettings.packages).not.toContain('npm:@jaggerxtrm/pi-extensions');
+      expect(globalSettings.packages).toEqual(['npm:pi-gitnexus', '../../dev/core/packages/pi-extensions']);
+    });
   });
 });

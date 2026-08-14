@@ -18,6 +18,21 @@
 | `packages/pi-extensions/extensions/xtrm-loader` | `packages/pi-extensions/extensions/xtrm-loader` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/xtrm-ui` | `packages/pi-extensions/extensions/xtrm-ui` | theme assets moved to package-level `themes/xtrm-ui` |
 | `packages/pi-extensions/src/core` | `packages/pi-extensions/src/core` | internal helpers; no separate `@xtrm/pi-core` package required |
+| `~/.pi/agent/extensions/python-kernel.ts` (user-local loose file) | `packages/pi-extensions/extensions/python-kernel` | persistent sequential python3 tool moved into the managed package (xtrm-3ljgz.1) |
+
+## python-kernel (xtrm-3ljgz.1)
+
+- The persistent `python` tool moved from the user-local
+  `~/.pi/agent/extensions/python-kernel.ts` into the managed package.
+- **Prerequisite:** `python3` must be on PATH. A missing interpreter is
+  reported as a structured tool error on every call — the host never crashes.
+- **Manual loose-file migration:** compare the managed copy against your local
+  file for customisations, apply them to the managed copy if needed, then
+  delete `~/.pi/agent/extensions/python-kernel.ts` yourself and restart pi (or
+  `/reload`). xt never deletes user-owned loose files.
+- `xt update` recognises a local source checkout
+  (`../../dev/core/packages/pi-extensions` in `~/.pi/agent/settings.json`) as
+  the same managed package and will not register the npm copy beside it.
 
 ## Asset migration
 
@@ -25,7 +40,6 @@
 - `xtrm-ui` now discovers themes from `join(__dirname, "../../themes/xtrm-ui")`.
 
 ## Follow-up updates required in later phases
-
 1. **Installer/runtime sync paths**
    - Replace hardcoded `packages/pi-extensions/extensions/**` references with `packages/pi-extensions/extensions/**` in install/runtime copy logic.
 2. **Registry generation**

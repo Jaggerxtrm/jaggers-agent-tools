@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, existsSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -124,10 +124,61 @@ try {
   assert.match(clean.stdout, /preserved/i);
   assert.match(clean.stdout, /removed/i);
 
+  // ── Global prompt sync surface (xtrm-3ljgz.2) ─────────────────────────────
+  // The packed tarball must carry the canonical assets the synchronizer reads
+  // and the managed python-kernel extension payload.
+  const tarballFiles = execFileSync('tar', ['-tf', tarball], { encoding: 'utf8' }).split('\n');
+  for (const required of [
+    'package/.xtrm/config/instructions/global-system-prompt.md',
+    'package/.xtrm/config/instructions/memory-doctrine.md',
+    'package/packages/pi-extensions/extensions/python-kernel/index.ts',
+    'package/packages/pi-extensions/extensions/python-kernel/package.json',
+  ]) {
+    assert.ok(tarballFiles.includes(required), `packed tarball missing canonical asset ${required}`);
+  }
+
+  // A real `xt update --repo <scaffolded-repo>` in DRY-RUN mode proves the
+  // packed CLI invokes the global prompt sync exactly once per command
+  // without any network touch. We deliberately do NOT run `xt update --apply`
+  // here: apply drives real installs (oh-pi/pnpm/xt-managed pi packages,
+  // tool upgrades via npm install -g) and the update exit-code contract makes
+  // package-assurance failures fatal — non-hermetic and flaky in CI. The
+  // apply path (marked files created, user bytes preserved, idempotent,
+  // no-secret) is covered by cli/src/tests/global-prompt-sync.test.ts against
+  // a real temp HOME + temp PI_AGENT_DIR.
+  const userPrompt = path.join(piAgentDir, 'APPEND_SYSTEM.md');
+  const claudePrompt = path.join(home, '.claude', 'CLAUDE.md');
+  // Seed a user-owned prefix/suffix so the sync must preserve it (dry-run
+  // reports; the mutating proof lives in the vitest integration suite).
+  mkdirSync(piAgentDir, { recursive: true });
+  mkdirSync(path.dirname(claudePrompt), { recursive: true });
+  writeFileSync(userPrompt, `# user prefix\n\n${secret}\n\n# user suffix\n`);
+  writeFileSync(claudePrompt, `# claude user prefix\n\n${secret}\n\n# claude user suffix\n`);
+  const xtrmRepo = path.join(smokeRoot, 'xtrm-repo');
+  mkdirSync(path.join(xtrmRepo, '.xtrm'), { recursive: true });
+  copyFileSync(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(xtrmRepo, '.xtrm', 'registry.json'));
+
+  const dryRun = run('node', [cli, 'update', '--repo', xtrmRepo], { cwd: project, env });
+  assertSuccess('dry-run update with global prompt sync', dryRun);
+  assert.match(combined(dryRun), /Global system-prompt sync/i);
+  assert.match(combined(dryRun), /pi: \[DRY RUN\] would prepend/i);
+  assert.match(combined(dryRun), /claude: \[DRY RUN\] would prepend/i);
+  // Dry-run must not mutate the seeded files.
+  assert.equal(readFileSync(userPrompt, 'utf8'), `# user prefix\n\n${secret}\n\n# user suffix\n`);
+  assert.equal(readFileSync(claudePrompt, 'utf8'), `# claude user prefix\n\n${secret}\n\n# claude user suffix\n`);
+  assertNoSecret('dry-run update', dryRun);
+
+  // Second dry-run: idempotent planning output (no duplicate sync block).
+  const dryRun2 = run('node', [cli, 'update', '--repo', xtrmRepo], { cwd: project, env });
+  assertSuccess('second dry-run update', dryRun2);
+  assert.equal((combined(dryRun2).match(/Global system-prompt sync/g) ?? []).length, 1);
+
   console.log('install-update-ux-smoke: PASS');
   console.log('  packed resolver: PASS');
   console.log('  help/retired-token matrix: PASS');
   console.log('  owned-only cleanup and preservation: PASS');
+  console.log('  canonical prompt assets in tarball: PASS');
+  console.log('  global prompt sync via packed update (dry-run, once): PASS');
   console.log('  command output redaction: PASS');
 } finally {
   rmSync(smokeRoot, { recursive: true, force: true });

@@ -38,6 +38,20 @@ mock.module("@earendil-works/pi-tui", () => ({
   visibleWidth: (value: string) => value.length,
 }));
 
+// The registry smoke test below loads src/registry.ts, which now registers
+// the managed python-kernel extension (xtrm-3ljgz.1). That extension imports
+// the Pi-hosted typebox for its parameter schema; bun cannot resolve it from
+// the repo tree, so substitute a structural stand-in exactly like
+// tests/python-kernel.test.ts does.
+mock.module("typebox", () => ({
+  Type: {
+    Object: (shape: unknown) => ({ kind: "object", shape }),
+    String: (opts: unknown) => ({ kind: "string", opts }),
+    Boolean: (opts: unknown) => ({ kind: "boolean", opts }),
+    Optional: (t: unknown) => ({ kind: "optional", t }),
+  },
+}));
+
 for (const modulePath of [
   "../../src/extensions/auto-session-name.ts",
   "../../src/extensions/beads.ts",

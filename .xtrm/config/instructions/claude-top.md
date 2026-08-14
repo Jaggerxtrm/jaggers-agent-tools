@@ -105,7 +105,7 @@ xtrm-loader no longer embeds project bodies in every request. Read them when the
 - Project skills catalog: Claude's native skill discovery (`~/.claude/skills/`); force-load a skill's body at turn 1 via `/skill-<name>`.
 - Durable cross-session knowledge: `bd memories <topic>` / `bd recall <key>` / `bd remember "<insight>"`.
 - Full workflow examples + prompt-shaping guidance: `/using-xtrm` on demand for both runtimes.
-- Auto-injected essential (small): `.xtrm/memory.md` per-project synthesized state.
+- Auto-injected essential (small): shared bd memory doctrine (`.xtrm/config/instructions/memory-doctrine.md`) — `bd memories` retrieval leads; live code/state wins.
 
 ## Code intelligence and edits
 
