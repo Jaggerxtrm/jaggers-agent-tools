@@ -76355,7 +76355,7 @@ function createUpdateCommand() {
         reason: "missing .xtrm/registry.json \u2014 run `xt init` to bootstrap or `xt update --apply --repo <path>` to repair"
       });
     }
-    const packageAssurance = await assureXtManagedPiPackages(Boolean(typedOpts.apply));
+    const packageAssurance = await assureXtManagedPiPackages(!Boolean(typedOpts.apply));
     const promptSync = await syncGlobalPrompts({ dryRun: !typedOpts.apply });
     if (typedOpts.apply) runExternalPiToolPatch(resolvePackageRoot2(), false);
     if (opts.json) {
