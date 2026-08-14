@@ -62,6 +62,50 @@ describe("numberReadText", () => {
     const input = "[Line 5 is 60KB, exceeds 50KB limit. Use bash: sed -n '5p' /a/b.txt | head -c 51200]";
     expect(numberReadText(input, 1, true)).toBe(input);
   });
+
+  // --- Mandate Section 4 correctness: REAL blank source lines must be numbered ---
+
+  test("interior blank source line is numbered (case 3)", () => {
+    expect(numberReadText("foo\n\nbar", 1, false)).toBe("1 | foo\n2 | \n3 | bar");
+  });
+
+  test("multiple consecutive blank source lines are all numbered (case 4)", () => {
+    expect(numberReadText("foo\n\n\nbar", 1, false)).toBe("1 | foo\n2 | \n3 | \n4 | bar");
+  });
+
+  test("first selected line is blank at offset 137 (case 5)", () => {
+    expect(numberReadText("\nfoo", 137, false)).toBe("137 | \n138 | foo");
+  });
+
+  test("genuine last blank source line is numbered (case 6)", () => {
+    // File content "foo\n\n" — a blank last line followed by the trailing
+    // newline artifact. The blank line at row 2 must arrive numbered.
+    expect(numberReadText("foo\n\n", 1, false)).toBe("1 | foo\n2 | \n");
+  });
+
+  test("synthetic blank separator before a notice stays unnumbered (case 11)", () => {
+    const input = "foo\nbar\n\n[Showing lines 1-2 of 5000. Use offset=3 to continue.]";
+    const output = numberReadText(input, 1, true);
+    expect(output).toBe("1 | foo\n2 | bar\n\n[Showing lines 1-2 of 5000. Use offset=3 to continue.]");
+    // The separator must not carry a "3 |" prefix.
+    expect(output).not.toContain("3 | ");
+  });
+});
+
+describe("read-line-numbers extension (integration)", () => {
+  test("registered handler numbers a REAL interior blank line (case 16)", () => {
+    // Exercise the extension entry point end-to-end: registerExtension →
+    // tool_result dispatch → numberReadText. This is the same path Pi runs.
+    const result = runHandler({
+      type: "tool_result",
+      toolCallId: "call-blank",
+      toolName: "read",
+      input: { path: "/a/b.txt", offset: 10 },
+      content: [{ type: "text", text: "alpha\n\nbeta" }],
+      isError: false,
+    }) as { content: Array<{ text: string }> };
+    expect(result.content[0]?.text).toBe("10 | alpha\n11 | \n12 | beta");
+  });
 });
 
 describe("read-line-numbers extension", () => {

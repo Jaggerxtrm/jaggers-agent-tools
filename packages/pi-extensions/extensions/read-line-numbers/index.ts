@@ -29,9 +29,7 @@ function isSyntheticNotice(line: string): boolean {
 }
 
 function numberLines(lines: string[], startLine: number): string {
-  return lines
-    .map((line, index) => (line === "" ? line : `${startLine + index} | ${line}`))
-    .join("\n");
+  return lines.map((line, index) => `${startLine + index} | ${line}`).join("\n");
 }
 
 /**
@@ -40,8 +38,9 @@ function numberLines(lines: string[], startLine: number): string {
  * - `startLine` is the 1-based number of the first line (Pi's `offset`, default 1).
  * - `truncated` mirrors `details.truncation.truncated`: when true, Pi appended a
  *   trailing `\n\n[Showing lines ...]` notice that stays verbatim.
- * - Empty lines pass through unnumbered; their index still advances the count,
- *   so a trailing newline leaves the final empty line unnumbered.
+ * - Every REAL source line is numbered, including empty lines inside the range.
+ *   Only two structural blanks stay unnumbered: the trailing-newline artifact
+ *   (text ending in "\n") and the "\n\n" separator that precedes a Pi notice.
  */
 export function numberReadText(text: string, startLine: number, truncated: boolean): string {
   if (text.length === 0) return text;
@@ -50,9 +49,17 @@ export function numberReadText(text: string, startLine: number, truncated: boole
   if (isSyntheticNotice(lines[last])) {
     // Whole payload is a banner (firstLineExceedsLimit) — keep verbatim.
     if (last === 0) return lines[last];
-    // Trailing "\n\n[notice]": number the body, re-append the notice verbatim
-    // (the blank separator line stays unnumbered).
-    return numberLines(lines.slice(0, last), startLine) + "\n" + lines[last];
+    // Trailing "\n\n[notice]": lines[last-1] is the synthetic blank separator.
+    // Number lines[0..last-2] and re-append "\n\n" + notice verbatim so the
+    // separator stays unnumbered.
+    const body = lines.slice(0, last - 1);
+    return (body.length === 0 ? "" : numberLines(body, startLine)) + "\n\n" + lines[last];
+  }
+  if (lines[last] === "") {
+    // Trailing-newline artifact: the final "" is the terminator, not a line.
+    // Number lines[0..last-1] and re-append the trailing "\n".
+    const body = lines.slice(0, last);
+    return (body.length === 0 ? "" : numberLines(body, startLine)) + "\n";
   }
   return numberLines(lines, startLine);
 }
