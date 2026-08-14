@@ -46,6 +46,7 @@ After install, keep `.pi/settings.json` package wiring pointed at `npm:@jaggerxt
 
 Notable bundled extensions include:
 
+- `python-kernel` — persistent sequential `python` tool (state survives across calls; reset/cwd/abort/shutdown semantics). Requires `python3` on PATH.
 - `xtrm-ui` — XTRM Pi chrome, native tool summaries, selectable external tool chrome (`/xtrm-ui chrome background|box`).
 - `sp-terminal-overlay` — `/sp-feed` streaming overlay, `/sp-ps` snapshot overlay, and `/xtrm-terminal` shell overlay for specialist monitoring.
 

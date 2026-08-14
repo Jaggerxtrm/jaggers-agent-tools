@@ -51,7 +51,7 @@ Always installed (`xtrm init`).
 
 | Hook | Event | Behavior |
 |------|-------|----------|
-| `project-memory.mjs` | SessionStart | Injects `.xtrm/memory.md` only; `/using-xtrm` remains on demand. |
+| `project-memory.mjs` | SessionStart | Injects the shared bd memory doctrine (`.xtrm/config/instructions/memory-doctrine.md`); `.xtrm/memory.md` is never injected; fails open when the doctrine is absent. |
 | `gitnexus/gitnexus-hook.cjs` | PostToolUse | Enriches Bash/Grep/Read/Glob output with GitNexus graph context |
 | `quality-check.cjs` | PostToolUse | Runs tsc/ESLint checks after JS/TS/CJS/MJS file edits |
 | `quality-check.py` | PostToolUse | Runs ruff/mypy checks after Python file edits |

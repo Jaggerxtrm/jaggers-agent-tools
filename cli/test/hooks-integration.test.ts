@@ -60,23 +60,29 @@ function createFakeWhich(scriptBody: string): string {
 }
 
 describe('project-memory.mjs integration', () => {
-  it('injects .xtrm/memory.md without the using-xtrm skill body', () => {
+  it('injects the canonical memory doctrine without the using-xtrm skill body (xtrm-3ljgz.3)', () => {
     const projectDir = createTempProject('xtrm-hook-memory-');
-    const xtrmDir = path.join(projectDir, '.xtrm');
-    mkdirSync(xtrmDir, { recursive: true });
-    writeFileSync(path.join(xtrmDir, 'memory.md'), 'Project memory.', 'utf8');
+    const instructionsDir = path.join(projectDir, '.xtrm', 'config', 'instructions');
+    mkdirSync(instructionsDir, { recursive: true });
+    const doctrine = '# BD Memory Doctrine\n\nUse `bd memories <topic>` when history is relevant.';
+    writeFileSync(path.join(instructionsDir, 'memory-doctrine.md'), doctrine, 'utf8');
+    // A stale synthesized memory.md must not leak even when present.
+    writeFileSync(path.join(projectDir, '.xtrm', 'memory.md'), 'stale synthesized state', 'utf8');
 
     try {
       const result = invokeHook('project-memory.mjs', { cwd: projectDir });
       expect(result.exitCode).toBe(0);
-      expect(String(parseHookOutput(result.stdout).hookSpecificOutput.additionalSystemPrompt)).toBe('Project memory.');
+      expect(String(parseHookOutput(result.stdout).hookSpecificOutput.additionalSystemPrompt)).toBe(doctrine.trim());
+      expect(result.stdout).not.toContain('stale synthesized state');
     } finally {
       rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
-  it('fails open when .xtrm/memory.md is missing', () => {
+  it('fails open when the memory doctrine is missing (memory.md alone is not injected)', () => {
     const projectDir = createTempProject('xtrm-hook-memory-missing-');
+    mkdirSync(path.join(projectDir, '.xtrm'), { recursive: true });
+    writeFileSync(path.join(projectDir, '.xtrm', 'memory.md'), 'stale synthesized state', 'utf8');
     try {
       const result = invokeHook('project-memory.mjs', { cwd: projectDir });
       expect(result.exitCode).toBe(0);

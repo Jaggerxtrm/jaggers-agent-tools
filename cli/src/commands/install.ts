@@ -49,6 +49,8 @@ export interface InstallOpts {
     skipGlobalPiPackageAssurance?: boolean;
     /** Update applies the external Pi tool patch once after all repo reconciliations. */
     skipExternalPiToolPatch?: boolean;
+    /** Update performs the global system-prompt sync once after all repo reconciliations. */
+    skipGlobalPromptSync?: boolean;
 }
 
 export interface InstallResult {
@@ -245,6 +247,7 @@ export async function runInstall(opts: InstallOpts = {}): Promise<InstallResult>
     const piRuntime = await runPiInstall(dryRun, isGlobal, projectRoot, {
         skipGlobalPackageAssurance: opts.skipGlobalPiPackageAssurance,
         skipExternalToolPatch: opts.skipExternalPiToolPatch,
+        skipGlobalPromptSync: opts.skipGlobalPromptSync,
     });
 
     if (!dryRun) {
