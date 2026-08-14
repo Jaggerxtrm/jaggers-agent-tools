@@ -236,7 +236,8 @@ describe('xtrm update', () => {
       skipGlobalPiPackageAssurance: true,
       skipExternalPiToolPatch: true,
     }));
-    expect(assureXtManagedPiPackagesMock).toHaveBeenCalledWith(false);
+    // plain update is a dry run: package assurance must not install/mutate
+    expect(assureXtManagedPiPackagesMock).toHaveBeenCalledWith(true);
     expect(result.logs.join('\n')).toContain('refreshed');
     expect(result.logs.join('\n')).not.toContain('already-current');
   });
@@ -303,7 +304,7 @@ describe('xtrm update', () => {
       undefined, // ponytail: globalRoots is undefined when HOME has no .xtrm/skills (CI temp HOME)
     );
     expect(runInstallMock).toHaveBeenCalledTimes(1);
-    expect(assureXtManagedPiPackagesMock).toHaveBeenCalledWith(true);
+    expect(assureXtManagedPiPackagesMock).toHaveBeenCalledWith(false);
     expect(runExternalPiToolPatchMock).toHaveBeenCalledWith(packageRoot, false);
     expect(assureXtManagedPiPackagesMock.mock.invocationCallOrder[0]).toBeLessThan(runExternalPiToolPatchMock.mock.invocationCallOrder[0]);
     expect(result.logs.join('\n')).toContain('refreshed');

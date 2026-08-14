@@ -347,7 +347,7 @@ export function createUpdateCommand(): Command {
                 });
             }
 
-            const packageAssurance = await assureXtManagedPiPackages(Boolean(typedOpts.apply));
+            const packageAssurance = await assureXtManagedPiPackages(!Boolean(typedOpts.apply));
             // Global system-prompt sync: exactly once per top-level update
             // command, outside the repo loop, consistent with package assurance.
             const promptSync = await syncGlobalPrompts({ dryRun: !typedOpts.apply });
