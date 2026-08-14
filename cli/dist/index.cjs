@@ -60685,7 +60685,10 @@ function runtimeSkillsDirectory(projectRoot, runtime) {
 async function ensureRuntimeDirectory(directory) {
   const existing = await import_fs_extra11.default.lstat(directory).catch(() => null);
   if (existing?.isSymbolicLink()) {
-    throw new Error(`Refusing to replace user-owned runtime directory ${directory}.`);
+    const projectRoot = import_node_path11.default.resolve(import_node_path11.default.dirname(import_node_path11.default.dirname(directory)));
+    throw new Error(
+      `Refusing to replace user-owned runtime directory ${directory}. Run 'xt migrate skills-layout --repo ${projectRoot}' to preview legacy adoption, or 'xt migrate skills-layout --repo ${projectRoot} --apply --yes' to execute.`
+    );
   }
   if (existing && !existing.isDirectory()) {
     throw new Error(`Refusing to replace non-directory runtime path ${directory}.`);
@@ -77867,6 +77870,12 @@ async function restoreBackup2(repoPath, backupPath, opts) {
   if (!await import_fs_extra61.default.pathExists(resolvedBackup)) {
     throw new Error(`Backup not found: ${resolvedBackup}`);
   }
+  const base = import_node_path59.default.basename(resolvedBackup);
+  if (base.startsWith("adopt-runtime-")) {
+    throw new Error(
+      `Cannot restore runtime-adoption backup '${base}': adoption never mutates the source target. To undo, move/remove the adopted runtime dir and recreate the original symlink; .migrate-old-* is recovery after an interrupted swap.`
+    );
+  }
   const component = detectRestoreComponent(resolvedBackup);
   if (!component) {
     throw new Error(
@@ -78028,6 +78037,128 @@ async function walkDir(dir) {
   }
   return files;
 }
+var RUNTIME_SKILL_ROOTS = [".claude/skills", ".pi/skills"];
+async function planRuntimeRootAdoption(repoPath, activeRoot, defaultTierRoot) {
+  const plans = [];
+  for (const runtimeRel of RUNTIME_SKILL_ROOTS) {
+    const runtimeDir = import_node_path59.default.join(repoPath, runtimeRel);
+    const stat = await import_fs_extra61.default.lstat(runtimeDir).catch(() => null);
+    if (!stat) {
+      plans.push({ kind: "leave" });
+      continue;
+    }
+    if (stat.isSymbolicLink()) {
+      const linkTarget = await import_fs_extra61.default.readlink(runtimeDir);
+      const resolvedTarget = import_node_path59.default.resolve(import_node_path59.default.dirname(runtimeDir), linkTarget);
+      if (resolvedTarget === activeRoot) {
+        plans.push({ kind: "remove", runtimeDir });
+        continue;
+      }
+      if (resolvedTarget === defaultTierRoot) {
+        await assertLegacyManagedRootProof(repoPath, runtimeDir, defaultTierRoot);
+        plans.push({ kind: "convert", runtimeDir, targetDir: defaultTierRoot });
+        continue;
+      }
+      throw new Error(
+        `Refusing skills-layout migration: ${import_node_path59.default.relative(repoPath, runtimeDir)} is a user symlink to '${linkTarget}'. Only legacy project roots (.xtrm/skills/active, .xtrm/skills/default) are adopted.`
+      );
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(
+        `Refusing skills-layout migration: ${import_node_path59.default.relative(repoPath, runtimeDir)} is not a directory or symlink.`
+      );
+    }
+    plans.push({ kind: "leave" });
+  }
+  return plans;
+}
+async function assertLegacyManagedRootProof(repoPath, runtimeDir, defaultTierRoot) {
+  const relativeTarget = import_node_path59.default.relative(repoPath, defaultTierRoot);
+  let current = repoPath;
+  for (const part of relativeTarget.split(import_node_path59.default.sep)) {
+    current = import_node_path59.default.join(current, part);
+    const stat = await import_fs_extra61.default.lstat(current).catch(() => null);
+    if (!stat || !stat.isDirectory()) {
+      throw new Error(
+        `Refusing skills-layout migration: ${import_node_path59.default.relative(repoPath, runtimeDir)} target is not a real directory (hazard at ${import_node_path59.default.relative(repoPath, current) || "."}).`
+      );
+    }
+  }
+  const parentStat = await import_fs_extra61.default.lstat(import_node_path59.default.dirname(runtimeDir)).catch(() => null);
+  if (!parentStat || !parentStat.isDirectory()) {
+    throw new Error(
+      `Refusing skills-layout migration: ${import_node_path59.default.relative(repoPath, import_node_path59.default.dirname(runtimeDir))} is not a real directory.`
+    );
+  }
+}
+async function readRegistryManagedSkillNames() {
+  const packageRoot = resolvePackageRoot2();
+  const registry2 = await import_fs_extra61.default.readJson(import_node_path59.default.join(packageRoot, ".xtrm", "registry.json"));
+  const names = /* @__PURE__ */ new Set();
+  const assets = registry2?.assets ?? {};
+  for (const assetName of ["skills", "skills_optional"]) {
+    const files = assets[assetName]?.files;
+    if (!files || typeof files !== "object") continue;
+    for (const key of Object.keys(files)) {
+      const firstSegment = key.split("/")[0];
+      if (firstSegment.length > 0) names.add(firstSegment);
+    }
+  }
+  return names;
+}
+async function buildConvertedRuntimeDir(runtimeDir, targetDir, managedNames) {
+  const tempDir = `${runtimeDir}.migrate-${import_node_crypto16.default.randomUUID()}`;
+  await import_fs_extra61.default.ensureDir(tempDir);
+  const preserved = [];
+  const omitted = [];
+  const entries = await import_fs_extra61.default.readdir(targetDir, { withFileTypes: true });
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    if (managedNames.has(entry.name)) {
+      omitted.push(entry.name);
+      continue;
+    }
+    await copyForeignEntry(import_node_path59.default.join(targetDir, entry.name), import_node_path59.default.join(tempDir, entry.name));
+    preserved.push(entry.name);
+  }
+  return { tempDir, preserved, omitted };
+}
+async function copyForeignEntry(source, dest) {
+  const special = [];
+  await import_fs_extra61.default.copy(source, dest, {
+    filter: (src) => {
+      const stat = import_fs_extra61.default.lstatSync(src);
+      if (stat.isDirectory() || stat.isFile() || stat.isSymbolicLink()) return true;
+      special.push(import_node_path59.default.basename(src));
+      return false;
+    }
+  });
+  if (special.length > 0) {
+    throw new Error(
+      `Refusing skills-layout migration: special file(s) inside legacy target: ${special.join(", ")}.`
+    );
+  }
+}
+async function swapRuntimeRoot(runtimeDir, tempDir, targetDir) {
+  const stat = await import_fs_extra61.default.lstat(runtimeDir).catch(() => null);
+  if (!stat?.isSymbolicLink() || import_node_path59.default.resolve(import_node_path59.default.dirname(runtimeDir), await import_fs_extra61.default.readlink(runtimeDir)) !== targetDir) {
+    throw new Error(`Runtime directory ${runtimeDir} changed during migration; aborting.`);
+  }
+  const oldDir = `${runtimeDir}.migrate-old-${import_node_crypto16.default.randomUUID()}`;
+  await import_fs_extra61.default.rename(runtimeDir, oldDir);
+  try {
+    await import_fs_extra61.default.rename(tempDir, runtimeDir);
+  } catch (error51) {
+    await import_fs_extra61.default.rename(oldDir, runtimeDir).catch(() => void 0);
+    throw error51;
+  }
+  await import_fs_extra61.default.remove(oldDir).catch(() => void 0);
+}
+async function createRuntimeAdoptionBackup(repoPath, targetDir) {
+  const backupPath = await createTarballBackup(targetDir, `adopt-runtime-${import_node_path59.default.basename(repoPath)}`);
+  await import_fs_extra61.default.chmod(backupPath, 384);
+  return backupPath;
+}
 async function migrateSkillsLayout(repoPath, opts) {
   const dryRun = opts.dryRun || opts.apply === false;
   const skillsRoot = import_node_path59.default.join(repoPath, ".xtrm", "skills");
@@ -78054,16 +78185,15 @@ async function migrateSkillsLayout(repoPath, opts) {
     }
   }
   const activeRoot = import_node_path59.default.join(skillsRoot, "active");
-  const danglingRuntimeSymlinks = [];
-  for (const runtimeRel of [".claude/skills", ".pi/skills"]) {
-    const runtimeDir = import_node_path59.default.join(repoPath, runtimeRel);
-    const stat = await import_fs_extra61.default.lstat(runtimeDir).catch(() => null);
-    if (!stat?.isSymbolicLink()) continue;
-    const linkTarget = await import_fs_extra61.default.readlink(runtimeDir);
-    const resolvedTarget = import_node_path59.default.resolve(import_node_path59.default.dirname(runtimeDir), linkTarget);
-    if (resolvedTarget === activeRoot) danglingRuntimeSymlinks.push(runtimeDir);
-  }
-  if (moves.length === 0 && !await import_fs_extra61.default.pathExists(activeRoot) && danglingRuntimeSymlinks.length === 0) {
+  const defaultTierRoot = import_node_path59.default.join(skillsRoot, "default");
+  const runtimePlans = await planRuntimeRootAdoption(repoPath, activeRoot, defaultTierRoot);
+  const adoptPlans = runtimePlans.filter(
+    (plan) => plan.kind === "convert"
+  );
+  const removePlans = runtimePlans.filter(
+    (plan) => plan.kind === "remove"
+  );
+  if (moves.length === 0 && !await import_fs_extra61.default.pathExists(activeRoot) && runtimePlans.every((plan) => plan.kind === "leave")) {
     console.log(kleur_default.dim("  skills-layout: already flat"));
     return;
   }
@@ -78078,10 +78208,40 @@ async function migrateSkillsLayout(repoPath, opts) {
   }
   if (dryRun) {
     if (await import_fs_extra61.default.pathExists(activeRoot)) console.log(kleur_default.cyan(`  skills-layout: would remove ${activeRoot}`));
-    for (const runtimeDir of danglingRuntimeSymlinks) {
-      console.log(kleur_default.cyan(`  skills-layout: would remove dangling ${import_node_path59.default.relative(repoPath, runtimeDir)} symlink`));
+    for (const plan of adoptPlans) {
+      console.log(kleur_default.cyan(`  skills-layout: would convert ${import_node_path59.default.relative(repoPath, plan.runtimeDir)} legacy symlink to a real runtime dir (registry-managed names omitted, foreign entries preserved)`));
+    }
+    for (const plan of removePlans) {
+      console.log(kleur_default.cyan(`  skills-layout: would remove dangling ${import_node_path59.default.relative(repoPath, plan.runtimeDir)} symlink`));
     }
     return;
+  }
+  if (adoptPlans.length > 0) {
+    const managedNames = await readRegistryManagedSkillNames();
+    const built = [];
+    try {
+      for (const plan of adoptPlans) {
+        built.push(await buildConvertedRuntimeDir(plan.runtimeDir, plan.targetDir, managedNames));
+      }
+      for (const targetDir of new Set(adoptPlans.map((plan) => plan.targetDir))) {
+        const backupPath = await createRuntimeAdoptionBackup(repoPath, targetDir);
+        console.log(kleur_default.green(`  skills-layout: backup created at ${backupPath}`));
+      }
+      for (let i = 0; i < adoptPlans.length; i++) {
+        const plan = adoptPlans[i];
+        await swapRuntimeRoot(plan.runtimeDir, built[i].tempDir, plan.targetDir);
+        const entry = built[i].preserved.length === 1 ? "entry" : "entries";
+        const name = built[i].omitted.length === 1 ? "name" : "names";
+        console.log(kleur_default.green(
+          `  skills-layout: converted ${import_node_path59.default.relative(repoPath, plan.runtimeDir)} symlink to real runtime dir (preserved ${built[i].preserved.length} foreign ${entry}, omitted ${built[i].omitted.length} registry-managed ${name})`
+        ));
+      }
+    } finally {
+      for (const entry of built) await import_fs_extra61.default.remove(entry.tempDir).catch(() => void 0);
+    }
+    console.log(kleur_default.dim(
+      "  skills-layout: rollback \u2014 source target .xtrm/skills/default untouched; to undo, move/remove the adopted runtime dir and recreate the original symlink; .migrate-old-* is recovery after an interrupted swap."
+    ));
   }
   if (await import_fs_extra61.default.pathExists(activeRoot)) {
     await import_fs_extra61.default.remove(activeRoot);
@@ -78089,9 +78249,9 @@ async function migrateSkillsLayout(repoPath, opts) {
   }
   await import_fs_extra61.default.remove(legacyRoot);
   await import_fs_extra61.default.remove(import_node_path59.default.join(skillsRoot, "user"));
-  for (const runtimeDir of danglingRuntimeSymlinks) {
-    await import_fs_extra61.default.remove(runtimeDir);
-    console.log(kleur_default.green(`  skills-layout: removed dangling ${import_node_path59.default.relative(repoPath, runtimeDir)} symlink`));
+  for (const plan of removePlans) {
+    await import_fs_extra61.default.remove(plan.runtimeDir);
+    console.log(kleur_default.green(`  skills-layout: removed dangling ${import_node_path59.default.relative(repoPath, plan.runtimeDir)} symlink`));
   }
 }
 async function containsAnyFile(dir) {

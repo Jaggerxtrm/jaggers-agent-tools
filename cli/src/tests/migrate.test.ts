@@ -180,7 +180,7 @@ describe('xt migrate command', () => {
     expect(await fs.lstat(path.join(repoDir, '.pi', 'skills')).catch(() => null)).toBeNull();
   });
 
-  it('preserves user-owned .claude/skills symlink pointing elsewhere during migration', async () => {
+  it('refuses user-owned .claude/skills symlink pointing elsewhere during migration (xtrm-2d6fw)', async () => {
     const repoDir = await createFakeRepo(tmpHome);
     const skillsRoot = path.join(repoDir, '.xtrm', 'skills');
     await fs.ensureDir(path.join(skillsRoot, 'active'));
@@ -189,10 +189,71 @@ describe('xt migrate command', () => {
     await fs.ensureDir(userTarget);
     await fs.symlink(userTarget, path.join(repoDir, '.claude', 'skills'));
 
-    await migrateSkillsLayout(repoDir, { dryRun: false, apply: true });
-
+    // xtrm-2d6fw: arbitrary runtime-root symlinks are hazards. The whole
+    // migration refuses before any mutation — nothing gets adopted, the user
+    // symlink is left untouched, and the operator resolves it first.
+    await expect(migrateSkillsLayout(repoDir, { dryRun: false, apply: true })).rejects.toThrow(/user symlink/);
     const stat = await fs.lstat(path.join(repoDir, '.claude', 'skills'));
     expect(stat.isSymbolicLink()).toBe(true);
+  });
+
+  it('skills-layout dry-run previews legacy runtime-root adoption without mutation', async () => {
+    const repoDir = path.join(tmpHome, 'test-repo');
+    await fs.ensureDir(path.join(repoDir, '.xtrm', 'skills', 'default'));
+    await fs.ensureDir(path.join(repoDir, '.claude'));
+    await fs.ensureDir(path.join(repoDir, '.pi'));
+    await fs.symlink('../.xtrm/skills/default', path.join(repoDir, '.claude', 'skills'));
+    await fs.symlink('../.xtrm/skills/default', path.join(repoDir, '.pi', 'skills'));
+    await fs.outputFile(path.join(repoDir, '.xtrm', 'skills', 'default', 'multiplexing', 'SKILL.md'), '# mux\n');
+    await fs.outputFile(path.join(repoDir, '.xtrm', 'skills', 'default', 'z-user-foreign.txt'), 'foreign bytes');
+
+    const result = runCli(['migrate', 'skills-layout', '--dry-run', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('would convert');
+    expect((await fs.lstat(path.join(repoDir, '.claude', 'skills'))).isSymbolicLink()).toBe(true);
+    expect((await fs.lstat(path.join(repoDir, '.pi', 'skills'))).isSymbolicLink()).toBe(true);
+    expect(await fs.pathExists(path.join(repoDir, '.xtrm', 'skills', 'default', 'z-user-foreign.txt'))).toBe(true);
+  });
+
+  it('skills-layout apply converts legacy symlinks, omits registry names, preserves foreign bytes (xtrm-2d6fw)', async () => {
+    const repoDir = path.join(tmpHome, 'test-repo');
+    await fs.ensureDir(path.join(repoDir, '.xtrm', 'skills', 'default'));
+    await fs.ensureDir(path.join(repoDir, '.claude'));
+    await fs.ensureDir(path.join(repoDir, '.pi'));
+    await fs.symlink('../.xtrm/skills/default', path.join(repoDir, '.claude', 'skills'));
+    await fs.symlink('../.xtrm/skills/default', path.join(repoDir, '.pi', 'skills'));
+    // 'multiplexing' is a real registry-managed skill name; 'z-user-foreign.txt' is not.
+    await fs.outputFile(path.join(repoDir, '.xtrm', 'skills', 'default', 'multiplexing', 'SKILL.md'), '# mux\n');
+    await fs.outputFile(path.join(repoDir, '.xtrm', 'skills', 'default', 'z-user-foreign.txt'), 'foreign bytes');
+
+    const result = runCli(['migrate', 'skills-layout', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(0);
+    for (const runtimeRel of ['.claude/skills', '.pi/skills']) {
+      const runtimeDir = path.join(repoDir, runtimeRel);
+      expect((await fs.lstat(runtimeDir)).isDirectory()).toBe(true);
+      expect(await fs.pathExists(path.join(runtimeDir, 'multiplexing'))).toBe(false);
+      expect(await fs.readFile(path.join(runtimeDir, 'z-user-foreign.txt'), 'utf8')).toBe('foreign bytes');
+    }
+    // Target untouched.
+    expect(await fs.readFile(path.join(repoDir, '.xtrm', 'skills', 'default', 'multiplexing', 'SKILL.md'), 'utf8')).toBe('# mux\n');
+    expect(await fs.readFile(path.join(repoDir, '.xtrm', 'skills', 'default', 'z-user-foreign.txt'), 'utf8')).toBe('foreign bytes');
+  });
+
+  it('skills-layout apply refuses arbitrary runtime symlink targets (xtrm-2d6fw)', async () => {
+    const repoDir = path.join(tmpHome, 'test-repo');
+    await fs.ensureDir(path.join(repoDir, '.xtrm', 'skills', 'default'));
+    await fs.ensureDir(path.join(repoDir, '.claude'));
+    const userTarget = path.join(tmpHome, 'user-skills');
+    await fs.ensureDir(userTarget);
+    await fs.symlink(userTarget, path.join(repoDir, '.claude', 'skills'));
+
+    const result = runCli(['migrate', 'skills-layout', '--apply', '--yes', '--repo', repoDir], repoDir);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('user symlink');
+    expect((await fs.lstat(path.join(repoDir, '.claude', 'skills'))).isSymbolicLink()).toBe(true);
   });
 
   it('preflights all targets before moving any legacy pack', async () => {

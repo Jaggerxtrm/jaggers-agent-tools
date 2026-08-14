@@ -84,6 +84,8 @@ Between `gh pr merge` and DM opening a window: build → `docker compose up -d -
 
 ## Retrieval hierarchy
 
+Before retrieving, gate on the target's live transition: `xtmux wait-agent <target> --wait-for-transition --consume --timeout <dur>` blocks until the pane/job state changes instead of a manual `capture-pane` live-state poll loop. It waits on **live pane state** and is **not durable retrieval** — after the wait returns, read the results from the durable sources below. `multiplexing-team` teaches the same primitive to delegated panes; this is the orchestrator-side equivalent.
+
 Prefer durable sources over live scraping:
 
 - `xtmux message-get <messageKey> --json` — the message that anchored a reply obligation.
