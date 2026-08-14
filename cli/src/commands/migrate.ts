@@ -18,6 +18,11 @@ import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { stageMigrationChanges } from '../utils/git-staging.js';
 import { planLegacyHookDedupe, type HookWrapperLike } from '../core/legacy-hook-dedupe.js';
 import { resolvePackageRoot } from '../core/registry-scaffold.js';
+import {
+  assertStagedTreeSafe,
+  extractValidatedBackup,
+  inspectBackupArchive,
+} from '../core/backup-archive.js';
 
 interface MigrateOptions {
   dryRun?: boolean;
@@ -87,29 +92,33 @@ async function restoreBackup(
     return { component, targetDir };
   }
 
-  if (await fs.pathExists(targetDir)) {
-    await fs.remove(targetDir);
-  }
+  // xtrm-zc1rs: pre-scan every archive entry and reject unsafe or malformed
+  // backups BEFORE any destination byte is written. The archive is extracted
+  // into a private temp dir first, the staged tree is lstat-verified, and only
+  // then is the existing target removed and the staged tree swapped in.
+  inspectBackupArchive(resolvedBackup, component);
 
-  const extractInto = path.join(repoPath, '.xtrm');
-  await fs.ensureDir(extractInto);
+  const staging = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-restore-'));
+  try {
+    extractValidatedBackup(resolvedBackup, component, staging);
+    await assertStagedTreeSafe(staging, component);
 
-  const result = spawnSync('tar', ['-xzf', resolvedBackup, '-C', extractInto], {
-    stdio: 'pipe',
-  });
-  if (result.status !== 0) {
-    throw new Error(
-      `Failed to extract backup: ${result.stderr.toString() || 'unknown error'}`,
-    );
-  }
-
-  const realExtractInto = await fs.realpath(extractInto);
-  const realTarget = await fs.realpath(targetDir);
-  const rel = path.relative(realExtractInto, realTarget);
-  if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    throw new Error(
-      `Restore path traversal detected: ${realTarget} escaped ${realExtractInto}`,
-    );
+    if (await fs.pathExists(targetDir)) {
+      await fs.remove(targetDir);
+    }
+    await fs.ensureDir(path.join(repoPath, '.xtrm'));
+    try {
+      // The staged tree's top level is the component root dir (the archive's
+      // top-level 'skills'/'hooks' entry); move that root into place.
+      const stagedRoot = path.join(staging, component);
+      await fs.move(stagedRoot, targetDir);
+    } catch (error) {
+      // Never leave a partially moved destination behind.
+      await fs.remove(targetDir).catch(() => undefined);
+      throw error;
+    }
+  } finally {
+    await fs.remove(staging).catch(() => undefined);
   }
 
   return { component, targetDir };
