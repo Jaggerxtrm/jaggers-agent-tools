@@ -158,19 +158,30 @@ try {
   mkdirSync(path.join(xtrmRepo, '.xtrm'), { recursive: true });
   copyFileSync(path.join(packageRoot, '.xtrm', 'registry.json'), path.join(xtrmRepo, '.xtrm', 'registry.json'));
 
+  function assertDryRunDriftExit(label, result) {
+    // xtrm-3ljgz.2: `xt update`'s exit-code contract makes package-assurance
+    // failures fatal — a clean temp HOME with registry/Pi drift reports the
+    // drift and exits 1, while a current environment exits 0. Both are the
+    // documented outcomes; anything else is an unexpected exit/crash and must
+    // fail the smoke. The content assertions that follow prove the update
+    // completed and printed the sync actions instead of dying early, so real
+    // failures are never masked.
+    assert.ok([0, 1].includes(result.status), `${label} crashed (${result.status}): ${redacted(combined(result).slice(-1_000))}`);
+    assertNoSecret(label, result);
+  }
+
   const dryRun = run('node', [cli, 'update', '--repo', xtrmRepo], { cwd: project, env });
-  assertSuccess('dry-run update with global prompt sync', dryRun);
+  assertDryRunDriftExit('dry-run update with global prompt sync', dryRun);
   assert.match(combined(dryRun), /Global system-prompt sync/i);
   assert.match(combined(dryRun), /pi: \[DRY RUN\] would prepend/i);
   assert.match(combined(dryRun), /claude: \[DRY RUN\] would prepend/i);
   // Dry-run must not mutate the seeded files.
   assert.equal(readFileSync(userPrompt, 'utf8'), `# user prefix\n\n${secret}\n\n# user suffix\n`);
   assert.equal(readFileSync(claudePrompt, 'utf8'), `# claude user prefix\n\n${secret}\n\n# claude user suffix\n`);
-  assertNoSecret('dry-run update', dryRun);
 
   // Second dry-run: idempotent planning output (no duplicate sync block).
   const dryRun2 = run('node', [cli, 'update', '--repo', xtrmRepo], { cwd: project, env });
-  assertSuccess('second dry-run update', dryRun2);
+  assertDryRunDriftExit('second dry-run update', dryRun2);
   assert.equal((combined(dryRun2).match(/Global system-prompt sync/g) ?? []).length, 1);
 
   console.log('install-update-ux-smoke: PASS');

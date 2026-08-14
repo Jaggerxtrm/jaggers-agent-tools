@@ -7,13 +7,22 @@ const {
   printGlobalPromptSyncSummaryMock,
   isPiInstalledMock,
   isPnpmInstalledMock,
+  spawnSyncMock,
 } = vi.hoisted(() => ({
   runPiRuntimeSyncMock: vi.fn(),
   syncGlobalPromptsMock: vi.fn(),
   printGlobalPromptSyncSummaryMock: vi.fn(),
   isPiInstalledMock: vi.fn(),
   isPnpmInstalledMock: vi.fn(),
+  spawnSyncMock: vi.fn(),
 }));
+
+// Deterministic external-binary responses: runPiInstall shells out for
+// `pi --version` / `pnpm --version` after the install checks. Never rely on
+// the real binary (absent on CI runners) or on other suites' child_process
+// mocks (xtrm-3ljgz.2) — the mock is scoped to this file and reset per test,
+// so the suite cannot depend on global test order.
+vi.mock('node:child_process', () => ({ spawnSync: spawnSyncMock }));
 
 vi.mock('../core/pi-runtime.js', () => ({
   runPiRuntimeSync: runPiRuntimeSyncMock,
@@ -33,6 +42,8 @@ import { runPiInstall } from '../commands/pi-install.js';
 
 describe('runPiInstall global prompt sync wiring (xtrm-3ljgz.2)', () => {
   beforeEach(() => {
+    spawnSyncMock.mockReset();
+    spawnSyncMock.mockReturnValue({ status: 0, stdout: '0.0.0\n', stderr: '' });
     runPiRuntimeSyncMock.mockReset();
     runPiRuntimeSyncMock.mockResolvedValue({
       extensionsAdded: [],
