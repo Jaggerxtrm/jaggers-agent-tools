@@ -219,6 +219,17 @@ describe('reconcileRuntimeLinks', () => {
     expect((await fs.lstat(path.join(projectRoot, '.claude', 'skills'))).isSymbolicLink()).toBe(true);
   });
 
+  it('refusal names the exact skills-layout adoption command (xtrm-2d6fw)', async () => {
+    const runtimeDirectory = path.join(projectRoot, '.claude', 'skills');
+    await fs.ensureDir(path.dirname(runtimeDirectory));
+    await fs.symlink(path.join(root, 'user-runtime-dir'), runtimeDirectory);
+
+    await expect(run()).rejects.toThrow(
+      `xt migrate skills-layout --repo ${projectRoot} --apply --yes`,
+    );
+    expect((await fs.lstat(runtimeDirectory)).isSymbolicLink()).toBe(true);
+  });
+
   it('refuses to overwrite an untracked real dir whose name collides with a managed skill', async () => {
     const userDir = path.join(projectRoot, '.claude', 'skills', 'local-skill');
     await fs.ensureDir(userDir);

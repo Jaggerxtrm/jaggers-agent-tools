@@ -164,6 +164,10 @@ tar -xzf ~/.xtrm/migration-backups/<repo>-<timestamp>-skills.tgz -C <repo>/.xtrm
 
 Restore command (`xt migrate --restore <backup>`) deferred to follow-up bead.
 
+### Runtime-root adoption rollback
+
+`xt migrate skills-layout` adoption never mutates the source target (`.xtrm/skills/default`). To undo, move/remove the adopted runtime dir and recreate the original symlink; `.migrate-old-*` next to a runtime dir is recovery after an interrupted swap. Adoption snapshots (`adopt-runtime-*`) are not restorable via `--restore`.
+
 ---
 
 ## Audit Trail

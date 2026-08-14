@@ -306,6 +306,10 @@ xt migrate skills --apply     # Execute
 
 Migration performs SHA-256 verification, tarball backup at `~/.xtrm/migration-backups/`, deletion of identical per-repo assets, preservation of diverged files as overrides, and cleanup of xtrm-owned settings.json entries.
 
+### Runtime-root adoption
+
+`xt migrate skills-layout --repo . --apply --yes` converts legacy runtime-root symlinks (`.claude/skills`, `.pi/skills` → `.xtrm/skills/default`) to real directories: registry-managed names are omitted, foreign entries are preserved byte-for-byte, and the source target `.xtrm/skills/default` is never mutated. Snapshots are written to `~/.xtrm/migration-backups/adopt-runtime-*.tgz` and are not restorable via `--restore`. To undo an adoption, move/remove the adopted runtime dir and recreate the original symlink; `.migrate-old-*` is recovery after an interrupted swap.
+
 Full workflow: [docs/plans/global-skills-migration.md](plans/global-skills-migration.md)
 
 ## Operational Commands

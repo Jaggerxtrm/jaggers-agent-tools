@@ -87,7 +87,15 @@ function runtimeSkillsDirectory(projectRoot: string, runtime: SkillsRuntime): st
 async function ensureRuntimeDirectory(directory: string): Promise<void> {
   const existing = await fs.lstat(directory).catch(() => null);
   if (existing?.isSymbolicLink()) {
-    throw new Error(`Refusing to replace user-owned runtime directory ${directory}.`);
+    // xtrm-2d6fw: keep failing closed, but name the exact explicit adoption
+    // path so the operator can preview and execute without digging for it.
+    // Never echoes prompt/skill bodies.
+    const projectRoot = path.resolve(path.dirname(path.dirname(directory)));
+    throw new Error(
+      `Refusing to replace user-owned runtime directory ${directory}. ` +
+      `Run 'xt migrate skills-layout --repo ${projectRoot}' to preview legacy adoption, ` +
+      `or 'xt migrate skills-layout --repo ${projectRoot} --apply --yes' to execute.`,
+    );
   }
   if (existing && !existing.isDirectory()) {
     throw new Error(`Refusing to replace non-directory runtime path ${directory}.`);
