@@ -86,4 +86,40 @@ describe("xtrm-ui presentation-only boundary", () => {
     expect(output).not.toContain("137 | 137 |");
     expect(output).not.toContain("1 | foo");
   });
+
+  test("read.renderResult preserves numbered blank lines (collapsed + expanded)", () => {
+    // A numbered blank line ("138 | ") is exactly the artifact the previous
+    // over-strip fix removed. Guard both view modes so a regression is caught
+    // at the presentation layer as well as the transform layer.
+    const { tools } = registerWithMock();
+    const readTool = tools.find((tool) => tool.name === "read");
+    expect(readTool).toBeDefined();
+
+    const theme = {
+      fg: (_color: string, text: string) => text,
+      bold: (text: string) => text,
+      bg: (_color: string) => (text: string) => text,
+    };
+    const numbered = "137 | foo\n138 | \n139 | bar";
+    const call = (expanded: boolean) =>
+      (readTool!.renderResult(
+        {
+          content: [{ type: "text", text: numbered }],
+          details: {},
+          isError: false,
+        },
+        { expanded, isPartial: false },
+        theme,
+        { args: { path: "/a/b.txt", offset: 137 }, executionStarted: true, isPartial: false, state: {} },
+      ) as { text: string }).text;
+
+    for (const rendered of [call(false), call(true)]) {
+      expect(rendered).toContain("137 | foo");
+      expect(rendered).toContain("138 | ");
+      expect(rendered).toContain("139 | bar");
+      // No double-prefix drift.
+      expect(rendered).not.toContain("137 | 137 |");
+      expect(rendered).not.toContain("138 | 138 |");
+    }
+  });
 });
