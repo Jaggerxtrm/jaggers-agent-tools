@@ -1513,6 +1513,12 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
   };
 
   pi.on("session_start", async (_event, ctx) => {
+    // thinkingFollowsToggle is process-lifetime module state (the extension
+    // factory is cached per process and the prototype patch installs once).
+    // Reset it per session so a stale latch from an earlier session cannot
+    // flip the first thinking block of a fresh session to the expanded raw
+    // trace (xtrm-6ggil).
+    thinkingFollowsToggle = false;
     setPrefs(loadPrefs(ctx.sessionManager.getEntries() as Array<MaybeCustomEntry>));
     refresh(ctx);
   });
