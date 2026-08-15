@@ -133,6 +133,7 @@ type AssistantMessageLike = { content?: AssistantContentBlock[] };
 type PatchableAssistantMessage = {
 	hideThinkingBlock?: boolean;
 	hiddenThinkingLabel?: string;
+	lastMessage?: AssistantMessageLike;
 	updateContent?: (message: AssistantMessageLike) => void;
 };
 
@@ -272,7 +273,59 @@ function resolvePiCodingAgentEntryPath(): string {
 // Pi's initial hideThinkingBlock is false (thinking expanded). We default to
 // compact previews until the user toggles; once a real toggle is visible
 // (a component with hideThinkingBlock === true), follow pi's toggle exactly.
-let thinkingFollowsToggle = false;
+// The latch is process-lifetime module state (pi caches the extension factory
+// per process); session_start resets it per session (xtrm-6ggil). The patch
+// factory takes the holder as a parameter so tests run with an isolated latch.
+export type ThinkingToggleLatch = { followsToggle: boolean };
+const thinkingToggleLatch: ThinkingToggleLatch = { followsToggle: false };
+
+/**
+ * Wraps AssistantMessageComponent.updateContent so thinking blocks render as
+ * XTRM preview rows. Exported for unit tests: pass the original updateContent,
+ * a style, and (optionally) an isolated latch.
+ */
+export function createPatchedUpdateContent(
+	updateContent: (message: AssistantMessageLike) => void,
+	style: ThinkingRowStyle,
+	latch: ThinkingToggleLatch = thinkingToggleLatch,
+): (this: PatchableAssistantMessage, message: AssistantMessageLike) => void {
+	return function patchedUpdateContent(this: PatchableAssistantMessage, message: AssistantMessageLike) {
+		if (Array.isArray(message.content)) {
+			const hasThinking = message.content.some((block) => block.type === "thinking" && block.thinking?.trim());
+			if (hasThinking) {
+				if (this.hideThinkingBlock) latch.followsToggle = true;
+				const compact = this.hideThinkingBlock === true || !latch.followsToggle;
+				const content = message.content.flatMap((block, index) => {
+					if (block.type !== "thinking" || !block.thinking?.trim()) return [block];
+					const row = compact
+						? buildCollapsedThinkingRow(buildThinkingRecap(block.thinking), block.thinking.length, style)
+						: buildExpandedThinkingBlock(block.thinking, style);
+					// Text blocks render even when pi's hideThinkingBlock branch is
+					// active (a "thinking" block would be swallowed and replaced by the
+					// empty hidden label). Append an invisible single-line block (a
+					// zero-width space survives pi's text trim and renders as a blank
+					// line) when a visible text/thinking block follows — mirroring pi's
+					// Spacer(1) after thinking runs; none before tool-call blocks.
+					const hasVisibleAfter = message.content
+						.slice(index + 1)
+						.some((c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()));
+					return hasVisibleAfter
+						? [{ type: "text", text: row }, { type: "text", text: "\u200b" }]
+						: [{ type: "text", text: row }];
+				});
+				updateContent.call(this, { ...message, content });
+				// Pi stores lastMessage and re-renders from it in
+				// setHideThinkingBlock()/invalidate()/setHiddenThinkingLabel().
+				// Restore the RAW message so those re-renders re-enter this patch
+				// with the original thinking blocks; otherwise the toggle renders
+				// the already-converted rows and existing thinking rows never flip.
+				this.lastMessage = message;
+				return;
+			}
+		}
+		updateContent.call(this, message);
+	};
+}
 
 async function installThinkingPreviewPatch(): Promise<void> {
 	const entryPath = resolvePiCodingAgentEntryPath();
@@ -298,36 +351,7 @@ async function installThinkingPreviewPatch(): Promise<void> {
 	if (!proto?.updateContent || proto[PATCHED_ASSISTANT_MESSAGE]) return;
 
 	const updateContent = proto.updateContent;
-	proto.updateContent = function patchedUpdateContent(this: PatchableAssistantMessage, message: AssistantMessageLike) {
-		if (Array.isArray(message.content)) {
-			const hasThinking = message.content.some((block) => block.type === "thinking" && block.thinking?.trim());
-			if (hasThinking) {
-				if (this.hideThinkingBlock) thinkingFollowsToggle = true;
-				const compact = this.hideThinkingBlock === true || !thinkingFollowsToggle;
-				const content = message.content.flatMap((block, index) => {
-					if (block.type !== "thinking" || !block.thinking?.trim()) return [block];
-					const row = compact
-						? buildCollapsedThinkingRow(buildThinkingRecap(block.thinking), block.thinking.length, style)
-						: buildExpandedThinkingBlock(block.thinking, style);
-					// Text blocks render even when pi's hideThinkingBlock branch is
-					// active (a "thinking" block would be swallowed and replaced by the
-					// empty hidden label). Append an invisible single-line block (a
-					// zero-width space survives pi's text trim and renders as a blank
-					// line) when a visible text/thinking block follows — mirroring pi's
-					// Spacer(1) after thinking runs; none before tool-call blocks.
-					const hasVisibleAfter = message.content
-						.slice(index + 1)
-						.some((c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()));
-					return hasVisibleAfter
-						? [{ type: "text", text: row }, { type: "text", text: "\u200b" }]
-						: [{ type: "text", text: row }];
-				});
-				updateContent.call(this, { ...message, content });
-				return;
-			}
-		}
-		updateContent.call(this, message);
-	};
+	proto.updateContent = createPatchedUpdateContent(updateContent, style);
 	proto[PATCHED_ASSISTANT_MESSAGE] = true;
 }
 
@@ -1513,12 +1537,12 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
   };
 
   pi.on("session_start", async (_event, ctx) => {
-    // thinkingFollowsToggle is process-lifetime module state (the extension
+    // thinkingToggleLatch is process-lifetime module state (the extension
     // factory is cached per process and the prototype patch installs once).
     // Reset it per session so a stale latch from an earlier session cannot
     // flip the first thinking block of a fresh session to the expanded raw
     // trace (xtrm-6ggil).
-    thinkingFollowsToggle = false;
+    thinkingToggleLatch.followsToggle = false;
     setPrefs(loadPrefs(ctx.sessionManager.getEntries() as Array<MaybeCustomEntry>));
     refresh(ctx);
   });
