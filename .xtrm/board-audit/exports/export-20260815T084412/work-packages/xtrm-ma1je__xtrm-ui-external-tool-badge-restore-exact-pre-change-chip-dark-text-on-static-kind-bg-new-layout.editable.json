@@ -1,0 +1,72 @@
+{
+  "content_sha256": "785de99e5cf7ceae0f1de75a88b9e41a082adc9aa76f379bd1a0b7cc799874b7",
+  "desired_issues": {
+    "xtrm-ma1je": {
+      "_type": "issue",
+      "assignee": "jaggerxtrm",
+      "comment_count": 0,
+      "created_at": "2026-08-12T05:29:06Z",
+      "created_by": "jaggerxtrm",
+      "dependency_count": 0,
+      "dependent_count": 0,
+      "description": "## CLARIFIED REQUIREMENT\n\nThe 'background' requested was the BADGE CHIP behind the tool name as it was before ANY modifications: dark text (\\x1b[38;2;3;8;12m) on the static per-kind colored background (serena cyan, gitnexus purple, ...). No phase color changing, plain and static. New layout only: no [] brackets, marker + chip + bold action.\n\n## CHANGES\n\n- Restore externalToolBadgeColor (chip: dark text on kind bg).\n- Header: '› <chip>Provider</chip> <action>' — chip static in every state, no brackets.\n- Remove phase machinery: ExternalToolState, externalToolStateBgToken, padToRenderWidth, theme import/themeLike/bgFn in patch; drop state+themeLike params from renderExternalToolLines/BackgroundLines. Keep the try/catch guard and version bump.\n- Tests: chip format assertions without brackets, static across lifecycle states.\n\n## VALIDATION\n\n- xtrm-ui tests green; tsc no new errors.",
+      "id": "xtrm-ma1je",
+      "issue_type": "task",
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "started_at": "2026-08-12T05:29:13Z",
+      "status": "in_progress",
+      "title": "xtrm-ui: external tool badge — restore exact pre-change chip (dark text on static kind bg), new layout only",
+      "updated_at": "2026-08-12T05:29:13Z"
+    }
+  },
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-ma1je"
+  },
+  "issues": {
+    "xtrm-ma1je": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "comment_count": 0,
+        "created_at": "2026-08-12T05:29:06Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## CLARIFIED REQUIREMENT\n\nThe 'background' requested was the BADGE CHIP behind the tool name as it was before ANY modifications: dark text (\\x1b[38;2;3;8;12m) on the static per-kind colored background (serena cyan, gitnexus purple, ...). No phase color changing, plain and static. New layout only: no [] brackets, marker + chip + bold action.\n\n## CHANGES\n\n- Restore externalToolBadgeColor (chip: dark text on kind bg).\n- Header: '› <chip>Provider</chip> <action>' — chip static in every state, no brackets.\n- Remove phase machinery: ExternalToolState, externalToolStateBgToken, padToRenderWidth, theme import/themeLike/bgFn in patch; drop state+themeLike params from renderExternalToolLines/BackgroundLines. Keep the try/catch guard and version bump.\n- Tests: chip format assertions without brackets, static across lifecycle states.\n\n## VALIDATION\n\n- xtrm-ui tests green; tsc no new errors.",
+        "id": "xtrm-ma1je",
+        "issue_type": "task",
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-12T05:29:13Z",
+        "status": "in_progress",
+        "title": "xtrm-ui: external tool badge — restore exact pre-change chip (dark text on static kind bg), new layout only",
+        "updated_at": "2026-08-12T05:29:13Z"
+      }
+    }
+  },
+  "new_comments": {},
+  "relations": [],
+  "repository": "xtrm-dev/core",
+  "root_id": "xtrm-ma1je",
+  "root_title": "xtrm-ui: external tool badge — restore exact pre-change chip (dark text on static kind bg), new layout only",
+  "roundtrip": {
+    "base_package_sha256": "785de99e5cf7ceae0f1de75a88b9e41a082adc9aa76f379bd1a0b7cc799874b7",
+    "base_record_sha256": {
+      "xtrm-ma1je": "e9b5d2b9cc07872e136b9cc9cf9d93e0050802da7a2a2b2beee1d798bc99100f"
+    },
+    "edit_contract": "modify desired_issues and new_comments only; issues.*.source is immutable base state",
+    "prepared_at": "2026-08-15T06:44:15Z",
+    "schema_version": "xtrm.board-audit.roundtrip.v1"
+  },
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}
