@@ -10,13 +10,15 @@ HOOKS_DIR=$(dirname "$0")
 if [ -x "$HOOKS_DIR/.security-pipeline-baseline" ]; then
     echo "$REFS" | "$HOOKS_DIR/.security-pipeline-baseline" "$@"
     rc=$?
-    [ $rc -ne 0 ] && exit $rc
+
+    if [ $rc -ne 0 ]; then exit $rc; fi
 fi
 
 if [ -x "$HOOKS_DIR/pre-push.local" ]; then
     echo "$REFS" | "$HOOKS_DIR/pre-push.local" "$@"
     rc=$?
-    [ $rc -ne 0 ] && exit $rc
+
+    if [ $rc -ne 0 ]; then exit $rc; fi
 fi
 
 # --- BEGIN custom: beads/dolt sync before push ---
@@ -31,7 +33,8 @@ if [ -x "$HOOKS_DIR/pre-push.bd-sync" ]; then
         echo "$REFS" | "$HOOKS_DIR/pre-push.bd-sync" "$@"
     fi
     rc=$?
-    [ $rc -ne 0 ] && exit $rc
+
+    if [ $rc -ne 0 ]; then exit $rc; fi
 fi
 # --- END custom ---
 
