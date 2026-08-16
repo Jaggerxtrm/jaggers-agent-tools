@@ -355,6 +355,59 @@ async function installThinkingPreviewPatch(): Promise<void> {
 	proto[PATCHED_ASSISTANT_MESSAGE] = true;
 }
 
+let retryFailureWarned = false;
+function warnRetryFailedOnce(error: unknown): void {
+  if (retryFailureWarned) return;
+  retryFailureWarned = true;
+  const message = error instanceof Error ? error.message : String(error);
+  // stderr so it surfaces even when Pi's UI eats stdout.
+  process.stderr.write(
+    `[xtrm-ui] thinking-preview install still failing at session_start: ${message.slice(0, 300)}\n`,
+  );
+}
+
+/**
+ * Single-flight wrapper around the thinking-preview prototype patch install.
+ * The extension factory runs during Pi's resource loading, BEFORE the TUI
+ * controller constructor calls initTheme(); the theme module (theme.js)
+ * exports a Proxy that throws "Theme not initialized" until then, so the
+ * factory-time attempt can fail. session_start fires after the controller is
+ * constructed, so awaiting ensureInstalled() there retries a failed install
+ * before the first assistant message renders (xtrm-3tus9). Exported for unit
+ * tests: pass an install function and an isolated state holder.
+ *
+ * @internal — factored out and exported for unit-test isolation only.
+ * `handlers.test.ts` constructs isolated install states per test to avoid
+ * process-lifetime state bleed. Not part of the public extension API and
+ * not intended for use outside this package's tests. Do not import from
+ * downstream extensions.
+ */
+export function createThinkingPreviewInstallState(install: () => Promise<void>): {
+  ensureInstalled: () => Promise<void>;
+  isInstalled: () => boolean;
+} {
+  let installed = false;
+  let current: Promise<void> | null = null;
+  return {
+    ensureInstalled() {
+      if (installed) return Promise.resolve();
+      if (current) return current;
+      current = install().then(
+        () => {
+          installed = true;
+          current = null;
+        },
+        (error: unknown) => {
+          current = null;
+          throw error;
+        },
+      );
+      return current;
+    },
+    isInstalled: () => installed,
+  };
+}
+
 type ToolExecutionComponentCtor = {
   prototype: {
     getRenderShell?: () => "default" | "self";
@@ -1509,7 +1562,11 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
 // ============================================================================
 
 export default function xtrmUiExtension(pi: ExtensionAPI): void {
-  void installThinkingPreviewPatch().catch(() => undefined);
+  const thinkingPreviewInstall = createThinkingPreviewInstallState(installThinkingPreviewPatch);
+  // Warm-up attempt. It can fail while Pi's theme is not initialized yet (the
+  // factory runs during resource loading, before initTheme()); session_start
+  // below retries via ensureInstalled() before the first message renders.
+  void thinkingPreviewInstall.ensureInstalled().catch(() => undefined);
   void installExternalToolFramePatch().catch(() => undefined);
 
   // Keep collapsed thinking rows to one line: the recap is truncated to the
@@ -1544,6 +1601,22 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
     // trace (xtrm-6ggil).
     thinkingToggleLatch.followsToggle = false;
     setPrefs(loadPrefs(ctx.sessionManager.getEntries() as Array<MaybeCustomEntry>));
+    // Await the prototype patch BEFORE the first message can render: a
+    // factory-time install failure (theme not initialized yet) must be
+    // retried here, after Pi's theme controller has run initTheme(), or the
+    // first thinking block renders through Pi's unpatched empty hidden label
+    // (xtrm-3tus9). No-op once installed.
+    await thinkingPreviewInstall.ensureInstalled().catch((error: unknown) => {
+      // If BOTH the factory warm-up AND this session_start retry fail, the
+      // prototype patch never installs and Pi's own hideThinkingBlock branch
+      // renders an empty label instead of the collapsed one-liner. Surface
+      // once per process so the operator sees a signal (silent .catch() is
+      // exactly the regression this whole PR closes) — never throw here,
+      // session_start must not fail because of this.
+      if (!thinkingPreviewInstall.isInstalled()) {
+        warnRetryFailedOnce(error);
+      }
+    });
     refresh(ctx);
   });
 
