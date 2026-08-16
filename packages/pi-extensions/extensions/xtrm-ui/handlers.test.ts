@@ -29,6 +29,7 @@ mock.module("@mariozechner/pi-coding-agent", () => ({}));
 const xtrmUiExtension = (await import("./index.ts")).default;
 const { createPatchedUpdateContent } = await import("./index.ts");
 const { buildThinkingRecap } = await import("./index.ts");
+const { createThinkingPreviewInstallState } = await import("./index.ts");
 
 type RegisteredTool = {
   name: string;
@@ -238,5 +239,87 @@ describe("xtrm-ui presentation-only boundary", () => {
     const message = { content: [{ type: "text", text: "plain reply" }] };
     component.updateContent(message as never);
     expect(seen).toEqual([message]);
+  });
+
+  test("thinking preview install retries on session start after factory-time failure (xtrm-3tus9)", async () => {
+    // The extension factory runs during Pi resource loading, before the TUI
+    // controller constructor calls initTheme(); reading theme.js's theme proxy
+    // then throws "Theme not initialized". The install must be retried from
+    // session_start (which fires after initTheme) before the first message.
+    let attempts = 0;
+    const state = createThinkingPreviewInstallState(async () => {
+      attempts++;
+      if (attempts === 1) throw new Error("Theme not initialized. Call initTheme() first.");
+    });
+
+    // Factory-time warm-up fails: patch is NOT installed.
+    await state.ensureInstalled().catch(() => undefined);
+    expect(state.isInstalled()).toBe(false);
+    expect(attempts).toBe(1);
+
+    // session_start retry (post-initTheme) succeeds.
+    await state.ensureInstalled();
+    expect(state.isInstalled()).toBe(true);
+    expect(attempts).toBe(2);
+
+    // Subsequent session starts no-op; no double patch install.
+    await state.ensureInstalled();
+    expect(attempts).toBe(2);
+  });
+
+  test("first message with thinking renders collapsed row once install completes (xtrm-3tus9)", async () => {
+    // Covers the reported state: patch not yet installed when the session
+    // starts (factory-time attempt failed), then session_start ensures the
+    // install; the FIRST thinking-emitting message must render the collapsed
+    // row instead of Pi's unpatched empty hidden label.
+    type ContentBlock = { type: string; text?: string; thinking?: string };
+    const plainStyle = {
+      label: (text: string) => text,
+      recap: (text: string) => text,
+      hint: (text: string) => text,
+      sep: " · ",
+    };
+    let installs = 0;
+    const state = createThinkingPreviewInstallState(async () => {
+      installs++;
+      if (installs === 1) throw new Error("Theme not initialized. Call initTheme() first.");
+    });
+
+    // Factory-time warm-up fails (theme not initialized yet).
+    await state.ensureInstalled().catch(() => undefined);
+    expect(state.isInstalled()).toBe(false);
+
+    // session_start: ensure the patch before the first message renders.
+    await state.ensureInstalled();
+    expect(state.isInstalled()).toBe(true);
+
+    // First assistant message carries a thinking block: hideThinkingBlock is
+    // true (settings), latch follows pi's hide state only after a real toggle,
+    // so the message must render the compact collapsed row.
+    const rendered: ContentBlock[][] = [];
+    const latch = { followsToggle: false };
+    const component = {
+      hideThinkingBlock: true,
+      lastMessage: undefined as { content: ContentBlock[] } | undefined,
+      updateContent(message: { content: ContentBlock[] }) {
+        this.lastMessage = message;
+        rendered.push(message.content);
+      },
+    };
+    component.updateContent = createPatchedUpdateContent(component.updateContent as never, plainStyle, latch);
+    component.updateContent({
+      content: [{ type: "thinking", thinking: "First line of the thinking trace\nDEEP_SECRET_DETAIL_XYZ not in recap" }],
+    } as never);
+
+    const row = rendered[0]![0].text ?? "";
+    expect(row).toContain("Thinking...");
+    expect(row).toContain("(Ctrl+T to expand)");
+    expect(row).not.toContain("DEEP_SECRET_DETAIL_XYZ");
+    // lastMessage keeps the RAW thinking block so toggle re-renders re-enter
+    // the patch with original content (xtrm-5vi8u).
+    expect(component.lastMessage!.content[0]).toMatchObject({
+      type: "thinking",
+      thinking: "First line of the thinking trace\nDEEP_SECRET_DETAIL_XYZ not in recap",
+    });
   });
 });
