@@ -282,7 +282,52 @@ Planner-created beads use the same 7-section contract that `using-specialists` S
 
 The seven sections — `PROBLEM / SUCCESS / SCOPE / NON_GOALS / CONSTRAINTS / VALIDATION / OUTPUT` — are mandatory for every task and every epic. Optional auxiliary sections (`REFERENCES`, `APPROACH NOTES`) may follow at the bottom.
 
+### Create the whole board in a single bash invocation (preferred)
+
+Create the epic and **all** child issues in one scripted bash invocation. Do not run one interactive `bd create` at a time. A single invocation makes the board creation reviewable as one artifact, keeps it fast to re-run, and avoids context-switching between create and dependency steps.
+
+The mechanics that make this work (verified against current `bd`):
+
+1. **Create the epic first, alone**, and capture its ID: `EPIC=$(bd create --title="..." --type epic --priority 2 --silent)`.
+2. **Create every child with `--parent "$EPIC"`** inside the same invocation, in dependency order — the issue that others wait on is created first.
+3. **Hierarchical IDs are assigned deterministically by creation order**: the first child becomes `<epic>.1`, the second `<epic>.2`, and so on. Because the numbering is known in advance, dependencies on earlier children are wired **inline at create time** via `--deps` — no post-hoc `bd dep add` needed for the main sequencing edges.
+4. **`--deps` direction semantics**: bare `id`, `depends-on:id`, and `blocked-by:id` all make THIS issue depend on `id`; `blocks:id` reverses the direction (`id` depends on this issue). For "this task waits on that task", use the bare id (e.g. `--deps "$EPIC.1"`).
+5. **Pass long 7-section descriptions as arguments, not stdin prompts**: in bash use `-d "$(cat <<'EOF' … EOF)"` per issue. For very long descriptions, a small generator script (e.g. Python `subprocess.run(["bd","create",…])` with arg lists) is safer than shell quoting; descriptions are then immune to quoting/escaping bugs.
+6. **`bd create --file <plan.md>` cannot set `--parent`** — it is rejected (`--parent is not valid with --file`) and the markdown parser has no parent field, so batch-file children get flat IDs (`xtrm-abc`), not hierarchical ones. Use `--file` only when flat IDs are acceptable; for boards that must read as `<epic>.1/.2/.3`, use the scripted `--parent` invocation.
+7. **End the invocation with verification chained on**: `bd children "$EPIC"`, `bd graph "$EPIC"`, and `bd dep cycles` prove numbering, edges, and acyclicity in the same run.
+
+Concrete shape:
+
+```bash
+EPIC=$(bd create --title="<Feature name — concise verb phrase>" --type epic --priority 2 --silent)
+
+# Children, in dependency order. The first created child becomes $EPIC.1.
+bd create --title="Task one — foundation" --type task --priority 2 --parent "$EPIC" \
+  -d "$(cat <<'EOF'
+## PROBLEM
+…
+## SUCCESS
+…
+EOF
+)" --silent
+
+# Task two waits on the first child; the hierarchical id $EPIC.1 is already known.
+bd create --title="Task two — depends on foundation" --type task --priority 2 --parent "$EPIC" \
+  --deps "$EPIC.1" \
+  -d "$(cat <<'EOF'
+## PROBLEM
+…
+EOF
+)" --silent
+
+bd children "$EPIC" && bd graph "$EPIC" && bd dep cycles
+```
+
+The per-issue templates below are the reference forms for the `bd create` calls inside this invocation; the separate `bd dep add` examples in "Wire dependencies and relationships" cover only post-hoc edges (review/test/security links, follow-ups) that cannot be known at board-creation time.
+
 ### Create the epic (new work only)
+
+Reference template for the epic `bd create` call — run first, alone, inside the single invocation above.
 
 ```bash
 bd create \
@@ -334,6 +379,8 @@ EOF
 ```
 
 ### Create child task issues
+
+Reference template for one child `bd create` call — run for each child, with `--parent=<epic-id>`, inside the single invocation above.
 
 ```bash
 bd create \
@@ -400,6 +447,8 @@ EOF
 ```
 
 ### Wire dependencies and relationships
+
+Main sequencing edges (`blocks`) are wired inline via `--deps` during the single board-creation invocation (see above); the commands below are for post-hoc edges added after creation.
 
 Use the right edge type when creating the board. `blocks` is only for hard
 must-happen-before sequencing; overusing it makes `bd ready` untrustworthy and
