@@ -18,6 +18,8 @@ disable-model-invocation: true
 
 # SRE Triage ( /sre-triage )
 
+> **sre-triage v1.6 (2026-08-19)** — prior-run lookup + bundle contract + evidence-first PLAN phase + Grafana MCP + OpenTelemetry MCP + deploy correlation + bead composition template. Source of truth: `~/.claude/skills/sre-triage/SKILL.md` (mirrors: `~/.xtrm/skills/default/sre-triage/SKILL.md`, `~/.jcode/skills/sre-triage/SKILL.md`, `~/dev/core/.xtrm/skills/default/sre-triage/SKILL.md`). Freshest content wins; the two primary copies must stay byte-identical.
+
 Verify every stack's health state **without touching the codebase**. If issues are
 found, route immediately to the correct expert skill(s) by **listing the service-skills
 directory and matching the offending container/alert label against service names or
@@ -50,6 +52,83 @@ appears in the conversation without a specific service being named yet.
 
 `/health` remains a colloquial alias during the deprecation window of the old
 `checking-stack-health` skill.
+
+---
+
+## Team Mode (2026-08-17)
+
+An alternative fan-out mode: `/sre-triage team <incident>` invokes the read-only SRE
+forensics specialist team instead of running the inline monolithic flow.
+
+**When to use team mode:**
+- Multi-surface incident (metrics + logs + host + recent-change all matter).
+- You want the investigation to run in a **fresh context**, so the main session's
+  memory pressure / prior investigation state doesn't bias findings.
+- The incident description already scopes the problem well enough for the specialists
+  to run without further clarification.
+
+**When to stay in the inline flow (this file, below):**
+- Quick single-surface probe (only alerts, only logs, only host).
+- You want to steer the investigation turn-by-turn.
+- Specialists infrastructure is unavailable (pi/sp broken, mcpq down).
+
+**How team mode works — 3 steps:**
+
+```bash
+# 1. Pour the formula. Creates root bead + 4 step beads (observability, host, change, coordinator).
+#    The molecule id printed IS the chain identity — capture it.
+bd mol pour sre-triage --var incident="<one-paragraph incident description>" --var window="last 1h"
+# -> prints e.g. infra-mol-q5h (root)
+
+# 2. Launch the coordinator against the root bead. Pick ONE of the two invocations:
+
+#    A) Interactive tmux pane -- recommended for real incidents you want to watch:
+xt claude --role sre-coordinator --bead <root-bead-id>
+#    (or xt pi --role ... or xt codex --role ... - same effect, different runtime)
+#    Creates a new tmux session with @agent_task metadata, xtmux wired up so the
+#    coordinator can message-send back to the parent orchestrator on judgment calls.
+
+#    B) Headless one-shot -- for scripted invocations or when you just want the report:
+sp run sre-coordinator --bead <root-bead-id>
+
+# 3. Coordinator fans out. It dispatches sp run --bead <step-id> for each of the three
+#    forensics specialists (observability, host, change) in parallel. Each writes to
+#    .specialists/<name>-result.md and appends to its step bead notes.
+#    When all three are complete, coordinator synthesizes ONE report to
+#    .specialists/sre-coordinator-result.md and messages back.
+```
+
+For regression / "was working, now isn't" outages, use `sre-outage` instead -- same
+invocation, different formula:
+
+```bash
+bd mol pour sre-outage --var incident="..." --var window="last 6h"
+xt claude --role sre-coordinator --bead <root-bead-id>
+# -> change (heavy, runs first) -> observability (validates top suspect) -> coordinator
+```
+
+**Slash-shorthand (if wired):** `/sre-triage team <incident>` and `/sre-triage outage <incident>`
+should collapse the pour+launch pair into one line. If the shortcut isn'''t installed for
+this session, run the two bd/xt commands above verbatim.
+
+**Freshness gate:** all four specialists load `service-knowledge/SKILL.md` at turn 1.
+The coordinator's Residual Uncertainty section flags any per-service SKILL whose
+`Last sync` timestamp is older than 30 days and recommends
+`service-knowledge index rebuild` or `/updating-service-skills`. Stale service knowledge
+means stale queries; the freshness gate keeps that from silently biasing the report.
+
+**Team roster + design principles:** see
+`<repo>/.specialists/user/SRE-README.md`. All 4 specialists are LOW tier and forbidden
+from state-changing commands by system-prompt mandate — findings are advisory, the
+operator applies.
+
+**Model:** `opencode-go/deepseek-v4-flash` primary, `zai/glm-5-turbo` fallback.
+
+**When to reach for team mode vs the inline flow — one-line rule:** if the incident's
+cause is likely a recent change (deploy, PR merge, container rebuild), team mode's
+`sre-outage` shape is fastest because `sre-change-forensics` runs first and often
+identifies the culprit inside its own step. For pure "system feels broken" health
+probes, the inline flow below is lower-overhead.
 
 ---
 
@@ -549,3 +628,383 @@ If `alert_investigator.py` identifies a **false-alert pattern** that is not yet 
 
 Full architecture, maintenance guide, and Agent Forge migration path:
 `~/projects/example-project/infra/HEALTH_SYSTEM.md`
+
+## Prior-Run Lookup (before publishing coordinator.decision)
+
+**MUST — not optional.** Before you publish `coordinator.decision`, run:
+
+    service-knowledge index query "<3-5 keywords derived from the incident_brief>"
+
+Use plain tokens only (FTS5 treats `-`, `_`, `=` as separators — `questdb`,
+`candle`, `swap`, `RestoreTest`, not `NQ=F` or `sre-triage-runs` verbatim).
+If you are in a target repo that has the archive registered, add
+`--service-id sre-triage-runs` and `--bundle` to get the evidence bundle.
+
+- If any hit returns, open the linked `report.md` and **cite the hit's
+  `chain_id` in your coordinator.decision evidence body under
+  `prior_runs_cited[]`** (one entry per prior run). Read the prior run's
+  applied fixes / workarounds and do NOT re-derive from scratch.
+- If no hit returns, emit `prior_runs_cited: []` — an empty array is valid;
+  skipping the search is not.
+- Failure mode: **if you skip the prior-run search, the reviewer step will
+  flag your coordinator.decision as incomplete.** The search is the mechanism
+  that makes the archive learn — a coordinator that never looks back is the
+  exact failure this skill exists to prevent.
+
+## Run Bundle Contract (at terminal state — satisfied OR escalated)
+
+Every terminal chain run (satisfied OR escalated) writes a durable per-run
+bundle into the target repo at:
+
+    <target>/.xtrm/skills/infra/service-knowledge/services/sre-triage-runs/<UTC>_<chain_id_short>/
+
+The coordinator-close activation writes `report.md` (narrative + gotchas +
+applied fixes + workarounds + deferred + next-actions) as its evidence body
+`kind=coordinator.decision`. The chain runtime is responsible for
+materializing that body plus the deterministic `chain-report.json` into the
+archive path. Bundle files (shape defined by service `sre-triage-runs`,
+spike infra-223r.1):
+
+| file | contents |
+|---|---|
+| `chain-report.json` | deterministic, `"schema": "chain-report.v1"` at top level; steps[], evidence_index[], prior_runs_cited[], plan_phase{}, next_actions[] |
+| `report.md` | hand-written narrative: incident brief, participants, evidence summary, top gotchas, applied fixes, deferred, prioritized next actions |
+| `gotchas.jsonl` | one JSON object per line: `{"kind","resource","symptom","evidence_ref","fix_applied","worked","prior_run_refs"}` |
+| `evidence/*.json` | the run's evidence entries from `evidence/index.jsonl`, expanded one file each |
+| `forensics.jsonl` | copy of `forensics/events.jsonl` |
+| `messages.jsonl` | copy of `channels/messages.jsonl` |
+
+After the bundle exists, rebuild the index so the next run can find it:
+
+    cd <target-repo>
+    service-knowledge index rebuild   # full regen (same as build)
+    service-knowledge index stats     # confirm item_count + source_ref updated
+
+## Orchestrator Handoff
+
+After the bundle exists, the **outer orchestrator** (Claude Code session /
+`xt claude` / `sp chat`) reads the run's next actions and schedules targeted
+follow-ups. The exact file is:
+
+    services/sre-triage-runs/<UTC>_<chain_id_short>/chain-report.json
+    # -> next_actions[] (array of operator-actionable strings)
+
+or the human-readable equivalent in `report.md` under "## Prioritized next
+actions". The orchestrator should convert each `next_actions[]` entry into a
+bd issue (or GH issue) with a `discovered-from` edge back to the incident
+bead, so the archive's recommendations actually become tracked work. Priority
+order in the array is intentional: P0 = stop-the-bleed, then P1/P2.
+
+## PLAN Phase (evidence-first)
+
+You are alert-ANCHORED but never alert-LIMITED. The alert set is one input
+among three. **Before dispatching any advisor**, enumerate the ACTIVE
+investigation surface and record it in your coordinator.decision evidence
+body under `plan_phase`:
+
+```json
+"plan_phase": {
+  "alerts_checked": ["<firing alert names, or []>"],
+  "dashboards_queried": ["<grafana dashboard names, or []>"],
+  "trace_queries": ["<otel trace query descriptions, or []>"],
+  "deploy_correlations_examined": ["<deploy/digest surfaces examined, or []>"]
+}
+```
+
+Surface enumeration (all READ-ONLY):
+
+1. **Currently-firing alerts** — via mcpq Prometheus.
+2. **Topology sweep** — for every critical service in
+   `service-registry.json`'s services map, note its expected container(s). A
+   degraded service with NO firing alert is the exact failure mode this phase
+   exists to catch (proof: chain-sre-308163 — observability-analyst reported
+   "0 firing alerts" for services that were in fact degraded).
+3. **Grafana forensic dashboards** — via mcpq (see §Grafana MCP Access).
+4. **OpenTelemetry traces** — via mcpq (see §OpenTelemetry MCP Access).
+5. **Deploy correlation** — see §Deploy Correlation.
+
+Every advisor gets a SCOPED subset of this surface, not just the alert set.
+A missing or empty `plan_phase` sub-object is a contract violation — the
+reviewer will flag your coordinator.decision as incomplete.
+
+## Deploy Correlation
+
+For every service surfaced by any advisor, check the last GHCR image digest
+change / container recreate / compose reconciliation timestamp. If the
+incident window overlaps a recent deploy, flag it as a plausible cause
+candidate and cite the exact digest / commit / compose diff:
+
+```bash
+git log -20 -G 'image:.*@sha256:' --date=short --format='%h %ad %s' -- docker-compose.yml
+docker events --since 24h --filter type=container
+git log -5 --since='7 days ago' --format='%h %ad %s' --date=short .
+```
+
+`docker inspect <container> --format '{{.Config.Image}} {{.State.StartedAt}}'`
+shows the running image digest vs start time — a `⚡BUILT+DEPLOYED` pattern
+(image `.Created` ≈ container `.StartedAt`) is a fresh deploy. The
+`service-map.json` (infra/scripts) maps container prefixes to repos — never
+assume a prefix.
+
+## Grafana MCP Access
+
+Mercury runs `grafana-mcp` as an internal docker service on the `platform`
+network (no Traefik route) — reachable ONLY via `mcpq`, never direct HTTP
+from the host. Server entry (`.mcpq.json`, discovered by walk-up):
+
+    mcpq servers
+    # grafana  via=docker:infra-prometheus-mcp  url=http://infra-grafana-mcp:8090/mcp
+
+Query sequence:
+
+```bash
+mcpq grafana list-tools          # live tool catalog
+mcpq grafana describe <tool>     # input schema
+mcpq grafana call <tool> ...     # invoke
+```
+
+Pull the dashboards relevant to the incident domain (host, containers,
+observability pipeline, ingest pipelines, backup/restore, security), snapshot
+key panels, and cite them in your evidence body (`dashboards_queried[]` in
+`plan_phase`). The Grafana Dashboard Reference section below lists the
+provisioned dashboards and the alerts each covers.
+
+## OpenTelemetry MCP Access
+
+Mercury runs `opentelemetry-mcp` (upstream traceloop/opentelemetry-mcp-server,
+BACKEND_TYPE=tempo) as an internal docker service on the `platform` network —
+reachable ONLY via `mcpq`:
+
+    mcpq opentelemetry-mcp list-tools    # 11 tools (traces)
+
+Pull traces around the incident window, filter by service name and error
+class, cite trace IDs in your evidence body (`trace_queries[]` in
+`plan_phase`). Combined with Loki logs (via grafana-mcp) this closes the
+trace/log correlation loop that alert-only triage misses.
+
+## Bead Composition Template
+
+When the outer orchestrator creates an incident bead (via `bd create` or a
+formula pour), the description SHOULD include this starter block so both live
+and test invocations get the evidence-first contract:
+
+    ## Initial surface (evidence-first — do not skip)
+    - Deploy-correlation checkpoint:
+      git log -20 -G 'image:.*@sha256:' --date=short --format='%h %ad %s' -- docker-compose.yml
+    - Grafana dashboards to consult (mcpq grafana list-tools; pick by domain):
+      [host, containers, observability pipeline, ingest pipelines, backup/restore, security]
+    - OTel trace-query starter (mcpq opentelemetry-mcp):
+      window=<incident window>, service=<affected service>, error class=<if known>
+    - Prior-run lookup: service-knowledge index query "<3-5 incident keywords>"
+
+The template lives in ONE place — this skill — and is referenced from the
+coordinator prompt via a `## Bead Composition` section, never duplicated.
+
+## Persistent per-run knowledge (service-knowledge integration)
+
+
+Every triage run MUST leave two artefacts in the target repo so the next run
+can search prior gotchas, fixes and workarounds via the `service-knowledge`
+CLI. Both are written under a **single registered service**, `sre-triage-runs`,
+so it is discoverable exactly like every other service skill.
+
+### Registered service — `sre-triage-runs`
+
+Path in the target repo:
+
+```
+<target>/.xtrm/skills/infra/service-knowledge/services/sre-triage-runs/
+    SKILL.md                                              ← FTS5-indexed
+    runs/
+      <UTC-YYYYMMDDTHHMMSSZ>-<chain_run_id>/              ← per-run subfolder
+        report.md                                         ← coordinator hand-written
+        chain-report.json                                  ← deterministic, schema chain-report.v1
+        report.md                                         ← coordinator hand-written narrative
+        gotchas.jsonl                                     ← one JSON object per line
+        evidence/*.json                                   ← evidence entries, one file each
+        forensics.jsonl                                   ← copy of forensics/events.jsonl
+        messages.jsonl                                    ← copy of channels/messages.jsonl
+```
+
+Register in `<target>/.xtrm/skills/infra/service-knowledge/service-registry.json`:
+
+```json
+"sre-triage-runs": {
+  "name": "sre-triage-runs",
+  "description": "Rolling ledger of past SRE triage chain runs — gotchas, fixes, workarounds, per-run evidence pointers. Use FIRST before starting a new triage; grep for symptoms already seen.",
+  "skill_path": ".xtrm/skills/infra/service-knowledge/services/sre-triage-runs/SKILL.md",
+  "territory": [".xtrm/skills/infra/service-knowledge/services/sre-triage-runs/**"],
+  "triggers": ["sre triage history", "seen this before", "previous outage", "gotcha", "known workaround", "past incident", "prior run"],
+  "last_sync": "<UTC iso now>",
+  "last_sync_ref": "<HEAD sha>"
+}
+```
+
+Territory is self-referential because the service IS the runs ledger — it has
+no source-of-truth code files. That is intentional and the reconcile driver
+accepts it: `service-knowledge` validates 13 claim kinds against `territory:`
+globs; a self-referential territory means the SKILL.md is authoritative for
+its own claims.
+
+### SKILL.md shape (the ONLY FTS-indexed surface)
+
+```markdown
+---
+name: sre-triage-runs
+description: Rolling ledger of past SRE triage chain runs …
+allowed-tools: Read, Grep, Bash(service-knowledge index query *)
+---
+
+# sre-triage-runs
+
+## How to use before starting a new triage
+
+    service-knowledge index query "<symptom>" --service-id sre-triage-runs --bundle
+    # or plain grep as fallback:
+    grep -rniE "<symptom>" services/sre-triage-runs/SKILL.md
+
+If a match returns, open the linked `runs/<id>/report.md` in the same
+service folder — it holds the full triage transcript, the fix or workaround
+that stuck, and the reason it stuck.
+
+## Gotchas & Fixes (append-only)
+
+<!-- Each entry: date · run_id · symptom (indexable words) · root cause · fix that stuck. -->
+<!-- Format is stable so grep + service-knowledge index query both work. -->
+
+- 2026-08-19 · run-sre-10506 · NQ=F/YM=F equities candles stale 26-40h · Sierra-side .scid watch-file gap (config present, 0 inflight) · <fix or "unfixed — see runs/…/report.md">
+- …
+
+## Workarounds
+
+<!-- Same append-only rule. Workarounds are things that are not the real fix but keep the system alive. -->
+
+- …
+
+## Recent Runs
+
+| UTC ts | chain_run_id | chain_id | severity | outcome | report |
+|---|---|---|---|---|---|
+| 2026-08-19T01:53Z | run-sre-10506 | chain-sre-308163 | DEGRADED | 5/6 steps satisfied; reviewer.verdict missing | [runs/…/report.md](runs/2026-08-19T015344Z-run-sre-10506/report.md) |
+| … | | | | | |
+```
+
+Keep entries short and grep-friendly — the whole file is what the FTS5 index
+sees. Long prose lives in `runs/<id>/report.md`; SKILL.md only holds pointers
+and the tight symptom/cause/fix triple.
+
+### Coordinator responsibilities per run
+
+The chain-coordinator step MUST perform, in order, before its final
+`evidence_publish(kind="coordinator.decision")`:
+
+1. **Search prior runs** for anything symptomatically similar to the incident
+   brief. If a match returns, cite it in the coordinator.decision body under
+   `prior_runs_consulted: [<run_id>, …]` so the reviewer can verify.
+
+2. Compute `runs_dir = <target>/.xtrm/skills/infra/service-knowledge/services/sre-triage-runs/runs/<UTC-YYYYMMDDTHHMMSSZ>-<chain_run_id>` and ensure it exists.
+
+3. Write `runs_dir/report.md` with fixed section headings — the same
+   headings across every run so grep and the FTS5 indexer both work:
+
+   ```
+   # SRE triage report — <chain_run_id>
+
+   ## Incident brief
+   ## Summary
+   ## Findings (severity-ranked)
+   ## Root causes (per finding)
+   ## Gotchas encountered (surprises worth remembering)
+   ## Fixes applied (or explicitly NOT applied — READ-ONLY runs)
+   ## Workarounds (what kept it alive without fixing)
+   ## Evidence pointers
+   ## Handoff to orchestrator (concrete next actions)
+   ```
+
+4. **Append** one row to `services/sre-triage-runs/SKILL.md`'s "Recent Runs"
+   table AND (for any surprise/fix that is genuinely new) one bullet each
+   under "Gotchas & Fixes" or "Workarounds". Never delete existing rows —
+   this is an append-only ledger. If a prior gotcha now has a confirmed fix,
+   add a **new** bullet stating the fix and citing the older bullet's run_id
+   rather than editing the older one.
+
+5. Emit the `coordinator.decision` evidence with a body containing
+   `report_path` (relative to target repo root) so the reviewer, coordinator
+   -close, and any downstream orchestrator can dereference the report
+   without guessing paths.
+
+6. Post the `work.turn` message with `evidence_refs=[<the coordinator.decision id>]`
+   and `body.summary` including the same `report_path`.
+
+Under `--specialist-json required` the XTRM authority overlay + role prompt
+already enforces steps 5–6; the runs-ledger writes (steps 1–4) are the
+sre-triage-specific extension that this SKILL contributes.
+
+### Deterministic chain evidence — `chain-report.json`
+
+The XTRM chain runtime emits `runs_dir/chain-report.json` automatically at
+terminalization. It is the machine-readable evidence bundle — do not hand
+edit. Shape:
+
+```json
+{
+  "schema": "chain-report.v1",
+  "chain_run_id": "run-sre-XXXXX",
+  "chain_id": "chain-sre-XXXXXX",
+  "chain_epic_id": "vsvs-chain-sre-XXXXXX-epic",
+  "target_repo": "/abs/path",
+  "target_repo_sha": "<git rev-parse HEAD>",
+  "started_at": "<ISO>",
+  "ended_at": "<ISO>",
+  "terminal_state": "closed | escalated | blocked",
+  "specialist_json_mode": "off | auto | required",
+  "baseline_specialists": [
+    { "name": "sre-coordinator", "source_sha256": "…", "resolved_model": "commandcode/deepseek/deepseek-v4-flash", "skills": [{ "name": "sre-triage", "sha256": "…" }, …] },
+    …
+  ],
+  "steps": [
+    {
+      "step_id": "coordinator-entry",
+      "role": "chain-coordinator",
+      "participant_id": "chain-sre-XXXXXX::chain-coordinator",
+      "execution_id": "exec-…-chain-coordinator-1",
+      "pi_session_id": "01a017…",
+      "attempts": 1,
+      "status": "satisfied",
+      "evidence": [{ "id": "ev-coordinato-…", "kind": "coordinator.decision", "summary_head": "…first 240 chars…" }]
+    },
+    …
+  ],
+  "evidence_index": ["ev-coordinato-…", "ev-topology-m-…", …],
+  "target_mutation_check": { "clean_at_end": true, "notes": "…" }
+}
+```
+
+`chain-report.json` is deterministic — the same chain rerun against the same
+inputs produces byte-identical output modulo timestamps. That determinism
+matters because the orchestrator downstream matches on `chain_run_id` +
+`evidence_index` to route follow-ups.
+
+### After every run — rebuild the index
+
+```bash
+cd <target-repo>
+service-knowledge index build   # rebuild FTS5 index; picks up the new SKILL.md row
+service-knowledge index stats   # confirm item_count went up + last source_ref updated
+service-knowledge index query "<symptom you just added>" --service-id sre-triage-runs
+```
+
+If `index build` errors on the new service (usually "reconcile: territory
+globs match no source files"), the fix is that this service intentionally has
+self-referential territory — accept it or set territory to include the
+`runs/**` subtree, whichever the current reconcile driver permits.
+
+### One-time bootstrap (per target repo)
+
+Only needed the first time in a repo. Produces the empty SKILL.md + registry
+entry; no runs yet. Idempotent — safe to re-run.
+
+    bash <ROOT>/scripts/bootstrap-sre-triage-runs.sh <target-repo-abs-path>
+
+(the script is a companion asset — see the sre-triage-runs playbook block
+in this SKILL for the exact steps if the script is not present).
