@@ -2,8 +2,8 @@
   "version": 1,
   "source": {
     "kind": "ref",
-    "ref": "6437e6984166b564fe680ef30752a8ade8d37d6f",
-    "resolved_sha": "6437e6984166b564fe680ef30752a8ade8d37d6f",
+    "ref": "bcdbd30cb8248155c0e57dd9243f6d32c612bab9",
+    "resolved_sha": "bcdbd30cb8248155c0e57dd9243f6d32c612bab9",
     "repo_path": "../specialists",
     "source_path": "config/skills"
   },
@@ -47,9 +47,9 @@
       "references/content-migration-map.json": "095dc0573b575521ca25cdc4f75d9d12239aad01ec924494819aa8e5ae2910eb",
       "references/dispatch-preconditions.md": "66c7f52379fe546e79fe3eac0c0d52c47df1fc8d1491f805531f48cf83a89dd8",
       "references/merge-and-integration.md": "7884a445b5ee7031fd0cf2b548a6f6bf4df8daa2ab1db5ec28f32c47cbc4d6dd",
-      "references/monitoring.md": "4871fca2072cffd73ba0932ce0f4514ab2dcbab974ce7bd17e77dc73c1807465",
+      "references/monitoring.md": "f87cc7345895cf2c7623f221faf235ad2f3a660878b1eb6e9fab53ec09878067",
       "references/registry-and-locations.md": "d02cb1c2e68f59e14f57d8fda7e80e109fe5666bbd33cae4c0ab8f9b10814460",
-      "SKILL.md": "8ba5c2fc32044ee44f689b565da4dbd275fd5dbcc8d75df127a26c29e040c8d0"
+      "SKILL.md": "a4aa58cfdb61bcee6cb027998213e99ccbb578a437cde34008b244ffdabbc41e"
     },
     "using-specialists-auto": {
       "SKILL.md": "7b63cb642f414a86b278f47dc9cc539a19c80d06f63093e2ab8e3ddadf6fb9b7"
