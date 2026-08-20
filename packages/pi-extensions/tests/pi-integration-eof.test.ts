@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,8 +23,9 @@ describe("Pi EOF real spawn (RUN_PI_INTEGRATION=1)", () => {
     const target = join(dir, "eof.txt");
     writeFileSync(target, "one\ntwo\n");
     try {
-      if (!existsSync("/home/dawid/.nvm/versions/node/v24.15.0/bin/pi")) {
-        console.warn("[pi-integration-eof] pi binary not found — skipping");
+      const piCheck = spawnSync("which", ["pi"], { encoding: "utf-8" });
+      if (piCheck.status !== 0) {
+        console.warn("[pi-integration-eof] pi binary not found in PATH — skipping");
         return;
       }
       const model = process.env.PI_MODEL ?? "google/gemini-2.0-flash-exp";
