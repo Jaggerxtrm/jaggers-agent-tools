@@ -2,8 +2,8 @@
   "version": 1,
   "source": {
     "kind": "ref",
-    "ref": "bcdbd30cb8248155c0e57dd9243f6d32c612bab9",
-    "resolved_sha": "bcdbd30cb8248155c0e57dd9243f6d32c612bab9",
+    "ref": "0253e3e4b823de419bf1acc54f07eb618e10a054",
+    "resolved_sha": "0253e3e4b823de419bf1acc54f07eb618e10a054",
     "repo_path": "../specialists",
     "source_path": "config/skills"
   },
