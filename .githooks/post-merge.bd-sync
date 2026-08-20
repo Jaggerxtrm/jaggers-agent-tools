@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Beads/Dolt sync chained from .githooks/post-merge (see that file).
-#
+# Beads/Dolt sync chained from the post-merge hook.
+: "${BEADS_FSCK_TIMEOUT:=600}"
 # Pulls Beads data from the GitHub-backed Dolt remote (refs/dolt/data) after a
 # Git pull/merge. A failed pull is reported loudly: the Git pull/merge command
 # reports failure (post-merge exit code) and the operator sees the message.
 set -uo pipefail
 
-# Skip when beads is unavailable or this checkout has no beads database.
 if ! command -v bd >/dev/null 2>&1 || ! bd where >/dev/null 2>&1; then
   exit 0
 fi
