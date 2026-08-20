@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.6] - 2026-08-20
+
+### Fixed
+- Replace hardcoded pi path with PATH lookup ([cc98590](https://github.com/xtrm-dev/core/commit/cc98590b3c4c319a1882782fa5a310f8a063d7e9))
+
 ## [0.11.5] - 2026-08-20
 
 Broad reliability sweep on the launch model plus a Pi extension polish pass. Structured launch outcomes are now schema-validated, refuse invalid slugs before spawning, preflight the codex/claude/pi paths, and degrade cleanly on incomplete persistence — the code path every session starts through. Pi extension gets a rendering refresh: phase-colored tool prefixes (dim command when success), preserved tree indentation on wrapped tool lines, flat rows for external tools, char counts on collapsed thinking rows, and accented bash command-names + light-magenta separators for readable multi-command lines. Also new: `xt worktree reap` for reclaiming abandoned worktrees, an experimental Codex runtime with K4 distribution parity, a dedicated `read-line-numbers` Pi extension that owns model-facing line numbering, a Python kernel + global prompt doctrine subsystem (`xtrm-3ljgz`), a `board-audit` hook feature (bd exporter + PR-checkpoint adapter), and the `sp log` monitor-recipe corrections in the `using-specialists` skill that fix silent-fail monitors on keep-alive specialists (via specialists v3.21.5 re-vendor).
