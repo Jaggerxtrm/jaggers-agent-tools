@@ -18,6 +18,83 @@ project-agnostic — adapt the allowlists and dependabot ecosystems per repo.
 Do NOT use this skill if the repo already has a working `dependabot.yml` AND
 all three workflows (`osv-scanner.yml`, `semgrep.yml`, `gitleaks.yml`).
 
+## Branch model — propose on every bootstrap
+
+Every bootstrap — fresh **or** already-security-bootstrapped — MUST propose
+the promoted-only-to-main branch model before wiring anything else:
+
+- `dev` is the integration branch and the repo's default. Feature PRs
+  target `dev`; CI runs there.
+- `main` is stable/released only, reachable only via an explicit
+  `dev → main` promotion PR (or a tagged release). Nothing feature-shaped
+  merges directly.
+- Feature branches (and worktrees) always cut from `origin/dev`, never
+  from `main`.
+
+### Why
+
+Without this split, `main` conflates two lifecycles — the "keep integrating"
+surface and the "known-good, deployable" pointer — and every failed feature
+PR churns the release branch. Separating them lets the security pipeline's
+required checks live on `main` as a **promotion gate** (cheap to enforce,
+rare to run) instead of as churn on every feature PR.
+
+Skip only the sub-steps that are already true; never skip the whole section
+because the repo "already has security" — an existing pipeline without this
+model is exactly the case where the model needs to be added.
+
+### Steps
+
+```bash
+# 1. Create `dev` from the current default if missing.
+git fetch origin --quiet
+git rev-parse --verify origin/dev >/dev/null 2>&1 \
+  || git push origin origin/main:refs/heads/dev
+
+# 2. Make `dev` the repo default.
+gh repo edit --default-branch dev
+git remote set-head origin dev
+
+# 3. Ruleset on `main` — the promotion gate. Required checks match whatever
+#    workflows this pipeline ships (adjust the contexts list to match; if
+#    the pr-review-gate is enabled, include it here too).
+gh api -X POST "/repos/$OWNER/$REPO/rulesets" --input - <<'EOF'
+{ "name": "main-protection", "target": "branch", "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "allowed_merge_methods": ["merge", "squash", "rebase"] } },
+    { "type": "required_status_checks", "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [
+          { "context": "OSV scan" }, { "context": "Semgrep scan" },
+          { "context": "Gitleaks scan" }, { "context": "pr-review-gate" }
+        ] } }
+  ]
+}
+EOF
+```
+
+The local pre-push hook already blocks direct pushes to `main`; the ruleset
+makes the server enforce the same rule for anyone who pushes without hooks.
+
+If the repo uses worktrees, ship a `scripts/new-worktree.sh` that always
+branches from `origin/dev` (never from `main`), plus a matching alias:
+
+```bash
+git config alias.wt '!f() { "$(git rev-parse --show-toplevel)/scripts/new-worktree.sh" "$@"; }; f'
+```
+
+### Workflow triggers
+
+Workflows shipped by this pipeline should trigger on `[dev, main]` (push and
+PR), so both the integration branch and the promotion gate get the same
+scans. `scripts/semgrep-diff.sh` derives its baseline dynamically (`@{u}`
+→ `origin/dev` → `origin/main`) so no hard-coded baseline needs changing.
+
 ## Architecture (5 layers)
 
 ```
