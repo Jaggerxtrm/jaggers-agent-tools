@@ -96,3 +96,13 @@ if command -v bd >/dev/null 2>&1; then
   if [ "$_bd_exit" -ne 0 ]; then exit "$_bd_exit"; fi
 fi
 # --- END BEADS INTEGRATION v1.2.1 ---
+# --- BEGIN custom: board-audit pr-checkpoint before push ---
+# Publishes a FRESH PR-checkpoint handoff for every push to a PR branch: the
+# adapter performs the code push itself (--no-verify), then binds the
+# checkpoint to the now-remote PR head, so the handoff is current, not stale.
+# Never blocks the code push: adapter failures only warn. Any agent in the
+# repository can verify the evidence via board-audit pr-status <pr> --check.
+if [ -x "/home/dawid/dev/core/.githooks/board-audit-pr-adapter.sh" ]; then
+    "/home/dawid/dev/core/.githooks/board-audit-pr-adapter.sh" "$@" || true
+fi
+# --- END custom ---
