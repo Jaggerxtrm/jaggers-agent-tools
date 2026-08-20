@@ -149,6 +149,17 @@ deliberately excludes your own panes, keeps you responsive without burning turns
 scheduled wakeup keeps firing with nothing to do, the monitor is misconfigured — fix the
 signal rather than raising the frequency.
 
+For a delegated **specialist** job — especially `--keep-alive` roles where
+`sp result --wait` hangs on the `waiting` state — compose `Monitor` around the live
+follow stream (`sp log --job <id> -f --json` or `sp feed <id> --json`, never
+`sp forensic` which is post-hoc only) and filter for every terminal matcher:
+`done | error | stale | complete | completed | waiting | failed | cancelled | crashed`
+plus `event_family=error`. Deduplicate on transition so a chatty job does not fill
+your inbox. Full recipe with a runnable filter and the "silence is not success"
+alternation lives in
+`using-specialists/references/monitoring.md` § *Event-Driven Monitoring For
+Keep-Alive Specialists*.
+
 ## Rulings and reviews: state the constraint, not the mechanism
 
 When you direct another agent, describe the invariant to satisfy and the failure to
