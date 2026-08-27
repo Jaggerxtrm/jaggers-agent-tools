@@ -26,15 +26,61 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 const DRIVER = `
-import json, sys, time, traceback, contextlib, io, os
+import json, sys, time, traceback, contextlib, io, os, importlib
+
+# Long-lived kernel: never write .pyc files. Python's bytecode cache is mtime-
+# resolution stale — a skill edit inside the same second then re-imports stale
+# bytecode after a del sys.modules (the reload_skills trap). No cache, no trap.
+sys.dont_write_bytecode = True
 
 _ns = {}
+_sk_errors = []
+
+# skillbridge (xtrm-h7uwi.1): mount python-backed skills as importable kernel
+# modules. PI_SKILL_PATHS is os.pathsep-joined roots; each is prepended to
+# sys.path (zero-install mount — skills have no external deps; a pythonBin
+# override is the escape hatch). PI_SKILL_IMPORTS is a comma list of module
+# names; each is imported and bound into _ns under its name. Per-module
+# failures are recorded, never fatal — a broken skill must not kill the kernel.
+for _p in (os.environ.get("PI_SKILL_PATHS", "") or "").split(os.pathsep):
+    _p = _p.strip()
+    if _p and _p not in sys.path:
+        sys.path.insert(0, _p)
+for _name in (os.environ.get("PI_SKILL_IMPORTS", "") or "").split(","):
+    _name = _name.strip()
+    if not _name:
+        continue
+    try:
+        _ns[_name] = importlib.import_module(_name)
+    except Exception as _e:
+        _sk_errors.append({"module": _name, "ename": type(_e).__name__, "evalue": str(_e)})
+# Loop vars above are module-level (never in _ns); leave them, they are harmless.
+
+def _reload_skills():
+    """Re-import every mounted skill module (dev-loop honesty: del sys.modules,
+    re-import, refresh the binding; record per-module failures, never raise).
+    Only PI_SKILL_IMPORTS names are touched — user-imported modules in _ns are
+    left alone."""
+    for _name in (os.environ.get("PI_SKILL_IMPORTS", "") or "").split(","):
+        _name = _name.strip()
+        if not _name:
+            continue
+        try:
+            del sys.modules[_name]
+        except KeyError:
+            pass
+        try:
+            _ns[_name] = importlib.import_module(_name)
+        except Exception as _e:
+            _sk_errors.append({"module": _name, "ename": type(_e).__name__, "evalue": str(_e)})
+
 
 def run_cell(code, reset=False, cwd=None):
     if reset:
@@ -63,7 +109,21 @@ def run_cell(code, reset=False, cwd=None):
         "stderr": err.getvalue(),
         "error": error,
         "duration_ms": int((time.time() - start) * 1000),
+        "audit": list(getattr(_ns, "_AUDIT", [])),
+        "sk_errors": list(_sk_errors),
     }
+
+def reload_skills():
+    """Re-import every mounted skill module and return per-module status."""
+    _sk_errors.clear()
+    _reload_skills()
+    status = {}
+    for _name in (os.environ.get("PI_SKILL_IMPORTS", "") or "").split(","):
+        _name = _name.strip()
+        if not _name:
+            continue
+        status[_name] = "ok" if _name in _ns else "error"
+    return status
 
 def main():
     sys.stdout.write(json.dumps({"ready": True, "python": sys.version.split()[0]}) + "\\n")
@@ -79,6 +139,8 @@ def main():
             sys.stdout.flush()
             continue
         res = run_cell(req.get("code") or "", bool(req.get("reset")), req.get("cwd"))
+        if req.get("reload_skills"):
+            res["reload_skills"] = reload_skills()
         res["seq"] = req.get("seq")
         sys.stdout.write(json.dumps(res) + "\\n")
         sys.stdout.flush()
@@ -98,6 +160,12 @@ export interface CellResult {
 	stderr: string;
 	error: { ename: string; evalue: string; traceback: string } | null;
 	duration_ms: number;
+	/** Kernel-side mutation audit entries (xtrm-h7uwi.3 convention: _AUDIT list). */
+	audit?: Array<Record<string, unknown>>;
+	/** Per-module import status at boot and after reload_skills (xtrm-h7uwi.1). */
+	sk_errors?: Array<Record<string, string>>;
+	/** reload_skills request result (xtrm-h7uwi.1). */
+	reload_skills?: Record<string, string>;
 }
 
 export interface PythonKernelOptions {
@@ -107,6 +175,86 @@ export interface PythonKernelOptions {
 	cellTimeoutMs?: number;
 	/** Driver-ready timeout; default 10s. */
 	startTimeoutMs?: number;
+}
+
+// skillbridge (xtrm-h7uwi.1): an importable skill module found in a skills root.
+// Convention (prime-agent Agent Skills): SKILL.md + src/<import_name>/**/__init__.py.
+export interface SkillModule {
+	/** Import name, e.g. "sre_chain" (package name). */
+	name: string;
+	/** The root to prepend to sys.path: <skillDir>/src (parent of the package). */
+	path: string;
+	/** SKILL.md frontmatter description, first line, trimmed. */
+	blurb: string;
+}
+
+/** Roots scanned for python-backed skills, best-effort (missing dirs are skipped). */
+export function skillRoots(): string[] {
+	const home = process.env.HOME ?? "";
+	return [
+		...((process.env.PI_SKILL_PATHS ?? "") ? (process.env.PI_SKILL_PATHS ?? "").split(":") : []),
+		...((process.env.PI_SKILL_ROOTS ?? "") ? (process.env.PI_SKILL_ROOTS ?? "").split(":") : []),
+		join(home, ".pi", "agent", "skills"),
+		join(home, ".claude", "skills"),
+	];
+}
+
+/** Scan the known skill roots for python-backed skills (SKILL.md + src/<import>). */
+export function discoverSkillModules(roots: readonly string[] = skillRoots()): SkillModule[] {
+	const found: SkillModule[] = [];
+	const seen = new Set<string>();
+	for (const root of roots) {
+		let entries: string[] = [];
+		try {
+			entries = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+		} catch {
+			continue;
+		}
+		for (const name of entries.sort()) {
+			if (seen.has(name)) continue;
+			const skillDir = join(root, name);
+			const skillMd = join(skillDir, "SKILL.md");
+			const srcDir = join(skillDir, "src");
+			let packageDir: string | undefined;
+			try {
+				packageDir = findPackageDir(srcDir);
+			} catch {
+				packageDir = undefined;
+			}
+			if (!existsSync(skillMd) || !packageDir) continue;
+			seen.add(name);
+			found.push({
+				name,
+				path: srcDir,
+				blurb: skillBlurb(skillMd),
+			});
+		}
+	}
+	return found.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Find the importable package dir directly under src (exactly one __init__.py package). */
+function findPackageDir(srcDir: string): string | undefined {
+	let childDirs: string[] = [];
+	try {
+		childDirs = readdirSync(srcDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+	} catch {
+		return undefined;
+	}
+	const candidates = childDirs.filter((d) => existsSync(join(srcDir, d, "__init__.py")));
+	return candidates.length === 1 ? join(srcDir, candidates[0]) : undefined;
+}
+
+/** Extract the `description:` line from a SKILL.md frontmatter block, if present. */
+export function skillBlurb(skillMd: string): string {
+	try {
+		const text = readFileSync(skillMd, "utf8");
+		const m = text.match(/^description:\s*(.+)$/m);
+		return m ? m[1].trim() : "";
+	}
+	catch {
+		return "";
+	}
 }
 
 export class PythonKernel {
@@ -125,15 +273,18 @@ export class PythonKernel {
 	private readonly pythonBin: string;
 	private readonly cellTimeoutMs: number;
 	private readonly startTimeoutMs: number;
+	private readonly skills: SkillModule[];
 
 	constructor(
 		private readonly cwd: string,
 		private readonly onRestart: (message: string) => void,
 		options: PythonKernelOptions = {},
+		skills: SkillModule[] = [],
 	) {
 		this.pythonBin = options.pythonBin ?? DEFAULT_PYTHON_BIN;
 		this.cellTimeoutMs = options.cellTimeoutMs ?? DEFAULT_CELL_TIMEOUT_MS;
 		this.startTimeoutMs = options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
+		this.skills = skills;
 	}
 
 	ensureStarted(): Promise<void> {
@@ -157,6 +308,16 @@ export class PythonKernel {
 
 		const proc = spawn(this.pythonBin, ["-u", driverPath], {
 			cwd: this.cwd,
+			env: {
+				...process.env,
+				...(this.skills.length > 0
+					? {
+							// skillbridge: mount roots on sys.path and pre-import modules into _ns.
+							PI_SKILL_PATHS: [...new Set(this.skills.map((s) => s.path))].join(":"),
+							PI_SKILL_IMPORTS: this.skills.map((s) => s.name).join(","),
+						}
+					: {}),
+			},
 			stdio: ["pipe", "pipe", "pipe"],
 			// Own process group so we can kill code-spawned children too.
 			detached: true,
@@ -294,6 +455,26 @@ export class PythonKernel {
 		});
 	}
 
+	/** Reload every mounted skill module in the live kernel (dev-loop honesty). */
+	async reloadSkills(): Promise<Record<string, string>> {
+		await this.ensureStarted();
+		if (!this.proc) throw new Error(this.lastSpawnError ?? `${this.pythonBin} kernel is not running`);
+		const seq = this.nextSeq++;
+		return new Promise<Record<string, string>>((resolve, reject) => {
+			const timer = setTimeout(() => {
+				const message = `skill reload timed out after ${this.cellTimeoutMs / 1000}s`;
+				reject(new Error(message));
+				this.kill();
+			}, this.cellTimeoutMs);
+			this.waiters.push((r) => {
+				clearTimeout(timer);
+				if (r.error) reject(new Error(`${r.error.ename}: ${r.error.evalue}`));
+				else resolve(r.reload_skills ?? {});
+			});
+			this.proc!.stdin.write(JSON.stringify({ seq, reload_skills: true }) + "\n");
+		});
+	}
+
 	kill(): void {
 		const proc = this.proc;
 		this.proc = undefined;
@@ -341,10 +522,17 @@ export type KernelFactory = (cwd: string, sessionId: string) => PythonKernel;
 export default function pythonKernelExtension(pi: ExtensionAPI, opts: { kernelFactory?: KernelFactory } = {}) {
 	const kernels = new Map<string, PythonKernel>();
 
+	// skillbridge: scan once at init; skill paths are static per environment.
+	const skillModules = discoverSkillModules();
+	const importableLine =
+		skillModules.length > 0
+			? `\nImportable skill modules: ${skillModules.map((s) => s.name).join(", ")} — pre-imported in namespace; help(x) for docs.`
+			: "";
+
 	function kernelFor(cwd: string, sessionId: string): PythonKernel {
 		let k = kernels.get(sessionId);
 		if (!k) {
-			k = opts.kernelFactory ? opts.kernelFactory(cwd, sessionId) : new PythonKernel(cwd, () => {});
+			k = opts.kernelFactory ? opts.kernelFactory(cwd, sessionId) : new PythonKernel(cwd, () => {}, {}, skillModules);
 			kernels.set(sessionId, k);
 		}
 		return k;
@@ -354,7 +542,9 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: { kernelFa
 		name: "python",
 		label: "Python (persistent kernel)",
 		description:
-			"Execute Python code in a persistent interpreter. Variables, imports, and functions persist across calls until reset: true. Code runs with your user permissions and is not sandboxed — treat a cell like any shell command. Run shell commands with subprocess when needed; for a project's own tests, scripts, and CLIs use the project's documented environment instead.",
+			"Execute Python code in a persistent interpreter. Variables, imports, and functions persist across calls until reset: true. Code runs with your user permissions and is not sandboxed — treat a cell like any shell command. Run shell commands with subprocess when needed; for a project's own tests, scripts, and CLIs use the project's documented environment instead." +
+			importableLine,
+
 		promptSnippet: "python - run code in a persistent kernel; state survives across calls",
 		promptGuidelines: [
 			"Use python for multi-step processing, parsing, aggregation, and fan-out: one cell replaces many round trips, and named variables persist across cells.",
@@ -369,6 +559,9 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: { kernelFa
 			reset: Type.Optional(
 				Type.Boolean({ description: "Clear the kernel namespace and return to the working directory." }),
 			),
+			reload_skills: Type.Optional(
+				Type.Boolean({ description: "Re-import every mounted skill module (del sys.modules + re-import) and refresh the namespace." }),
+			),
 		}),
 		async execute(toolCallId, params, signal, _onUpdate, ctx) {
 			const sessionId = ctx.sessionManager.getSessionId();
@@ -376,6 +569,18 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: { kernelFa
 			const onAbort = () => kernel.kill();
 			signal?.addEventListener("abort", onAbort, { once: true });
 			try {
+				if (params.reload_skills === true) {
+					// skillbridge: re-import every mounted skill module in the live kernel.
+					const status = await kernel.reloadSkills();
+					const failed = Object.entries(status).filter(([, s]) => s !== "ok");
+					const lines = Object.entries(status).map(([n, s]) => `${n}: ${s}`);
+					return {
+						content: [{ type: "text", text: `reload_skills: ${lines.join(", ") || "(no modules)"}` }],
+						details: { status: failed.length > 0 ? "error" : "ok", reload_skills: status },
+						isError: failed.length > 0,
+					};
+				}
+
 				const result = await kernel.runCell(params.code, params.reset === true, params.reset ? ctx.cwd : undefined);
 
 				let text = result.stdout;
