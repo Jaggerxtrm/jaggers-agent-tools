@@ -517,7 +517,7 @@ describe("xtrm-ui external tool rendering", () => {
     expect(footer).toMatch(/^└─ showing 6\/94 lines \(ctrl\+o expand\) · 1\.6s · \d+B$/);
   });
 
-  it("adds a Serena badge and pretty-prints single-line JSON", () => {
+  it("renders a Serena row in native style and pretty-prints single-line JSON", () => {
     const rendered = renderExternalToolBackgroundLines(
       ['[{"name_path":"highlightExternalToolBadge","kind":"Function"}]'],
       200,
@@ -526,12 +526,13 @@ describe("xtrm-ui external tool rendering", () => {
       "find_symbol",
     );
 
-    expect(rendered[0]).toContain("\x1b[38;2;3;8;12m\x1b[48;2;82;210;255m Serena \x1b[39m\x1b[49m \x1b[1mfind_symbol\x1b[22m");
+    // • used <Serena #9a8bff bold> <find_symbol bold dim>
+    expect(rendered[0]).toBe("• \x1b[1mused\x1b[22m \x1b[38;2;154;139;255m\x1b[1mSerena\x1b[22m\x1b[39m \x1b[2m\x1b[1mfind_symbol\x1b[22m\x1b[22m");
     expect(rendered.length).toBeGreaterThan(2);
     expect(rendered.join("\n")).toContain('"name_path": "highlightExternalToolBadge"');
   });
 
-  it("uses the real name for generic external tool badges", () => {
+  it("uses the real name for generic external tools", () => {
     const rendered = renderExternalToolBackgroundLines(
       ["plain result"],
       200,
@@ -540,10 +541,10 @@ describe("xtrm-ui external tool rendering", () => {
       "mcp_custom_tool",
     );
 
-    expect(rendered[0]).toContain("\x1b[38;2;3;8;12m\x1b[48;2;178;190;210m mcp \x1b[39m\x1b[49m \x1b[1mcustom_tool\x1b[22m");
+    expect(rendered[0]).toBe("• \x1b[1mused\x1b[22m \x1b[38;2;154;139;255m\x1b[1mmcp\x1b[22m\x1b[39m \x1b[2m\x1b[1mcustom_tool\x1b[22m\x1b[22m");
   });
 
-  it("keeps a colored provider label and action for raw GitNexus output", () => {
+  it("keeps a colored provider label and tool for raw GitNexus output", () => {
     const rendered = renderExternalToolBackgroundLines(
       ["[GitNexus]", "{", '  "status": "found"', "}"],
       200,
@@ -552,28 +553,40 @@ describe("xtrm-ui external tool rendering", () => {
       "gitnexus_query",
     );
 
-    expect(rendered[0]).toContain("\x1b[38;2;3;8;12m\x1b[48;2;178;154;255m GitNexus \x1b[39m\x1b[49m \x1b[1mquery\x1b[22m");
+    expect(rendered[0]).toBe("• \x1b[1mused\x1b[22m \x1b[38;2;154;139;255m\x1b[1mGitNexus\x1b[22m\x1b[39m \x1b[2m\x1b[1mquery\x1b[22m\x1b[22m");
   });
 
-  it("keeps the static chip identical across lifecycle states (no color changing)", () => {
+  it("dims the dot and brightens the tool on success, keeps them muted while pending", () => {
     const stripAnsi = (value: string) => value.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
-    const states = [
-      "› [Serena] execute_shell_command",
-      "[Serena] execute_shell_command",
-      "[Serena] execute_shell_command",
-    ] as const;
-    const expected = "›  Serena  execute_shell_command";
+    const statuses = ["pending", "success", "error"] as const;
+    const expected = [
+      "• used Serena execute_shell_command",
+      "• used Serena execute_shell_command",
+      "• used Serena execute_shell_command",
+    ];
 
-    for (const header of states) {
+    for (let index = 0; index < statuses.length; index++) {
+      const status = statuses[index];
       const rendered = renderExternalToolBackgroundLines(
-        [header, "result"],
+        ["[Serena] execute_shell_command", "result"],
         200,
         "serena",
         false,
         "execute_shell_command",
+        undefined,
+        status,
       );
-      expect(stripAnsi(rendered[0] ?? "")).toBe(expected);
-      expect(rendered[0]).toContain("\x1b[38;2;3;8;12m\x1b[48;2;82;210;255m Serena \x1b[39m\x1b[49m \x1b[1mexecute_shell_command\x1b[22m");
+      // Plain text layout is identical across states (same stripped content).
+      expect(stripAnsi(rendered[0] ?? "")).toBe(expected[index]);
+      const line = rendered[0] ?? "";
+      if (status === "success") {
+        expect(line).toContain("\x1b[2m•\x1b[22m"); // dot dimmed on success
+        expect(line).toContain("\x1b[1mexecute_shell_command\x1b[22m"); // tool bright (no dim)
+      } else {
+        expect(line).toContain("\x1b[2m\x1b[1mexecute_shell_command\x1b[22m\x1b[22m"); // tool dim while pending/error
+      }
+      // Extension is always #9a8bff bold.
+      expect(line).toContain("\x1b[38;2;154;139;255m\x1b[1mSerena\x1b[22m\x1b[39m");
     }
   });
 

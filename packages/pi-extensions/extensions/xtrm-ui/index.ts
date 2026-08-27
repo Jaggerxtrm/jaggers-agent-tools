@@ -430,8 +430,40 @@ type PatchableToolExecutionComponent = {
 type ExternalToolFrameKind = "serena" | "gitnexus" | "structured" | "process" | "external";
 
 const PATCHED_EXTERNAL_TOOL_FRAME = "__xtrmUiExternalToolFrame";
-const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 21;
+const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 22;
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+
+// XTRM extension accent (#9a8bff) — pi's theme.fg() only accepts named tokens and
+// throws on raw hex, so emit the truecolor SGR directly (repo already uses raw
+// SGR escapes for bold).
+const XTRM_EXT_ACCENT = "\x1b[38;2;154;139;255m";
+
+type ToolRowStatus = "pending" | "success" | "error";
+
+function boldSgr(text: string): string {
+  return `\x1b[1m${text}\x1b[22m`;
+}
+
+/**
+ * External tool row header in native tool style:
+ *   • used <Extension> <tool>
+ *   - dot: plain prompt color; dim once the command succeeds (like native rows)
+ *   - "used": bold action word
+ *   - extension: #9a8bff, bold
+ *   - tool: bold, dim until success, default (light) when success
+ */
+function externalToolHeaderLine(
+  status: ToolRowStatus,
+  provider: string,
+  tool?: string,
+): string {
+  const dot = status === "success" ? "\x1b[2m•\x1b[22m" : "•";
+  const ext = `${XTRM_EXT_ACCENT}${boldSgr(provider)}\x1b[39m`;
+  const toolColor = status === "success" ? "" : "\x1b[2m";
+  const toolReset = status === "success" ? "" : "\x1b[22m";
+  const toolName = tool ? ` ${toolColor}${boldSgr(tool)}${toolReset}` : "";
+  return `${dot} ${boldSgr("used")} ${ext}${toolName}`;
+}
 
 function stripAnsi(text: string): string {
   return text.replace(ANSI_PATTERN, "");
@@ -491,18 +523,6 @@ function trimRenderedToolLines(lines: string[]): string[] {
   return lines.slice(start, end).map((line) => line.replace(/\s+$/u, ""));
 }
 
-function externalToolBadgeColor(kind: ExternalToolFrameKind, text: string): string {
-  const bgColors: Record<ExternalToolFrameKind, [number, number, number]> = {
-    serena: [82, 210, 255],
-    gitnexus: [178, 154, 255],
-    structured: [205, 166, 255],
-    process: [92, 226, 255],
-    external: [178, 190, 210],
-  };
-  const [badgeR, badgeG, badgeB] = bgColors[kind];
-  return `\x1b[38;2;3;8;12m\x1b[48;2;${badgeR};${badgeG};${badgeB}m ${text} \x1b[39m\x1b[49m`;
-}
-
 export function collapsedExternalToolLines(contentLines: string[], expanded: boolean): string[] {
   if (expanded || contentLines.length <= 6) return contentLines;
   return [
@@ -550,6 +570,7 @@ export function renderExternalToolBackgroundLines(
   expanded: boolean,
   toolName?: string,
   durationMs?: number,
+  status: ToolRowStatus = "pending",
 ): string[] {
   let displayLines = contentLines;
   const raw = contentLines.length === 1 ? contentLines[0]?.trim() : undefined;
@@ -566,8 +587,7 @@ export function renderExternalToolBackgroundLines(
     || /^[•›]\s+\S+/u.test(firstLine);
   const header = externalToolHeader(kind, toolName, firstLine);
   const payloadLines = hasHeader ? displayLines.slice(1) : displayLines;
-  const action = header.action ? ` \x1b[1m${header.action}\x1b[22m` : "";
-  const headerLine = `${TOOL_ROW_MARKER} ${externalToolBadgeColor(kind, header.provider)}${action}`;
+  const headerLine = externalToolHeaderLine(status, header.provider, header.action);
   displayLines = [headerLine, ...payloadLines];
 
   const renderedHeader = displayLines[0] ?? "";
@@ -599,10 +619,11 @@ function renderExternalToolLines(
   expanded = false,
   toolName?: string,
   durationMs?: number,
+  status: ToolRowStatus = "pending",
 ): string[] {
   const contentLines = trimRenderedToolLines(lines).filter((line) => !isBlankRenderedLine(line));
   return contentLines.length > 0
-    ? renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs)
+    ? renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs, status)
     : [];
 }
 
@@ -638,6 +659,7 @@ async function installExternalToolFramePatch(): Promise<void> {
     const firstContentIndex = rendered.findIndex((line) => !isBlankRenderedLine(line));
     const leading = firstContentIndex > 0 ? rendered.slice(0, firstContentIndex) : [];
     const content = extractResultTextLines(this) ?? rendered;
+    const status: ToolRowStatus = this.result ? (this.result.isError ? "error" : "success") : "pending";
     let styled: string[];
     try {
       styled = renderExternalToolLines(
@@ -647,6 +669,7 @@ async function installExternalToolFramePatch(): Promise<void> {
         Boolean(this.expanded),
         this.toolName,
         this.__xtrmExternalDurationMs,
+        status,
       );
     } catch {
       // A patched renderer must never take the interactive mode down.
