@@ -248,27 +248,38 @@ function maybeFileUrlToPath(value: string): string {
 	return value.startsWith("file:") ? fileURLToPath(value) : value;
 }
 
+export function piRuntimeEntryForCliPath(cliPath: string): string | undefined {
+	if (cliPath.endsWith("/dist/bundle/cli.js")) return join(dirname(cliPath), "index.js");
+	if (cliPath.endsWith("/dist/cli.js")) return join(dirname(cliPath), "index.js");
+	return undefined;
+}
+
 function resolvePiCodingAgentEntryPath(): string {
 	const candidates: string[] = [];
 
 	const argvPath = process.argv[1];
 	if (argvPath && existsSync(argvPath)) {
-		const realArgvPath = realpathSync(argvPath);
-		if (realArgvPath.endsWith("/dist/cli.js")) {
-			candidates.push(join(dirname(realArgvPath), "index.js"));
-		}
+		const runtimeEntry = piRuntimeEntryForCliPath(realpathSync(argvPath));
+		if (runtimeEntry) candidates.push(runtimeEntry);
 	}
 
-	candidates.push(
-		join(dirname(process.execPath), "..", "lib", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js"),
+	const globalDist = join(
+		dirname(process.execPath),
+		"..",
+		"lib",
+		"node_modules",
+		"@earendil-works",
+		"pi-coding-agent",
+		"dist",
 	);
+	candidates.push(join(globalDist, "bundle", "index.js"), join(globalDist, "index.js"));
 
 	try {
 		candidates.push(maybeFileUrlToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
 	} catch {}
 
 	const entryPath = candidates.find((candidate) => existsSync(candidate));
-	if (!entryPath) throw new Error("Could not resolve pi-coding-agent entry path");
+	if (!entryPath) throw new Error("Could not resolve active pi-coding-agent runtime entry path");
 	return entryPath;
 }
 
@@ -345,21 +356,18 @@ export function selectPatchBase<T>(
 
 async function installThinkingPreviewPatch(): Promise<void> {
 	const entryPath = resolvePiCodingAgentEntryPath();
-	const themeMod = await import(
-		pathToFileURL(join(dirname(entryPath), "modes", "interactive", "theme", "theme.js")).href,
-	) as { theme: { bold: (text: string) => string; fg: (color: string, text: string) => string } };
-	const t = themeMod.theme;
-	const style: ThinkingRowStyle = {
-		// theme.bold() is a chalk no-op in this runtime; emit the SGR escape directly.
-		label: (text) => `\x1b[1m${t.fg("thinkingText", text)}\x1b[22m`,
-		recap: (text) => t.fg("thinkingText", text),
-		hint: (text) => t.fg("dim", text),
-		sep: t.fg("dim", " · "),
-	};
-
-	const componentPath = join(dirname(entryPath), "modes", "interactive", "components", "assistant-message.js");
-	const mod = await import(pathToFileURL(componentPath).href) as {
+	const mod = await import(pathToFileURL(entryPath).href) as {
 		AssistantMessageComponent?: AssistantMessageComponentCtor;
+	};
+	// xtrm-dark and xtrm-light both map thinkingText/dim to these values. Raw
+	// SGR avoids importing the unbundled theme singleton when pi runs bundle/cli.js.
+	const thinkingText = (text: string) => `\x1b[38;2;167;167;167m${text}\x1b[39m`;
+	const dimText = (text: string) => `\x1b[38;2;138;138;138m${text}\x1b[39m`;
+	const style: ThinkingRowStyle = {
+		label: (text) => `\x1b[1m${thinkingText(text)}\x1b[22m`,
+		recap: thinkingText,
+		hint: dimText,
+		sep: dimText(" · "),
 	};
 	const proto = mod.AssistantMessageComponent?.prototype as
 		| (AssistantMessageComponentCtor["prototype"] & {
@@ -658,8 +666,7 @@ function renderExternalToolLines(
 
 async function installExternalToolFramePatch(): Promise<void> {
   const entryPath = resolvePiCodingAgentEntryPath();
-  const componentPath = join(dirname(entryPath), "modes", "interactive", "components", "tool-execution.js");
-  const mod = await import(pathToFileURL(componentPath).href) as {
+  const mod = await import(pathToFileURL(entryPath).href) as {
     ToolExecutionComponent?: ToolExecutionComponentCtor;
   };
   const proto = mod.ToolExecutionComponent?.prototype as

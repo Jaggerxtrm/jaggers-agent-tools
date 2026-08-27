@@ -49,6 +49,7 @@ const {
 	DEFAULT_PREFS,
 	default: xtrmUiExtension,
 	fitThinkingRowToWidth,
+	piRuntimeEntryForCliPath,
 	renderExternalToolBackgroundLines,
 	selectPatchBase,
 } = await import("../../../packages/pi-extensions/extensions/xtrm-ui/index");
@@ -500,6 +501,22 @@ describe("xtrm-ui built-in tool rendering", () => {
     expect(handlers.tool_call).toBeUndefined();
     expect(handlers.tool_execution_end).toBeUndefined();
     expect(handlers.tool_result).toBeUndefined();
+  });
+});
+
+describe("xtrm-ui pi runtime resolution", () => {
+  it("targets the bundled runtime used by dist/bundle/cli.js", () => {
+    expect(piRuntimeEntryForCliPath("/opt/pi/dist/bundle/cli.js"))
+      .toBe("/opt/pi/dist/bundle/index.js");
+  });
+
+  it("keeps unbundled dist/cli.js compatibility", () => {
+    expect(piRuntimeEntryForCliPath("/opt/pi/dist/cli.js"))
+      .toBe("/opt/pi/dist/index.js");
+  });
+
+  it("rejects unrelated entry paths", () => {
+    expect(piRuntimeEntryForCliPath("/opt/other/cli.js")).toBeUndefined();
   });
 });
 
