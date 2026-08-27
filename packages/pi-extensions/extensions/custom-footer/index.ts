@@ -1,4 +1,5 @@
-/** XTRM footer: single-line statusline — path/branch, context/model, beads counts.
+/**
+ * XTRM footer: single-line statusline — path/branch, context/model, beads counts.
  *
  * xtrm-64pl0: the footer is a pure cache READER. It renders one line combining
  * path/branch, context usage, provider/model/thinking, and compact beads counts read
@@ -35,6 +36,11 @@ const CACHE_TTL = 5000;
 const REFRESH_TIMEOUT_MS = 2000;
 const TOOL_RESULT_REFRESH_DELAY_MS = 200;
 const FOOTER_REAPPLY_DELAY_MS = 40;
+
+// XTRM accent for the model name (#9a8bff) — theme.fg() only accepts named tokens
+// and throws on raw hex, so emit the truecolor SGR directly (the footer already
+// uses raw SGR escapes for bold path and thinking level).
+const XTRM_ACCENT = "\x1b[38;2;154;139;255m";
 
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
@@ -185,7 +191,7 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 					const usageColor = percentValue > 90 ? "error" : percentValue > 70 ? "warning" : "dim";
 					// Bold + default fg (not dim) so the path/branch reads first.
 					const head = `\x1b[1m${pwd}\x1b[22m`;
-					const line = `${head} ${theme.fg(usageColor, contextDisplay)} ${theme.fg("dim", modelDisplay)}${theme.fg("dim", beadsDisplay)}`;
+					const line = `${head} ${theme.fg(usageColor, contextDisplay)} ${XTRM_ACCENT}${modelDisplay}\x1b[39m${theme.fg("dim", beadsDisplay)}`;
 					return [truncateToWidth(line, width)];
 				},
 			};

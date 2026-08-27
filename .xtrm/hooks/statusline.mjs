@@ -24,6 +24,8 @@ const MAX_CACHE_BYTES = 16 * 1024;
 const REFRESH_LOCK = join(CACHE_DIR, 'xtrm-sl-refresh.lock');
 
 const R = '\x1b[0m', B = '\x1b[1m', B_ = '\x1b[22m', D = '\x1b[2m';
+// XTRM accent for the model name (#9a8bff) — mirrors the pi custom-footer.
+const EXT = '\x1b[38;2;154;139;255m';
 
 function cacheFile(cwd) {
   const key = createHash('md5').update(cwd).digest('hex').slice(0, 8);
@@ -182,7 +184,7 @@ function render(ctx, git, beadsCache, cwd) {
   const counts = beadsCache?.counts;
   let beadsStr = '';
   if (counts) beadsStr = ` o:${counts.open ?? 0} p:${counts.in_progress ?? 0}${counts.blocked ? ` b:${counts.blocked}` : ''}`;
-  process.stdout.write(`${head} ${D}${pctStr}/${formatTokens(windowSize)}${R} ${D}${modelStr}${R}${D}${beadsStr}${R}\n`);
+  process.stdout.write(`${head} ${D}${pctStr}/${formatTokens(windowSize)}${R} ${EXT}${modelStr}${R}${D}${beadsStr}${R}\n`);
 }
 
 if (process.argv[2] === '--refresh') {
