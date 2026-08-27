@@ -17,6 +17,8 @@
  *
  * With a registry, the surface is:
  *   (a) before_agent_start context note — service count + drift state
+ *       (checks both the canonical .service-knowledge-drift-pending and the
+ *       legacy .service-skills-drift-pending marker; canonical wins)
  *   (b) /service-knowledge:status — services, last_sync_ref vs git HEAD,
  *       drift marker presence, suggested action
  *   (c) guidance pointing at /updating-service-knowledge (NOT -skills)
@@ -33,6 +35,9 @@ const NEW_UMBRELLA = "service-knowledge";
 const LEGACY_UMBRELLA = "service-skills";
 const RESERVED_PACK_NAMES = new Set(["default", "optional", "user", "active", "local-legacy"]);
 const DRIFT_MARKER_REL = join(".xtrm", ".service-knowledge-drift-pending");
+// Wave-1 repos carry the legacy marker name (mercury/infra reality); the new
+// name wins when both are present (xtrm-6z6.2 coordinator finding).
+const LEGACY_DRIFT_MARKER_REL = join(".xtrm", ".service-skills-drift-pending");
 const RECONCILE_COMMAND = "/updating-service-knowledge";
 
 export interface ServiceRegistryPack {
@@ -116,9 +121,20 @@ function syncRefs(registry: { services: Record<string, Record<string, unknown>> 
 	return out;
 }
 
-/** Whether the post-merge drift sweep left a pending marker in this repo. */
+/**
+ * Whether a drift pending marker is present in this repo. Checks both the
+ * canonical (service-knowledge) and legacy (service-skills) marker names;
+ * the canonical one wins when both exist (xtrm-6z6.2).
+ */
 export function hasDriftMarker(cwd: string): boolean {
-	return existsSync(join(cwd, DRIFT_MARKER_REL));
+	return existsSync(join(cwd, DRIFT_MARKER_REL)) || existsSync(join(cwd, LEGACY_DRIFT_MARKER_REL));
+}
+
+/** The marker file actually present (canonical preferred), or null. */
+export function driftMarkerPath(cwd: string): string | null {
+	if (existsSync(join(cwd, DRIFT_MARKER_REL))) return DRIFT_MARKER_REL;
+	if (existsSync(join(cwd, LEGACY_DRIFT_MARKER_REL))) return LEGACY_DRIFT_MARKER_REL;
+	return null;
 }
 
 function packLabel(pack: ServiceRegistryPack): string {
@@ -128,13 +144,12 @@ function packLabel(pack: ServiceRegistryPack): string {
 /** Build the before_agent_start context note (service count + drift state). */
 function buildContextNote(cwd: string, packs: ServiceRegistryPack[]): string {
 	const total = packs.reduce((acc, p) => acc + (loadRegistry(p.registryPath)?.services ? Object.keys(loadRegistry(p.registryPath)!.services).length : 0), 0);
-	const drift = hasDriftMarker(cwd);
 	const lines = [
 		"<service_knowledge_context>",
 		`service registry: ${packs.length} pack(s), ${total} service(s)`,
 		...packs.map((p) => `- ${packLabel(p)} (${Object.keys(loadRegistry(p.registryPath)?.services ?? {}).length} services)`),
-		drift
-			? `drift: PENDING marker present (${DRIFT_MARKER_REL}) — reconcile with ${RECONCILE_COMMAND}`
+		driftMarkerPath(cwd)
+			? `drift: PENDING marker present (${driftMarkerPath(cwd)}) — reconcile with ${RECONCILE_COMMAND}`
 			: "drift: none detected",
 		"</service_knowledge_context>",
 	];
@@ -189,7 +204,8 @@ export default function serviceKnowledgeExtension(pi: ExtensionAPI, opts: Servic
 			}
 			const head = gitHead(repoCwd);
 			lines.push(`git HEAD: ${head ?? "(not a git repo)"}`);
-			lines.push(`drift marker (${DRIFT_MARKER_REL}): ${hasDriftMarker(repoCwd) ? "PRESENT" : "absent"}`);
+			const marker = driftMarkerPath(repoCwd);
+			lines.push(`drift marker: ${marker ? `PRESENT (${marker})` : "absent"}`);
 			const anyOutOfSync = packs.some((p) => {
 				const registry = loadRegistry(p.registryPath);
 				if (!registry) return false;
