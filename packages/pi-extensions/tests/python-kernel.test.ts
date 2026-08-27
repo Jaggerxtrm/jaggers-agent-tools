@@ -94,6 +94,25 @@ describe("python-kernel managed extension", () => {
     }
   });
 
+  test("skillbridge discovery: import name is the package dir, not the skill dir (xtrm-vs7f8)", () => {
+    const fx = tmpBase();
+    try {
+      // Skill dir is 'fiskill' but the importable package is src/sre_chain.
+      const skillDir = join(fx.dir, "fiskill");
+      mkdirSync(join(skillDir, "src", "sre_chain"), { recursive: true });
+      writeFileSync(join(skillDir, "SKILL.md"), "---\ndescription: e2e fixture\n---\n");
+      writeFileSync(join(skillDir, "src", "sre_chain", "__init__.py"), "VALUE = 1\n");
+
+      const modules = extension.discoverSkillModules([fx.dir]);
+      expect(modules).toHaveLength(1);
+      // The description must list the ACTUAL import name (what the kernel mounts).
+      expect(modules[0].name).toBe("sre_chain");
+      expect(modules[0].path).toBe(join(skillDir, "src"));
+    } finally {
+      fx.cleanup();
+    }
+  });
+
   test("skillbridge mounts fixture skills as importable kernel modules (no host round trips)", async () => {
     const fx = tmpBase();
     try {

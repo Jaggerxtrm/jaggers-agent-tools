@@ -148,7 +148,7 @@ describe("service-knowledge ext v1 (xtrm-6z6.1)", () => {
     }
   });
 
-  test("registry present → registers command + session_start handler", () => {
+  test("registry present → registers command + before_agent_start handler", () => {
     const fx = tmpBase();
     try {
       writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db", last_sync_ref: "abc12345" } });
@@ -156,19 +156,19 @@ describe("service-knowledge ext v1 (xtrm-6z6.1)", () => {
       extension.default(pi as any, { cwd: fx.dir });
       expect(pi.commands).toHaveLength(1);
       expect(pi.commands[0].name).toBe("service-knowledge:status");
-      expect(pi.listeners.has("session_start")).toBe(true);
+      expect(pi.listeners.has("before_agent_start")).toBe(true);
     } finally {
       fx.cleanup();
     }
   });
 
-  test("session_start emits a context note with service count + drift state", async () => {
+  test("before_agent_start emits a context note with service count + drift state", async () => {
     const fx = tmpBase();
     try {
       writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db" } });
       const pi = fakePi();
       extension.default(pi as any, { cwd: fx.dir });
-      const handler = pi.listeners.get("session_start")![0];
+      const handler = pi.listeners.get("before_agent_start")![0];
       const result = await handler({}, { cwd: fx.dir });
       expect(result?.message?.content).toContain("1 pack(s), 1 service(s)");
       expect(result?.message?.content).toContain("drift: none detected");

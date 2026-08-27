@@ -1,0 +1,40 @@
+{
+  "tools": [
+    {
+      "name": "python",
+      "label": "Python (persistent kernel)",
+      "description": "Execute Python code in a persistent interpreter. Variables, imports, and functions persist across calls until reset: true. Code runs with your user permissions and is not sandboxed — treat a cell like any shell command. Run shell commands with subprocess when needed; for a project's own tests, scripts, and CLIs use the project's documented environment instead.\nPrelude pre-loaded: json, re, os, sys, subprocess, Path (from pathlib).\nImportable skill modules: sre_chain — pre-imported in namespace; help(x) for docs.",
+      "promptSnippet": "python - run code in a persistent kernel; state survives across calls",
+      "promptGuidelines": [
+        "Use python for multi-step processing, parsing, aggregation, and fan-out: one cell replaces many round trips, and named variables persist across cells.",
+        "python state persists across calls (variables, imports, functions); pass reset: true to clear it.",
+        "os.chdir() inside a cell persists; reset returns to the working directory.",
+        "Code runs with your user permissions and is not sandboxed; treat a cell like a shell command.",
+        "For a project's own tests, scripts, and CLIs, use the project's documented environment (uv run, .venv/bin/python, npm run) rather than the kernel."
+      ],
+      "parameters": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Python code to execute in the persistent kernel."
+          },
+          "reset": {
+            "type": "boolean",
+            "description": "Clear the kernel namespace and return to the working directory."
+          },
+          "reload_skills": {
+            "type": "boolean",
+            "description": "Re-import every mounted skill module (del sys.modules + re-import) and refresh the namespace."
+          }
+        }
+      },
+      "executionMode": "sequential"
+    }
+  ],
+  "commands": [],
+  "sessionStartHandlers": 0
+}

@@ -16,7 +16,7 @@
  * source, so this gate is what keeps registrations airtight in non-service repos.
  *
  * With a registry, the surface is:
- *   (a) session_start context note — service count + drift state
+ *   (a) before_agent_start context note — service count + drift state
  *   (b) /service-knowledge:status — services, last_sync_ref vs git HEAD,
  *       drift marker presence, suggested action
  *   (c) guidance pointing at /updating-service-knowledge (NOT -skills)
@@ -125,7 +125,7 @@ function packLabel(pack: ServiceRegistryPack): string {
 	return `${pack.umbrellaName}@${pack.packDir.replace(/^.*\/\.xtrm\/skills\//, "")}`;
 }
 
-/** Build the session_start context note (service count + drift state). */
+/** Build the before_agent_start context note (service count + drift state). */
 function buildContextNote(cwd: string, packs: ServiceRegistryPack[]): string {
 	const total = packs.reduce((acc, p) => acc + (loadRegistry(p.registryPath)?.services ? Object.keys(loadRegistry(p.registryPath)!.services).length : 0), 0);
 	const drift = hasDriftMarker(cwd);
@@ -156,8 +156,10 @@ export default function serviceKnowledgeExtension(pi: ExtensionAPI, opts: Servic
 		return; // zero surface
 	}
 
-	// (a) session_start context note
-	pi.on("session_start", async (_event, ctx) => {
+	// (a) per-turn context note. before_agent_start is the documented injection
+	// point for a custom message into the LLM context (session_start return
+	// values are not consumed as messages — xtrm-vs7f8 audit finding).
+	pi.on("before_agent_start", async (_event, ctx) => {
 		return {
 			message: {
 				customType: "service-knowledge-context",
