@@ -4,7 +4,6 @@
 
 | Legacy path | New path | Notes |
 |---|---|---|
-| `packages/pi-extensions/extensions/auto-session-name` | `packages/pi-extensions/extensions/auto-session-name` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/beads` | `packages/pi-extensions/extensions/beads` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/compact-header` | `packages/pi-extensions/extensions/compact-header` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/custom-footer` | `packages/pi-extensions/extensions/custom-footer` | now imports `../../src/core` |
@@ -33,6 +32,14 @@
 - `xt update` recognises a local source checkout
   (`../../dev/core/packages/pi-extensions` in `~/.pi/agent/settings.json`) as
   the same managed package and will not register the npm copy beside it.
+
+## Retired extensions
+
+- `auto-session-name` was retired (xtrm-rhmm1): the launcher now passes
+  `--name <worktree-slug>` to pi/claude directly, so the extension's
+  first-message-based naming is redundant and would fight the launcher-owned
+  name. Removed from `src/manifest.json`, `src/registry.ts`, the legacy path
+  map, and the plugin-era cleanup set.
 
 ## Asset migration
 

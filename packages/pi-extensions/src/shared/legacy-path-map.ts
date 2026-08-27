@@ -5,7 +5,6 @@ export interface ExtensionPathMapping {
 }
 
 export const LEGACY_PATH_MAPPINGS: readonly ExtensionPathMapping[] = [
-  { extensionId: "auto-session-name", legacyPath: ".xtrm/ext-src/auto-session-name", newPath: "packages/pi-extensions/extensions/auto-session-name" },
   { extensionId: "beads", legacyPath: ".xtrm/ext-src/beads", newPath: "packages/pi-extensions/extensions/beads" },
   { extensionId: "compact-header", legacyPath: ".xtrm/ext-src/compact-header", newPath: "packages/pi-extensions/extensions/compact-header" },
   { extensionId: "custom-footer", legacyPath: ".xtrm/ext-src/custom-footer", newPath: "packages/pi-extensions/extensions/custom-footer" },

@@ -71,7 +71,6 @@ const XTRM_MANAGED_PI_EXTENSIONS = new Set([
   'custom-footer',
   'lsp-bootstrap',
   'plan-mode',
-  'auto-session-name',
   'auto-update',
   'compact-header',
   'git-checkpoint',

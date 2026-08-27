@@ -250,7 +250,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     // no consumer wrapper, no wait-for sync-points. xtrm-3xgs5.
     expect(usedBufferedTransport).toBe(false);
     expect(newSessionArgs[newSessionArgs.length - 1]).toBe(
-      "'pi' '--model' 'openai-codex/gpt-5.6-luna' '--thinking' 'high' 'echo hi'",
+      "'pi' '--name' 'repo-xt-pi-general' '--model' 'openai-codex/gpt-5.6-luna' '--thinking' 'high' 'echo hi'",
     );
     expect(mocked.spawnSync).not.toHaveBeenCalledWith('sp', expect.anything(), expect.anything());
     expect(mocked.spawnSync).toHaveBeenCalledWith(
@@ -336,7 +336,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(mocked.spawnSync.mock.calls.some(([command, args]) =>
       command === 'tmux'
       && args[0] === 'new-session'
-      && args.at(-1) === `'${path.join(repoRoot, 'bin', 'pi')}' 'echo hi'`
+      && args.at(-1) === `'${path.join(repoRoot, 'bin', 'pi')}' '--name' 'repo-xt-pi-json' 'echo hi'`
     )).toBe(true);
     expect(mocked.spawnSync).toHaveBeenCalledWith(
       'bd',

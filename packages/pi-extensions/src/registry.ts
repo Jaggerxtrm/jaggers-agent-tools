@@ -1,7 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import manifest from "./manifest.json" with { type: "json" };
-import autoSessionNameExtension from "./extensions/auto-session-name.ts";
 import beadsExtension from "./extensions/beads.ts";
 import compactHeaderExtension from "./extensions/compact-header.ts";
 import customFooterExtension from "./extensions/custom-footer.ts";
@@ -26,7 +25,6 @@ export type ManagedPiExtension = {
 };
 
 const availableManagedPiExtensions: readonly ManagedPiExtension[] = [
-  { id: "auto-session-name", register: autoSessionNameExtension },
   { id: "beads", register: beadsExtension },
   { id: "compact-header", register: compactHeaderExtension },
   { id: "custom-footer", register: customFooterExtension },

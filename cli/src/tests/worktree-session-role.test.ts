@@ -36,6 +36,8 @@ import {
 const WT = {
     worktreePath: '/repo/.xtrm/worktrees/repo-xt-pi-demo',
     branchName: 'xt/demo',
+    // Launcher-owned session display name — the worktree slug (xtrm-rhmm1).
+    sessionDisplayName: 'repo-xt-pi-demo',
 } as const;
 
 // Use synthetic test-only skill paths that don't exist under real repo OR
@@ -505,6 +507,7 @@ describe('buildBareTmuxPlan', () => {
 
         expect(plan.sessionName).toBe('claude-demo');
         expect(plan.runtimeArgs).toEqual([
+            '--name', WT.sessionDisplayName,
             '--dangerously-skip-permissions',
             '--model', 'claude-opus-4-8',
             '--', 'echo hi',
@@ -524,7 +527,7 @@ describe('buildBareTmuxPlan', () => {
         expect(plan.runtimeArgs).not.toContain('--append-system-prompt');
         expect(plan.runtimeArgs).not.toContain('--no-skills');
         // pi takes the positional without a `--` delimiter.
-        expect(plan.runtimeArgs).toEqual(['--thinking', 'high', 'hi']);
+        expect(plan.runtimeArgs).toEqual(['--name', WT.sessionDisplayName, '--thinking', 'high', 'hi']);
     });
 
     it('pushes explicit --skill paths to pi argv (bare mode)', () => {
@@ -538,6 +541,7 @@ describe('buildBareTmuxPlan', () => {
 
         // Deduped, order preserved, no turn-1 positional when the body is empty.
         expect(plan.runtimeArgs).toEqual([
+            '--name', WT.sessionDisplayName,
             '--skill', '/skills/multiplexing',
             '--skill', '/skills/planning',
         ]);
@@ -576,6 +580,7 @@ describe('buildBareTmuxPlan', () => {
         });
 
         expect(plan.runtimeArgs).toEqual([
+            '--name', WT.sessionDisplayName,
             '--dangerously-skip-permissions',
             '--add-dir', '/notes',
             '--', 'hi',
@@ -595,9 +600,11 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
             turn1Body: '/skill:a /skill:b\n\ntask body',
         });
         expect(plan.sessionName).toBe('role-pi-chain-coordinator-xtmux-2i5');
-        // Inline system prompt — first two args
-        expect(plan.runtimeArgs[0]).toBe('--append-system-prompt');
-        expect(plan.runtimeArgs[1]).toContain('chain coordinator');
+        // Launcher-owned --name is first; inline system prompt follows.
+        expect(plan.runtimeArgs[0]).toBe('--name');
+        expect(plan.runtimeArgs[1]).toBe(WT.sessionDisplayName);
+        expect(plan.runtimeArgs[2]).toBe('--append-system-prompt');
+        expect(plan.runtimeArgs[3]).toContain('chain coordinator');
         expect(plan.runtimeArgs).toContain('--no-skills');
         // Pool isolation combined with explicit skills from role
         expect(plan.runtimeArgs.filter((a) => a === '--skill')).toHaveLength(2);
@@ -656,7 +663,7 @@ describe('buildRoleTmuxPlan (pi runtime)', () => {
             parentSessionId: '',
             turn1Body: "hello it's mine",
         });
-        expect(plan.runtimeCmdString.startsWith("'pi' ")).toBe(true);
+        expect(plan.runtimeCmdString.startsWith("'pi' '--name' ")).toBe(true);
         expect(plan.runtimeCmdString).toContain("'hello it'\\''s mine'");
     });
 
@@ -860,8 +867,10 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
             turn1Body: '/x\n\nbody',
         });
         expect(plan.runtimeCmd).toBe('claude');
-        expect(plan.runtimeArgs[0]).toBe('--append-system-prompt');
-        expect(plan.runtimeArgs[1]).toBe('You are chain-coordinator.');
+        expect(plan.runtimeArgs[0]).toBe('--name');
+        expect(plan.runtimeArgs[1]).toBe(WT.sessionDisplayName);
+        expect(plan.runtimeArgs[2]).toBe('--append-system-prompt');
+        expect(plan.runtimeArgs[3]).toBe('You are chain-coordinator.');
         expect(plan.runtimeArgs).not.toContain('--append-system-prompt-file');
         expect(plan.runtimeArgs).toContain('--dangerously-skip-permissions');
     });
@@ -969,7 +978,7 @@ describe('buildRoleTmuxPlan (claude runtime)', () => {
             parentSessionId: '',
             turn1Body: '',
         });
-        expect(plan.runtimeCmdString.startsWith("'claude' ")).toBe(true);
+        expect(plan.runtimeCmdString.startsWith("'claude' '--name' ")).toBe(true);
         expect(plan.runtimeCmdString).toContain("'You are chain-coordinator.'");
     });
 
