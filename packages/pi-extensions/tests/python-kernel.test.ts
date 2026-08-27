@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,6 +20,15 @@ const { PythonKernel } = extension;
 function tmpBase() {
   const dir = mkdtempSync(join(tmpdir(), "pi-py-kernel-test-"));
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+/** Write a python-backed skill fixture: SKILL.md + src/<name>/__init__.py. */
+function writeFixtureSkill(root: string, name: string, body: string) {
+  const skillDir = join(root, name);
+  mkdirSync(join(skillDir, "src", name), { recursive: true });
+  writeFileSync(join(skillDir, "SKILL.md"), `---\ndescription: ${name} test skill\n---\n`);
+  writeFileSync(join(skillDir, "src", name, "__init__.py"), body);
+  return skillDir;
 }
 
 function fakePi() {
@@ -62,6 +71,129 @@ describe("python-kernel managed extension", () => {
     expect(tool.parameters.kind).toBe("object");
     expect(tool.parameters.shape.code.kind).toBe("string");
     expect(tool.parameters.shape.reset.kind).toBe("optional");
+    expect(tool.parameters.shape.reload_skills.kind).toBe("optional");
+  });
+
+  test("skillbridge discovery scans skills roots for python-backed skills", () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "alpha", "VALUE = 1\n");
+      writeFixtureSkill(fx.dir, "beta", "VALUE = 2\n");
+      // Not python-backed: no src/<name>/__init__.py.
+      mkdirSync(join(fx.dir, "plain"));
+      writeFileSync(join(fx.dir, "plain", "SKILL.md"), "---\ndescription: no python\n---\n");
+
+      const modules = extension.discoverSkillModules([fx.dir]);
+      expect(modules.map((m) => m.name).sort()).toEqual(["alpha", "beta"]);
+      for (const m of modules) {
+        expect(m.path).toBe(join(fx.dir, m.name, "src"));
+        expect(m.blurb).toContain("test skill");
+      }
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("skillbridge mounts fixture skills as importable kernel modules (no host round trips)", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "sre_chain", "def load(): return 'loaded'\ndef run(dry_run=False): return dry_run\n");
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "sre_chain", path: join(fx.dir, "sre_chain", "src"), blurb: "fixture" },
+      ]);
+      // Import happens at boot; the module is bound into _ns, so a bare name
+      // reference works with zero host round trips.
+      const call = await kernel.runCell("sre_chain.load()", false);
+      expect(call.error).toBeNull();
+      expect(call.stdout.trim()).toBe("'loaded'");
+      const call2 = await kernel.runCell("sre_chain.run(dry_run=True)", false);
+      expect(call2.error).toBeNull();
+      expect(call2.stdout.trim()).toBe("True");
+      expect(call2.sk_errors).toEqual([]);
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("skillbridge reload re-imports a skill module and reflects changes", async () => {
+    const fx = tmpBase();
+    try {
+      const skill = writeFixtureSkill(fx.dir, "reloadme", "VALUE = 'old'\n");
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "reloadme", path: join(fx.dir, "reloadme", "src"), blurb: "fixture" },
+      ]);
+      const first = await kernel.runCell("reloadme.VALUE", false);
+      expect(first.stdout.trim()).toBe("'old'");
+
+      writeFileSync(join(skill, "src", "reloadme", "__init__.py"), "VALUE = 'new'\n");
+      const status = await kernel.reloadSkills();
+      expect(status).toEqual({ reloadme: "ok" });
+      const second = await kernel.runCell("reloadme.VALUE", false);
+      expect(second.stdout.trim()).toBe("'new'");
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("skillbridge boot survives a broken skill and surfaces _sk_errors", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "good", "VALUE = 1\n");
+      writeFixtureSkill(fx.dir, "bad", "raise RuntimeError('boom')\n");
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "good", path: join(fx.dir, "good", "src"), blurb: "fixture" },
+        { name: "bad", path: join(fx.dir, "bad", "src"), blurb: "fixture" },
+      ]);
+      // Boot must not die; the good module still imports, the bad one is recorded.
+      const call = await kernel.runCell("good.VALUE", false);
+      expect(call.error).toBeNull();
+      expect(call.stdout.trim()).toBe("1");
+      expect(call.sk_errors).toHaveLength(1);
+      expect(call.sk_errors![0].module).toBe("bad");
+      expect(call.sk_errors![0].ename).toBe("RuntimeError");
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("tool reload_skills param surfaces per-module status via the extension", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "sre_chain", "def load(): return 'loaded'\n");
+      const pi = fakePi();
+      extension.default(pi as any, {
+        kernelFactory: () =>
+          new PythonKernel(fx.dir, () => {}, {}, [
+            { name: "sre_chain", path: join(fx.dir, "sre_chain", "src"), blurb: "fixture" },
+          ]),
+      });
+      const tool = pi.tools[0];
+      const result = await runViaExecute(tool, { reload_skills: true });
+      expect(result.isError).toBe(false);
+      expect(result.content[0].text).toContain("sre_chain: ok");
+      expect(result.details.status).toBe("ok");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("kernel reply carries the skill import audit list for host visibility", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "sre_chain", "def load(): return 'loaded'\n");
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "sre_chain", path: join(fx.dir, "sre_chain", "src"), blurb: "fixture" },
+      ]);
+      const call = await kernel.runCell("sre_chain.load()", false);
+      expect(call.audit).toEqual([]); // no _AUDIT entries yet; field present
+      expect(Array.isArray(call.audit)).toBe(true);
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
   });
 
   test("kernel state persists across cells and reset clears it", async () => {
