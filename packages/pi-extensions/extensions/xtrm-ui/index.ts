@@ -1590,7 +1590,11 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
   // factory runs during resource loading, before initTheme()); session_start
   // below retries via ensureInstalled() before the first message renders.
   void thinkingPreviewInstall.ensureInstalled().catch(() => undefined);
-  void installExternalToolFramePatch().catch(() => undefined);
+  // Same treatment for the external tool frame patch: fire-and-forget at factory
+  // time, retried on session_start. A silent factory-time failure must not leave
+  // external tool rows rendering through pi's unpatched default path.
+  const externalToolInstall = createThinkingPreviewInstallState(installExternalToolFramePatch);
+  void externalToolInstall.ensureInstalled().catch(() => undefined);
 
   // Keep collapsed thinking rows to one line: the recap is truncated to the
   // render width so the expand hint never wraps or disappears. Runs for both
@@ -1637,6 +1641,14 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
       // exactly the regression this whole PR closes) — never throw here,
       // session_start must not fail because of this.
       if (!thinkingPreviewInstall.isInstalled()) {
+        warnRetryFailedOnce(error);
+      }
+    });
+    // External tool rows: retry the frame patch before the first tool row can
+    // render (xtrm-rnp2e). Same failure mode as the thinking patch above — a
+    // factory-time miss must not leave external tools on pi's default shell.
+    await externalToolInstall.ensureInstalled().catch((error: unknown) => {
+      if (!externalToolInstall.isInstalled()) {
         warnRetryFailedOnce(error);
       }
     });
