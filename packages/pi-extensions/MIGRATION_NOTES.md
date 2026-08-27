@@ -67,8 +67,8 @@
 
 - A stale copy exists at `~/.pi/agent/local/pi-extensions` (v0.11.6, last
   touched 2026-07-13). It is NOT referenced by any active pi wiring:
-  `~/.pi/agent/settings.json` packages list points at
-  `/home/dawid/dev/core/packages/pi-extensions` (the source checkout), which
+  `~/.pi/agent/settings.json` packages list points at the package source
+  checkout (the local `packages/pi-extensions` path), which
   `xt update` already treats as the managed package. The `local/` copy is dead
   weight — it diverges silently from source and nothing consumes it.
 - **Decision (report-only, no deletion):** the brief forbids touching
