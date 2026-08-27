@@ -98,20 +98,20 @@ export function loadRegistry(registryPath: string): { services: Record<string, R
 	}
 }
 
-/** Current git HEAD short sha; null when the cwd is not in a git repo. */
+/** Current git HEAD short sha (fixed 7 chars); null when the cwd is not in a git repo. */
 export function gitHead(cwd: string): string | null {
 	try {
-		return execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd, encoding: "utf8" }).trim() || null;
+		return execFileSync("git", ["rev-parse", "--short=7", "HEAD"], { cwd, encoding: "utf8" }).trim() || null;
 	} catch {
 		return null;
 	}
 }
 
-/** Per-service last_sync_ref (first 8 chars) from the registry; empty when absent. */
+/** Per-service last_sync_ref (first 7 chars, matching `git rev-parse --short`) from the registry; empty when absent. */
 function syncRefs(registry: { services: Record<string, Record<string, unknown>> }): Record<string, string> {
 	const out: Record<string, string> = {};
 	for (const [id, info] of Object.entries(registry.services)) {
-		out[id] = String(info?.last_sync_ref ?? "").slice(0, 8);
+		out[id] = String(info?.last_sync_ref ?? "").slice(0, 7);
 	}
 	return out;
 }
