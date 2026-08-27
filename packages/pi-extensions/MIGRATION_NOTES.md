@@ -110,3 +110,20 @@
 - Release path: `scripts/verify-python-kernel-v2.mjs` (23 checks) wired into
   prepublishOnly as `verify:python-kernel-v2`.
 - Docs and e2e smoke transcripts live in `packages/pi-extensions/docs/e2e-smoke/`.
+
+## service-knowledge ext relocation (xtrm-6z6.5)
+
+- `extensions/service-knowledge/` + `src/extensions/service-knowledge.ts` +
+  `tests/service-knowledge.test.ts` moved OUT of this package into the xtrm
+  repo as the standalone npm pi-package `@jaggerxtrm/pi-service-knowledge`
+  (`packages/service-knowledge-ext`). Co-locates with the service-knowledge
+  Python package it mirrors.
+- Core manifest: `service-knowledge` moved to `disabled` (reason:
+  "Relocated to @jaggerxtrm/pi-service-knowledge (xtrm-6z6.5)"). The bundle no
+  longer ships it.
+- `src/shared/legacy-path-map.ts` entry for service-knowledge now carries a
+  note pointing at the new package.
+- python-kernel STAYS in this package (operator decision: agent-critical
+  kernel stays bundled).
+- To use the ext pre-merge: `-e <xtrm>/packages/service-knowledge-ext/index.ts`
+  or enroll the local source path in `~/.pi/agent/settings.json`.

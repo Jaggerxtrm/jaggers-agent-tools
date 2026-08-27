@@ -12,7 +12,6 @@ import piSerenaCompactExtension from "./extensions/pi-serena-compact.ts";
 import serenaPoolExtension from "./extensions/serena-pool.ts";
 import qualityGatesExtension from "./extensions/quality-gates.ts";
 import readLineNumbersExtension from "./extensions/read-line-numbers.ts";
-import serviceKnowledgeExtension from "./extensions/service-knowledge.ts";
 import sessionFlowExtension from "./extensions/session-flow.ts";
 import spTerminalOverlayExtension from "./extensions/sp-terminal-overlay.ts";
 import xtrmLoaderExtension from "./extensions/xtrm-loader.ts";
@@ -36,7 +35,6 @@ const availableManagedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "quality-gates", register: qualityGatesExtension },
   { id: "read-line-numbers", register: readLineNumbersExtension },
   { id: "serena-pool", register: serenaPoolExtension },
-  { id: "service-knowledge", register: serviceKnowledgeExtension },
   { id: "session-flow", register: sessionFlowExtension },
   { id: "sp-terminal-overlay", register: spTerminalOverlayExtension },
   { id: "xtrm-loader", register: xtrmLoaderExtension },

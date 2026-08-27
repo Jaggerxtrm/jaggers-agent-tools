@@ -13,7 +13,7 @@ export const LEGACY_PATH_MAPPINGS: readonly ExtensionPathMapping[] = [
   { extensionId: "lsp-bootstrap", legacyPath: ".xtrm/ext-src/lsp-bootstrap", newPath: "packages/pi-extensions/extensions/lsp-bootstrap" },
   { extensionId: "pi-serena-compact", legacyPath: ".xtrm/ext-src/pi-serena-compact", newPath: "packages/pi-extensions/extensions/pi-serena-compact" },
   { extensionId: "quality-gates", legacyPath: ".xtrm/ext-src/quality-gates", newPath: "packages/pi-extensions/extensions/quality-gates" },
-  { extensionId: "service-knowledge", legacyPath: ".xtrm/ext-src/service-knowledge", newPath: "packages/pi-extensions/extensions/service-knowledge" },
+  { extensionId: "service-knowledge", legacyPath: ".xtrm/ext-src/service-knowledge", newPath: "packages/pi-extensions/extensions/service-knowledge", note: "relocated to xtrm repo package @jaggerxtrm/pi-service-knowledge (xtrm-6z6.5)" },
   { extensionId: "session-flow", legacyPath: ".xtrm/ext-src/session-flow", newPath: "packages/pi-extensions/extensions/session-flow" },
   { extensionId: "xtrm-loader", legacyPath: ".xtrm/ext-src/xtrm-loader", newPath: "packages/pi-extensions/extensions/xtrm-loader" },
   { extensionId: "xtrm-ui", legacyPath: ".xtrm/ext-src/xtrm-ui", newPath: "packages/pi-extensions/extensions/xtrm-ui" },
