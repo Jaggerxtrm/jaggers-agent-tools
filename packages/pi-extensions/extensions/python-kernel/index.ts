@@ -43,6 +43,13 @@ sys.dont_write_bytecode = True
 _ns = {}
 _sk_errors = []
 
+# audit seam (xtrm-h7uwi.3): skill convention — kernel-side file mutations are
+# appended to _AUDIT as {"op": "write", "path": ...} entries. The driver
+# copies the list into every run_cell reply so the host can log/policy-gate
+# them. Convention-first: no enforcement yet, and skills that do not set it
+# simply produce an empty audit list.
+_ns["_AUDIT"] = []
+
 # skillbridge (xtrm-h7uwi.1): mount python-backed skills as importable kernel
 # modules. PI_SKILL_PATHS is os.pathsep-joined roots; each is prepended to
 # sys.path (zero-install mount — skills have no external deps; a pythonBin
@@ -58,7 +65,11 @@ for _name in (os.environ.get("PI_SKILL_IMPORTS", "") or "").split(","):
     if not _name:
         continue
     try:
-        _ns[_name] = importlib.import_module(_name)
+        _mod = importlib.import_module(_name)
+        # Audit seam: bind the shared _AUDIT list into the skill module so its
+        # functions can append mutation entries with a bare _AUDIT reference.
+        setattr(_mod, "_AUDIT", _ns["_AUDIT"])
+        _ns[_name] = _mod
     except Exception as _e:
         _sk_errors.append({"module": _name, "ename": type(_e).__name__, "evalue": str(_e)})
 # Loop vars above are module-level (never in _ns); leave them, they are harmless.
@@ -84,7 +95,9 @@ def _reload_skills():
         except KeyError:
             pass
         try:
-            _ns[_name] = importlib.import_module(_name)
+            _mod = importlib.import_module(_name)
+            setattr(_mod, "_AUDIT", _ns["_AUDIT"])
+            _ns[_name] = _mod
         except Exception as _e:
             _sk_errors.append({"module": _name, "ename": type(_e).__name__, "evalue": str(_e)})
 
@@ -156,7 +169,7 @@ def run_cell(code, reset=False, cwd=None, seq=None, max_output=20000, tmp_dir=No
         "stderr": stderr,
         "error": error,
         "duration_ms": int((time.time() - start) * 1000),
-        "audit": list(getattr(_ns, "_AUDIT", [])),
+        "audit": list(_ns.get("_AUDIT", [])),
         "sk_errors": list(_sk_errors),
         "shape_hint": hint,
         "full_output_path": full_path,
@@ -593,8 +606,20 @@ export class PythonKernel {
 
 export type KernelFactory = (cwd: string, sessionId: string) => PythonKernel;
 
-export default function pythonKernelExtension(pi: ExtensionAPI, opts: { kernelFactory?: KernelFactory } = {}) {
+export interface PythonKernelExtensionOptions {
+	kernelFactory?: KernelFactory;
+	/**
+	 * audit seam (xtrm-h7uwi.3): enable the mutation policy hook. Off by
+	 * default — convention-first, no enforcement ships until the hook has
+	 * proven itself. When on, audit entries whose path lies outside the
+	 * session cwd are flagged in the tool result (report-only, never blocks).
+	 */
+	auditPolicy?: boolean;
+}
+
+export default function pythonKernelExtension(pi: ExtensionAPI, opts: PythonKernelExtensionOptions = {}) {
 	const kernels = new Map<string, PythonKernel>();
+	const auditPolicy = opts.auditPolicy === true;
 
 	// skillbridge: scan once at init; skill paths are static per environment.
 	const skillModules = discoverSkillModules();
@@ -673,6 +698,24 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: { kernelFa
 					text = `[python kernel crashed; prior state is lost — it restarts on the next call]\n\n` + text;
 				}
 
+				// audit seam (xtrm-h7uwi.3): surface kernel-side mutation entries in
+				// the tool details; the policy hook (behind the auditPolicy flag)
+				// gets first look before any enforcement ships. Convention-first.
+				const audit = result.audit ?? [];
+				let policy = "none";
+				if (auditPolicy && audit.length > 0) {
+					const blocked = audit.filter((entry) => {
+						const p = typeof entry?.path === "string" ? entry.path : "";
+						return p && !p.startsWith(ctx.cwd);
+					});
+					if (blocked.length > 0) {
+						policy = `blocked ${blocked.length} out-of-session writes`;
+						text += `\n[audit policy] blocked ${blocked.length} mutation(s) outside session cwd:\n` + JSON.stringify(blocked, null, 2);
+					} else {
+						policy = `allowed ${audit.length} mutations`;
+					}
+				}
+
 				return {
 					content: [{ type: "text", text: text || "(no output)" }],
 					details: {
@@ -681,6 +724,8 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: { kernelFa
 						stderr: result.stderr,
 						durationMs: result.duration_ms,
 						error: result.error ?? undefined,
+						audit: audit.length > 0 ? audit : undefined,
+						auditPolicy: policy,
 					},
 					isError: result.error !== null,
 				};
