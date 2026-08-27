@@ -57,3 +57,22 @@
    - Update docs/policies that still mention `packages/pi-extensions/extensions` after runtime switch lands.
 5. **Packaging entrypoint wiring**
    - Wire `packages/pi-extensions/src/index.ts` into Pi package install flow and extension registration.
+
+## Stale installed copy divergence (xtrm-h7uwi.4)
+
+- A stale copy exists at `~/.pi/agent/local/pi-extensions` (v0.11.6, last
+  touched 2026-07-13). It is NOT referenced by any active pi wiring:
+  `~/.pi/agent/settings.json` packages list points at
+  `/home/dawid/dev/core/packages/pi-extensions` (the source checkout), which
+  `xt update` already treats as the managed package. The `local/` copy is dead
+  weight — it diverges silently from source and nothing consumes it.
+- **Decision (report-only, no deletion):** the brief forbids touching
+  `~/.pi/agent/local/pi-extensions` and `pi install`. The copy stays; this
+  note records the divergence so a later operator can delete it. Do NOT treat
+  it as authoritative — treat `packages/pi-extensions` as the source of truth.
+- **Preventing silent divergence:** the canonical sync is the release contract
+  (`npm run release:pi-extensions`, prepublish `verify:runtime` +
+  `verify:python-kernel-v2`). A fresh session reaches the new surface via the
+  settings.json source path with no reinstall needed; when switching to the
+  npm package, `pi install npm:@jaggerxtrm/pi-extensions` replaces the source
+  path. No sync script is warranted while the source path is active.
