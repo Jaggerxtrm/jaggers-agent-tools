@@ -36,8 +36,9 @@ drift: none detected
 </service_knowledge_context>
 ```
 
-With a pending drift marker (`.xtrm/.service-knowledge-drift-pending` dropped
-by the post-merge sweep):
+With a pending drift marker — either the canonical
+`.xtrm/.service-knowledge-drift-pending` or the legacy wave-1
+`.xtrm/.service-skills-drift-pending` (canonical wins when both exist):
 
 ```
 drift: PENDING marker present (.xtrm/.service-knowledge-drift-pending) — reconcile with /updating-service-knowledge
@@ -55,7 +56,7 @@ pack: service-knowledge@infra
   - db-expert: last_sync_ref abc12345
   - auth-svc: last_sync_ref (never)
 git HEAD: 296be429
-drift marker (.xtrm/.service-knowledge-drift-pending): absent
+drift marker: absent
 suggested action: run /updating-service-knowledge to reconcile + stamp last_sync_ref
 ```
 

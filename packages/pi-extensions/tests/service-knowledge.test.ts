@@ -183,6 +183,41 @@ describe("service-knowledge ext v1 (xtrm-6z6.1)", () => {
     }
   });
 
+  test("drift marker: legacy service-skills marker name is detected (xtrm-6z6.2)", async () => {
+    const fx = tmpBase();
+    try {
+      mkdirSync(join(fx.dir, ".xtrm"), { recursive: true });
+      writeFileSync(join(fx.dir, ".xtrm", ".service-skills-drift-pending"), "legacy drift");
+      expect(extension.hasDriftMarker(fx.dir)).toBe(true);
+      expect(extension.driftMarkerPath(fx.dir)).toBe(".xtrm/.service-skills-drift-pending");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("drift marker: canonical name wins when both are present (xtrm-6z6.2)", async () => {
+    const fx = tmpBase();
+    try {
+      mkdirSync(join(fx.dir, ".xtrm"), { recursive: true });
+      writeFileSync(join(fx.dir, ".xtrm", ".service-skills-drift-pending"), "legacy");
+      writeFileSync(join(fx.dir, ".xtrm", ".service-knowledge-drift-pending"), "new");
+      expect(extension.hasDriftMarker(fx.dir)).toBe(true);
+      expect(extension.driftMarkerPath(fx.dir)).toBe(".xtrm/.service-knowledge-drift-pending");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("drift marker: absent when neither marker exists", () => {
+    const fx = tmpBase();
+    try {
+      expect(extension.hasDriftMarker(fx.dir)).toBe(false);
+      expect(extension.driftMarkerPath(fx.dir)).toBeNull();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
   test("status command golden: services, last_sync_ref vs HEAD, marker, suggested action", async () => {
     const fx = tmpBase();
     try {
@@ -201,7 +236,27 @@ describe("service-knowledge ext v1 (xtrm-6z6.1)", () => {
       expect(out).toContain("db-expert: last_sync_ref 0000000");
       expect(out).toContain("auth-svc: last_sync_ref (never)");
       expect(out).toContain("git HEAD:");
-      expect(out).toContain("drift marker");
+      expect(out).toContain("drift marker: absent");
+      expect(out).toContain("suggested action: run /updating-service-knowledge");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("status command reports a legacy drift marker as PRESENT with its path (xtrm-6z6.2)", async () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db", last_sync_ref: "0000000" } });
+      mkdirSync(join(fx.dir, ".xtrm"), { recursive: true });
+      writeFileSync(join(fx.dir, ".xtrm", ".service-skills-drift-pending"), "legacy drift");
+      const pi = fakePi();
+      extension.default(pi as any, { cwd: fx.dir });
+      const cmd = pi.commands[0];
+      const notifications: string[] = [];
+      const ctx = { cwd: fx.dir, ui: { notify: (m: string) => notifications.push(m) } };
+      await cmd.handler("", ctx);
+      const out = notifications.join("\n");
+      expect(out).toContain("drift marker: PRESENT (.xtrm/.service-skills-drift-pending)");
       expect(out).toContain("suggested action: run /updating-service-knowledge");
     } finally {
       fx.cleanup();
