@@ -69,6 +69,23 @@ Drift is reconciled with `/updating-service-knowledge` (the
 `service-knowledge-sync` specialist) — NOT `/updating-service-skills`. This
 extension only surfaces drift; it never auto-updates or rebuilds the index.
 
+## When knowledge is absent or stale
+
+A drift marker (`drift: PENDING` in the context note, or a `last_sync_ref`
+behind git HEAD) is **advisory** — it never blocks work. Memory priority:
+
+1. **service-knowledge, if present** — use the registry and skill bodies as-is;
+   never grep-hunt for `service-registry.json` speculatively.
+2. **Commit corpus — always available** — fall back to `git log -p --follow --
+   <file>` for per-file history, `git log --grep`/`--oneline` for corpus, and
+   diffs vs `last_sync_ref` when a registry states one. Commits do not go stale.
+3. **bd memories** — `bd memories <topic>` / `bd recall <key>` before
+   workflow-sensitive questions; write findings back with `bd remember`.
+
+Suggest the reconcile, proceed with current knowledge + commit corpus in
+parallel; stamp `last_sync_ref` only after a successful reconcile, and rebuild
+the index only after that.
+
 ## Non-goals (v1)
 
 - no auto-update execution
