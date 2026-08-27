@@ -364,7 +364,7 @@ describe("python-kernel managed extension", () => {
     }
   });
 
-  test("output truncation guards unbounded tool results", async () => {
+  test("output truncation guards unbounded tool results with head+marker+tail and a temp file path", async () => {
     const fx = tmpBase();
     try {
       const pi = fakePi();
@@ -372,8 +372,57 @@ describe("python-kernel managed extension", () => {
       const tool = pi.tools[0];
       const result = await runViaExecute(tool, { code: "print('x' * 300_000)" });
       expect(result.isError).toBe(false);
-      expect(result.content[0].text.length).toBeLessThan(205_000);
-      expect(result.content[0].text.endsWith("... [output truncated]")).toBe(true);
+      // 300k chars → head 8k + marker + tail 4k ≈ 12.3k, well under the old 200k guard.
+      expect(result.content[0].text.length).toBeLessThan(20_000);
+      expect(result.content[0].text).toMatch(/\[truncated 3000\d+ chars\]/);
+      // The full output is preserved in a temp file whose path is in the reply.
+      expect(result.content[0].text).toMatch(/\[full output: .*pi-py-kernel-.*\]/);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("output truncation reports an object shape hint when the result is sized", async () => {
+    const fx = tmpBase();
+    try {
+      const pi = fakePi();
+      extension.default(pi as any);
+      const tool = pi.tools[0];
+      const result = await runViaExecute(tool, { code: "list(range(100_000))" });
+      expect(result.isError).toBe(false);
+      expect(result.content[0].text).toContain("list len=100000");
+      // The truncated repr carries the marker.
+      expect(result.content[0].text).toContain("...[truncated");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("truncateOutput pure helper: head+marker+tail under the cap, passthrough under it", () => {
+    const { text, truncated, originalLength } = extension.truncateOutput("a".repeat(100), 50);
+    expect(truncated).toBe(true);
+    expect(originalLength).toBe(100);
+    expect(text).toContain("...[truncated 100 chars]...");
+    expect(text.startsWith("a".repeat(8192) + "\n")).toBe(false); // head is 8192 then marker
+    const small = extension.truncateOutput("hi", 50);
+    expect(small.truncated).toBe(false);
+    expect(small.text).toBe("hi");
+  });
+
+  test("stdlib prelude is pre-loaded into the kernel namespace", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {});
+      const check = await kernel.runCell("json.dumps({'a': 1}) + '|' + re.sub('a', 'b', 'a') + '|' + str(Path('.') / 'x') + '|' + os.getcwd() + '|' + subprocess.run(['echo','hi'], capture_output=True, text=True).stdout.strip() + '|' + sys.version.split()[0]", false);
+      expect(check.error).toBeNull();
+      // repr() wraps the whole joined string in quotes; assert on the parts.
+      expect(check.stdout).toContain('{"a": 1}');
+      expect(check.stdout).toContain("|b|");
+      expect(check.stdout).toContain("|x|");
+      expect(check.stdout).toContain(fx.dir); // cwd is the fixture dir
+      expect(check.stdout).toContain("|hi|"); // subprocess
+      expect(check.stdout).toContain("|3."); // sys.version
+      kernel.kill();
     } finally {
       fx.cleanup();
     }
