@@ -9,7 +9,7 @@
 | `packages/pi-extensions/extensions/custom-footer` | `packages/pi-extensions/extensions/custom-footer` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/git-checkpoint` | `packages/pi-extensions/extensions/git-checkpoint` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/quality-gates` | `packages/pi-extensions/extensions/quality-gates` | now imports `../../src/core` |
-| `packages/pi-extensions/extensions/service-skills` | `packages/pi-extensions/extensions/service-skills` | now imports `../../src/core` |
+| `packages/pi-extensions/extensions/service-skills` | `packages/pi-extensions/extensions/service-knowledge` | retired service-skills; replaced by self-gating service-knowledge (xtrm-6z6.1) |
 | `packages/pi-extensions/extensions/session-flow` | `packages/pi-extensions/extensions/session-flow` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/xtrm-loader` | `packages/pi-extensions/extensions/xtrm-loader` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/xtrm-ui` | `packages/pi-extensions/extensions/xtrm-ui` | theme assets moved to package-level `themes/xtrm-ui` |
@@ -81,3 +81,37 @@
   settings.json source path with no reinstall needed; when switching to the
   npm package, `pi install npm:@jaggerxtrm/pi-extensions` replaces the source
   path. No sync script is warranted while the source path is active.
+
+## service-skills → service-knowledge rename (xtrm-6z6.1)
+
+- The `service-skills` extension is RETIRED (moved to `src/manifest.json.disabled`
+  with a reason). Its source dir `extensions/service-skills/` and
+  `src/extensions/service-skills.ts` were removed.
+- The replacement is `extensions/service-knowledge/` (extension id
+  `service-knowledge`, manifest entry active, `src/extensions/service-knowledge.ts`,
+  legacy-path-map entry updated).
+- Behavior change: the old extension registered unconditionally-ish and only
+  scanned `.xtrm/skills/user/packs` + the `service-skills` umbrella; the new one
+  is self-gating with `find_umbrella_packs` semantics (roots
+  `[.xtrm/skills, .xtrm/skills/user/packs]`, `service-knowledge` wins over
+  `service-skills`, reserved pack names skipped). No canonical registry → zero
+  surface. Legacy `.claude/skills` fallback deliberately dropped.
+- Context note injection uses `before_agent_start` (documented `{message}`
+  injection point) — NOT `session_start` return values (not consumed as
+  messages; xtrm-vs7f8 audit finding).
+
+## python-kernel v2 (xtrm-h7uwi.1-.4 + xtrm-vs7f8)
+
+- Skillbridge: python-backed skills (`SKILL.md` + `src/<pkg>/__init__.py`) mount
+  as importable kernel modules via `PI_SKILL_PATHS`/`PI_SKILL_IMPORTS`. The
+  import name is the package dir basename under `src/`, not the skill dir name
+  (xtrm-vs7f8 fix).
+- QoL: stdlib prelude (`json, re, os, sys, subprocess, Path`) pre-loaded; output
+  cap (default 20KB) returns head 8KB + marker + tail 4KB with shape hint, full
+  copy in a temp file (`PI_KERNEL_TMP`).
+- Audit seam: `_AUDIT` reserved in the driver, bound into skill namespaces,
+  copied into every reply; report-only policy hook behind `auditPolicy` option
+  or `PI_KERNEL_AUDIT_POLICY=1`.
+- Release path: `scripts/verify-python-kernel-v2.mjs` (23 checks) wired into
+  prepublishOnly as `verify:python-kernel-v2`.
+- Docs and e2e smoke transcripts live in `packages/pi-extensions/docs/e2e-smoke/`.

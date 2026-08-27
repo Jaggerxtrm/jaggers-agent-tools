@@ -46,7 +46,17 @@ After install, keep `.pi/settings.json` package wiring pointed at `npm:@jaggerxt
 
 Notable bundled extensions include:
 
-- `python-kernel` — persistent sequential `python` tool (state survives across calls; reset/cwd/abort/shutdown semantics). Requires `python3` on PATH.
+- `python-kernel` — persistent sequential `python` tool (state survives across
+  calls; reset/cwd/abort/shutdown semantics). Requires `python3` on PATH.
+  v2 adds: python-backed skills as importable kernel modules (skillbridge),
+  stdlib prelude, output truncation with shape hint + temp-file fallback, and
+  a kernel-side mutation audit seam. See
+  [extensions/python-kernel/README.md](extensions/python-kernel/README.md).
+- `service-knowledge` — self-gating service-registry status + drift notice.
+  Registers a context note and `/service-knowledge:status` ONLY in repos with
+  a canonical registry (`.xtrm/skills/<pack>/service-knowledge/`); zero
+  surface otherwise. Replaces the retired `service-skills` extension. See
+  [extensions/service-knowledge/README.md](extensions/service-knowledge/README.md).
 - `xtrm-ui` — XTRM Pi chrome, native tool summaries, selectable external tool chrome (`/xtrm-ui chrome background|box`).
 - `sp-terminal-overlay` — `/sp-feed` streaming overlay, `/sp-ps` snapshot overlay, and `/xtrm-terminal` shell overlay for specialist monitoring.
 

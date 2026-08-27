@@ -511,4 +511,28 @@ describe("python-kernel managed extension", () => {
       fx.cleanup();
     }
   });
+
+  test("prelude and audit list survive reset (xtrm-vs7f8 readme-check finding)", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {});
+      // Prelude works before reset.
+      const before = await kernel.runCell("subprocess.run(['echo','hi'], capture_output=True, text=True).stdout.strip()", false);
+      expect(before.error).toBeNull();
+      // Reset clears user state but must NOT clear the documented prelude.
+      await kernel.runCell("x = 1", true, fx.dir);
+      const after = await kernel.runCell("subprocess.run(['echo','hi'], capture_output=True, text=True).stdout.strip()", false);
+      expect(after.error).toBeNull();
+      expect(after.stdout.trim()).toBe("'hi'");
+      // User state is still gone.
+      const userState = await kernel.runCell("x", false);
+      expect(userState.error?.ename).toBe("NameError");
+      // _AUDIT still exists after reset (skills append to it).
+      const audit = await kernel.runCell("_AUDIT.append({'op': 'write', 'path': '/tmp/x'}); len(_AUDIT)", false);
+      expect(audit.error).toBeNull();
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
 });

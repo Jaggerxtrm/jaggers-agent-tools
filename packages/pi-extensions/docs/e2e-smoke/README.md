@@ -55,11 +55,20 @@ Fixture `noregrepo` (no `.xtrm/skills` registry at all).
 | No commands registered | PASS — `commands: []` | `c-zero-surface.json` |
 | No event handlers | PASS — `events: []`, no context note | `c-zero-surface.json` |
 
-## (d) real-repo read-only probe — PASS (conservative self-gating)
+## (d) real-repo read-only probe — PASS (canonical real-world validation)
 
-The canonical mercury/infra registry was not present on this machine. Probed real
-repos with non-canonical layouts instead — all correctly yield ZERO surface,
-proving the resolver only registers for the canonical
+**mercury/infra** (`/home/dawid/projects/mercury/infra`) — the canonical
+real-world registry at `.xtrm/skills/infra/service-knowledge/service-registry.json`
+with **17 services**:
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Command registered | PASS — `service-knowledge:status` | `d-mercury-infra-context-note.json` |
+| before_agent_start context note | PASS — `service registry: 1 pack(s), 17 service(s)` + `drift: none detected` | `d-mercury-infra-context-note.json` |
+| Status command output | PASS — 17 real services with real `last_sync_ref` (`ec269dff`, `bddc58c1`), real git HEAD (`7d775996`), drift marker absent, `suggested action: run /updating-service-knowledge` | `d-mercury-infra-status.json` |
+
+Additional conservative probes — non-canonical layouts correctly yield ZERO
+surface, proving the resolver only registers for the canonical
 `<pack>/<service-knowledge|service-skills>/service-registry.json` shape under a
 non-reserved pack:
 
@@ -67,8 +76,6 @@ non-reserved pack:
 |------|--------|--------|
 | `dev/vaultctl` | `.xtrm/skills/local-legacy/service-skills-set/service-registry.json` — **reserved pack name** `local-legacy`, umbrella not `service-skills` | zero surface (correct) |
 | `dev/specialists/.worktrees/*` | `.claude/service-registry.json` — legacy flat layout | zero surface (correct, canonical resolver does not fall back to `.claude`) |
-
-Evidence: `d-real-repo-probe.json` (`commands: []`).
 
 ## Audit findings surfaced by the smoke
 
@@ -86,6 +93,12 @@ Evidence: `d-real-repo-probe.json` (`commands: []`).
 3. **auditPolicy env knob (added)**: `PI_KERNEL_AUDIT_POLICY=1` enables the
    policy hook headlessly (was code-option-only), making the e2e exercise
    possible without code changes.
+4. **prelude + _AUDIT wiped by reset (fixed)**: verifying the README's
+   example session against live behavior revealed `reset: true` cleared the
+   documented stdlib prelude and the audit list (`_ns.clear()`). The prelude
+   is now re-injected after every reset (`_apply_prelude()`), and `_AUDIT` is
+   re-initialized — both are durable kernel invariants. Regression test
+   `prelude and audit list survive reset` added.
 
 ## Harness
 
