@@ -53,8 +53,9 @@ for (const [label, re] of skillbridgeMarkers) {
 
 // --- QoL (xtrm-h7uwi.2) ---
 const qolMarkers = [
-  ["stdlib prelude (import re, subprocess, Path)", /import re, subprocess/],
+  ["stdlib prelude (_apply_prelude)", /_apply_prelude/],
   ["prelude bound into _ns", /_ns\.update\(\{"json": json/],
+  ["prelude survives reset", /_apply_prelude\(\)/],
   ["output cap (max_output)", /max_output/],
   ["truncation head+marker+tail", /\[truncated/],
   ["shape hint", /shape_hint/],

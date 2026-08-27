@@ -74,12 +74,19 @@ for _name in (os.environ.get("PI_SKILL_IMPORTS", "") or "").split(","):
         _sk_errors.append({"module": _name, "ename": type(_e).__name__, "evalue": str(_e)})
 # Loop vars above are module-level (never in _ns); leave them, they are harmless.
 
-# QoL (xtrm-h7uwi.2): stdlib prelude — the imports every first cell used to
-# burn on boilerplate are pre-loaded into the namespace. Documented in the tool
-# description so the model knows they exist without importing.
-import re, subprocess
-from pathlib import Path as Path
-_ns.update({"json": json, "re": re, "os": os, "sys": sys, "subprocess": subprocess, "Path": Path})
+def _apply_prelude():
+    """Re-inject kernel invariants into _ns (QoL prelude + audit seam). Called
+    at boot and after every reset — reset clears user state, but the prelude
+    and _AUDIT are durable kernel invariants: the tool description documents
+    the prelude unconditionally, and the audit list must keep existing for
+    skills that append to it (xtrm-vs7f8 readme-check finding)."""
+    import re as _re, subprocess as _subprocess
+    from pathlib import Path as _Path
+    _ns.update({"json": json, "re": _re, "os": os, "sys": sys, "subprocess": _subprocess, "Path": _Path})
+    _ns.setdefault("_AUDIT", [])
+
+
+_apply_prelude()
 
 def _reload_skills():
     """Re-import every mounted skill module (dev-loop honesty: del sys.modules,
@@ -134,6 +141,7 @@ def _truncate(text, max_chars, tmp_dir, seq):
 def run_cell(code, reset=False, cwd=None, seq=None, max_output=20000, tmp_dir=None):
     if reset:
         _ns.clear()
+        _apply_prelude()
         if cwd:
             os.chdir(cwd)
         return {"stdout": "", "stderr": "", "error": None, "duration_ms": 0, "shape_hint": None, "full_output_path": None}
