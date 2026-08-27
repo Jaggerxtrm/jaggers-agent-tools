@@ -28,7 +28,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -261,8 +261,11 @@ export function truncateOutput(text: string, maxChars: number): { text: string; 
 
 // skillbridge (xtrm-h7uwi.1): an importable skill module found in a skills root.
 // Convention (prime-agent Agent Skills): SKILL.md + src/<import_name>/**/__init__.py.
+// The import name is the PACKAGE dir under src/ (e.g. src/sre_chain/), which may
+// differ from the skill directory name — the description must list the actual
+// import name, not the skill dir (xtrm-vs7f8 audit fix).
 export interface SkillModule {
-	/** Import name, e.g. "sre_chain" (package name). */
+	/** Import name, e.g. "sre_chain" (package dir under src/). */
 	name: string;
 	/** The root to prepend to sys.path: <skillDir>/src (parent of the package). */
 	path: string;
@@ -305,8 +308,11 @@ export function discoverSkillModules(roots: readonly string[] = skillRoots()): S
 			}
 			if (!existsSync(skillMd) || !packageDir) continue;
 			seen.add(name);
+			// The import name is the package dir basename (src/<pkg>/), NOT the
+			// skill dir name — they can differ (xtrm-vs7f8 audit fix).
+			const importName = basename(packageDir);
 			found.push({
-				name,
+				name: importName,
 				path: srcDir,
 				blurb: skillBlurb(skillMd),
 			});
@@ -619,7 +625,9 @@ export interface PythonKernelExtensionOptions {
 
 export default function pythonKernelExtension(pi: ExtensionAPI, opts: PythonKernelExtensionOptions = {}) {
 	const kernels = new Map<string, PythonKernel>();
-	const auditPolicy = opts.auditPolicy === true;
+	// audit seam: flag is opt-in via code, but also honor PI_KERNEL_AUDIT_POLICY
+	// so headless e2e smoke can exercise the policy hook without code changes.
+	const auditPolicy = opts.auditPolicy === true || process.env.PI_KERNEL_AUDIT_POLICY === "1";
 
 	// skillbridge: scan once at init; skill paths are static per environment.
 	const skillModules = discoverSkillModules();
