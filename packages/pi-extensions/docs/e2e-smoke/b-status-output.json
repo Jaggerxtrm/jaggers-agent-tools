@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "service-knowledge:status"
+  ],
+  "notifications": [
+    "service-knowledge status\npack: service-knowledge@infra\n  umbrella: service-knowledge (registry: /tmp/smoke/regrepo/.xtrm/skills/infra/service-knowledge/service-registry.json)\n  services: 2\n  - db-expert: last_sync_ref abc12345\n  - auth-svc: last_sync_ref (never)\ngit HEAD: (not a git repo)\ndrift marker (.xtrm/.service-knowledge-drift-pending): absent\nsuggested action: run /updating-service-knowledge to reconcile + stamp last_sync_ref"
+  ]
+}
