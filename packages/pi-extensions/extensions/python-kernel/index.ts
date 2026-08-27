@@ -63,6 +63,13 @@ for _name in (os.environ.get("PI_SKILL_IMPORTS", "") or "").split(","):
         _sk_errors.append({"module": _name, "ename": type(_e).__name__, "evalue": str(_e)})
 # Loop vars above are module-level (never in _ns); leave them, they are harmless.
 
+# QoL (xtrm-h7uwi.2): stdlib prelude — the imports every first cell used to
+# burn on boilerplate are pre-loaded into the namespace. Documented in the tool
+# description so the model knows they exist without importing.
+import re, subprocess
+from pathlib import Path as Path
+_ns.update({"json": json, "re": re, "os": os, "sys": sys, "subprocess": subprocess, "Path": Path})
+
 def _reload_skills():
     """Re-import every mounted skill module (dev-loop honesty: del sys.modules,
     re-import, refresh the binding; record per-module failures, never raise).
@@ -82,17 +89,47 @@ def _reload_skills():
             _sk_errors.append({"module": _name, "ename": type(_e).__name__, "evalue": str(_e)})
 
 
-def run_cell(code, reset=False, cwd=None):
+def _shape_hint(result):
+    """Object-shape hint when detectable: type + len for sized objects."""
+    if result is None:
+        return None
+    try:
+        return type(result).__name__ + " len=" + str(len(result))
+    except TypeError:
+        return type(result).__name__
+
+
+def _truncate(text, max_chars, tmp_dir, seq):
+    """Cap cell output to max_chars: head + marker + tail. When truncated, the
+    full text is written to a temp file (path returned) so nothing is lost."""
+    if len(text) <= max_chars:
+        return text, None
+    head_n, tail_n = 8192, 4096
+    marker = "\\n...[truncated " + str(len(text)) + " chars]...\\n"
+    truncated = text[:head_n] + marker + text[-tail_n:]
+    full_path = None
+    if tmp_dir:
+        full_path = os.path.join(tmp_dir, "cell-" + str(seq) + ".out")
+        try:
+            with open(full_path, "w", encoding="utf-8", errors="replace") as _f:
+                _f.write(text)
+        except OSError:
+            full_path = None
+    return truncated, full_path
+
+
+def run_cell(code, reset=False, cwd=None, seq=None, max_output=20000, tmp_dir=None):
     if reset:
         _ns.clear()
         if cwd:
             os.chdir(cwd)
-        return {"stdout": "", "stderr": "", "error": None, "duration_ms": 0}
+        return {"stdout": "", "stderr": "", "error": None, "duration_ms": 0, "shape_hint": None, "full_output_path": None}
     if cwd:
         os.chdir(cwd)
     out, err = io.StringIO(), io.StringIO()
     start = time.time()
     error = None
+    result = None
     try:
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             try:
@@ -104,13 +141,25 @@ def run_cell(code, reset=False, cwd=None):
                 exec(compile(code, "<cell>", "exec"), _ns)
     except Exception:
         error = {"ename": type(sys.exc_info()[1]).__name__, "evalue": str(sys.exc_info()[1]), "traceback": traceback.format_exc().rstrip()}
+    stdout = out.getvalue()
+    stderr = err.getvalue()
+    hint = None
+    full_path = None
+    if len(stdout) > max_output or len(stderr) > max_output:
+        if result is not None:
+            hint = _shape_hint(result)
+        stdout, p1 = _truncate(stdout, max_output, tmp_dir, seq)
+        stderr, p2 = _truncate(stderr, max_output, tmp_dir, seq)
+        full_path = p1 or p2
     return {
-        "stdout": out.getvalue(),
-        "stderr": err.getvalue(),
+        "stdout": stdout,
+        "stderr": stderr,
         "error": error,
         "duration_ms": int((time.time() - start) * 1000),
         "audit": list(getattr(_ns, "_AUDIT", [])),
         "sk_errors": list(_sk_errors),
+        "shape_hint": hint,
+        "full_output_path": full_path,
     }
 
 def reload_skills():
@@ -138,7 +187,8 @@ def main():
             sys.stdout.write(json.dumps({"seq": None, "stdout": "", "stderr": f"bad request: {e}", "error": None, "duration_ms": 0}) + "\\n")
             sys.stdout.flush()
             continue
-        res = run_cell(req.get("code") or "", bool(req.get("reset")), req.get("cwd"))
+        res = run_cell(req.get("code") or "", bool(req.get("reset")), req.get("cwd"),
+                       req.get("seq"), req.get("max_output") or 20000, os.environ.get("PI_KERNEL_TMP", ""))
         if req.get("reload_skills"):
             res["reload_skills"] = reload_skills()
         res["seq"] = req.get("seq")
@@ -152,6 +202,7 @@ if __name__ == "__main__":
 const DEFAULT_PYTHON_BIN = "python3";
 const DEFAULT_CELL_TIMEOUT_MS = 120_000;
 const DEFAULT_START_TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_OUTPUT_CHARS = 20_000;
 const MAX_OUTPUT = 200_000;
 
 export interface CellResult {
@@ -166,6 +217,10 @@ export interface CellResult {
 	sk_errors?: Array<Record<string, string>>;
 	/** reload_skills request result (xtrm-h7uwi.1). */
 	reload_skills?: Record<string, string>;
+	/** Object-shape hint for a truncated result (xtrm-h7uwi.2). */
+	shape_hint?: string | null;
+	/** Temp file holding the full untruncated output (xtrm-h7uwi.2). */
+	full_output_path?: string | null;
 }
 
 export interface PythonKernelOptions {
@@ -175,6 +230,20 @@ export interface PythonKernelOptions {
 	cellTimeoutMs?: number;
 	/** Driver-ready timeout; default 10s. */
 	startTimeoutMs?: number;
+	/** Per-cell output cap (chars); default 20KB. Over-cap output is head+marker+tail, full copy to a temp file. */
+	maxOutputBytes?: number;
+}
+
+/**
+ * Truncate text that exceeds maxChars: head + marker + tail (xtrm-h7uwi.2).
+ * Pure and unit-testable; the driver mirrors this logic for the kernel side.
+ */
+export function truncateOutput(text: string, maxChars: number): { text: string; truncated: boolean; originalLength: number } {
+	if (text.length <= maxChars) return { text, truncated: false, originalLength: text.length };
+	const headN = 8_192;
+	const tailN = 4_096;
+	const marker = `\n...[truncated ${text.length} chars]...\n`;
+	return { text: text.slice(0, headN) + marker + text.slice(-tailN), truncated: true, originalLength: text.length };
 }
 
 // skillbridge (xtrm-h7uwi.1): an importable skill module found in a skills root.
@@ -273,6 +342,7 @@ export class PythonKernel {
 	private readonly pythonBin: string;
 	private readonly cellTimeoutMs: number;
 	private readonly startTimeoutMs: number;
+	private readonly maxOutputChars: number;
 	private readonly skills: SkillModule[];
 
 	constructor(
@@ -284,6 +354,7 @@ export class PythonKernel {
 		this.pythonBin = options.pythonBin ?? DEFAULT_PYTHON_BIN;
 		this.cellTimeoutMs = options.cellTimeoutMs ?? DEFAULT_CELL_TIMEOUT_MS;
 		this.startTimeoutMs = options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
+		this.maxOutputChars = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_CHARS;
 		this.skills = skills;
 	}
 
@@ -317,6 +388,9 @@ export class PythonKernel {
 							PI_SKILL_IMPORTS: this.skills.map((s) => s.name).join(","),
 						}
 					: {}),
+				// QoL: full over-cap cell output is written into the kernel temp dir
+				// (path surfaces in the reply; removed with the kernel on teardown).
+				PI_KERNEL_TMP: this.tmpDir ?? "",
 			},
 			stdio: ["pipe", "pipe", "pipe"],
 			// Own process group so we can kill code-spawned children too.
@@ -450,7 +524,7 @@ export class PythonKernel {
 					clearTimeout(timer);
 					resolve(r);
 				});
-				this.proc!.stdin.write(JSON.stringify({ seq, code, reset, cwd }) + "\n");
+				this.proc!.stdin.write(JSON.stringify({ seq, code, reset, cwd, max_output: this.maxOutputChars }) + "\n");
 			});
 		});
 	}
@@ -543,6 +617,7 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: { kernelFa
 		label: "Python (persistent kernel)",
 		description:
 			"Execute Python code in a persistent interpreter. Variables, imports, and functions persist across calls until reset: true. Code runs with your user permissions and is not sandboxed — treat a cell like any shell command. Run shell commands with subprocess when needed; for a project's own tests, scripts, and CLIs use the project's documented environment instead." +
+			"\nPrelude pre-loaded: json, re, os, sys, subprocess, Path (from pathlib)." +
 			importableLine,
 
 		promptSnippet: "python - run code in a persistent kernel; state survives across calls",
@@ -588,8 +663,11 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: { kernelFa
 				if (result.error) {
 					text += (text ? "\n" : "") + result.error.traceback;
 				}
-				if (text.length > MAX_OUTPUT) {
-					text = text.slice(0, MAX_OUTPUT) + "\n... [output truncated]";
+				if (result.shape_hint) {
+					text = `[output truncated: ${result.shape_hint}]\n` + text;
+				}
+				if (result.full_output_path) {
+					text += `\n[full output: ${result.full_output_path}]`;
 				}
 				if (kernel.crashedState && result.error?.ename === "KernelExited") {
 					text = `[python kernel crashed; prior state is lost — it restarts on the next call]\n\n` + text;
