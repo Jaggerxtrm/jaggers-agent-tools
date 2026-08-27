@@ -138,6 +138,8 @@ type PatchableAssistantMessage = {
 };
 
 const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview5";
+const ORIGINAL_ASSISTANT_UPDATE = "__xtrmUiThinkingPreviewOriginalUpdate";
+const THINKING_PREVIEW_PATCH_VERSION = 6;
 
 const THINKING_RECAP_MAX = 120;
 
@@ -327,6 +329,20 @@ export function createPatchedUpdateContent(
 	};
 }
 
+export function selectPatchBase<T>(
+  current: T | undefined,
+  installedVersion: number | boolean | undefined,
+  targetVersion: number,
+  original: T | undefined,
+  patchName: string,
+): T | undefined {
+  if (!current || installedVersion === targetVersion) return undefined;
+  if (installedVersion !== undefined && !original) {
+    throw new Error(`${patchName} was installed by a legacy version; restart pi before upgrading`);
+  }
+  return original ?? current;
+}
+
 async function installThinkingPreviewPatch(): Promise<void> {
 	const entryPath = resolvePiCodingAgentEntryPath();
 	const themeMod = await import(
@@ -346,13 +362,24 @@ async function installThinkingPreviewPatch(): Promise<void> {
 		AssistantMessageComponent?: AssistantMessageComponentCtor;
 	};
 	const proto = mod.AssistantMessageComponent?.prototype as
-		| (AssistantMessageComponentCtor["prototype"] & { [PATCHED_ASSISTANT_MESSAGE]?: boolean })
+		| (AssistantMessageComponentCtor["prototype"] & {
+			[PATCHED_ASSISTANT_MESSAGE]?: number | boolean;
+			[ORIGINAL_ASSISTANT_UPDATE]?: (message: AssistantMessageLike) => void;
+		})
 		| undefined;
-	if (!proto?.updateContent || proto[PATCHED_ASSISTANT_MESSAGE]) return;
+	if (!proto) return;
 
-	const updateContent = proto.updateContent;
+	const updateContent = selectPatchBase(
+		proto.updateContent,
+		proto[PATCHED_ASSISTANT_MESSAGE],
+		THINKING_PREVIEW_PATCH_VERSION,
+		proto[ORIGINAL_ASSISTANT_UPDATE],
+		"xtrm-ui thinking preview patch",
+	);
+	if (!updateContent) return;
+	proto[ORIGINAL_ASSISTANT_UPDATE] ??= updateContent;
 	proto.updateContent = createPatchedUpdateContent(updateContent, style);
-	proto[PATCHED_ASSISTANT_MESSAGE] = true;
+	proto[PATCHED_ASSISTANT_MESSAGE] = THINKING_PREVIEW_PATCH_VERSION;
 }
 
 let retryFailureWarned = false;
@@ -430,7 +457,9 @@ type PatchableToolExecutionComponent = {
 type ExternalToolFrameKind = "serena" | "gitnexus" | "structured" | "process" | "external";
 
 const PATCHED_EXTERNAL_TOOL_FRAME = "__xtrmUiExternalToolFrame";
-const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 22;
+const ORIGINAL_EXTERNAL_RENDER = "__xtrmUiExternalToolFrameOriginalRender";
+const ORIGINAL_EXTERNAL_GET_RENDER_SHELL = "__xtrmUiExternalToolFrameOriginalGetRenderShell";
+const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 23;
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 
 // XTRM extension accent (#9a8bff) — pi's theme.fg() only accepts named tokens and
@@ -634,12 +663,25 @@ async function installExternalToolFramePatch(): Promise<void> {
     ToolExecutionComponent?: ToolExecutionComponentCtor;
   };
   const proto = mod.ToolExecutionComponent?.prototype as
-    | (ToolExecutionComponentCtor["prototype"] & { [PATCHED_EXTERNAL_TOOL_FRAME]?: number })
+    | (ToolExecutionComponentCtor["prototype"] & {
+      [PATCHED_EXTERNAL_TOOL_FRAME]?: number;
+      [ORIGINAL_EXTERNAL_RENDER]?: (width: number) => string[];
+      [ORIGINAL_EXTERNAL_GET_RENDER_SHELL]?: () => "default" | "self";
+    })
     | undefined;
-  if (!proto?.render || proto[PATCHED_EXTERNAL_TOOL_FRAME] === EXTERNAL_TOOL_FRAME_PATCH_VERSION) return;
+  if (!proto) return;
 
-  const getRenderShell = proto.getRenderShell;
-  const render = proto.render;
+  const render = selectPatchBase(
+    proto.render,
+    proto[PATCHED_EXTERNAL_TOOL_FRAME],
+    EXTERNAL_TOOL_FRAME_PATCH_VERSION,
+    proto[ORIGINAL_EXTERNAL_RENDER],
+    "xtrm-ui external tool frame patch",
+  );
+  if (!render) return;
+  proto[ORIGINAL_EXTERNAL_RENDER] ??= render;
+  proto[ORIGINAL_EXTERNAL_GET_RENDER_SHELL] ??= proto.getRenderShell;
+  const getRenderShell = proto[ORIGINAL_EXTERNAL_GET_RENDER_SHELL];
 
   proto.getRenderShell = function patchedGetRenderShell(this: PatchableToolExecutionComponent) {
     const kind = externalToolFrameKind(this.toolName);
@@ -1644,15 +1686,14 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
         warnRetryFailedOnce(error);
       }
     });
-    // External tool rows: retry the frame patch before the first tool row can
-    // render (xtrm-rnp2e). Same failure mode as the thinking patch above — a
-    // factory-time miss must not leave external tools on pi's default shell.
+    // Thinking/editor chrome must not depend on external tool patch startup.
+    refresh(ctx);
+    // External tool rows: retry the frame patch before session_start returns.
     await externalToolInstall.ensureInstalled().catch((error: unknown) => {
       if (!externalToolInstall.isInstalled()) {
         warnRetryFailedOnce(error);
       }
     });
-    refresh(ctx);
   });
 
   pi.on("session_switch", async (_event, ctx) => {

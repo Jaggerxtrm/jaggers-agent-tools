@@ -50,6 +50,7 @@ const {
 	default: xtrmUiExtension,
 	fitThinkingRowToWidth,
 	renderExternalToolBackgroundLines,
+	selectPatchBase,
 } = await import("../../../packages/pi-extensions/extensions/xtrm-ui/index");
 
 function loadExtension() {
@@ -499,6 +500,28 @@ describe("xtrm-ui built-in tool rendering", () => {
     expect(handlers.tool_call).toBeUndefined();
     expect(handlers.tool_execution_end).toBeUndefined();
     expect(handlers.tool_result).toBeUndefined();
+  });
+});
+
+describe("xtrm-ui prototype patch upgrades", () => {
+  const base = () => "base";
+  const wrapped = () => "wrapped";
+
+  it("uses the current method for a fresh install", () => {
+    expect(selectPatchBase(base, undefined, 23, undefined, "test patch")).toBe(base);
+  });
+
+  it("skips an already-current patch", () => {
+    expect(selectPatchBase(wrapped, 23, 23, base, "test patch")).toBeUndefined();
+  });
+
+  it("replaces an older patch from the preserved original", () => {
+    expect(selectPatchBase(wrapped, 22, 23, base, "test patch")).toBe(base);
+  });
+
+  it("refuses to stack over a legacy patch without its original", () => {
+    expect(() => selectPatchBase(wrapped, 22, 23, undefined, "test patch"))
+      .toThrow("test patch was installed by a legacy version; restart pi before upgrading");
   });
 });
 
