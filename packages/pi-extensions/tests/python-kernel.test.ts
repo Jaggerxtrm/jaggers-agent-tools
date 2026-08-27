@@ -196,6 +196,71 @@ describe("python-kernel managed extension", () => {
     }
   });
 
+  test("audit seam: kernel-side mutation entries flow into the reply and tool details", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(
+        fx.dir,
+        "mutator",
+        "def write_file(path, content='x'):\n    _AUDIT.append({'op': 'write', 'path': path})\n    return 'wrote'\n",
+      );
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "mutator", path: join(fx.dir, "mutator", "src"), blurb: "fixture" },
+      ]);
+      const call = await kernel.runCell("mutator.write_file('/etc/hosts')", false);
+      expect(call.error).toBeNull();
+      expect(call.audit).toHaveLength(1);
+      expect(call.audit![0]).toEqual({ op: "write", path: "/etc/hosts" });
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("audit seam: policy hook (behind flag) flags out-of-session writes in the tool result", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, []);
+      const pi = fakePi();
+      extension.default(pi as any, {
+        auditPolicy: true,
+        kernelFactory: () => kernel,
+      });
+      const tool = pi.tools[0];
+      // Simulate a cell whose skill appended an out-of-session write to _AUDIT.
+      await kernel.runCell("_AUDIT.append({'op': 'write', 'path': '/etc/hosts'})", false);
+      const result = await runViaExecute(tool, { code: "'ok'" });
+      expect(result.details.auditPolicy).toContain("blocked 1");
+      expect(result.content[0].text).toContain("outside session cwd");
+      // In-session writes are allowed when the hook is on. runViaExecute uses
+      // ctx.cwd = process.cwd(), so an in-session path is under that cwd.
+      const sessionCwd = process.cwd();
+      await kernel.runCell(`_AUDIT.clear(); _AUDIT.append({'op': 'write', 'path': '${sessionCwd}/x.txt'})`, false);
+      const result2 = await runViaExecute(tool, { code: "'ok'" });
+      expect(result2.details.auditPolicy).toContain("allowed");
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("audit seam: hook is off by default (no policy text, audit still in details)", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, []);
+      const pi = fakePi();
+      extension.default(pi as any, { kernelFactory: () => kernel });
+      const tool = pi.tools[0];
+      await kernel.runCell("_AUDIT.append({'op': 'write', 'path': '/etc/hosts'})", false);
+      const result = await runViaExecute(tool, { code: "'ok'" });
+      expect(result.details.audit).toEqual([{ op: "write", path: "/etc/hosts" }]);
+      expect(result.details.auditPolicy).toBe("none");
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
   test("kernel state persists across cells and reset clears it", async () => {
     const fx = tmpBase();
     try {
