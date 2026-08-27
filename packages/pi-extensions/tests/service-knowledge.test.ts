@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -219,6 +220,28 @@ describe("service-knowledge ext v1 (xtrm-6z6.1)", () => {
       const ctx = { cwd: fx.dir, ui: { notify: (m: string) => notifications.push(m) } };
       await cmd.handler("", ctx);
       const out = notifications.join("\n");
+      expect(out).toContain("suggested action: none — registry is in sync with HEAD");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("status command: in-sync refs (7-char, matching git HEAD short sha) are NOT flagged (xtrm-vs7f8)", async () => {
+    const fx = tmpBase();
+    try {
+      // Point the command's cwd at the real core repo so gitHead resolves, and
+      // give a service a last_sync_ref equal to the current HEAD short sha.
+      const coreRoot = join(import.meta.dir, "../../..");
+      const head = execFileSync("git", ["rev-parse", "--short=7", "HEAD"], { cwd: coreRoot, encoding: "utf8" }).trim();
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db", last_sync_ref: head } });
+      const pi = fakePi();
+      extension.default(pi as any, { cwd: fx.dir });
+      const cmd = pi.commands[0];
+      const notifications: string[] = [];
+      const ctx = { cwd: coreRoot, ui: { notify: (m: string) => notifications.push(m) } };
+      await cmd.handler("", ctx);
+      const out = notifications.join("\n");
+      expect(out).toContain(`db-expert: last_sync_ref ${head}`);
       expect(out).toContain("suggested action: none — registry is in sync with HEAD");
     } finally {
       fx.cleanup();

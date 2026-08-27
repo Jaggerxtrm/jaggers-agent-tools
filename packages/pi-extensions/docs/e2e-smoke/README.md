@@ -57,7 +57,7 @@ Fixture `noregrepo` (no `.xtrm/skills` registry at all).
 
 ## (d) real-repo read-only probe — PASS (canonical real-world validation)
 
-**mercury/infra** (`/home/dawid/projects/mercury/infra`) — the canonical
+**mercury/infra** (`<mercury-infra>` (read-only probe; absolute path sanitized for payload hygiene)) — the canonical
 real-world registry at `.xtrm/skills/infra/service-knowledge/service-registry.json`
 with **17 services**:
 
@@ -99,6 +99,11 @@ non-reserved pack:
    is now re-injected after every reset (`_apply_prelude()`), and `_AUDIT` is
    re-initialized — both are durable kernel invariants. Regression test
    `prelude and audit list survive reset` added.
+5. **last_sync_ref vs git HEAD length mismatch (fixed)**: registry refs were
+   sliced to 8 chars but `git rev-parse --short` returns 7 (or more when
+   ambiguous), so in-sync repos were falsely flagged as drifted. Fixed with
+   `--short=7` + 7-char slice; verified against real mercury/infra data.
+   Regression test with a real git repo.
 
 ## Harness
 
