@@ -107,7 +107,7 @@ describe('pi launch self-heal regression', () => {
     expect(resolvedTarget).toBe(path.resolve(path.join(worktreePath, '.xtrm', 'extensions', 'core')));
     expect(await fs.pathExists(overrideDir)).toBe(false);
 
-    expect(mocked.spawnSync).toHaveBeenCalledWith('pi', [], expect.objectContaining({ cwd: worktreePath }));
+    expect(mocked.spawnSync).toHaveBeenCalledWith('pi', ['--name', 'repo-xt-pi-heal1'], expect.objectContaining({ cwd: worktreePath }));
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 

@@ -42,6 +42,7 @@ function readEvents(): Array<Record<string, unknown>> {
 describe('K1 runtime characterization', () => {
   it('freezes the released Pi and Claude launcher argv and identity baseline', () => {
     const shared = {
+      sessionDisplayName: 'workspace-core-k1',
       sessionSlug: 'k1-baseline',
       bead: 'xtrm-ozknq.5',
       parentSessionId: '$41',
@@ -64,6 +65,7 @@ describe('K1 runtime characterization', () => {
       sessionName: 'pi-k1-baseline',
       runtimeCmd: 'pi',
       runtimeArgs: [
+        '--name', 'workspace-core-k1',
         '--skill', '/skills/multiplexing-team',
         '--model', 'baseline-model',
         '--thinking', 'high',
@@ -75,6 +77,7 @@ describe('K1 runtime characterization', () => {
       sessionName: 'claude-k1-baseline',
       runtimeCmd: 'claude',
       runtimeArgs: [
+        '--name', 'workspace-core-k1',
         '--dangerously-skip-permissions',
         '--model', 'baseline-model',
         '--verbose',

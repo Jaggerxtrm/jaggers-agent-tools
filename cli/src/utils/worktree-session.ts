@@ -854,6 +854,8 @@ export function chooseAttachCommand(sessionName: string, insideTmux: boolean): s
 interface CommonTmuxPlanArgs {
     /** Which runtime binary this plan targets. */
     runtime: 'pi' | 'claude';
+    /** Session display name passed to the runtime via --name (worktree slug). */
+    sessionDisplayName: string;
     bead?: string;
     parentSessionId: string;
     /** Absolute path of the worktree this session owns. Required, not optional:
@@ -904,6 +906,7 @@ function finalizeTmuxPlan(args: {
     sessionName: string;
     /** Head args, mutated in place with the shared tail. */
     runtimeArgs: string[];
+    sessionDisplayName: string;
     agentTask: string;
     bead?: string;
     /** Role name in role mode; absent in bare mode (a bare session has no role). */
@@ -917,9 +920,15 @@ function finalizeTmuxPlan(args: {
     passthrough?: string[];
 }): TmuxLaunchPlan {
     const {
-        runtime, sessionName, runtimeArgs, agentTask, bead, role, parentSessionId,
-        worktreePath, branchName, turn1Body, model, thinking, passthrough,
+        runtime, sessionName, runtimeArgs, sessionDisplayName, agentTask, bead, role,
+        parentSessionId, worktreePath, branchName, turn1Body, model, thinking, passthrough,
     } = args;
+
+    // Launcher-owned session display name. Pushed first so nothing later in the
+    // shared tail (or the runtime's own argv handling) can shadow it; the
+    // passthrough guard already rejects user-supplied --name as xt-owned.
+    // xtrm-rhmm1.
+    runtimeArgs.unshift('--name', sessionDisplayName);
 
     // Model: both runtimes accept --model <name>; pi and claude resolve their
     // own defaults when unset.
@@ -979,8 +988,8 @@ export function buildRoleTmuxPlan(args: CommonTmuxPlanArgs & {
     role: ResolvedRole;
 }): TmuxLaunchPlan {
     const {
-        runtime, role, bead, parentSessionId, worktreePath, branchName, turn1Body,
-        modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
+        runtime, sessionDisplayName, role, bead, parentSessionId, worktreePath, branchName,
+        turn1Body, modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
     } = args;
 
     // Include runtime in the session name so xt pi --role X --bead Y and
@@ -1042,6 +1051,7 @@ export function buildRoleTmuxPlan(args: CommonTmuxPlanArgs & {
 
     return finalizeTmuxPlan({
         runtime,
+        sessionDisplayName,
         sessionName,
         runtimeArgs,
         agentTask: `role:${role.name}`,
@@ -1070,8 +1080,8 @@ export function buildBareTmuxPlan(args: CommonTmuxPlanArgs & {
     sessionSlug: string;
 }): TmuxLaunchPlan {
     const {
-        runtime, sessionSlug, bead, parentSessionId, worktreePath, branchName,
-        turn1Body, modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
+        runtime, sessionDisplayName, sessionSlug, bead, parentSessionId, worktreePath,
+        branchName, turn1Body, modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
     } = args;
 
     const runtimeArgs: string[] = [];
@@ -1086,6 +1096,7 @@ export function buildBareTmuxPlan(args: CommonTmuxPlanArgs & {
 
     return finalizeTmuxPlan({
         runtime,
+        sessionDisplayName,
         sessionName: `${runtime}-${slugifyForSession(sessionSlug)}`,
         runtimeArgs,
         agentTask: `session:${sessionSlug}`,
@@ -1914,6 +1925,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     const common = {
         runtime,
         runtimeExecutable,
+        sessionDisplayName: worktreeName,
         sessionSlug: slug,
         bead,
         attach,
@@ -1945,9 +1957,11 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         return;
     }
 
-    // Launch the runtime in the worktree
+    // Launch the runtime in the worktree. Launcher-owned --name (worktree slug)
+    // is first; claude also needs its permission skip. xtrm-rhmm1.
     const runtimeCmd = runtime === 'claude' ? 'claude' : 'pi';
-    const runtimeArgs = runtime === 'claude' ? ['--dangerously-skip-permissions'] : [];
+    const runtimeArgs = ['--name', worktreeName];
+    if (runtime === 'claude') runtimeArgs.push('--dangerously-skip-permissions');
     const launchResult = spawnSync(runtimeCmd, runtimeArgs, {
         cwd: worktreePath,
         stdio: 'inherit',
@@ -2008,6 +2022,7 @@ function emitAgentRoleLaunched(fields: Record<string, string>): void {
 type TmuxLaunchArgs = {
     runtime: 'pi' | 'claude';
     runtimeExecutable: string;
+    sessionDisplayName: string;
     sessionSlug: string;
     bead?: string;
     attach: boolean;
@@ -2037,7 +2052,7 @@ type TmuxLaunchArgs = {
 
 async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     const {
-        runtime, runtimeExecutable, sessionSlug, bead, attach, worktreePath, branchName, metadataPersisted, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
+        runtime, runtimeExecutable, sessionDisplayName, sessionSlug, bead, attach, worktreePath, branchName, metadataPersisted, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
         newSession, parent, child, reuse, json: structuredOutput = false,
     } = args;
 
@@ -2086,8 +2101,8 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     // trusted to inspect or control the session.
 
     const planCommon = {
-        runtime, bead, parentSessionId, worktreePath, branchName, turn1Body,
-        modelOverride, thinkingOverride, explicitSkillPaths, passthrough,
+        runtime, sessionDisplayName, bead, parentSessionId, worktreePath, branchName,
+        turn1Body, modelOverride, thinkingOverride, explicitSkillPaths, passthrough,
     };
     const plan = args.mode === 'role'
         ? buildRoleTmuxPlan({ ...planCommon, role: args.role })

@@ -201,7 +201,6 @@ call is one JSON-lines RPC cell on a small driver script — no pty, no jupyter.
 - `sp-terminal-overlay` — centered overlay for streaming `sp feed -f`, snapshot `sp ps`, and arbitrary shell commands
 - `python-kernel` — persistent sequential `python` tool (state survives across calls; reset/cwd/abort/timeout semantics; runs with user permissions, not sandboxed)
 - `xtrm-loader` — XTRM context injection (shared bd memory doctrine + project context; `.xtrm/memory.md` is never injected)
-- `auto-session-name` — Generates session names from branch/context
 - `compact-header` — Compact header layout
 - `git-checkpoint` — Git state snapshots
 - `lsp-bootstrap` — LSP initialization hints

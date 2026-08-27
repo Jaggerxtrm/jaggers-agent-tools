@@ -57223,6 +57223,7 @@ function finalizeTmuxPlan(args) {
     runtime,
     sessionName,
     runtimeArgs,
+    sessionDisplayName,
     agentTask,
     bead,
     role,
@@ -57234,6 +57235,7 @@ function finalizeTmuxPlan(args) {
     thinking,
     passthrough
   } = args;
+  runtimeArgs.unshift("--name", sessionDisplayName);
   if (model) runtimeArgs.push("--model", model);
   if (runtime === "pi" && thinking) runtimeArgs.push("--thinking", thinking);
   if (passthrough && passthrough.length > 0) {
@@ -57258,6 +57260,7 @@ function finalizeTmuxPlan(args) {
 function buildRoleTmuxPlan(args) {
   const {
     runtime,
+    sessionDisplayName,
     role,
     bead,
     parentSessionId,
@@ -57288,6 +57291,7 @@ function buildRoleTmuxPlan(args) {
   }
   return finalizeTmuxPlan({
     runtime,
+    sessionDisplayName,
     sessionName,
     runtimeArgs,
     agentTask: `role:${role.name}`,
@@ -57305,6 +57309,7 @@ function buildRoleTmuxPlan(args) {
 function buildBareTmuxPlan(args) {
   const {
     runtime,
+    sessionDisplayName,
     sessionSlug,
     bead,
     parentSessionId,
@@ -57324,6 +57329,7 @@ function buildBareTmuxPlan(args) {
   }
   return finalizeTmuxPlan({
     runtime,
+    sessionDisplayName,
     sessionName: `${runtime}-${slugifyForSession(sessionSlug)}`,
     runtimeArgs,
     agentTask: `session:${sessionSlug}`,
@@ -57853,6 +57859,7 @@ async function launchWorktreeSession(opts) {
   const common = {
     runtime,
     runtimeExecutable,
+    sessionDisplayName: worktreeName,
     sessionSlug: slug,
     bead,
     attach,
@@ -57880,7 +57887,8 @@ async function launchWorktreeSession(opts) {
     return;
   }
   const runtimeCmd = runtime === "claude" ? "claude" : "pi";
-  const runtimeArgs = runtime === "claude" ? ["--dangerously-skip-permissions"] : [];
+  const runtimeArgs = ["--name", worktreeName];
+  if (runtime === "claude") runtimeArgs.push("--dangerously-skip-permissions");
   const launchResult = (0, import_node_child_process.spawnSync)(runtimeCmd, runtimeArgs, {
     cwd: worktreePath,
     stdio: "inherit"
@@ -57923,6 +57931,7 @@ async function launchTmuxSession(args) {
   const {
     runtime,
     runtimeExecutable,
+    sessionDisplayName,
     sessionSlug,
     bead,
     attach,
@@ -57969,6 +57978,7 @@ async function launchTmuxSession(args) {
   }
   const planCommon = {
     runtime,
+    sessionDisplayName,
     bead,
     parentSessionId,
     worktreePath,
@@ -60600,7 +60610,6 @@ var XTRM_MANAGED_PI_EXTENSIONS = /* @__PURE__ */ new Set([
   "custom-footer",
   "lsp-bootstrap",
   "plan-mode",
-  "auto-session-name",
   "auto-update",
   "compact-header",
   "git-checkpoint",
