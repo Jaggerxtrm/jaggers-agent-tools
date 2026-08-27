@@ -1,0 +1,17 @@
+{
+  "name": "@xtrm/pi-service-knowledge",
+  "version": "1.0.0",
+  "description": "xtrm Pi extension: service-knowledge (self-gating registry status + drift notice)",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "keywords": [
+    "pi",
+    "extension",
+    "xtrm",
+    "service-knowledge"
+  ],
+  "author": "xtrm",
+  "license": "MIT"
+}
