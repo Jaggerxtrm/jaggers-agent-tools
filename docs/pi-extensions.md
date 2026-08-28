@@ -203,7 +203,6 @@ call is one JSON-lines RPC cell on a small driver script — no pty, no jupyter.
 - `xtrm-loader` — XTRM context injection (shared bd memory doctrine + project context; `.xtrm/memory.md` is never injected)
 - `compact-header` — Compact header layout
 - `git-checkpoint` — Git state snapshots
-- `lsp-bootstrap` — LSP initialization hints
 
 ## Notes
 
@@ -213,7 +212,7 @@ call is one JSON-lines RPC cell on a small driver script — no pty, no jupyter.
 - Use `pi install -l` only for ad-hoc third-party/local extensions outside the managed set.
 - Legacy `config/pi/extensions/**` and `.xtrm/config/pi/extensions/**` trees are retired.
 - Shared core helpers now live in `packages/pi-extensions/src/core/`.
-- Serena-related extensions remain disabled migration artifacts and are not enrolled or managed by XTRM.
+- Serena-related extensions (`pi-serena-compact`, `serena-pool`) were retired and removed; XTRM no longer manages Serena MCP integration.
 
 ## Related Docs
 
