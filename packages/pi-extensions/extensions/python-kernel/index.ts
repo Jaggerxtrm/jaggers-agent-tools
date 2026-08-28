@@ -74,6 +74,21 @@ for _name in (os.environ.get("PI_SKILL_IMPORTS", "") or "").split(","):
         _sk_errors.append({"module": _name, "ename": type(_e).__name__, "evalue": str(_e)})
 # Loop vars above are module-level (never in _ns); leave them, they are harmless.
 
+# kernel binding (xtrm-6z6.4): mount the installed service_knowledge package
+# into the namespace when a service registry is present in the cwd (the TS
+# side resolves PI_SK_PACKAGE_PATH via the kernel's own interpreter, so it is
+# venv-aware). Failures are recorded, never fatal — a missing package must not
+# kill the kernel.
+_pkg_path = os.environ.get("PI_SK_PACKAGE_PATH", "") or ""
+if _pkg_path:
+    if _pkg_path not in sys.path:
+        sys.path.insert(0, _pkg_path)
+    try:
+        _ns["service_knowledge"] = importlib.import_module("service_knowledge")
+    except Exception as _e:
+        _sk_errors.append({"module": "service_knowledge", "ename": type(_e).__name__, "evalue": str(_e)})
+del _pkg_path
+
 def _apply_prelude():
     """Re-inject kernel invariants into _ns (QoL prelude + audit seam). Called
     at boot and after every reset — reset clears user state, but the prelude
@@ -84,9 +99,46 @@ def _apply_prelude():
     from pathlib import Path as _Path
     _ns.update({"json": json, "re": _re, "os": os, "sys": sys, "subprocess": _subprocess, "Path": _Path})
     _ns.setdefault("_AUDIT", [])
+    # kernel binding (xtrm-6z6.4): after reset, re-mount service_knowledge
+    # (the package is already on sys.path from boot; just re-import the binding).
+    if "service_knowledge" in _ns or "service_knowledge" in sys.modules:
+        try:
+            _ns["service_knowledge"] = importlib.import_module("service_knowledge")
+        except Exception:
+            pass
+    # Re-bind the in-kernel index-rebuild helper (defined below at module scope;
+    # resolved at call time).
+    try:
+        _ns["sk_rebuild"] = sk_rebuild
+    except NameError:
+        pass
 
 
 _apply_prelude()
+
+def sk_rebuild():
+    """Rebuild the service-knowledge FTS5 evidence index in-kernel (xtrm-6z6.4).
+    Writes the sqlite cache under .xtrm/cache/ — the mutation rides the audit
+    seam so the host sees it in the tool details. No-op (returns None) when the
+    package is not mounted."""
+    sk = _ns.get("service_knowledge")
+    if sk is None:
+        return None
+    try:
+        # The index submodule is lazily imported; importlib.import_module makes
+        # it available as service_knowledge.index regardless of prior imports.
+        import importlib as _il
+        _idx = _il.import_module("service_knowledge.index")
+        from pathlib import Path as _P
+        stats = _idx.build(_P(os.getcwd()))
+        _ns["_AUDIT"].append({"op": "write", "path": os.path.join(os.getcwd(), ".xtrm", "cache", "service-knowledge.sqlite"), "kind": "index-rebuild"})
+        return {"items": getattr(stats, "items", None), "duration_ms": getattr(stats, "duration_ms", None)}
+    except Exception as _e:
+        return {"error": {"ename": type(_e).__name__, "evalue": str(_e)}}
+
+
+# Bind the in-kernel helper into _ns (cells eval in _ns, not module scope).
+_ns["sk_rebuild"] = sk_rebuild
 
 def _reload_skills():
     """Re-import every mounted skill module (dev-loop honesty: del sys.modules,
@@ -353,6 +405,62 @@ export function skillBlurb(skillMd: string): string {
 	}
 }
 
+// kernel binding (xtrm-6z6.4): service_knowledge in-kernel.
+// When the cwd carries a service registry (the same gating signal the
+// service-knowledge extension uses), the driver pre-imports the installed
+// `service_knowledge` Python package so drift checks + index rebuild run from
+// one cell instead of CLI round trips.
+
+/** Canonical service-knowledge registry roots (mirror find_umbrella_packs). */
+function registryRoots(cwd: string): string[] {
+	return [join(cwd, ".xtrm", "skills"), join(cwd, ".xtrm", "skills", "user", "packs")];
+}
+
+const RESERVED_PACK_NAMES = new Set(["default", "optional", "user", "active", "local-legacy"]);
+
+/** True when cwd carries a canonical service-knowledge or legacy service-skills registry. */
+export function hasServiceRegistry(cwd: string): boolean {
+	for (const root of registryRoots(cwd)) {
+		let names: string[] = [];
+		try {
+			names = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+		} catch {
+			continue;
+		}
+		for (const name of names) {
+			if (RESERVED_PACK_NAMES.has(name)) continue;
+			const packDir = join(root, name);
+			for (const umbrella of ["service-knowledge", "service-skills"]) {
+				if (existsSync(join(packDir, umbrella, "service-registry.json"))) return true;
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * Resolve the installed `service_knowledge` package location via the kernel's
+ * own interpreter (venv-aware: uses the same pythonBin the kernel spawns).
+ * Returns the directory to prepend to sys.path (parent of the package), or
+ * null when the package is not importable.
+ */
+export async function resolveServiceKnowledgePath(pythonBin: string): Promise<string | null> {
+	try {
+		const { execFile } = await import("node:child_process");
+		const { promisify } = await import("node:util");
+		const execFileAsync = promisify(execFile);
+		const { stdout } = await execFileAsync(
+			pythonBin,
+			["-c", "import service_knowledge, os; print(os.path.dirname(os.path.dirname(service_knowledge.__file__)))"],
+			{ timeout: 10_000 },
+		);
+		const path = stdout.trim();
+		return path && existsSync(path) ? path : null;
+	} catch {
+		return null;
+	}
+}
+
 export class PythonKernel {
 	private proc: ChildProcessWithoutNullStreams | undefined;
 	private tmpDir: string | undefined;
@@ -371,18 +479,21 @@ export class PythonKernel {
 	private readonly startTimeoutMs: number;
 	private readonly maxOutputChars: number;
 	private readonly skills: SkillModule[];
+	private readonly skPackagePath: string | null;
 
 	constructor(
 		private readonly cwd: string,
 		private readonly onRestart: (message: string) => void,
 		options: PythonKernelOptions = {},
 		skills: SkillModule[] = [],
+		skPackagePath: string | null = null,
 	) {
 		this.pythonBin = options.pythonBin ?? DEFAULT_PYTHON_BIN;
 		this.cellTimeoutMs = options.cellTimeoutMs ?? DEFAULT_CELL_TIMEOUT_MS;
 		this.startTimeoutMs = options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
 		this.maxOutputChars = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_CHARS;
 		this.skills = skills;
+		this.skPackagePath = skPackagePath;
 	}
 
 	ensureStarted(): Promise<void> {
@@ -415,6 +526,9 @@ export class PythonKernel {
 							PI_SKILL_IMPORTS: this.skills.map((s) => s.name).join(","),
 						}
 					: {}),
+				// kernel binding (xtrm-6z6.4): when a service registry is present,
+				// the driver pre-imports the installed service_knowledge package.
+				...(this.skPackagePath ? { PI_SK_PACKAGE_PATH: this.skPackagePath } : {}),
 				// QoL: full over-cap cell output is written into the kernel temp dir
 				// (path surfaces in the reply; removed with the kernel on teardown).
 				PI_KERNEL_TMP: this.tmpDir ?? "",
@@ -644,10 +758,29 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: PythonKern
 			? `\nImportable skill modules: ${skillModules.map((s) => s.name).join(", ")} — pre-imported in namespace; help(x) for docs.`
 			: "";
 
-	function kernelFor(cwd: string, sessionId: string): PythonKernel {
+	// kernel binding (xtrm-6z6.4): per-cwd service_knowledge package path cache.
+	// Registry presence is per-repo (sessions can be in different cwds), so it is
+	// resolved lazily per cwd, not at extension init.
+	const skPathCache = new Map<string, Promise<string | null>>();
+	function resolveSkPathFor(cwd: string): Promise<string | null> {
+		let p = skPathCache.get(cwd);
+		if (!p) {
+			p = (async () => {
+				if (!hasServiceRegistry(cwd)) return null;
+				return resolveServiceKnowledgePath(process.env.PI_PYTHON_BIN ?? "python3");
+			})();
+			skPathCache.set(cwd, p);
+		}
+		return p;
+	}
+
+	async function kernelFor(cwd: string, sessionId: string): Promise<PythonKernel> {
 		let k = kernels.get(sessionId);
 		if (!k) {
-			k = opts.kernelFactory ? opts.kernelFactory(cwd, sessionId) : new PythonKernel(cwd, () => {}, {}, skillModules);
+			const skPath = await resolveSkPathFor(cwd);
+			k = opts.kernelFactory
+				? opts.kernelFactory(cwd, sessionId)
+				: new PythonKernel(cwd, () => {}, {}, skillModules, skPath);
 			kernels.set(sessionId, k);
 		}
 		return k;
@@ -681,7 +814,7 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: PythonKern
 		}),
 		async execute(toolCallId, params, signal, _onUpdate, ctx) {
 			const sessionId = ctx.sessionManager.getSessionId();
-			const kernel = kernelFor(ctx.cwd, sessionId);
+			const kernel = await kernelFor(ctx.cwd, sessionId);
 			const onAbort = () => kernel.kill();
 			signal?.addEventListener("abort", onAbort, { once: true });
 			try {

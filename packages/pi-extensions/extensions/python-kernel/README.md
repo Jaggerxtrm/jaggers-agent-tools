@@ -97,6 +97,33 @@ Per-cell output is capped (default 20,000 chars; configurable via
   reply: `[full output: /tmp/pi-py-kernel-*/cell-N.out]`. The file lives in
   the kernel temp dir and is removed when the kernel is torn down.
 
+## service_knowledge in-kernel binding (xtrm-6z6.4)
+
+When the session cwd carries a canonical service registry (the same gating
+signal the service-knowledge extension uses — `.xtrm/skills/<pack>/` with a
+`service-knowledge` or legacy `service-skills` umbrella + `service-registry.json`,
+reserved pack names skipped), the driver pre-imports the installed
+`service_knowledge` Python package into the namespace. The package location is
+resolved via the kernel's own interpreter (venv-aware, honors `pythonBin`).
+
+```python
+import service_knowledge
+service_knowledge.__version__                     # e.g. '0.7.0'
+from service_knowledge.index import search
+search(Path('.'), 'alerting', limit=2)            # in-kernel index query
+```
+
+An in-kernel index-rebuild helper is bound as `sk_rebuild()` — it calls
+`service_knowledge.index.build()` and appends an `_AUDIT` entry so the mutation
+rides the audit seam (host sees it in tool details):
+
+```python
+sk_rebuild()   # -> {'items': N, 'duration_ms': ...}; _AUDIT gains an entry
+```
+
+No registry → the package is not mounted (mirrors the extension's self-gating).
+A missing/unimportable package is recorded in `sk_errors`, never fatal.
+
 ## Audit seam
 
 The driver reserves `_AUDIT` (a list) in the kernel namespace and copies it
