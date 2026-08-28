@@ -1,18 +1,79 @@
 {
   "schema_version": "xtrm.pi-extension-manifest.v1",
   "active": [
-    { "id": "beads", "displayName": "beads", "required": true, "ownership": "xtrm" },
-    { "id": "compact-header", "displayName": "compact-header", "required": false, "ownership": "xtrm" },
-    { "id": "custom-footer", "displayName": "custom-footer", "required": true, "ownership": "xtrm" },
-    { "id": "git-checkpoint", "displayName": "git-checkpoint", "required": false, "ownership": "xtrm" },
-    { "id": "python-kernel", "displayName": "python-kernel", "required": false, "ownership": "xtrm" },
-    { "id": "service-skills", "displayName": "service-skills", "required": false, "ownership": "xtrm" },
-    { "id": "session-flow", "displayName": "session-flow", "required": true, "ownership": "xtrm" },
-    { "id": "sp-terminal-overlay", "displayName": "sp-terminal-overlay", "required": false, "ownership": "xtrm" },
-    { "id": "xtrm-loader", "displayName": "xtrm-loader", "required": true, "ownership": "xtrm" },
-    { "id": "xtrm-ui", "displayName": "xtrm-ui", "required": true, "ownership": "xtrm" },
-    { "id": "xtprompt", "displayName": "xtprompt", "required": false, "ownership": "xtrm" },
-    { "id": "read-line-numbers", "displayName": "read-line-numbers", "required": true, "ownership": "xtrm" }
+    {
+      "id": "beads",
+      "displayName": "beads",
+      "required": true,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "compact-header",
+      "displayName": "compact-header",
+      "required": false,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "custom-footer",
+      "displayName": "custom-footer",
+      "required": true,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "git-checkpoint",
+      "displayName": "git-checkpoint",
+      "required": false,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "python-kernel",
+      "displayName": "python-kernel",
+      "required": false,
+      "ownership": "xtrm",
+      "description": "Persistent python3 kernel: skills-as-imports, prelude, output truncation, audit seam"
+    },
+    {
+      "id": "service-skills",
+      "displayName": "service-skills",
+      "required": false,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "session-flow",
+      "displayName": "session-flow",
+      "required": true,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "sp-terminal-overlay",
+      "displayName": "sp-terminal-overlay",
+      "required": false,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "xtrm-loader",
+      "displayName": "xtrm-loader",
+      "required": true,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "xtrm-ui",
+      "displayName": "xtrm-ui",
+      "required": true,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "xtprompt",
+      "displayName": "xtprompt",
+      "required": false,
+      "ownership": "xtrm"
+    },
+    {
+      "id": "read-line-numbers",
+      "displayName": "read-line-numbers",
+      "required": true,
+      "ownership": "xtrm"
+    }
   ],
   "disabled": {
     "quality-gates": "Hook-script lookup still targets .claude/hooks instead of the managed .xtrm/hooks layout.",

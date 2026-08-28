@@ -1,0 +1,19 @@
+{
+  "tools": [],
+  "commands": [
+    {
+      "name": "service-knowledge:status",
+      "description": "Show service registry status: services, last_sync_ref vs git HEAD, drift marker, suggested action"
+    }
+  ],
+  "events": [
+    "before_agent_start"
+  ],
+  "beforeAgentStartReturn": {
+    "message": {
+      "customType": "service-knowledge-context",
+      "content": "<service_knowledge_context>\nservice registry: 1 pack(s), 17 service(s)\n- service-knowledge@infra (17 services)\ndrift: none detected\n</service_knowledge_context>",
+      "display": false
+    }
+  }
+}

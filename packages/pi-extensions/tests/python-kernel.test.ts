@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,6 +20,15 @@ const { PythonKernel } = extension;
 function tmpBase() {
   const dir = mkdtempSync(join(tmpdir(), "pi-py-kernel-test-"));
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+/** Write a python-backed skill fixture: SKILL.md + src/<name>/__init__.py. */
+function writeFixtureSkill(root: string, name: string, body: string) {
+  const skillDir = join(root, name);
+  mkdirSync(join(skillDir, "src", name), { recursive: true });
+  writeFileSync(join(skillDir, "SKILL.md"), `---\ndescription: ${name} test skill\n---\n`);
+  writeFileSync(join(skillDir, "src", name, "__init__.py"), body);
+  return skillDir;
 }
 
 function fakePi() {
@@ -62,6 +71,213 @@ describe("python-kernel managed extension", () => {
     expect(tool.parameters.kind).toBe("object");
     expect(tool.parameters.shape.code.kind).toBe("string");
     expect(tool.parameters.shape.reset.kind).toBe("optional");
+    expect(tool.parameters.shape.reload_skills.kind).toBe("optional");
+  });
+
+  test("skillbridge discovery scans skills roots for python-backed skills", () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "alpha", "VALUE = 1\n");
+      writeFixtureSkill(fx.dir, "beta", "VALUE = 2\n");
+      // Not python-backed: no src/<name>/__init__.py.
+      mkdirSync(join(fx.dir, "plain"));
+      writeFileSync(join(fx.dir, "plain", "SKILL.md"), "---\ndescription: no python\n---\n");
+
+      const modules = extension.discoverSkillModules([fx.dir]);
+      expect(modules.map((m) => m.name).sort()).toEqual(["alpha", "beta"]);
+      for (const m of modules) {
+        expect(m.path).toBe(join(fx.dir, m.name, "src"));
+        expect(m.blurb).toContain("test skill");
+      }
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("skillbridge discovery: import name is the package dir, not the skill dir (xtrm-vs7f8)", () => {
+    const fx = tmpBase();
+    try {
+      // Skill dir is 'fiskill' but the importable package is src/sre_chain.
+      const skillDir = join(fx.dir, "fiskill");
+      mkdirSync(join(skillDir, "src", "sre_chain"), { recursive: true });
+      writeFileSync(join(skillDir, "SKILL.md"), "---\ndescription: e2e fixture\n---\n");
+      writeFileSync(join(skillDir, "src", "sre_chain", "__init__.py"), "VALUE = 1\n");
+
+      const modules = extension.discoverSkillModules([fx.dir]);
+      expect(modules).toHaveLength(1);
+      // The description must list the ACTUAL import name (what the kernel mounts).
+      expect(modules[0].name).toBe("sre_chain");
+      expect(modules[0].path).toBe(join(skillDir, "src"));
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("skillbridge mounts fixture skills as importable kernel modules (no host round trips)", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "sre_chain", "def load(): return 'loaded'\ndef run(dry_run=False): return dry_run\n");
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "sre_chain", path: join(fx.dir, "sre_chain", "src"), blurb: "fixture" },
+      ]);
+      // Import happens at boot; the module is bound into _ns, so a bare name
+      // reference works with zero host round trips.
+      const call = await kernel.runCell("sre_chain.load()", false);
+      expect(call.error).toBeNull();
+      expect(call.stdout.trim()).toBe("'loaded'");
+      const call2 = await kernel.runCell("sre_chain.run(dry_run=True)", false);
+      expect(call2.error).toBeNull();
+      expect(call2.stdout.trim()).toBe("True");
+      expect(call2.sk_errors).toEqual([]);
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("skillbridge reload re-imports a skill module and reflects changes", async () => {
+    const fx = tmpBase();
+    try {
+      const skill = writeFixtureSkill(fx.dir, "reloadme", "VALUE = 'old'\n");
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "reloadme", path: join(fx.dir, "reloadme", "src"), blurb: "fixture" },
+      ]);
+      const first = await kernel.runCell("reloadme.VALUE", false);
+      expect(first.stdout.trim()).toBe("'old'");
+
+      writeFileSync(join(skill, "src", "reloadme", "__init__.py"), "VALUE = 'new'\n");
+      const status = await kernel.reloadSkills();
+      expect(status).toEqual({ reloadme: "ok" });
+      const second = await kernel.runCell("reloadme.VALUE", false);
+      expect(second.stdout.trim()).toBe("'new'");
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("skillbridge boot survives a broken skill and surfaces _sk_errors", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "good", "VALUE = 1\n");
+      writeFixtureSkill(fx.dir, "bad", "raise RuntimeError('boom')\n");
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "good", path: join(fx.dir, "good", "src"), blurb: "fixture" },
+        { name: "bad", path: join(fx.dir, "bad", "src"), blurb: "fixture" },
+      ]);
+      // Boot must not die; the good module still imports, the bad one is recorded.
+      const call = await kernel.runCell("good.VALUE", false);
+      expect(call.error).toBeNull();
+      expect(call.stdout.trim()).toBe("1");
+      expect(call.sk_errors).toHaveLength(1);
+      expect(call.sk_errors![0].module).toBe("bad");
+      expect(call.sk_errors![0].ename).toBe("RuntimeError");
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("tool reload_skills param surfaces per-module status via the extension", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "sre_chain", "def load(): return 'loaded'\n");
+      const pi = fakePi();
+      extension.default(pi as any, {
+        kernelFactory: () =>
+          new PythonKernel(fx.dir, () => {}, {}, [
+            { name: "sre_chain", path: join(fx.dir, "sre_chain", "src"), blurb: "fixture" },
+          ]),
+      });
+      const tool = pi.tools[0];
+      const result = await runViaExecute(tool, { reload_skills: true });
+      expect(result.isError).toBe(false);
+      expect(result.content[0].text).toContain("sre_chain: ok");
+      expect(result.details.status).toBe("ok");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("kernel reply carries the skill import audit list for host visibility", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(fx.dir, "sre_chain", "def load(): return 'loaded'\n");
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "sre_chain", path: join(fx.dir, "sre_chain", "src"), blurb: "fixture" },
+      ]);
+      const call = await kernel.runCell("sre_chain.load()", false);
+      expect(call.audit).toEqual([]); // no _AUDIT entries yet; field present
+      expect(Array.isArray(call.audit)).toBe(true);
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("audit seam: kernel-side mutation entries flow into the reply and tool details", async () => {
+    const fx = tmpBase();
+    try {
+      writeFixtureSkill(
+        fx.dir,
+        "mutator",
+        "def write_file(path, content='x'):\n    _AUDIT.append({'op': 'write', 'path': path})\n    return 'wrote'\n",
+      );
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [
+        { name: "mutator", path: join(fx.dir, "mutator", "src"), blurb: "fixture" },
+      ]);
+      const call = await kernel.runCell("mutator.write_file('/etc/hosts')", false);
+      expect(call.error).toBeNull();
+      expect(call.audit).toHaveLength(1);
+      expect(call.audit![0]).toEqual({ op: "write", path: "/etc/hosts" });
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("audit seam: policy hook (behind flag) flags out-of-session writes in the tool result", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, []);
+      const pi = fakePi();
+      extension.default(pi as any, {
+        auditPolicy: true,
+        kernelFactory: () => kernel,
+      });
+      const tool = pi.tools[0];
+      // Simulate a cell whose skill appended an out-of-session write to _AUDIT.
+      await kernel.runCell("_AUDIT.append({'op': 'write', 'path': '/etc/hosts'})", false);
+      const result = await runViaExecute(tool, { code: "'ok'" });
+      expect(result.details.auditPolicy).toContain("blocked 1");
+      expect(result.content[0].text).toContain("outside session cwd");
+      // In-session writes are allowed when the hook is on. runViaExecute uses
+      // ctx.cwd = process.cwd(), so an in-session path is under that cwd.
+      const sessionCwd = process.cwd();
+      await kernel.runCell(`_AUDIT.clear(); _AUDIT.append({'op': 'write', 'path': '${sessionCwd}/x.txt'})`, false);
+      const result2 = await runViaExecute(tool, { code: "'ok'" });
+      expect(result2.details.auditPolicy).toContain("allowed");
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("audit seam: hook is off by default (no policy text, audit still in details)", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, []);
+      const pi = fakePi();
+      extension.default(pi as any, { kernelFactory: () => kernel });
+      const tool = pi.tools[0];
+      await kernel.runCell("_AUDIT.append({'op': 'write', 'path': '/etc/hosts'})", false);
+      const result = await runViaExecute(tool, { code: "'ok'" });
+      expect(result.details.audit).toEqual([{ op: "write", path: "/etc/hosts" }]);
+      expect(result.details.auditPolicy).toBe("none");
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
   });
 
   test("kernel state persists across cells and reset clears it", async () => {
@@ -232,7 +448,7 @@ describe("python-kernel managed extension", () => {
     }
   });
 
-  test("output truncation guards unbounded tool results", async () => {
+  test("output truncation guards unbounded tool results with head+marker+tail and a temp file path", async () => {
     const fx = tmpBase();
     try {
       const pi = fakePi();
@@ -240,8 +456,161 @@ describe("python-kernel managed extension", () => {
       const tool = pi.tools[0];
       const result = await runViaExecute(tool, { code: "print('x' * 300_000)" });
       expect(result.isError).toBe(false);
-      expect(result.content[0].text.length).toBeLessThan(205_000);
-      expect(result.content[0].text.endsWith("... [output truncated]")).toBe(true);
+      // 300k chars → head 8k + marker + tail 4k ≈ 12.3k, well under the old 200k guard.
+      expect(result.content[0].text.length).toBeLessThan(20_000);
+      expect(result.content[0].text).toMatch(/\[truncated 3000\d+ chars\]/);
+      // The full output is preserved in a temp file whose path is in the reply.
+      expect(result.content[0].text).toMatch(/\[full output: .*pi-py-kernel-.*\]/);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("output truncation reports an object shape hint when the result is sized", async () => {
+    const fx = tmpBase();
+    try {
+      const pi = fakePi();
+      extension.default(pi as any);
+      const tool = pi.tools[0];
+      const result = await runViaExecute(tool, { code: "list(range(100_000))" });
+      expect(result.isError).toBe(false);
+      expect(result.content[0].text).toContain("list len=100000");
+      // The truncated repr carries the marker.
+      expect(result.content[0].text).toContain("...[truncated");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("truncateOutput pure helper: head+marker+tail under the cap, passthrough under it", () => {
+    const { text, truncated, originalLength } = extension.truncateOutput("a".repeat(100), 50);
+    expect(truncated).toBe(true);
+    expect(originalLength).toBe(100);
+    expect(text).toContain("...[truncated 100 chars]...");
+    expect(text.startsWith("a".repeat(8192) + "\n")).toBe(false); // head is 8192 then marker
+    const small = extension.truncateOutput("hi", 50);
+    expect(small.truncated).toBe(false);
+    expect(small.text).toBe("hi");
+  });
+
+  test("stdlib prelude is pre-loaded into the kernel namespace", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {});
+      const check = await kernel.runCell("json.dumps({'a': 1}) + '|' + re.sub('a', 'b', 'a') + '|' + str(Path('.') / 'x') + '|' + os.getcwd() + '|' + subprocess.run(['echo','hi'], capture_output=True, text=True).stdout.strip() + '|' + sys.version.split()[0]", false);
+      expect(check.error).toBeNull();
+      // repr() wraps the whole joined string in quotes; assert on the parts.
+      expect(check.stdout).toContain('{"a": 1}');
+      expect(check.stdout).toContain("|b|");
+      expect(check.stdout).toContain("|x|");
+      expect(check.stdout).toContain(fx.dir); // cwd is the fixture dir
+      expect(check.stdout).toContain("|hi|"); // subprocess
+      expect(check.stdout).toContain("|3."); // sys.version
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("prelude and audit list survive reset (xtrm-vs7f8 readme-check finding)", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {});
+      // Prelude works before reset.
+      const before = await kernel.runCell("subprocess.run(['echo','hi'], capture_output=True, text=True).stdout.strip()", false);
+      expect(before.error).toBeNull();
+      // Reset clears user state but must NOT clear the documented prelude.
+      await kernel.runCell("x = 1", true, fx.dir);
+      const after = await kernel.runCell("subprocess.run(['echo','hi'], capture_output=True, text=True).stdout.strip()", false);
+      expect(after.error).toBeNull();
+      expect(after.stdout.trim()).toBe("'hi'");
+      // User state is still gone.
+      const userState = await kernel.runCell("x", false);
+      expect(userState.error?.ename).toBe("NameError");
+      // _AUDIT still exists after reset (skills append to it).
+      const audit = await kernel.runCell("_AUDIT.append({'op': 'write', 'path': '/tmp/x'}); len(_AUDIT)", false);
+      expect(audit.error).toBeNull();
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("kernel binding: hasServiceRegistry detects canonical + legacy registries (xtrm-6z6.4)", () => {
+    const fx = tmpBase();
+    try {
+      // No registry -> false.
+      expect(extension.hasServiceRegistry(fx.dir)).toBe(false);
+      // Canonical service-knowledge registry -> true.
+      mkdirSync(join(fx.dir, ".xtrm", "skills", "infra", "service-knowledge"), { recursive: true });
+      writeFileSync(join(fx.dir, ".xtrm", "skills", "infra", "service-knowledge", "service-registry.json"), "{}");
+      expect(extension.hasServiceRegistry(fx.dir)).toBe(true);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("kernel binding: registry absent -> service_knowledge NOT mounted (xtrm-6z6.4)", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [], null);
+      const call = await kernel.runCell("'service_knowledge' in dir()", false);
+      expect(call.error).toBeNull();
+      expect(call.stdout.trim()).toBe("False");
+      // _sk_errors stays empty (no mount attempted).
+      expect(call.sk_errors).toEqual([]);
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("kernel binding: registry present + package resolvable -> service_knowledge mounted (xtrm-6z6.4)", async () => {
+    const fx = tmpBase();
+    try {
+      // Registry present in cwd.
+      mkdirSync(join(fx.dir, ".xtrm", "skills", "infra", "service-knowledge"), { recursive: true });
+      writeFileSync(join(fx.dir, ".xtrm", "skills", "infra", "service-knowledge", "service-registry.json"), "{}");
+      // Resolve the installed package path the way the extension does.
+      const skPath = await extension.resolveServiceKnowledgePath("python3");
+      if (!skPath) {
+        // Package not installed in this env -> binding gracefully absent; assert the
+        // kernel still boots cleanly and records no error for a non-mount.
+        const kernel = new PythonKernel(fx.dir, () => {}, {}, [], null);
+        const call = await kernel.runCell("1 + 1", false);
+        expect(call.error).toBeNull();
+        kernel.kill();
+        return;
+      }
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [], skPath);
+      const call = await kernel.runCell("service_knowledge.__version__", false);
+      expect(call.error).toBeNull();
+      expect(call.stdout).toMatch(/\d+\.\d+/); // version
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("kernel binding: sk_rebuild rides the audit seam (xtrm-6z6.4)", async () => {
+    const fx = tmpBase();
+    try {
+      const skPath = await extension.resolveServiceKnowledgePath("python3");
+      if (!skPath) {
+        // Package absent: sk_rebuild must be a safe no-op (None), never a crash.
+        const kernel = new PythonKernel(fx.dir, () => {}, {}, [], null);
+        const call = await kernel.runCell("sk_rebuild()", false);
+        expect(call.error).toBeNull();
+        expect(call.stdout.trim()).toBe("None");
+        kernel.kill();
+        return;
+      }
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [], skPath);
+      const call = await kernel.runCell("sk_rebuild()", false);
+      expect(call.error).toBeNull();
+      // Either a real rebuild (with items) or an error dict — never a crash.
+      expect(call.stdout).toMatch(/\{.*\}|None/);
+      kernel.kill();
     } finally {
       fx.cleanup();
     }

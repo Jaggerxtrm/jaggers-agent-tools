@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.7] - 2026-08-27
+
+### Added
+- Single-line render for pi footer and claude hook ([1e6c2f5](https://github.com/xtrm-dev/core/commit/1e6c2f57e690b2b87af63334906b128416d0705e))
+- Native-style external tool rows + #9a8bff model accent ([1fd5889](https://github.com/xtrm-dev/core/commit/1fd58895c737147449659d41898662ac608ad70f))
+- Skillbridge — mount python-backed skills as importable kernel modules (xtrm-h7uwi.1) ([48cd3ae](https://github.com/xtrm-dev/core/commit/48cd3ae3961f9116618edbd894628736cd7ac7ae))
+- Python-kernel QoL — stdlib prelude + output truncation with shape hint (xtrm-h7uwi.2) ([8aa5b17](https://github.com/xtrm-dev/core/commit/8aa5b1751e51b9881bce3716c4b2011c3b51e268))
+- Python-kernel audit seam — kernel mutation events visible to host (xtrm-h7uwi.3) ([cf7da84](https://github.com/xtrm-dev/core/commit/cf7da847ca9a2b84883501d6ce89ce14e35aee78))
+
+### Fixed
+- Retry external tool frame patch on session_start ([18bc72f](https://github.com/xtrm-dev/core/commit/18bc72f6c69aff19f556f7efe8e327f7c9c45616))
+- Replace prototype patches without wrapper stacking ([5312a04](https://github.com/xtrm-dev/core/commit/5312a04769b54512d6d577763cbc93596b71a88e))
+- Patch active bundled pi runtime classes (#604) ([296be42](https://github.com/xtrm-dev/core/commit/296be42923d76f2eb6dced60390bb37e4b7c3874))
+
+### Project maintenance
+- Reconcile Core residual architecture pointers (#596) ([3b04202](https://github.com/xtrm-dev/core/commit/3b04202289627334266b9100236ae2a2a9cd45d4))
+- Update parity test to single-line statusline contract ([0850349](https://github.com/xtrm-dev/core/commit/0850349c7a28b23b4cf5781a18300349b6980693))
+
 ## [0.11.6] - 2026-08-20
 
 ### Fixed
