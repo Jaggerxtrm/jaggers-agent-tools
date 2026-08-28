@@ -8,9 +8,11 @@ Date: 2026-08-28
 
 ## Decision
 
-Add a small, trusted extension-descriptor registry shared by the Specialists runner, `PiAgentSession`, and direct script runner. A specialist selects known descriptors through `specialist.execution.extensions`; the runner resolves the selected set once and passes the same health/path plan to both spawn implementations. Each spawn adds only healthy paths as explicit `-e` arguments after `--no-extensions`.
+Use two configuration layers. A user-owned descriptor registry under `~/.config/specialists` defines which extension IDs are trusted and available on the machine, plus package/entry resolution overrides. A specialist manifest can then select only those trusted IDs through boolean `specialist.execution.extensions`. The Specialists runner resolves the selected set once and passes the same health/path plan to `PiAgentSession` and the direct script runner. Each spawn adds only healthy paths as explicit `-e` arguments after `--no-extensions`.
 
-Do not generate Pi settings, change `HOME`, publish packages, accept arbitrary repository-provided code paths, or change the Core `xt pi --role` launcher. The current Core launcher already uses Pi's ambient global/project extension discovery. The isolated path that needs configuration is a tracked Specialists dispatch (`sp run` and related job paths), not the interactive Core role launcher.
+Trust does not imply activation. Every descriptor is opt-in per specialist: only manifest `true` selects it; omitted or `false` means inactive. Packaged catalog metadata can supply resolution defaults, but it cannot grant trust or activate an extension. User descriptor metadata overrides packaged catalog metadata.
+
+Do not generate Pi settings, change `HOME`, publish packages, accept arbitrary repository-provided code paths, vendor extensions into Core, or change the Core `xt pi --role` launcher. The current Core launcher already uses Pi's ambient global/project extension discovery. The isolated path that needs configuration is a tracked Specialists dispatch (`sp run` and related job paths), not the interactive Core role launcher.
 
 The smallest safe manifest shape is a boolean map of trusted extension IDs:
 
@@ -29,7 +31,7 @@ The smallest safe manifest shape is a boolean map of trusted extension IDs:
 }
 ```
 
-Each descriptor owns its package name, entry path, default-enabled state, permission predicate, and optional tool-catalog identity. A repository manifest can select a known descriptor, but it cannot point Pi at an arbitrary file.
+The user layer owns trust and can override package name and relative entry path. Catalog metadata can provide fallback package, entry, version, permission predicate, and tool identity. A repository manifest can select a user-trusted descriptor, but it cannot define a descriptor or point Pi at an arbitrary file.
 
 ## Source-bound terminology correction
 
@@ -127,6 +129,8 @@ Service Knowledge has a catalog row but no tools. Its package/version are not co
 
 The catalog is therefore a tool-policy/health surface, not a complete extension inventory. Overloading it with UI hooks, gates, context injectors, and provider adapters would widen its role and require changes across its fixed enum and manifest resolver. A separate small injection-descriptor registry is the lower-diff design.
 
+The current catalog reader prefers repository-local `<cwd>/.specialists/catalog/index.json` (`/home/dawid/dev/specialists/src/pi/session.ts:181-198`). That source is valid for existing repository tool policy, but it is not a trust source. The descriptor resolver must read fallback metadata only from the packaged Specialists catalog and `~/.config/specialists/extensions.json`; it must never accept descriptor package, entry, version, permission, or tool identity from a repository-local catalog.
+
 ## 4. Injectable packages and self-gating
 
 ### Service Knowledge
@@ -172,38 +176,39 @@ Use boolean keys under existing `execution.extensions`:
 
 Rules:
 
-- Omitted key: descriptor default applies.
-- `true`: request injection, subject to descriptor permission and health checks.
-- `false`: suppress injection, including current default-enabled descriptors.
-- Unknown key: skip and add an `unknown_extension_id` health warning; do not fail the job.
+- Omitted key or `false`: do not select the descriptor.
+- `true`: request injection, but only if the user layer marks the ID trusted and resolution/permission health checks pass.
+- ID absent from the effective user registry: skip and add an `untrusted_extension_id` health warning; do not fail the job, even when packaged catalog metadata exists.
 - `serena`: continue to parse and ignore for compatibility.
-- Only booleans are accepted for known keys in typed schema/docs.
+- All manifest extension values must be booleans. Descriptor IDs remain data-driven so a user can trust an external descriptor such as `ast-grep` without a Specialists or Core release.
 
-Initial trusted descriptors:
+Initial descriptor metadata candidates, all inactive until a manifest explicitly selects them:
 
-| ID | Package/entry | Default | Predicate |
+| ID | Packaged catalog/default package entry | User trust required | Predicate |
 |---|---|---:|---|
-| `gitnexus` | existing contract package path | enabled | contract status `available` |
-| `python-kernel` | `@jaggerxtrm/pi-extensions/extensions/python-kernel/index.ts` | enabled | tier is not `READ_ONLY` and catalog-compatible |
-| `service-knowledge` | `@jaggerxtrm/pi-service-knowledge/index.ts` | enabled | package entry exists; extension self-gates by registry |
-| `xtrm-loader` | `@jaggerxtrm/pi-extensions/extensions/xtrm-loader/index.ts` | disabled | explicit `true`; package entry exists |
+| `gitnexus` | existing contract package path | yes | contract status `available` |
+| `python-kernel` | `@jaggerxtrm/pi-extensions/extensions/python-kernel/index.ts` | yes | tier is not `READ_ONLY` and catalog-compatible |
+| `service-knowledge` | `@jaggerxtrm/pi-service-knowledge/index.ts` | yes | package entry exists; extension self-gates by registry |
+| `xtrm-loader` | `@jaggerxtrm/pi-extensions/extensions/xtrm-loader/index.ts` | yes | package entry exists |
 
-Additional Core-package entries can be approved as narrow descriptors after overlap review. The whole `src/index.ts` bundle is not an initial descriptor. Quality Gates, Caveman, NVIDIA NIM, worktree boundary, and read-line-numbers remain existing runtime-owned injections in the first wave. Migrating them into descriptors is optional cleanup, not required for this gap.
+The user registry can introduce other IDs when it supplies complete package/entry metadata. Additional Core-package entries can be selected as narrow external package entries after overlap review, but the whole `src/index.ts` bundle is not a descriptor. Quality Gates, Caveman, NVIDIA NIM, worktree boundary, and read-line-numbers remain existing runtime-owned injections in the first wave; the opt-in rule applies to descriptors, not these existing runtime invariants. Migrating them into descriptors is optional cleanup, not required for this gap.
 
 ### 5.2 Resolution algorithm
 
 Resolve once in the runner after `runCwd` is known and before prompt rendering:
 
-1. Merge descriptor defaults with the effective specialist boolean map.
-2. For each enabled known descriptor, reuse its existing vendored resolver/contract path where one exists.
-3. Enumerate the existing global-node-modules candidate roots and test `<root>/<package>/<entry>` in order. Select the first package entry that exists. This intentionally fixes the current first-existing-root behavior, which can miss a package installed in a later root.
-4. Read `package.json` when the descriptor/catalog has an expected version. A version mismatch is unhealthy and skipped.
-5. Canonicalize successful paths with `realpath`; deduplicate by realpath.
-6. Preserve descriptor order, then append runtime-owned boundary/read-line-number extensions in their existing tail order.
-7. Return an immutable plan containing `id`, requested/default state, status, source, package, version, resolved path, and reason.
-8. Pass that same plan to tool-contract formatting and `PiAgentSession`; the session must not independently re-resolve it.
+1. Load packaged Specialists catalog/default descriptor metadata. Treat it as untrusted and inactive. Never read the cwd-local catalog for descriptor construction.
+2. Load the user descriptor registry. Remove entries not marked trusted; overlay trusted package/entry/version/tool fields on matching packaged metadata. A new user-defined ID must provide complete package and relative-entry metadata.
+3. Read the effective specialist boolean map. Only an explicit manifest `true` advances a trusted descriptor to resolution; omitted and `false` entries remain inactive.
+4. For each selected trusted descriptor, reuse existing catalog health/contract logic where one exists.
+5. Enumerate the existing global-node-modules candidate roots and test `<root>/<package>/<entry>` in order. Select the first package entry that exists. This intentionally fixes the current first-existing-root behavior, which can miss a package installed in a later root.
+6. Read `package.json` when the effective descriptor has an expected version. A version mismatch is unhealthy and skipped.
+7. Canonicalize successful paths with `realpath`; deduplicate by realpath.
+8. Preserve descriptor order, then append runtime-owned boundary/read-line-number extensions in their existing tail order.
+9. Return an immutable plan containing `id`, trust state, requested state, status, metadata source, package, version, resolved path, and reason.
+10. Pass that same plan to tool-contract formatting and both spawn implementations; neither spawn path may independently re-resolve it.
 
-Recommended status values are `available`, `available_self_gating`, `disabled`, `not_installed`, `incompatible`, `missing_entry`, and `unknown_id`. `available_self_gating` means the package entry is injectable but actual registry activation is cwd-dependent; it still produces `-e`, but the resolver must not claim that the command/context hook registered.
+Recommended status values are `available`, `available_self_gating`, `not_selected`, `untrusted_extension_id`, `not_installed`, `incompatible`, and `missing_entry`. `available_self_gating` means the package entry is injectable but actual registry activation is cwd-dependent; it still produces `-e`, but the resolver must not claim that the command/context hook registered.
 
 ### 5.3 Local unpublished package strategy
 
@@ -216,11 +221,11 @@ Prefer the global-node-modules symlink pattern. Host observations on 2026-08-28,
 
 This pattern gives a stable package identity, live source checkout, package metadata, and the same resolver path used by published installs. No npm publish is required.
 
-Do not automatically search `~/dev/core` or `~/dev/xtrm`; those paths are machine-specific and can silently select an unrelated checkout. Do not allow repository overrides to supply arbitrary source paths: Pi extensions execute with full user permissions, outside `--tools` restrictions. If a later developer escape hatch is necessary, put an ID-to-path map in a user-owned/global Specialists config or environment variable, validate its package name/entry, and keep repository manifests limited to trusted IDs. That escape hatch is not part of the smallest diff.
+Do not automatically search `~/dev/core` or `~/dev/xtrm`; those paths are machine-specific and can silently select an unrelated checkout. The user registry may override npm package name and relative entry, but not inject a repository-supplied absolute source path. For an unpublished checkout, create a user-controlled global-node-modules symlink, then point the descriptor at its package name and relative entry. Validate package syntax, reject absolute entries and `..` traversal, and keep repository manifests limited to boolean selection.
 
 ### 5.4 Precedence and deduplication
 
-Existing resolver/contract output wins over manifest fallback resolution. A manifest key controls enabled state; it does not replace a vendored path. If two descriptors resolve to the same realpath, inject the first only and report the duplicate in health details.
+Resolution precedence is: user descriptor metadata, then packaged Specialists catalog/default metadata, then existing resolver health checks. Trust comes only from the user registry, and activation comes only from manifest `true`; neither catalog presence nor user trust activates a descriptor. A manifest key never supplies or replaces a path. If two selected descriptors resolve to the same realpath, inject the first only and report the duplicate in health details.
 
 Keep current behavioral order:
 
@@ -234,7 +239,7 @@ The two final positions preserve the source's explicit boundary/read-output orde
 
 ### 5.5 Failure semantics and health evidence
 
-A missing package, missing entry, incompatible version, duplicate path, or unknown ID must never abort the specialist session. The resolver omits that `-e` pair, adds the record to `ResolvedToolContract.warnings`, and writes one bounded `[specialists:extension]` warning to the parent process stderr before spawn. `available_self_gating` still injects the entry and records that surface activation is conditional. Parent stderr is the smallest-diff operator note; validation must prove where each CLI/server surface persists or displays it before documentation calls it durable. A later structured timeline event can be added separately, but is not required for the injection seam.
+A missing package, missing entry, incompatible version, duplicate path, or untrusted ID must never abort the specialist session. The resolver omits that `-e` pair, adds the record to `ResolvedToolContract.warnings`, and writes one bounded `[specialists:extension]` warning to the parent process stderr before spawn. `available_self_gating` still injects the entry and records that surface activation is conditional. Parent stderr is the smallest-diff operator note; validation must prove where each CLI/server surface persists or displays it before documentation calls it durable. A later structured timeline event can be added separately, but is not required for the injection seam.
 
 Minimum health fields:
 
@@ -244,7 +249,7 @@ specialist=<name>
 extension_id=<id>
 requested=true|false
 status=<status>
-source=default|manifest|global-node-modules|vendored
+source=user-config|catalog|manifest|global-node-modules
 package=<redacted package name>
 entry=<relative entry>
 reason=<bounded code>
@@ -263,21 +268,67 @@ Move `runCwd` computation before extension/contract resolution. Feed the resolve
 - Python tools appear only when the exact Python entry will be injected.
 - GitNexus exclusion and injection use the same plan.
 - Service Knowledge reports package health and `available_self_gating`, with no invented tools.
-- Narrow Core-package descriptors report loaded package state but do not add tools unless a future trusted catalog declares them.
-- Missing requested extensions add warnings and downgrade reasons, not fatal validation errors.
+- Narrow external package descriptors report loaded package state. Their exact Pi tool names come from packaged catalog metadata or the trusted user's `tools_by_tier`; package injection alone never expands `--tools`.
+- Untrusted or missing requested extensions add warnings and downgrade reasons, not fatal validation errors.
 
 `formatResolvedToolContract` already renders extension state (`/home/dawid/dev/specialists/src/specialist/resolved-tool-contract.ts:114-139`). Extend it with requested/source/reason and the self-gate distinction. The formatted block reaches the model only when the specialist task template includes `$resolved_tool_contract` (`/home/dawid/dev/specialists/src/specialist/runner.ts:1036-1040`). Update authoring guidance to require that placeholder for specialists whose instructions depend on optional extension capabilities.
 
 The generic GitNexus prompt mandate currently checks only for `.gitnexus/meta.json`, not extension health (`/home/dawid/dev/specialists/src/specialist/runner.ts:1185-1210`). Gate that text on the resolved GitNexus state or phrase it conditionally so prompt and tools cannot conflict.
 
+### 5.7 User trust and availability configuration
+
+Use a dedicated user-owned file adjacent to the existing global specialist override file:
+
+```text
+~/.config/specialists/extensions.json
+```
+
+Keeping this separate from `user.json` avoids overloading that file's current specialist-name-to-override shape (`/home/dawid/dev/specialists/src/specialist/loader.ts:300-338`). Recommended shape:
+
+```json
+{
+  "descriptors": {
+    "python-kernel": {
+      "trusted": true
+    },
+    "service-knowledge": {
+      "trusted": true,
+      "package": "@jaggerxtrm/pi-service-knowledge",
+      "entry": "index.ts"
+    },
+    "ast-grep": {
+      "trusted": true,
+      "package": "<user-installed-package-name>",
+      "entry": "<relative-extension-entry>",
+      "tools_by_tier": {
+        "READ_ONLY": ["<registered-ast-grep-tool-name>"]
+      }
+    }
+  }
+}
+```
+
+The `ast-grep` values are placeholders for the operator-installed package and the exact tool name that package registers; Specialists must not invent or bundle either value. A catalog-backed ID can set only `trusted`; a new ID must set `trusted`, `package`, and `entry`. Optional `version` narrows compatibility. Optional `tools_by_tier` declares the descriptor's exact Pi tool names for `READ_ONLY`, `LOW`, `MEDIUM`, and `HIGH`; a missing tier contributes no tools. The resolver adds only the selected permission tier's names to `--tools`. It must reject native Specialists tool names and collisions with another catalog/descriptor owner. `trusted: false` or absence removes the ID from the effective registry.
+
+The two layers have separate authority:
+
+1. **User registry:** grants machine-wide trust and availability; optionally overrides catalog package, entry, and version metadata.
+2. **Specialist manifest:** selects a trusted ID for one specialist with boolean `true`.
+3. **Runtime health:** applies permission, version, package, entry, and self-gate checks after trust and selection.
+
+Precedence is field-level `user config > packaged catalog defaults`. The repository-local catalog is excluded from descriptor construction. There is no activation default: trusted-but-unselected descriptors stay inactive. Repository manifests and repository override files cannot add trust, define packages, provide entry paths, or declare tool names. This boundary is required because Pi extensions execute with the user's permissions and are not constrained by `--tools`.
+
 ## 6. Smallest-diff implementation plan
 
-### Phase 1: typed manifest and trusted descriptors
+### Phase 1: two-layer schema, trust registry, and descriptor resolution
 
 Files:
 
 - `/home/dawid/dev/specialists/src/specialist/schema.ts`
-- `/home/dawid/dev/specialists/src/pi/python-kernel-extension.ts` or a small adjacent resolver module
+- `/home/dawid/dev/specialists/src/specialist/loader.ts`
+- `/home/dawid/dev/specialists/src/specialist/global-config.ts`
+- `/home/dawid/dev/specialists/src/specialist/extension-config.ts` (new, or an equivalently small adjacent module)
+- `/home/dawid/dev/specialists/src/pi/python-kernel-extension.ts` or the new resolver module
 - `/home/dawid/dev/specialists/src/pi/session.ts`
 - `/home/dawid/dev/specialists/docs/pi-session.md`
 - `/home/dawid/dev/specialists/docs/authoring.md`
@@ -285,10 +336,12 @@ Files:
 
 Changes:
 
-1. Type the known boolean keys while retaining `.passthrough()` and legacy Serena parsing.
-2. Add known nested override paths. Do not add a wildcard arbitrary-path override.
-3. Define the four initial trusted descriptors and one pure resolver returning health records plus deduplicated paths.
-4. Extract the current global-node-modules root candidates, but search each candidate for the requested package entry instead of stopping at the first existing root. Reuse existing Python/Service Knowledge metadata and tests.
+1. Validate `execution.extensions` as a record of boolean selections while retaining legacy Serena parsing/ignore behavior.
+2. Merge permitted extension-selection maps key-by-key across specialist layers; do not permit package or entry data in repository manifests or overrides.
+3. Add schema, path resolution, and fail-closed parsing for `~/.config/specialists/extensions.json`. Invalid descriptor records are unavailable and produce bounded warnings.
+4. Build the effective registry from the packaged Specialists catalog overlaid by user records. Do not call the existing cwd-preferring catalog loader for descriptor metadata. Only user-trusted records are selectable; every descriptor remains inactive unless the manifest says `true`.
+5. Define one pure resolver returning trust/health records plus deduplicated paths. User package/entry/version/tool fields override packaged catalog defaults. Validate tool names, reject native-tool escalation and ownership collisions, and feed the selected tier into the resolved tool contract.
+6. Extract the current global-node-modules root candidates, but search each candidate for the requested package entry instead of stopping at the first existing root. Reuse existing Python/Service Knowledge metadata and tests.
 
 ### Phase 2: one resolved plan for prompt and spawn
 
@@ -302,7 +355,7 @@ Files:
 Changes:
 
 1. Compute `runCwd` before extension and tool-contract resolution.
-2. Resolve extensions once from effective `execution.extensions`.
+2. Resolve extensions once from the user trust registry plus effective `execution.extensions` selection map.
 3. Pass `resolvedExtensions` through `PiSessionOptions`.
 4. Replace package-specific `args.push('-e', ...)` decisions for GitNexus, Python, and Service Knowledge with iteration over the healthy resolved plan. Preserve current ordering and permission predicates.
 5. Pass the same plan into `script-runner.ts`; remove its stale loose `service-skills` lookup and use the plan for both direct JSON-mode spawn and write-capable `PiAgentSession` execution.
@@ -319,21 +372,23 @@ Files:
 
 Changes:
 
-1. Add explicit `service-knowledge: true` to the librarian manifest for intent and health reporting, even though the descriptor default preserves current injection.
-2. Opt individual roles into approved narrow entries such as `xtrm-loader` only after inspecting their RPC behavior.
-3. Do not expose or enable the whole Core bundle.
+1. Add explicit `service-knowledge: true` to the librarian manifest. Without that selection the descriptor remains inactive.
+2. Document the matching user trust record; do not silently write or enable it during repository setup.
+3. Opt individual roles into approved narrow entries such as `xtrm-loader` only after inspecting their RPC behavior and requiring user trust.
+4. Do not expose or enable the whole Core bundle.
 
 ### Phase 4: validation
 
 Add focused tests near existing session/runner coverage:
 
-1. Manifest parsing and override tests for each known boolean and unknown-key warning.
-2. Resolver tests for regular global installs, symlinked global packages, missing package, missing entry, version mismatch, duplicate realpath, and disabled descriptor.
-3. Spawn-argv tests for both `PiAgentSession` and direct `script-runner` proving `--no-extensions` remains and only healthy requested entries produce ordered `-e` pairs.
-4. Contract tests proving Python tools and GitNexus prompt text agree with injected paths.
-5. Service Knowledge tests for registry present and absent; absent must start successfully and register zero surface.
-6. An integrated RPC smoke using a temporary global-node-modules tree with symlinked fixtures. Assert health output and effective tool/command surface without network or npm publish.
-7. A regression test for current hardcoded defaults so the migration does not silently drop Quality Gates, boundary, or read-line-numbers.
+1. Manifest parsing and override tests for dynamic boolean IDs, omitted/false selection, legacy Serena, and rejection of non-boolean descriptor data.
+2. User-config tests for absent/untrusted IDs, packaged-catalog-backed trust, new complete descriptors, user-over-catalog package/entry/tool precedence, malformed records, absolute entries, traversal, native-tool escalation, and tool ownership collisions.
+3. Resolver tests for regular global installs, symlinked global packages, missing package, missing entry, version mismatch, duplicate realpath, trusted-but-unselected descriptors, and proof that repository-local catalog metadata cannot define or alter a descriptor.
+4. Spawn-argv tests for both `PiAgentSession` and direct `script-runner` proving `--no-extensions` remains, no descriptor loads by default, and only trusted, explicitly selected, healthy entries produce ordered `-e` pairs.
+5. Contract tests proving Python tools and GitNexus prompt text agree with injected paths, and that a trusted selected external descriptor contributes only its selected-tier `tools_by_tier` names.
+6. Service Knowledge tests for registry present and absent; absent must start successfully and register zero surface.
+7. An integrated RPC smoke using a temporary user config and global-node-modules tree with symlinked fixtures. Assert health output and effective tool/command surface without network or npm publish.
+8. A regression test proving runtime-owned Quality Gates, boundary, and read-line-numbers remain while old hardcoded descriptor defaults are removed.
 
 The implementation must use the repository's normal typecheck and focused/full test commands. A test runner should record exact pass/fail counts and the smoke artifact path.
 
@@ -344,8 +399,9 @@ The implementation must use the repository's normal typecheck and focused/full t
 - **Pi itself:** no change. `--no-extensions` with explicit `-e` is already supported.
 - **Package publication:** no change. Global node-modules symlinks support unpublished local testing.
 - **Service Knowledge package:** no change. Its registry self-gate and fail-open behavior are suitable as-is.
-- **Core extension source:** no change for the resolver wave. Specialists points only at approved existing narrow entries; whole-bundle injection is deferred.
-- **Tool catalog schema/index:** no change is required for non-tool extension injection. Reuse catalog state where it already exists; do not turn the tool catalog into a universal resource manifest.
+- **Core extension source:** no change for the resolver wave. Specialists can point only at user-trusted existing narrow package entries; whole-bundle injection is deferred.
+- **No new vendoring into the Core bundle:** do not copy `ast-grep`, Service Knowledge, or future extension source into Core, and do not add imports to `packages/pi-extensions/src/registry.ts`. Python Kernel continues to use its existing narrow entry without duplication. The user layer resolves independently installed or symlinked packages.
+- **Tool catalog schema/index:** no change is required. Read packaged catalog resolution/tool defaults where they already exist; keep custom descriptor tools in the user-owned registry, and never turn catalog presence into trust or activation.
 - **Existing runtime-owned extensions:** no forced migration in the first wave.
 - **`xt` CLI flags:** no new flag. The per-role manifest owns tracked-dispatch selection.
 
@@ -353,7 +409,7 @@ The implementation must use the repository's normal typecheck and focused/full t
 
 GitNexus reports `PiAgentSession` as **HIGH** upstream risk: 8 direct dependents, 182 impacted items through depth 3, and affected `run`/`runSingleAttempt` processes. Direct dependents include `runner.ts`, `script-runner.ts`, `supervisor.ts`, and session/runner tests. The later implementation must warn before editing, keep the change additive, and run both focused session tests and an integrated dispatch smoke.
 
-Security risk is higher than the code size suggests: an extension executes arbitrary code with the user's permissions and is not constrained by `--tools`. This is why manifests select trusted IDs rather than arbitrary paths.
+Security risk is higher than the code size suggests: an extension executes arbitrary code with the user's permissions and is not constrained by `--tools`. This is why only the user-owned config can grant trust or supply package metadata, while repository manifests contain boolean selection only.
 
 ## 9. Explicit unknowns
 
