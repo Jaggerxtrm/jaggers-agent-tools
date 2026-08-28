@@ -38,9 +38,9 @@ The inspected source has two different launch paths:
 1. **Interactive role session:** `xt pi --role <role>` is implemented by Core. It calls `sp view` to render role configuration, then Core spawns Pi itself.
 2. **Tracked specialist dispatch:** normal `sp run` and write-capable `sp script` paths create `PiAgentSession`. Read-only/script surfaces, including `sp serve`, can use a second direct JSON-mode Pi spawn in `script-runner.ts`.
 
-Host observation on 2026-08-28: `readlink -f "$(command -v xt)"` returned `/home/dawid/dev/core/cli/dist/index.cjs`. `/home/dawid/dev/xtrm` owns the standalone service-knowledge package, not the inspected `xt pi --role` implementation. Core defines the `xt pi` command and forwards it to `launchWorktreeSession` (`cli/src/commands/pi.ts:99-117`, `cli/src/commands/pi.ts:152-174`).
+Host observation on 2026-08-28: `readlink -f "$(command -v xt)"` returned `~/dev/core/cli/dist/index.cjs`. `~/dev/xtrm` owns the standalone service-knowledge package, not the inspected `xt pi --role` implementation. Core defines the `xt pi` command and forwards it to `launchWorktreeSession` (`cli/src/commands/pi.ts:99-117`, `cli/src/commands/pi.ts:152-174`).
 
-No literal `.specialists.json` file or loader was found in the three scoped repositories. Current Specialists manifests are `*.specialist.json`; repository overrides are `.specialists/user/<name>.specialist.json`. Merge order is package canonical, global `~/.config/specialists/user.json`, then repository override (`/home/dawid/dev/specialists/src/specialist/loader.ts:300-359`). This document uses “manifest” for that supported family.
+No literal `.specialists.json` file or loader was found in the three scoped repositories. Current Specialists manifests are `*.specialist.json`; repository overrides are `.specialists/user/<name>.specialist.json`. Merge order is package canonical, global `~/.config/specialists/user.json`, then repository override (`~/dev/specialists/src/specialist/loader.ts:300-359`). This document uses “manifest” for that supported family.
 
 ## 1. Exact launch traces and configuration surfaces
 
@@ -52,7 +52,7 @@ The Core command passes `--role` to `launchWorktreeSession` (`cli/src/commands/p
 sp view <name> --raw --surface pi
 ```
 
-(`cli/src/utils/worktree-session.ts:518-552`). Specialists returns the merged effective spec (`/home/dawid/dev/specialists/src/cli/view.ts:261-276`). Core parses the system prompt, skills, model, thinking level, `execution.extensions`, and `interactive`; the parsed extension map is retained but not consumed (`cli/src/utils/worktree-session.ts:458-511`).
+(`cli/src/utils/worktree-session.ts:518-552`). Specialists returns the merged effective spec (`~/dev/specialists/src/cli/view.ts:261-276`). Core parses the system prompt, skills, model, thinking level, `execution.extensions`, and `interactive`; the parsed extension map is retained but not consumed (`cli/src/utils/worktree-session.ts:458-511`).
 
 Core builds Pi arguments with `--append-system-prompt`, `--no-skills`, declared `--skill` paths, model/thinking, and the initial prompt (`cli/src/utils/worktree-session.ts:987-1067`). It deliberately does **not** add `--no-extensions` or `-e`; the source says Pi owns extension discovery (`cli/src/utils/worktree-session.ts:1014-1028`). A regression test fixes that behavior (`cli/src/tests/worktree-session-role.test.ts:700-709`).
 
@@ -65,17 +65,17 @@ Therefore, current interactive role sessions see:
 - global/project extension discovery;
 - explicit operator `-e` arguments passed after `--`.
 
-Pi documents the global/project settings scopes and merge (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/settings.md:1-20`, `:272-313`). `PI_CODING_AGENT_DIR` is the config-directory override (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/environment-variables.md:75-94`). The installed loader merges configured and CLI extensions unless discovery is disabled (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js:312-319`).
+Pi documents the global/project settings scopes and merge (`<pi-agent>/docs/settings.md:1-20`, `:272-313`). `PI_CODING_AGENT_DIR` is the config-directory override (`<pi-agent>/docs/environment-variables.md:75-94`). The installed loader merges configured and CLI extensions unless discovery is disabled (`<pi-agent>/dist/core/resource-loader.js:312-319`).
 
-The inspected host globally enrolls both local source packages (`/home/dawid/.pi/agent/settings.json:7-24`). Consequently, source does not support “global enrollment is hidden from current `xt pi --role`.” If an interactive role lacks service-knowledge, likely causes are an inherited config-dir override, package-load failure, a different installed version, project trust, or the extension's registry gate.
+The inspected host globally enrolls both local source packages (`~/.pi/agent/settings.json:7-24`). Consequently, source does not support “global enrollment is hidden from current `xt pi --role`.” If an interactive role lacks service-knowledge, likely causes are an inherited config-dir override, package-load failure, a different installed version, project trust, or the extension's registry gate.
 
 ### 1.2 Tracked Specialists dispatch
 
-`PiAgentSession.start()` builds RPC arguments with `--no-extensions`, `--no-skills`, `--no-session`, `--offline`, `--no-context-files`, `--no-prompt-templates`, and `--no-themes` (`/home/dawid/dev/specialists/src/pi/session.ts:772-800`). Declared skills are restored individually (`:807-810`).
+`PiAgentSession.start()` builds RPC arguments with `--no-extensions`, `--no-skills`, `--no-session`, `--offline`, `--no-context-files`, `--no-prompt-templates`, and `--no-themes` (`~/dev/specialists/src/pi/session.ts:772-800`). Declared skills are restored individually (`:807-810`).
 
-The process keeps `HOME` and the parent environment and uses the requested job cwd (`/home/dawid/dev/specialists/src/pi/session.ts:882-904`). This is discovery isolation, not a custom config directory or OS sandbox. `--no-extensions` is the reason globally enrolled packages do not reach a tracked dispatch; explicit `-e` arguments are the only restoration path. Pi explicitly documents that `--no-extensions` still permits explicit `-e` (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/usage.md:220-236`).
+The process keeps `HOME` and the parent environment and uses the requested job cwd (`~/dev/specialists/src/pi/session.ts:882-904`). This is discovery isolation, not a custom config directory or OS sandbox. `--no-extensions` is the reason globally enrolled packages do not reach a tracked dispatch; explicit `-e` arguments are the only restoration path. Pi explicitly documents that `--no-extensions` still permits explicit `-e` (`<pi-agent>/docs/usage.md:220-236`).
 
-The reported live service-knowledge failure did not include its command, worktree, startup diagnostics, or session log. Source cannot prove whether it was interactive `xt pi --role` or a tracked `sp` dispatch. The isolation explanation applies to the latter. A service-specific stopgap has since landed in Specialists commit `57fbbfb9`: service-knowledge is now hand-injected when its global package entry resolves (`/home/dawid/dev/specialists/src/pi/session.ts:819-828`). The general configurability gap remains.
+The reported live service-knowledge failure did not include its command, worktree, startup diagnostics, or session log. Source cannot prove whether it was interactive `xt pi --role` or a tracked `sp` dispatch. The isolation explanation applies to the latter. A service-specific stopgap has since landed in Specialists commit `57fbbfb9`: service-knowledge is now hand-injected when its global package entry resolves (`~/dev/specialists/src/pi/session.ts:819-828`). The general configurability gap remains.
 
 ## 2. Every extension force point
 
@@ -83,47 +83,47 @@ The primary RPC-session injection sites are fixed code in `PiAgentSession.start(
 
 | Order | Extension | Condition | Evidence |
 |---:|---|---|---|
-| 1 | quality-gates | loose `~/.pi/agent/extensions/quality-gates`; non-`READ_ONLY` | `/home/dawid/dev/specialists/src/pi/session.ts:812-818` |
-| 2 | service-knowledge | dedicated global-package resolver; always when present | `/home/dawid/dev/specialists/src/pi/session.ts:819-828` |
-| 3 | python-kernel | dedicated global-package resolver; non-`READ_ONLY` | `/home/dawid/dev/specialists/src/pi/session.ts:830-840` |
-| 4 | caveman | loose extension directory when present | `/home/dawid/dev/specialists/src/pi/session.ts:842-844` |
-| 5 | NVIDIA NIM | fixed global git-package directory when present | `/home/dawid/dev/specialists/src/pi/session.ts:846-849` |
-| 6 | GitNexus | resolved tool contract says `available` and package path exists | `/home/dawid/dev/specialists/src/pi/session.ts:851-859` |
-| 7 | worktree boundary | generated temporary extension when boundary generation succeeds | `/home/dawid/dev/specialists/src/pi/session.ts:661-723`, `:866-871` |
-| 8 | read line numbers | bundled resolver returns a path | `/home/dawid/dev/specialists/src/pi/session.ts:874-880` |
+| 1 | quality-gates | loose `~/.pi/agent/extensions/quality-gates`; non-`READ_ONLY` | `~/dev/specialists/src/pi/session.ts:812-818` |
+| 2 | service-knowledge | dedicated global-package resolver; always when present | `~/dev/specialists/src/pi/session.ts:819-828` |
+| 3 | python-kernel | dedicated global-package resolver; non-`READ_ONLY` | `~/dev/specialists/src/pi/session.ts:830-840` |
+| 4 | caveman | loose extension directory when present | `~/dev/specialists/src/pi/session.ts:842-844` |
+| 5 | NVIDIA NIM | fixed global git-package directory when present | `~/dev/specialists/src/pi/session.ts:846-849` |
+| 6 | GitNexus | resolved tool contract says `available` and package path exists | `~/dev/specialists/src/pi/session.ts:851-859` |
+| 7 | worktree boundary | generated temporary extension when boundary generation succeeds | `~/dev/specialists/src/pi/session.ts:661-723`, `:866-871` |
+| 8 | read line numbers | bundled resolver returns a path | `~/dev/specialists/src/pi/session.ts:874-880` |
 
-Python Kernel is fixed to `@jaggerxtrm/pi-extensions/extensions/python-kernel/index.ts`; Service Knowledge is fixed to `@jaggerxtrm/pi-service-knowledge/index.ts` (`/home/dawid/dev/specialists/src/pi/python-kernel-extension.ts:20-53`, `:61-87`). The resolver builds several possible global-node-modules roots, selects the first existing root, and inspects only that root for each package; it does not search later roots when a package is absent (`:24-49`, `:70-81`).
+Python Kernel is fixed to `@jaggerxtrm/pi-extensions/extensions/python-kernel/index.ts`; Service Knowledge is fixed to `@jaggerxtrm/pi-service-knowledge/index.ts` (`~/dev/specialists/src/pi/python-kernel-extension.ts:20-53`, `:61-87`). The resolver builds several possible global-node-modules roots, selects the first existing root, and inspects only that root for each package; it does not search later roots when a package is absent (`:24-49`, `:70-81`).
 
-The worktree-boundary extension is generated under the OS temporary directory and fails open with a warning (`/home/dawid/dev/specialists/src/pi/session.ts:661-723`). No session settings file is generated.
+The worktree-boundary extension is generated under the OS temporary directory and fails open with a warning (`~/dev/specialists/src/pi/session.ts:661-723`). No session settings file is generated.
 
 ### Direct `script-runner` force path
 
-`script-runner.ts` has a separate `appendExtensionArgs()` implementation. It injects read-line-numbers, Quality Gates, a retired loose `service-skills` path, Caveman, and contract-gated GitNexus (`/home/dawid/dev/specialists/src/specialist/script-runner.ts:969-990`). Write-capable `surface === "script"` invocations use `PiAgentSession` (`:1007-1022`), but the other script/read-only path spawns Pi directly with `--no-extensions` and calls the separate assembler (`:1135-1145`). `sp serve` imports and calls `runScriptSpecialist` (`/home/dawid/dev/specialists/src/cli/serve.ts:7-10`, `:394-400`).
+`script-runner.ts` has a separate `appendExtensionArgs()` implementation. It injects read-line-numbers, Quality Gates, a retired loose `service-skills` path, Caveman, and contract-gated GitNexus (`~/dev/specialists/src/specialist/script-runner.ts:969-990`). Write-capable `surface === "script"` invocations use `PiAgentSession` (`:1007-1022`), but the other script/read-only path spawns Pi directly with `--no-extensions` and calls the separate assembler (`:1135-1145`). `sp serve` imports and calls `runScriptSpecialist` (`~/dev/specialists/src/cli/serve.ts:7-10`, `:394-400`).
 
 This is a real parity gap: the implementation wave must share one ordered enabled-source list across `runner.ts`, `PiAgentSession`, and the direct script runner. It must also remove the stale loose `service-skills` lookup in favor of the configured standalone Service Knowledge source.
 
 ### Existing exclusion path
 
-The schema declares only legacy `serena` and active `gitnexus` booleans, while `.passthrough()` accepts untyped extra keys (`/home/dawid/dev/specialists/src/specialist/schema.ts:45-58`). Override layers explicitly allow only `extensions.serena` and `extensions.gitnexus` (`:180-186`).
+The schema declares only legacy `serena` and active `gitnexus` booleans, while `.passthrough()` accepts untyped extra keys (`~/dev/specialists/src/specialist/schema.ts:45-58`). Override layers explicitly allow only `extensions.serena` and `extensions.gitnexus` (`:180-186`).
 
-The runner ignores Serena and converts only `gitnexus === false` into package exclusion (`/home/dawid/dev/specialists/src/specialist/runner.ts:1025-1035`). It passes that exclusion and the resolved contract into the session (`:1431-1446`). No other manifest extension key changes Pi arguments.
+The runner ignores Serena and converts only `gitnexus === false` into package exclusion (`~/dev/specialists/src/specialist/runner.ts:1025-1035`). It passes that exclusion and the resolved contract into the session (`:1431-1446`). No other manifest extension key changes Pi arguments.
 
 ## 3. Catalog versus hardcoded runtime behavior
 
 There is no generic catalog-to-`-e` loop.
 
-The runtime reads one complete catalog index, preferring `<process.cwd()>/.specialists/catalog/index.json` and falling back to packaged `config/catalog/index.json` (`/home/dawid/dev/specialists/src/pi/session.ts:181-198`). Individual `config/catalog/*.json` files are not independently loaded. The first valid index is cached process-wide (`:166-187`).
+The runtime reads one complete catalog index, preferring `<process.cwd()>/.specialists/catalog/index.json` and falling back to packaged `config/catalog/index.json` (`~/dev/specialists/src/pi/session.ts:181-198`). Individual `config/catalog/*.json` files are not independently loaded. The first valid index is cached process-wide (`:166-187`).
 
-The index defines native, GitNexus, Python Kernel, and Service Knowledge entries (`/home/dawid/dev/specialists/config/catalog/index.json:2-148`). It drives:
+The index defines native, GitNexus, Python Kernel, and Service Knowledge entries (`~/dev/specialists/config/catalog/index.json:2-148`). It drives:
 
 - tier-specific native and extension tool names;
 - exact package/version health for GitNexus and Python Kernel;
 - `--tools` and formatted tool-contract text;
 - GitNexus package-path injection when healthy.
 
-The tool resolver explicitly assembles only GitNexus and Python Kernel tools (`/home/dawid/dev/specialists/src/specialist/manifest-resolver.ts:138-191`). Catalog names are a fixed enum (`/home/dawid/dev/specialists/src/specialist/tool-catalog.ts:3-14`).
+The tool resolver explicitly assembles only GitNexus and Python Kernel tools (`~/dev/specialists/src/specialist/manifest-resolver.ts:138-191`). Catalog names are a fixed enum (`~/dev/specialists/src/specialist/tool-catalog.ts:3-14`).
 
-Service Knowledge has a catalog row but no tools. Its package/version are not consulted by its launch resolver; launch checks only its hardcoded entry existence (`/home/dawid/dev/specialists/src/pi/python-kernel-extension.ts:61-87`). Python has the opposite mismatch: the contract can mark it disabled or incompatible, while actual `-e` assembly calls the dedicated path resolver and can still load it (`/home/dawid/dev/specialists/src/pi/session.ts:265-319`, `:830-840`).
+Service Knowledge has a catalog row but no tools. Its package/version are not consulted by its launch resolver; launch checks only its hardcoded entry existence (`~/dev/specialists/src/pi/python-kernel-extension.ts:61-87`). Python has the opposite mismatch: the contract can mark it disabled or incompatible, while actual `-e` assembly calls the dedicated path resolver and can still load it (`~/dev/specialists/src/pi/session.ts:265-319`, `:830-840`).
 
 The catalog is therefore a tool-policy/health surface, not an extension inventory. Overloading it with package resolution for UI hooks, gates, context injectors, and provider adapters would widen its role. Keep it responsible for known tool names and permissions; use the specialist boolean source map plus native Pi `-e` resolution for loading.
 
@@ -131,11 +131,11 @@ The catalog is therefore a tool-policy/health surface, not an extension inventor
 
 ### Service Knowledge
 
-`@jaggerxtrm/pi-service-knowledge` exports and declares `./index.ts` as its Pi extension (`/home/dawid/dev/xtrm/packages/service-knowledge-ext/package.json:6-8`, `:27-31`).
+`@jaggerxtrm/pi-service-knowledge` exports and declares `./index.ts` as its Pi extension (`~/dev/xtrm/packages/service-knowledge-ext/package.json:6-8`, `:27-31`).
 
-At initialization it scans the cwd and five ancestors for `.xtrm/skills` pack umbrellas (`/home/dawid/dev/xtrm/packages/service-knowledge-ext/index.ts:54-109`). If no qualifying `service-knowledge/service-registry.json` exists, it immediately returns and registers zero surface (`:185-193`). The zero-surface case is tested (`/home/dawid/dev/xtrm/packages/service-knowledge-ext/tests/service-knowledge.test.ts:52-63`).
+At initialization it scans the cwd and five ancestors for `.xtrm/skills` pack umbrellas (`~/dev/xtrm/packages/service-knowledge-ext/index.ts:54-109`). If no qualifying `service-knowledge/service-registry.json` exists, it immediately returns and registers zero surface (`:185-193`). The zero-surface case is tested (`~/dev/xtrm/packages/service-knowledge-ext/tests/service-knowledge.test.ts:52-63`).
 
-When active, it registers one hidden `before_agent_start` context message and `/service-knowledge:status` (`/home/dawid/dev/xtrm/packages/service-knowledge-ext/index.ts:195-238`). Missing roots, malformed registry reads, and git lookup failures fail open (`:85-93`, `:112-131`). Drift is advisory and never starts reconciliation automatically (`/home/dawid/dev/xtrm/packages/service-knowledge-ext/README.md:66-93`).
+When active, it registers one hidden `before_agent_start` context message and `/service-knowledge:status` (`~/dev/xtrm/packages/service-knowledge-ext/index.ts:195-238`). Missing roots, malformed registry reads, and git lookup failures fail open (`:85-93`, `:112-131`). Drift is advisory and never starts reconciliation automatically (`~/dev/xtrm/packages/service-knowledge-ext/README.md:66-93`).
 
 This makes package injection suitable across specialists: registry-less jobs pay load/discovery cost but receive no command or prompt surface. Specialists need not model the internal gate; Pi loads the package and the package decides whether to register its surface.
 
@@ -143,7 +143,7 @@ This makes package injection suitable across specialists: registry-less jobs pay
 
 `@jaggerxtrm/pi-extensions` exports and declares `./src/index.ts` (`packages/pi-extensions/package.json:15-23`). That entry delegates to the managed registry (`packages/pi-extensions/src/index.ts:3-9`), whose static imports register the active bundle (`packages/pi-extensions/src/registry.ts:3-15`, `:22-58`). Individual extension entries remain addressable, for example `extensions/beads/index.ts` (`packages/pi-extensions/extensions/beads/package.json:1-8`).
 
-Whole-bundle injection is materially different from injecting Python Kernel alone: it loads Python Kernel and read-line-numbers again, plus gates, lifecycle hooks, UI patches, and context injectors (`packages/pi-extensions/src/registry.ts:3-15`, `:22-35`). Pi keeps conflicting extensions loaded, reports diagnostics, and uses load order for precedence (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js:459-465`); the first tool registration by name wins (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/runner.js:280-290`). Duplicate event handlers can still both run.
+Whole-bundle injection is materially different from injecting Python Kernel alone: it loads Python Kernel and read-line-numbers again, plus gates, lifecycle hooks, UI patches, and context injectors (`packages/pi-extensions/src/registry.ts:3-15`, `:22-35`). Pi keeps conflicting extensions loaded, reports diagnostics, and uses load order for precedence (`<pi-agent>/dist/core/resource-loader.js:459-465`); the first tool registration by name wins (`<pi-agent>/dist/core/extensions/runner.js:280-290`). Duplicate event handlers can still both run.
 
 Therefore the design must **not** pass the aggregate `@jaggerxtrm/pi-extensions` package source merely to reach one nested extension. Python Kernel retains its existing runtime-owned narrow path until it has a standalone Pi package source. Other selectable extensions should use standalone package sources whose native package metadata exposes only the intended surface.
 
@@ -178,7 +178,7 @@ Rules:
 - Pass each source string to Pi unchanged. Specialists does not parse package names, resolve global node-modules roots, inspect package versions, or find entry files.
 - Keep legacy `serena` parsing/ignore behavior only for migration compatibility; do not treat it as a Pi source.
 
-The existing global user file already provides per-specialist overrides at `~/.config/specialists/user.json` (`/home/dawid/dev/specialists/src/specialist/loader.ts:300-338`). It can expose the same configurable fields:
+The existing global user file already provides per-specialist overrides at `~/.config/specialists/user.json` (`~/dev/specialists/src/specialist/loader.ts:300-338`). It can expose the same configurable fields:
 
 ```json
 {
@@ -196,9 +196,9 @@ Merge `execution.extensions` key-by-key through the existing package → global 
 
 ### 5.2 Native Pi resolution
 
-Pi documents `-e, --extension <source>` as accepting a path, npm source, or git source, while `--no-extensions` disables discovery (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/usage.md:219-224`). Pi also documents temporary package loading through `pi -e npm:@foo/bar` and `pi -e git:github.com/user/repo` (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/packages.md:43-50`).
+Pi documents `-e, --extension <source>` as accepting a path, npm source, or git source, while `--no-extensions` disables discovery (`<pi-agent>/docs/usage.md:219-224`). Pi also documents temporary package loading through `pi -e npm:@foo/bar` and `pi -e git:github.com/user/repo` (`<pi-agent>/docs/packages.md:43-50`).
 
-The resource loader sends CLI `-e` values through the native package manager, then uses those explicitly resolved extensions even when `noExtensions` is true (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js:274-280`, `:313-319`). The package manager resolves the supplied sources and collects package resources (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/package-manager.js:733-738`, `:981-1035`).
+The resource loader sends CLI `-e` values through the native package manager, then uses those explicitly resolved extensions even when `noExtensions` is true (`<pi-agent>/dist/core/resource-loader.js:274-280`, `:313-319`). The package manager resolves the supplied sources and collects package resources (`<pi-agent>/dist/core/package-manager.js:733-738`, `:981-1035`).
 
 The Specialists operation is therefore only:
 
@@ -223,7 +223,7 @@ Therefore:
 
 For unpublished work, Pi accepts a local package directory or file through `-e`. A user override can select that local source for development. Published/canonical manifests should use stable npm or git sources rather than machine-specific paths.
 
-Both Specialists spawn paths currently pass `--offline` (`/home/dawid/dev/specialists/src/pi/session.ts:772-800`, `/home/dawid/dev/specialists/src/specialist/script-runner.ts:1135-1145`). Native npm/git resolution cannot install a missing temporary package while offline: the package manager skips missing installs in offline mode (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/package-manager.js:995-1017`). Therefore each spawn path must omit `--offline` when the enabled source list contains an npm, git, or network source. Keep `--offline` when every enabled source is local or the list is empty. This preserves offline startup for existing sessions while making configured native package names work from a clean environment.
+Both Specialists spawn paths currently pass `--offline` (`~/dev/specialists/src/pi/session.ts:772-800`, `~/dev/specialists/src/specialist/script-runner.ts:1135-1145`). Native npm/git resolution cannot install a missing temporary package while offline: the package manager skips missing installs in offline mode (`<pi-agent>/dist/core/package-manager.js:995-1017`). Therefore each spawn path must omit `--offline` when the enabled source list contains an npm, git, or network source. Keep `--offline` when every enabled source is local or the list is empty. This preserves offline startup for existing sessions while making configured native package names work from a clean environment.
 
 ### 5.4 One source list for every spawn path
 
@@ -238,7 +238,7 @@ Preserve runtime-owned injections that are not yet represented as package source
 
 ### 5.5 Failure and tool-contract behavior
 
-Pi owns package resolution and extension-load diagnostics. Specialists should not duplicate Pi's version, path, package-manifest, entrypoint, or conflict checks. Before spawn, Specialists may log the bounded ordered source list; after spawn, existing `extension_error` handling remains the evidence for native load failure (`/home/dawid/dev/specialists/src/pi/session.ts:94-102`, `:1242-1248`).
+Pi owns package resolution and extension-load diagnostics. Specialists should not duplicate Pi's version, path, package-manifest, entrypoint, or conflict checks. Before spawn, Specialists may log the bounded ordered source list; after spawn, existing `extension_error` handling remains the evidence for native load failure (`~/dev/specialists/src/pi/session.ts:94-102`, `:1242-1248`).
 
 Extension loading and tool permission remain separate:
 
@@ -246,7 +246,7 @@ Extension loading and tool permission remain separate:
 - A tool-bearing extension loads through `-e`, but its tools remain unavailable unless the existing resolved tool contract admits their exact registered names.
 - The existing catalog remains the tool-policy surface. This design does not add custom `tools_by_tier` or descriptor metadata to extension configuration.
 
-The generic GitNexus prompt mandate currently checks only for `.gitnexus/meta.json`, not actual extension state (`/home/dawid/dev/specialists/src/specialist/runner.ts:1185-1210`). Gate that text on whether the GitNexus source is enabled and its existing catalog contract is available.
+The generic GitNexus prompt mandate currently checks only for `.gitnexus/meta.json`, not actual extension state (`~/dev/specialists/src/specialist/runner.ts:1185-1210`). Gate that text on whether the GitNexus source is enabled and its existing catalog contract is available.
 
 ### 5.6 Security boundary
 
@@ -260,9 +260,9 @@ No separate machine trust database is necessary. The operator grants trust by pl
 
 Files:
 
-- `/home/dawid/dev/specialists/src/specialist/schema.ts`
-- `/home/dawid/dev/specialists/src/specialist/loader.ts`
-- `/home/dawid/dev/specialists/docs/authoring.md`
+- `~/dev/specialists/src/specialist/schema.ts`
+- `~/dev/specialists/src/specialist/loader.ts`
+- `~/dev/specialists/docs/authoring.md`
 
 Changes:
 
@@ -276,9 +276,9 @@ Changes:
 
 Files:
 
-- `/home/dawid/dev/specialists/src/specialist/runner.ts`
-- `/home/dawid/dev/specialists/src/specialist/script-runner.ts`
-- `/home/dawid/dev/specialists/src/pi/session.ts`
+- `~/dev/specialists/src/specialist/runner.ts`
+- `~/dev/specialists/src/specialist/script-runner.ts`
+- `~/dev/specialists/src/pi/session.ts`
 
 Changes:
 

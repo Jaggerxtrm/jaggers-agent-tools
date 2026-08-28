@@ -2,9 +2,9 @@
   "version": 1,
   "source": {
     "kind": "ref",
-    "ref": "0253e3e4b823de419bf1acc54f07eb618e10a054",
-    "resolved_sha": "0253e3e4b823de419bf1acc54f07eb618e10a054",
-    "repo_path": "../specialists",
+    "ref": "af65334ba4dc55bb5731a95fce08fc314f9c1274",
+    "resolved_sha": "af65334ba4dc55bb5731a95fce08fc314f9c1274",
+    "repo_path": "../../../../specialists/.worktrees/unitAI-jndsb.1.1/unitAI-jndsb.1.1-executor",
     "source_path": "config/skills"
   },
   "skills": [
@@ -18,10 +18,10 @@
   ],
   "files": {
     "specialists-creator": {
-      "scripts/audit-spec-uniformity.mjs": "0ada06784cfd5c3adfa9c9908a9cd23380e8278fb57329fc616a83140a47fb33",
+      "scripts/audit-spec-uniformity.mjs": "7ef232521ff123377c4a9637c2f5712bfb4c9f1454a310966c58cb2cc8dc4216",
       "scripts/scaffold-specialist.ts": "c1bfa3693d644072e6d387d2519e131624d99c5b85521ae638680d7485267403",
       "scripts/validate-specialist.ts": "3a5f5a3a77c50e98ecf9188634ff2882f8143b19d0f28a53aff5c42e1bd09dfa",
-      "SKILL.md": "59fe74927988a339ea3ba2b73ebf7fa06e57b73a1e07ef288c306177f99a14f7"
+      "SKILL.md": "690a3d709500c74722493e9b2e0b832435fad5b5ae855f742546e8c1370d8a98"
     },
     "update-specialists": {
       "SKILL.md": "dfaf2e3d4fd38989ccfbbb52054dbc66f80bbc82084b387b05cd0b6a5aa51e87"
