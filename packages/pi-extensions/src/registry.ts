@@ -27,7 +27,6 @@ const availableManagedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "python-kernel", register: pythonKernelExtension },
   { id: "quality-gates", register: qualityGatesExtension },
   { id: "read-line-numbers", register: readLineNumbersExtension },
-  { id: "service-skills", register: serviceSkillsExtension },
   { id: "session-flow", register: sessionFlowExtension },
   { id: "sp-terminal-overlay", register: spTerminalOverlayExtension },
   { id: "xtrm-loader", register: xtrmLoaderExtension },

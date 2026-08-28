@@ -33,12 +33,6 @@
       "description": "Persistent python3 kernel: skills-as-imports, prelude, output truncation, audit seam"
     },
     {
-      "id": "service-skills",
-      "displayName": "service-skills",
-      "required": false,
-      "ownership": "xtrm"
-    },
-    {
       "id": "session-flow",
       "displayName": "session-flow",
       "required": true,
