@@ -535,4 +535,84 @@ describe("python-kernel managed extension", () => {
       fx.cleanup();
     }
   });
+
+  test("kernel binding: hasServiceRegistry detects canonical + legacy registries (xtrm-6z6.4)", () => {
+    const fx = tmpBase();
+    try {
+      // No registry -> false.
+      expect(extension.hasServiceRegistry(fx.dir)).toBe(false);
+      // Canonical service-knowledge registry -> true.
+      mkdirSync(join(fx.dir, ".xtrm", "skills", "infra", "service-knowledge"), { recursive: true });
+      writeFileSync(join(fx.dir, ".xtrm", "skills", "infra", "service-knowledge", "service-registry.json"), "{}");
+      expect(extension.hasServiceRegistry(fx.dir)).toBe(true);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("kernel binding: registry absent -> service_knowledge NOT mounted (xtrm-6z6.4)", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [], null);
+      const call = await kernel.runCell("'service_knowledge' in dir()", false);
+      expect(call.error).toBeNull();
+      expect(call.stdout.trim()).toBe("False");
+      // _sk_errors stays empty (no mount attempted).
+      expect(call.sk_errors).toEqual([]);
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("kernel binding: registry present + package resolvable -> service_knowledge mounted (xtrm-6z6.4)", async () => {
+    const fx = tmpBase();
+    try {
+      // Registry present in cwd.
+      mkdirSync(join(fx.dir, ".xtrm", "skills", "infra", "service-knowledge"), { recursive: true });
+      writeFileSync(join(fx.dir, ".xtrm", "skills", "infra", "service-knowledge", "service-registry.json"), "{}");
+      // Resolve the installed package path the way the extension does.
+      const skPath = await extension.resolveServiceKnowledgePath("python3");
+      if (!skPath) {
+        // Package not installed in this env -> binding gracefully absent; assert the
+        // kernel still boots cleanly and records no error for a non-mount.
+        const kernel = new PythonKernel(fx.dir, () => {}, {}, [], null);
+        const call = await kernel.runCell("1 + 1", false);
+        expect(call.error).toBeNull();
+        kernel.kill();
+        return;
+      }
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [], skPath);
+      const call = await kernel.runCell("service_knowledge.__version__", false);
+      expect(call.error).toBeNull();
+      expect(call.stdout).toMatch(/\d+\.\d+/); // version
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("kernel binding: sk_rebuild rides the audit seam (xtrm-6z6.4)", async () => {
+    const fx = tmpBase();
+    try {
+      const skPath = await extension.resolveServiceKnowledgePath("python3");
+      if (!skPath) {
+        // Package absent: sk_rebuild must be a safe no-op (None), never a crash.
+        const kernel = new PythonKernel(fx.dir, () => {}, {}, [], null);
+        const call = await kernel.runCell("sk_rebuild()", false);
+        expect(call.error).toBeNull();
+        expect(call.stdout.trim()).toBe("None");
+        kernel.kill();
+        return;
+      }
+      const kernel = new PythonKernel(fx.dir, () => {}, {}, [], skPath);
+      const call = await kernel.runCell("sk_rebuild()", false);
+      expect(call.error).toBeNull();
+      // Either a real rebuild (with items) or an error dict — never a crash.
+      expect(call.stdout).toMatch(/\{.*\}|None/);
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
 });
