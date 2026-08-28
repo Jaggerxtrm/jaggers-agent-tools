@@ -25,10 +25,6 @@
       "instruction": "Run `pi` and authenticate via Google OAuth"
     },
     {
-      "key": "qwen-cli",
-      "instruction": "Inside `pi`, run `/login qwen-cli` for OAuth device flow"
-    },
-    {
       "key": "google-antigravity",
       "instruction": "Run `pi` and authenticate via Google OAuth (Antigravity)"
     }

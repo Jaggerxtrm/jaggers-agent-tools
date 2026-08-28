@@ -4,12 +4,8 @@ import manifest from "./manifest.json" with { type: "json" };
 import beadsExtension from "./extensions/beads.ts";
 import compactHeaderExtension from "./extensions/compact-header.ts";
 import customFooterExtension from "./extensions/custom-footer.ts";
-import customProviderQwenCliExtension from "./extensions/custom-provider-qwen-cli.ts";
 import gitCheckpointExtension from "./extensions/git-checkpoint.ts";
-import lspBootstrapExtension from "./extensions/lsp-bootstrap.ts";
 import pythonKernelExtension from "./extensions/python-kernel.ts";
-import piSerenaCompactExtension from "./extensions/pi-serena-compact.ts";
-import serenaPoolExtension from "./extensions/serena-pool.ts";
 import qualityGatesExtension from "./extensions/quality-gates.ts";
 import readLineNumbersExtension from "./extensions/read-line-numbers.ts";
 import serviceSkillsExtension from "./extensions/service-skills.ts";
@@ -28,14 +24,10 @@ const availableManagedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "beads", register: beadsExtension },
   { id: "compact-header", register: compactHeaderExtension },
   { id: "custom-footer", register: customFooterExtension },
-  { id: "custom-provider-qwen-cli", register: customProviderQwenCliExtension },
   { id: "git-checkpoint", register: gitCheckpointExtension },
-  { id: "lsp-bootstrap", register: lspBootstrapExtension },
   { id: "python-kernel", register: pythonKernelExtension },
-  { id: "pi-serena-compact", register: piSerenaCompactExtension },
   { id: "quality-gates", register: qualityGatesExtension },
   { id: "read-line-numbers", register: readLineNumbersExtension },
-  { id: "serena-pool", register: serenaPoolExtension },
   { id: "service-skills", register: serviceSkillsExtension },
   { id: "session-flow", register: sessionFlowExtension },
   { id: "sp-terminal-overlay", register: spTerminalOverlayExtension },

@@ -7,10 +7,7 @@
 | `packages/pi-extensions/extensions/beads` | `packages/pi-extensions/extensions/beads` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/compact-header` | `packages/pi-extensions/extensions/compact-header` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/custom-footer` | `packages/pi-extensions/extensions/custom-footer` | now imports `../../src/core` |
-| `packages/pi-extensions/extensions/custom-provider-qwen-cli` | `packages/pi-extensions/extensions/custom-provider-qwen-cli` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/git-checkpoint` | `packages/pi-extensions/extensions/git-checkpoint` | extension source moved unchanged |
-| `packages/pi-extensions/extensions/lsp-bootstrap` | `packages/pi-extensions/extensions/lsp-bootstrap` | extension source moved unchanged |
-| `packages/pi-extensions/extensions/pi-serena-compact` | `packages/pi-extensions/extensions/pi-serena-compact` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/quality-gates` | `packages/pi-extensions/extensions/quality-gates` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/service-skills` | `packages/pi-extensions/extensions/service-skills` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/session-flow` | `packages/pi-extensions/extensions/session-flow` | now imports `../../src/core` |
@@ -40,6 +37,14 @@
   first-message-based naming is redundant and would fight the launcher-owned
   name. Removed from `src/manifest.json`, `src/registry.ts`, the legacy path
   map, and the plugin-era cleanup set.
+- `custom-provider-qwen-cli` was removed: the qwen-cli provider is no longer
+  part of the managed set; consumers that need Qwen models use the upstream
+  pi qwen provider directly.
+- `lsp-bootstrap` was removed: auto-installing LSP binaries on agent start was
+  surprising and is no longer part of the managed set.
+- `pi-serena-compact` and `serena-pool` were already disabled as retired
+  (XTRM no longer manages Serena MCP integration) and their sources are now
+  removed.
 
 ## Asset migration
 

@@ -4,14 +4,10 @@
 
 | Legacy path | New path | Notes |
 |---|---|---|
-| `packages/pi-extensions/extensions/auto-session-name` | `packages/pi-extensions/extensions/auto-session-name` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/beads` | `packages/pi-extensions/extensions/beads` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/compact-header` | `packages/pi-extensions/extensions/compact-header` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/custom-footer` | `packages/pi-extensions/extensions/custom-footer` | now imports `../../src/core` |
-| `packages/pi-extensions/extensions/custom-provider-qwen-cli` | `packages/pi-extensions/extensions/custom-provider-qwen-cli` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/git-checkpoint` | `packages/pi-extensions/extensions/git-checkpoint` | extension source moved unchanged |
-| `packages/pi-extensions/extensions/lsp-bootstrap` | `packages/pi-extensions/extensions/lsp-bootstrap` | extension source moved unchanged |
-| `packages/pi-extensions/extensions/pi-serena-compact` | `packages/pi-extensions/extensions/pi-serena-compact` | extension source moved unchanged |
 | `packages/pi-extensions/extensions/quality-gates` | `packages/pi-extensions/extensions/quality-gates` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/service-skills` | `packages/pi-extensions/extensions/service-skills` | now imports `../../src/core` |
 | `packages/pi-extensions/extensions/session-flow` | `packages/pi-extensions/extensions/session-flow` | now imports `../../src/core` |

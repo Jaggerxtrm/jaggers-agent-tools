@@ -60608,12 +60608,10 @@ var XTRM_MANAGED_PI_EXTENSIONS = /* @__PURE__ */ new Set([
   "service-skills",
   "xtrm-loader",
   "custom-footer",
-  "lsp-bootstrap",
   "plan-mode",
   "auto-update",
   "compact-header",
   "git-checkpoint",
-  "pi-serena-compact",
   "xtrm-ui",
   "core"
 ]);

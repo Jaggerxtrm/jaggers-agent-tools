@@ -59,9 +59,6 @@ describe("Pi extension ownership parity", () => {
     for (const [id, reason] of Object.entries(manifest.disabled)) {
       expect(reason.length, `missing disabled reason for ${id}`).toBeGreaterThan(0);
     }
-
-    expect(activeIds()).not.toContain("serena-pool");
-    expect(manifest.disabled).toHaveProperty("serena-pool");
   });
 
   test("read-line-numbers is enrolled as a required active extension", () => {

@@ -98,13 +98,13 @@ describe('createInstallPiCommand', () => {
         expect(keys).toContain('ZAI_API_KEY');
     });
 
-    it('install-schema.json lists anthropic and qwen-cli as oauth_providers', () => {
+    it('install-schema.json lists anthropic as oauth_provider', () => {
         const fs = require('node:fs');
         const p = require('node:path');
         const schema = JSON.parse(fs.readFileSync(p.resolve(__dirname, '..', '..', 'config', 'pi', 'install-schema.json'), 'utf8'));
         const keys = schema.oauth_providers.map((o) => o.key);
         expect(keys).toContain('anthropic');
-        expect(keys).toContain('qwen-cli');
+        expect(keys).not.toContain('qwen-cli');
     });
 
     it('extensions directory resolves from current runtime source', async () => {
@@ -112,14 +112,6 @@ describe('createInstallPiCommand', () => {
         const path = require('node:path');
         const sourceDir = resolveManagedPiExtensionsSourceDir();
         expect(sourceDir).toBe(path.resolve(__dirname, '..', '..', 'packages', 'pi-extensions', 'extensions'));
-    });
-
-    it('custom-provider-qwen-cli extension has index.ts and package.json', () => {
-        const fs = require('node:fs');
-        const p = require('node:path');
-        const base = p.resolve(__dirname, '..', '..', 'packages', 'pi-extensions', 'extensions', 'custom-provider-qwen-cli');
-        expect(fs.existsSync(p.join(base, 'index.ts'))).toBe(true);
-        expect(fs.existsSync(p.join(base, 'package.json'))).toBe(true);
     });
 
     it('readExistingPiValues extracts DASHSCOPE_API_KEY from existing auth.json', async () => {

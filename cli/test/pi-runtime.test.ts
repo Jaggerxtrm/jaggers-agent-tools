@@ -225,12 +225,12 @@ describe('inventoryPiRuntime', () => {
     });
 
     it('detects retired managed extensions without treating user extensions as orphans', async () => {
-        await makeExtension(targetDir, 'pi-serena-compact');
+        await makeExtension(targetDir, 'quality-gates');
         await makeExtension(targetDir, 'user-extension');
 
         const plan = await inventoryPiRuntime(sourceDir, targetDir);
 
-        expect(plan.orphanedExtensions).toEqual(['pi-serena-compact']);
+        expect(plan.orphanedExtensions).toEqual(['quality-gates']);
     });
 
     it('reports allPresent when everything is synced', async () => {
@@ -335,14 +335,14 @@ describe('executePiSync', () => {
     });
 
     it('removes retired managed extensions without touching user extensions', async () => {
-        await makeExtension(targetDir, 'pi-serena-compact');
+        await makeExtension(targetDir, 'quality-gates');
         await makeExtension(targetDir, 'user-extension');
 
         const plan = await inventoryPiRuntime(sourceDir, targetDir);
         const result = await executePiSync(plan, sourceDir, targetDir, { removeOrphaned: true });
 
-        expect(result.extensionsRemoved).toContain('pi-serena-compact');
-        expect(await fs.pathExists(path.join(targetDir, 'pi-serena-compact'))).toBe(false);
+        expect(result.extensionsRemoved).toContain('quality-gates');
+        expect(await fs.pathExists(path.join(targetDir, 'quality-gates'))).toBe(false);
         expect(await fs.pathExists(path.join(targetDir, 'user-extension'))).toBe(true);
     });
 
@@ -357,7 +357,7 @@ describe('executePiSync', () => {
     });
 
     it('dry run enrolls current extensions and skips disabled or library IDs', async () => {
-        await makeExtension(sourceDir, 'serena-pool');
+        await makeExtension(sourceDir, 'quality-gates');
         await makeExtension(sourceDir, 'sp-terminal-overlay');
         await makeExtension(sourceDir, 'xtprompt');
 
@@ -370,10 +370,8 @@ describe('executePiSync', () => {
             '[DRY RUN] + sp-terminal-overlay',
             '[DRY RUN] + xtprompt',
         ]));
-        expect(logs.join('\n')).not.toContain('serena-pool');
-        expect(logs.join('\n')).not.toContain('core');
-        expect(logs.join('\n')).not.toContain('pi-serena-compact');
         expect(logs.join('\n')).not.toContain('quality-gates');
-        expect(await fs.pathExists(path.join(targetDir, 'serena-pool'))).toBe(false);
+        expect(logs.join('\n')).not.toContain('core');
+        expect(await fs.pathExists(path.join(targetDir, 'quality-gates'))).toBe(false);
     });
 });
