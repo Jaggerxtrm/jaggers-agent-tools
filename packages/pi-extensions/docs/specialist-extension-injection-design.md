@@ -8,30 +8,28 @@ Date: 2026-08-28
 
 ## Decision
 
-Use two configuration layers. A user-owned descriptor registry under `~/.config/specialists` defines which extension IDs are trusted and available on the machine, plus package/entry resolution overrides. A specialist manifest can then select only those trusted IDs through boolean `specialist.execution.extensions`. The Specialists runner resolves the selected set once and passes the same health/path plan to `PiAgentSession` and the direct script runner. Each spawn adds only healthy paths as explicit `-e` arguments after `--no-extensions`.
+Keep Specialists sessions isolated with `--no-extensions`. Treat `specialist.execution.extensions` as a boolean map whose keys are native Pi extension sources. For each effective `true` entry, append one `-e <source>` pair. Pass the same ordered source list to `PiAgentSession` and the direct script runner; Pi performs all path, npm, git, package-manifest, and entrypoint resolution. Keep `--offline` for local-only sessions, but omit it when an enabled source requires native npm/git/network resolution.
 
-Trust does not imply activation. Every descriptor is opt-in per specialist: only manifest `true` selects it; omitted or `false` means inactive. Packaged catalog metadata can supply resolution defaults, but it cannot grant trust or activate an extension. User descriptor metadata overrides packaged catalog metadata.
+The existing global user configuration at `~/.config/specialists/user.json` can override the same per-specialist boolean fields. Omitted or `false` entries do not load. No second registry or resolver configuration is needed.
 
-Do not generate Pi settings, change `HOME`, publish packages, accept arbitrary repository-provided code paths, vendor extensions into Core, or change the Core `xt pi --role` launcher. The current Core launcher already uses Pi's ambient global/project extension discovery. The isolated path that needs configuration is a tracked Specialists dispatch (`sp run` and related job paths), not the interactive Core role launcher.
+Do not generate Pi settings, change `HOME`, publish packages, add a descriptor registry, vendor extensions into Core, or change the Core `xt pi --role` launcher. The current Core launcher already uses Pi's ambient global/project extension discovery. The isolated path that needs configuration is a tracked Specialists dispatch (`sp run` and related job paths), not the interactive Core role launcher.
 
-The smallest safe manifest shape is a boolean map of trusted extension IDs:
+The smallest manifest shape is a boolean map of Pi-native extension sources:
 
 ```json
 {
   "specialist": {
     "execution": {
       "extensions": {
-        "gitnexus": true,
-        "python-kernel": true,
-        "service-knowledge": true,
-        "xtrm-loader": true
+        "npm:pi-gitnexus@0.6.1": true,
+        "npm:@jaggerxtrm/pi-service-knowledge@1.0.0": true
       }
     }
   }
 }
 ```
 
-The user layer owns trust and can override package name and relative entry path. Catalog metadata can provide fallback package, entry, version, permission predicate, and tool identity. A repository manifest can select a user-trusted descriptor, but it cannot define a descriptor or point Pi at an arbitrary file.
+The source string is passed to Pi unchanged. Pi already accepts local paths, npm sources, and git sources through `-e`; package entrypoints come from the package's native `pi.extensions` metadata. Specialists owns selection and ordering only.
 
 ## Source-bound terminology correction
 
@@ -102,7 +100,7 @@ The worktree-boundary extension is generated under the OS temporary directory an
 
 `script-runner.ts` has a separate `appendExtensionArgs()` implementation. It injects read-line-numbers, Quality Gates, a retired loose `service-skills` path, Caveman, and contract-gated GitNexus (`/home/dawid/dev/specialists/src/specialist/script-runner.ts:969-990`). Write-capable `surface === "script"` invocations use `PiAgentSession` (`:1007-1022`), but the other script/read-only path spawns Pi directly with `--no-extensions` and calls the separate assembler (`:1135-1145`). `sp serve` imports and calls `runScriptSpecialist` (`/home/dawid/dev/specialists/src/cli/serve.ts:7-10`, `:394-400`).
 
-This is a real parity gap: the implementation wave must share one resolved extension plan across `runner.ts`, `PiAgentSession`, and the direct script runner. It must also remove the stale loose `service-skills` lookup in favor of the standalone service-knowledge descriptor.
+This is a real parity gap: the implementation wave must share one ordered enabled-source list across `runner.ts`, `PiAgentSession`, and the direct script runner. It must also remove the stale loose `service-skills` lookup in favor of the configured standalone Service Knowledge source.
 
 ### Existing exclusion path
 
@@ -127,9 +125,7 @@ The tool resolver explicitly assembles only GitNexus and Python Kernel tools (`/
 
 Service Knowledge has a catalog row but no tools. Its package/version are not consulted by its launch resolver; launch checks only its hardcoded entry existence (`/home/dawid/dev/specialists/src/pi/python-kernel-extension.ts:61-87`). Python has the opposite mismatch: the contract can mark it disabled or incompatible, while actual `-e` assembly calls the dedicated path resolver and can still load it (`/home/dawid/dev/specialists/src/pi/session.ts:265-319`, `:830-840`).
 
-The catalog is therefore a tool-policy/health surface, not a complete extension inventory. Overloading it with UI hooks, gates, context injectors, and provider adapters would widen its role and require changes across its fixed enum and manifest resolver. A separate small injection-descriptor registry is the lower-diff design.
-
-The current catalog reader prefers repository-local `<cwd>/.specialists/catalog/index.json` (`/home/dawid/dev/specialists/src/pi/session.ts:181-198`). That source is valid for existing repository tool policy, but it is not a trust source. The descriptor resolver must read fallback metadata only from the packaged Specialists catalog and `~/.config/specialists/extensions.json`; it must never accept descriptor package, entry, version, permission, or tool identity from a repository-local catalog.
+The catalog is therefore a tool-policy/health surface, not an extension inventory. Overloading it with package resolution for UI hooks, gates, context injectors, and provider adapters would widen its role. Keep it responsible for known tool names and permissions; use the specialist boolean source map plus native Pi `-e` resolution for loading.
 
 ## 4. Injectable packages and self-gating
 
@@ -141,7 +137,7 @@ At initialization it scans the cwd and five ancestors for `.xtrm/skills` pack um
 
 When active, it registers one hidden `before_agent_start` context message and `/service-knowledge:status` (`/home/dawid/dev/xtrm/packages/service-knowledge-ext/index.ts:195-238`). Missing roots, malformed registry reads, and git lookup failures fail open (`:85-93`, `:112-131`). Drift is advisory and never starts reconciliation automatically (`/home/dawid/dev/xtrm/packages/service-knowledge-ext/README.md:66-93`).
 
-This makes package injection safe across specialists: registry-less jobs pay load/discovery cost but receive no command or prompt surface. The descriptor health note must distinguish “package loaded” from “registry gate active”; package presence alone cannot claim an active service-knowledge surface.
+This makes package injection suitable across specialists: registry-less jobs pay load/discovery cost but receive no command or prompt surface. Specialists need not model the internal gate; Pi loads the package and the package decides whether to register its surface.
 
 ### Core Pi extension bundle
 
@@ -149,25 +145,24 @@ This makes package injection safe across specialists: registry-less jobs pay loa
 
 Whole-bundle injection is materially different from injecting Python Kernel alone: it loads Python Kernel and read-line-numbers again, plus gates, lifecycle hooks, UI patches, and context injectors (`packages/pi-extensions/src/registry.ts:3-15`, `:22-35`). Pi keeps conflicting extensions loaded, reports diagnostics, and uses load order for precedence (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js:459-465`); the first tool registration by name wins (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/runner.js:280-290`). Duplicate event handlers can still both run.
 
-Therefore the initial design must **not** inject `@jaggerxtrm/pi-extensions/src/index.ts`. It exposes approved narrow entries such as `extensions/xtrm-loader/index.ts`, while Python Kernel retains its existing narrow descriptor. A whole-bundle descriptor remains deferred until the package offers a non-overlapping Specialists entry or the resolver suppresses every duplicate extension deterministically.
+Therefore the design must **not** pass the aggregate `@jaggerxtrm/pi-extensions` package source merely to reach one nested extension. Python Kernel retains its existing runtime-owned narrow path until it has a standalone Pi package source. Other selectable extensions should use standalone package sources whose native package metadata exposes only the intended surface.
 
-The bundle catches errors from individual factory calls and continues with sibling extensions (`packages/pi-extensions/src/registry.ts:47-58`), but static import failure occurs before that boundary. The Specialists resolver must check package and entry existence before adding `-e`; it cannot make an import-time exception non-fatal after Pi starts.
+The bundle catches errors from individual factory calls and continues with sibling extensions (`packages/pi-extensions/src/registry.ts:47-58`), but static import failure occurs before that boundary. Under this design, Pi's native loader reports package, entrypoint, and import failures; Specialists does not duplicate that preflight logic.
 
 ## 5. Proposed contract
 
-### 5.1 Manifest semantics
+### 5.1 Specialist manifest and user override
 
-Use boolean keys under existing `execution.extensions`:
+Use the existing `execution.extensions` object. Its keys are Pi-native extension sources and its values are booleans:
 
 ```json
 {
   "specialist": {
     "execution": {
       "extensions": {
-        "service-knowledge": true,
-        "python-kernel": true,
-        "xtrm-loader": false,
-        "gitnexus": true
+        "npm:pi-gitnexus@0.6.1": true,
+        "npm:@jaggerxtrm/pi-service-knowledge@1.0.0": true,
+        "git:github.com/example/pi-extension@v1": false
       }
     }
   }
@@ -176,247 +171,175 @@ Use boolean keys under existing `execution.extensions`:
 
 Rules:
 
-- Omitted key or `false`: do not select the descriptor.
-- `true`: request injection, but only if the user layer marks the ID trusted and resolution/permission health checks pass.
-- ID absent from the effective user registry: skip and add an `untrusted_extension_id` health warning; do not fail the job, even when packaged catalog metadata exists.
-- `serena`: continue to parse and ignore for compatibility.
-- All manifest extension values must be booleans. Descriptor IDs remain data-driven so a user can trust an external descriptor such as `ast-grep` without a Specialists or Core release.
+- `true`: append one `-e <source>` pair.
+- `false` or omitted: do not append the source.
+- Every value must be boolean.
+- Preserve object insertion order after layered configuration merge.
+- Pass each source string to Pi unchanged. Specialists does not parse package names, resolve global node-modules roots, inspect package versions, or find entry files.
+- Keep legacy `serena` parsing/ignore behavior only for migration compatibility; do not treat it as a Pi source.
 
-Initial descriptor metadata candidates, all inactive until a manifest explicitly selects them:
-
-| ID | Packaged catalog/default package entry | User trust required | Predicate |
-|---|---|---:|---|
-| `gitnexus` | existing contract package path | yes | contract status `available` |
-| `python-kernel` | `@jaggerxtrm/pi-extensions/extensions/python-kernel/index.ts` | yes | tier is not `READ_ONLY` and catalog-compatible |
-| `service-knowledge` | `@jaggerxtrm/pi-service-knowledge/index.ts` | yes | package entry exists; extension self-gates by registry |
-| `xtrm-loader` | `@jaggerxtrm/pi-extensions/extensions/xtrm-loader/index.ts` | yes | package entry exists |
-
-The user registry can introduce other IDs when it supplies complete package/entry metadata. Additional Core-package entries can be selected as narrow external package entries after overlap review, but the whole `src/index.ts` bundle is not a descriptor. Quality Gates, Caveman, NVIDIA NIM, worktree boundary, and read-line-numbers remain existing runtime-owned injections in the first wave; the opt-in rule applies to descriptors, not these existing runtime invariants. Migrating them into descriptors is optional cleanup, not required for this gap.
-
-### 5.2 Resolution algorithm
-
-Resolve once in the runner after `runCwd` is known and before prompt rendering:
-
-1. Load packaged Specialists catalog/default descriptor metadata. Treat it as untrusted and inactive. Never read the cwd-local catalog for descriptor construction.
-2. Load the user descriptor registry. Remove entries not marked trusted; overlay trusted package/entry/version/tool fields on matching packaged metadata. A new user-defined ID must provide complete package and relative-entry metadata.
-3. Read the effective specialist boolean map. Only an explicit manifest `true` advances a trusted descriptor to resolution; omitted and `false` entries remain inactive.
-4. For each selected trusted descriptor, reuse existing catalog health/contract logic where one exists.
-5. Enumerate the existing global-node-modules candidate roots and test `<root>/<package>/<entry>` in order. Select the first package entry that exists. This intentionally fixes the current first-existing-root behavior, which can miss a package installed in a later root.
-6. Read `package.json` when the effective descriptor has an expected version. A version mismatch is unhealthy and skipped.
-7. Canonicalize successful paths with `realpath`; deduplicate by realpath.
-8. Preserve descriptor order, then append runtime-owned boundary/read-line-number extensions in their existing tail order.
-9. Return an immutable plan containing `id`, trust state, requested state, status, metadata source, package, version, resolved path, and reason.
-10. Pass that same plan to tool-contract formatting and both spawn implementations; neither spawn path may independently re-resolve it.
-
-Recommended status values are `available`, `available_self_gating`, `not_selected`, `untrusted_extension_id`, `not_installed`, `incompatible`, and `missing_entry`. `available_self_gating` means the package entry is injectable but actual registry activation is cwd-dependent; it still produces `-e`, but the resolver must not claim that the command/context hook registered.
-
-### 5.3 Local unpublished package strategy
-
-Prefer the global-node-modules symlink pattern. Host observations on 2026-08-28, captured with `npm root -g` plus `readlink -f`, were:
-
-```text
-@jaggerxtrm/pi-extensions -> /home/dawid/dev/core/packages/pi-extensions
-@jaggerxtrm/pi-service-knowledge -> /home/dawid/dev/xtrm/packages/service-knowledge-ext
-```
-
-This pattern gives a stable package identity, live source checkout, package metadata, and the same resolver path used by published installs. No npm publish is required.
-
-Do not automatically search `~/dev/core` or `~/dev/xtrm`; those paths are machine-specific and can silently select an unrelated checkout. The user registry may override npm package name and relative entry, but not inject a repository-supplied absolute source path. For an unpublished checkout, create a user-controlled global-node-modules symlink, then point the descriptor at its package name and relative entry. Validate package syntax, reject absolute entries and `..` traversal, and keep repository manifests limited to boolean selection.
-
-### 5.4 Precedence and deduplication
-
-Resolution precedence is: user descriptor metadata, then packaged Specialists catalog/default metadata, then existing resolver health checks. Trust comes only from the user registry, and activation comes only from manifest `true`; neither catalog presence nor user trust activates a descriptor. A manifest key never supplies or replaces a path. If two selected descriptors resolve to the same realpath, inject the first only and report the duplicate in health details.
-
-Keep current behavioral order:
-
-1. existing loose/default runtime extensions through NVIDIA NIM;
-2. resolved known package descriptors, preserving existing GitNexus position where practical;
-3. manifest-only narrow Core-package additions such as `xtrm-loader`;
-4. worktree boundary;
-5. read-line-numbers.
-
-The two final positions preserve the source's explicit boundary/read-output ordering invariant (`/home/dawid/dev/specialists/src/pi/session.ts:866-880`).
-
-### 5.5 Failure semantics and health evidence
-
-A missing package, missing entry, incompatible version, duplicate path, or untrusted ID must never abort the specialist session. The resolver omits that `-e` pair, adds the record to `ResolvedToolContract.warnings`, and writes one bounded `[specialists:extension]` warning to the parent process stderr before spawn. `available_self_gating` still injects the entry and records that surface activation is conditional. Parent stderr is the smallest-diff operator note; validation must prove where each CLI/server surface persists or displays it before documentation calls it durable. A later structured timeline event can be added separately, but is not required for the injection seam.
-
-Minimum health fields:
-
-```text
-component=specialists.pi.extensions
-specialist=<name>
-extension_id=<id>
-requested=true|false
-status=<status>
-source=user-config|catalog|manifest|global-node-modules
-package=<redacted package name>
-entry=<relative entry>
-reason=<bounded code>
-```
-
-Do not log full prompts, credentials, environment values, or arbitrary file contents. Absolute resolved paths may be included in debug output but should not be included in cross-system telemetry by default.
-
-Pi-emitted `extension_error` events remain runtime evidence for a path that resolved but failed during load (`/home/dawid/dev/specialists/src/pi/session.ts:94-102`, `:1242-1248`). Resolution health and Pi load health are separate states.
-
-### 5.6 Tool-contract and prompt updates
-
-Today the runner resolves the tool contract before `runCwd` and before launch (`/home/dawid/dev/specialists/src/specialist/runner.ts:1020-1040`, `:1053-1055`). Service Knowledge appears in the catalog but receives no runtime state; Python contract and actual injection can disagree (`/home/dawid/dev/specialists/src/pi/session.ts:321-368`, `:830-840`).
-
-Move `runCwd` computation before extension/contract resolution. Feed the resolved extension plan into `resolveRuntimeToolContract` so:
-
-- Python tools appear only when the exact Python entry will be injected.
-- GitNexus exclusion and injection use the same plan.
-- Service Knowledge reports package health and `available_self_gating`, with no invented tools.
-- Narrow external package descriptors report loaded package state. Their exact Pi tool names come from packaged catalog metadata or the trusted user's `tools_by_tier`; package injection alone never expands `--tools`.
-- Untrusted or missing requested extensions add warnings and downgrade reasons, not fatal validation errors.
-
-`formatResolvedToolContract` already renders extension state (`/home/dawid/dev/specialists/src/specialist/resolved-tool-contract.ts:114-139`). Extend it with requested/source/reason and the self-gate distinction. The formatted block reaches the model only when the specialist task template includes `$resolved_tool_contract` (`/home/dawid/dev/specialists/src/specialist/runner.ts:1036-1040`). Update authoring guidance to require that placeholder for specialists whose instructions depend on optional extension capabilities.
-
-The generic GitNexus prompt mandate currently checks only for `.gitnexus/meta.json`, not extension health (`/home/dawid/dev/specialists/src/specialist/runner.ts:1185-1210`). Gate that text on the resolved GitNexus state or phrase it conditionally so prompt and tools cannot conflict.
-
-### 5.7 User trust and availability configuration
-
-Use a dedicated user-owned file adjacent to the existing global specialist override file:
-
-```text
-~/.config/specialists/extensions.json
-```
-
-Keeping this separate from `user.json` avoids overloading that file's current specialist-name-to-override shape (`/home/dawid/dev/specialists/src/specialist/loader.ts:300-338`). Recommended shape:
+The existing global user file already provides per-specialist overrides at `~/.config/specialists/user.json` (`/home/dawid/dev/specialists/src/specialist/loader.ts:300-338`). It can expose the same configurable fields:
 
 ```json
 {
-  "descriptors": {
-    "python-kernel": {
-      "trusted": true
-    },
-    "service-knowledge": {
-      "trusted": true,
-      "package": "@jaggerxtrm/pi-service-knowledge",
-      "entry": "index.ts"
-    },
-    "ast-grep": {
-      "trusted": true,
-      "package": "<user-installed-package-name>",
-      "entry": "<relative-extension-entry>",
-      "tools_by_tier": {
-        "READ_ONLY": ["<registered-ast-grep-tool-name>"]
+  "service-knowledge-sync": {
+    "execution": {
+      "extensions": {
+        "npm:@jaggerxtrm/pi-service-knowledge@1.0.0": true
       }
     }
   }
 }
 ```
 
-The `ast-grep` values are placeholders for the operator-installed package and the exact tool name that package registers; Specialists must not invent or bundle either value. A catalog-backed ID can set only `trusted`; a new ID must set `trusted`, `package`, and `entry`. Optional `version` narrows compatibility. Optional `tools_by_tier` declares the descriptor's exact Pi tool names for `READ_ONLY`, `LOW`, `MEDIUM`, and `HIGH`; a missing tier contributes no tools. The resolver adds only the selected permission tier's names to `--tools`. It must reject native Specialists tool names and collisions with another catalog/descriptor owner. `trusted: false` or absence removes the ID from the effective registry.
+Merge `execution.extensions` key-by-key through the existing package → global user → repository-user specialist layers. A higher layer replaces only the matching boolean. It does not replace the complete map.
 
-The two layers have separate authority:
+### 5.2 Native Pi resolution
 
-1. **User registry:** grants machine-wide trust and availability; optionally overrides catalog package, entry, and version metadata.
-2. **Specialist manifest:** selects a trusted ID for one specialist with boolean `true`.
-3. **Runtime health:** applies permission, version, package, entry, and self-gate checks after trust and selection.
+Pi documents `-e, --extension <source>` as accepting a path, npm source, or git source, while `--no-extensions` disables discovery (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/usage.md:219-224`). Pi also documents temporary package loading through `pi -e npm:@foo/bar` and `pi -e git:github.com/user/repo` (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/packages.md:43-50`).
 
-Precedence is field-level `user config > packaged catalog defaults`. The repository-local catalog is excluded from descriptor construction. There is no activation default: trusted-but-unselected descriptors stay inactive. Repository manifests and repository override files cannot add trust, define packages, provide entry paths, or declare tool names. This boundary is required because Pi extensions execute with the user's permissions and are not constrained by `--tools`.
+The resource loader sends CLI `-e` values through the native package manager, then uses those explicitly resolved extensions even when `noExtensions` is true (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js:274-280`, `:313-319`). The package manager resolves the supplied sources and collects package resources (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/package-manager.js:733-738`, `:981-1035`).
+
+The Specialists operation is therefore only:
+
+```text
+for each (source, enabled) in effective execution.extensions
+  if enabled
+    args.push("-e", source)
+```
+
+Keep `--no-extensions` before the generated pairs. Do not pre-resolve a source to a filesystem path.
+
+### 5.3 Package shape and local development
+
+A selectable package must expose the intended extension through native Pi package metadata or conventions. If one npm package exposes a large aggregate bundle, passing its package source loads that bundle. Specialists must not reconstruct a private nested entry path to select one member.
+
+Therefore:
+
+- Service Knowledge can use its standalone package source.
+- GitNexus can use its standalone package source.
+- A future Ast-grep extension should use its own Pi package source.
+- Python Kernel should remain on its existing runtime-owned narrow path until it has a correct standalone Pi package source; do not pass the whole Core extension bundle merely to reach it.
+
+For unpublished work, Pi accepts a local package directory or file through `-e`. A user override can select that local source for development. Published/canonical manifests should use stable npm or git sources rather than machine-specific paths.
+
+Both Specialists spawn paths currently pass `--offline` (`/home/dawid/dev/specialists/src/pi/session.ts:772-800`, `/home/dawid/dev/specialists/src/specialist/script-runner.ts:1135-1145`). Native npm/git resolution cannot install a missing temporary package while offline: the package manager skips missing installs in offline mode (`/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/package-manager.js:995-1017`). Therefore each spawn path must omit `--offline` when the enabled source list contains an npm, git, or network source. Keep `--offline` when every enabled source is local or the list is empty. This preserves offline startup for existing sessions while making configured native package names work from a clean environment.
+
+### 5.4 One source list for every spawn path
+
+Resolve the effective boolean map once in the runner and produce one ordered `string[]` of enabled sources. Pass that list to:
+
+1. `PiAgentSession`, used by normal tracked runs and write-capable script runs;
+2. the direct JSON-mode path in `script-runner.ts`, used by read-only/script and `sp serve` paths.
+
+Both spawn implementations append the same list. This closes the current parity gap without a package resolver or descriptor registry.
+
+Preserve runtime-owned injections that are not yet represented as package sources: Quality Gates, Caveman, NVIDIA NIM, the generated worktree boundary, read-line-numbers, and the narrow Python Kernel path. Remove the stale loose `service-skills` injection from the direct script runner when Service Knowledge moves to its configured native source.
+
+### 5.5 Failure and tool-contract behavior
+
+Pi owns package resolution and extension-load diagnostics. Specialists should not duplicate Pi's version, path, package-manifest, entrypoint, or conflict checks. Before spawn, Specialists may log the bounded ordered source list; after spawn, existing `extension_error` handling remains the evidence for native load failure (`/home/dawid/dev/specialists/src/pi/session.ts:94-102`, `:1242-1248`).
+
+Extension loading and tool permission remain separate:
+
+- A context-only extension such as Service Knowledge needs no `--tools` change.
+- A tool-bearing extension loads through `-e`, but its tools remain unavailable unless the existing resolved tool contract admits their exact registered names.
+- The existing catalog remains the tool-policy surface. This design does not add custom `tools_by_tier` or descriptor metadata to extension configuration.
+
+The generic GitNexus prompt mandate currently checks only for `.gitnexus/meta.json`, not actual extension state (`/home/dawid/dev/specialists/src/specialist/runner.ts:1185-1210`). Gate that text on whether the GitNexus source is enabled and its existing catalog contract is available.
+
+### 5.6 Security boundary
+
+A CLI `-e` source executes code with the user's permissions and loads before Pi project trust. Therefore only configuration surfaces already treated as trusted Specialist configuration may populate `execution.extensions`. Do not accept extension sources from task text, model output, environment interpolation, or arbitrary runtime request fields.
+
+No separate machine trust database is necessary. The operator grants trust by placing a source in a canonical specialist manifest or the existing user override configuration.
 
 ## 6. Smallest-diff implementation plan
 
-### Phase 1: two-layer schema, trust registry, and descriptor resolution
+### Phase 1: boolean source map
 
 Files:
 
 - `/home/dawid/dev/specialists/src/specialist/schema.ts`
 - `/home/dawid/dev/specialists/src/specialist/loader.ts`
-- `/home/dawid/dev/specialists/src/specialist/global-config.ts`
-- `/home/dawid/dev/specialists/src/specialist/extension-config.ts` (new, or an equivalently small adjacent module)
-- `/home/dawid/dev/specialists/src/pi/python-kernel-extension.ts` or the new resolver module
-- `/home/dawid/dev/specialists/src/pi/session.ts`
-- `/home/dawid/dev/specialists/docs/pi-session.md`
 - `/home/dawid/dev/specialists/docs/authoring.md`
-- `/home/dawid/dev/specialists/config/skills/setup-specialists/SKILL.md`
 
 Changes:
 
-1. Validate `execution.extensions` as a record of boolean selections while retaining legacy Serena parsing/ignore behavior.
-2. Merge permitted extension-selection maps key-by-key across specialist layers; do not permit package or entry data in repository manifests or overrides.
-3. Add schema, path resolution, and fail-closed parsing for `~/.config/specialists/extensions.json`. Invalid descriptor records are unavailable and produce bounded warnings.
-4. Build the effective registry from the packaged Specialists catalog overlaid by user records. Do not call the existing cwd-preferring catalog loader for descriptor metadata. Only user-trusted records are selectable; every descriptor remains inactive unless the manifest says `true`.
-5. Define one pure resolver returning trust/health records plus deduplicated paths. User package/entry/version/tool fields override packaged catalog defaults. Validate tool names, reject native-tool escalation and ownership collisions, and feed the selected tier into the resolved tool contract.
-6. Extract the current global-node-modules root candidates, but search each candidate for the requested package entry instead of stopping at the first existing root. Reuse existing Python/Service Knowledge metadata and tests.
+1. Validate `execution.extensions` as a string-keyed record of booleans.
+2. Retain legacy `serena` compatibility without forwarding it to Pi.
+3. Merge extension booleans key-by-key in the existing specialist override pipeline.
+4. Document that keys use Pi-native path, `npm:`, or `git:` source syntax.
+5. Add the extension map to the existing configurable user fields; do not create `extensions.json`.
 
-### Phase 2: one resolved plan for prompt and spawn
+### Phase 2: append sources at both force points
 
 Files:
 
 - `/home/dawid/dev/specialists/src/specialist/runner.ts`
 - `/home/dawid/dev/specialists/src/specialist/script-runner.ts`
 - `/home/dawid/dev/specialists/src/pi/session.ts`
-- `/home/dawid/dev/specialists/src/specialist/resolved-tool-contract.ts`
 
 Changes:
 
-1. Compute `runCwd` before extension and tool-contract resolution.
-2. Resolve extensions once from the user trust registry plus effective `execution.extensions` selection map.
-3. Pass `resolvedExtensions` through `PiSessionOptions`.
-4. Replace package-specific `args.push('-e', ...)` decisions for GitNexus, Python, and Service Knowledge with iteration over the healthy resolved plan. Preserve current ordering and permission predicates.
-5. Pass the same plan into `script-runner.ts`; remove its stale loose `service-skills` lookup and use the plan for both direct JSON-mode spawn and write-capable `PiAgentSession` execution.
-6. Keep `--no-extensions`; do not write a settings file.
-7. Add bounded resolution warnings to parent stderr and the contract formatter.
-8. Gate extension-specific prompt text on resolved state.
+1. Convert the effective boolean map to one ordered enabled-source array.
+2. Pass that array through `PiSessionOptions`.
+3. At each spawn implementation, append `['-e', source]` for every enabled source after `--no-extensions`.
+4. Omit `--offline` in both spawn paths when any enabled source uses npm, git, or network syntax; retain it for local-only or empty source lists.
+5. Remove package-specific Service Knowledge and GitNexus path assembly only when their manifests use native package sources.
+6. Keep runtime-owned narrow injections that do not yet have correct standalone package sources.
+7. Remove the direct script runner's stale loose `service-skills` path.
 
-### Phase 3: manifest adoption
+The implementation helper should stay equivalent to:
 
-Files:
+```ts
+for (const source of extensionSources) args.push('-e', source)
+```
 
-- `/home/dawid/dev/specialists/config/specialists/service-knowledge-sync.specialist.json`
-- only other specialist manifests that need approved narrow Core-package entries
+### Phase 3: configuration adoption
 
-Changes:
-
-1. Add explicit `service-knowledge: true` to the librarian manifest. Without that selection the descriptor remains inactive.
-2. Document the matching user trust record; do not silently write or enable it during repository setup.
-3. Opt individual roles into approved narrow entries such as `xtrm-loader` only after inspecting their RPC behavior and requiring user trust.
-4. Do not expose or enable the whole Core bundle.
+1. Add the exact Service Knowledge npm source to `service-knowledge-sync.specialist.json`.
+2. Add other standalone sources only to specialists that need them.
+3. Use `~/.config/specialists/user.json` for user-specific enables, disables, or local development sources.
+4. Do not add the whole `@jaggerxtrm/pi-extensions` package source to reach one narrow extension.
 
 ### Phase 4: validation
 
-Add focused tests near existing session/runner coverage:
-
-1. Manifest parsing and override tests for dynamic boolean IDs, omitted/false selection, legacy Serena, and rejection of non-boolean descriptor data.
-2. User-config tests for absent/untrusted IDs, packaged-catalog-backed trust, new complete descriptors, user-over-catalog package/entry/tool precedence, malformed records, absolute entries, traversal, native-tool escalation, and tool ownership collisions.
-3. Resolver tests for regular global installs, symlinked global packages, missing package, missing entry, version mismatch, duplicate realpath, trusted-but-unselected descriptors, and proof that repository-local catalog metadata cannot define or alter a descriptor.
-4. Spawn-argv tests for both `PiAgentSession` and direct `script-runner` proving `--no-extensions` remains, no descriptor loads by default, and only trusted, explicitly selected, healthy entries produce ordered `-e` pairs.
-5. Contract tests proving Python tools and GitNexus prompt text agree with injected paths, and that a trusted selected external descriptor contributes only its selected-tier `tools_by_tier` names.
-6. Service Knowledge tests for registry present and absent; absent must start successfully and register zero surface.
-7. An integrated RPC smoke using a temporary user config and global-node-modules tree with symlinked fixtures. Assert health output and effective tool/command surface without network or npm publish.
-8. A regression test proving runtime-owned Quality Gates, boundary, and read-line-numbers remain while old hardcoded descriptor defaults are removed.
-
-The implementation must use the repository's normal typecheck and focused/full test commands. A test runner should record exact pass/fail counts and the smoke artifact path.
+1. Schema tests for source-string keys, boolean values, and legacy Serena behavior.
+2. Layer-merge tests proving user fields can enable and disable individual sources without replacing siblings.
+3. `PiAgentSession` argv tests proving ordered enabled sources produce repeated `-e` pairs after `--no-extensions`.
+4. Direct `script-runner` argv tests proving exact parity with `PiAgentSession`.
+5. Disabled and omitted source tests proving no `-e` pair is added.
+6. Local package smoke proving Pi resolves a package root and its native `pi.extensions` entry.
+7. Argv tests proving a remote source omits `--offline`, while local-only and empty source lists retain it.
+8. A clean-cache npm/git smoke proving Pi can natively install and load the configured package source.
+9. Regression tests proving runtime-owned boundary, read-line-numbers, Quality Gates, and narrow Python Kernel behavior remain.
 
 ## 7. What does not need to change
 
-- **Core `xt pi --role`:** no change. It already delegates extension discovery to Pi and preserves global settings (`cli/src/utils/worktree-session.ts:1014-1028`, `:2151-2167`). Adding resolver logic there would duplicate Specialists and change interactive behavior.
-- **Pi config directory or settings generation:** no change. Specialists should keep `--no-extensions` plus explicit `-e`; no custom `HOME`, `PI_CODING_AGENT_DIR`, or generated settings file is required.
-- **Pi itself:** no change. `--no-extensions` with explicit `-e` is already supported.
-- **Package publication:** no change. Global node-modules symlinks support unpublished local testing.
-- **Service Knowledge package:** no change. Its registry self-gate and fail-open behavior are suitable as-is.
-- **Core extension source:** no change for the resolver wave. Specialists can point only at user-trusted existing narrow package entries; whole-bundle injection is deferred.
-- **No new vendoring into the Core bundle:** do not copy `ast-grep`, Service Knowledge, or future extension source into Core, and do not add imports to `packages/pi-extensions/src/registry.ts`. Python Kernel continues to use its existing narrow entry without duplication. The user layer resolves independently installed or symlinked packages.
-- **Tool catalog schema/index:** no change is required. Read packaged catalog resolution/tool defaults where they already exist; keep custom descriptor tools in the user-owned registry, and never turn catalog presence into trust or activation.
-- **Existing runtime-owned extensions:** no forced migration in the first wave.
-- **`xt` CLI flags:** no new flag. The per-role manifest owns tracked-dispatch selection.
+- **Core `xt pi --role`:** no change. It already delegates extension discovery to Pi and preserves global settings (`cli/src/utils/worktree-session.ts:1014-1028`, `:2151-2167`).
+- **Pi:** no change. Native `-e` resolution already supports path, npm, and git sources with `--no-extensions`.
+- **Pi settings generation:** no change. Do not create a settings file or alter `HOME` or `PI_CODING_AGENT_DIR`.
+- **Specialists global configuration format:** no new file. Reuse `~/.config/specialists/user.json` and its existing per-specialist override shape.
+- **Descriptor registry:** none. Do not add descriptor IDs, trust records, metadata precedence, package-root probing, or custom health states.
+- **Core extension bundle:** no change and no new vendoring. Do not add imports to `packages/pi-extensions/src/registry.ts`.
+- **Tool catalog:** no generic extension inventory. It remains responsible only for known tool permission and contract state.
+- **Package publication:** not required for local-source testing; stable shared manifests should use proper published or git package sources.
+- **Existing runtime-owned injections:** no forced migration until each has a correct standalone Pi source.
+- **`xt` CLI flags:** no new flag.
 
 ## 8. Risk and blast radius
 
 GitNexus reports `PiAgentSession` as **HIGH** upstream risk: 8 direct dependents, 182 impacted items through depth 3, and affected `run`/`runSingleAttempt` processes. Direct dependents include `runner.ts`, `script-runner.ts`, `supervisor.ts`, and session/runner tests. The later implementation must warn before editing, keep the change additive, and run both focused session tests and an integrated dispatch smoke.
 
-Security risk is higher than the code size suggests: an extension executes arbitrary code with the user's permissions and is not constrained by `--tools`. This is why only the user-owned config can grant trust or supply package metadata, while repository manifests contain boolean selection only.
+Security risk is higher than the code size suggests: an extension executes arbitrary code with the user's permissions and is not constrained by `--tools`. Treat canonical specialist manifests and existing user override configuration as executable configuration; do not populate extension sources from task or model input.
 
 ## 9. Explicit unknowns
 
 - The original failing launch command, installed versions, inherited environment, cwd, registry path, Pi startup diagnostics, and job/session log were not supplied. The exact live failure path cannot be proven from source.
 - If the failure was current `xt pi --role`, config isolation is not the source-backed cause.
-- Pi loader behavior after a resolved extension throws during static import was not verified with a live probe; the design prevents known missing paths but cannot convert an internal module exception into a pre-spawn skip.
+- Pi loader behavior after an extension throws during static import was not verified with a live probe. This design intentionally leaves that failure to Pi's native diagnostics rather than adding a Specialists preflight resolver.
 - No generator for `config/catalog/index.json` was found in the inspected runtime path. This design does not depend on individual catalog files being merged.
 - The supported source does not contain a literal `.specialists.json` manifest. Implementation should use the existing `*.specialist.json` and `.specialists/user/<name>.specialist.json` surfaces unless a separate manifest migration is approved.
-- Whole-bundle Core injection has unresolved duplicate tool/hook behavior. The first wave deliberately supports narrow entries only.
-- Direct `script-runner` and `sp serve` parity must ship with the same resolved plan; leaving that path unchanged would preserve the gap.
+- Whole-bundle Core injection has unresolved duplicate tool/hook behavior. Configure standalone package sources only; keep narrow runtime-owned entries until such packages exist.
+- Direct `script-runner` and `sp serve` parity must ship with the same enabled-source list; leaving that path unchanged would preserve the gap.
