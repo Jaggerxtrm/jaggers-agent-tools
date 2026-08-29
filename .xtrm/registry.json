@@ -1330,8 +1330,8 @@
     "version": 1,
     "source": {
       "kind": "ref",
-      "ref": "af65334ba4dc55bb5731a95fce08fc314f9c1274",
-      "resolved_sha": "af65334ba4dc55bb5731a95fce08fc314f9c1274",
+      "ref": "feature/unitAI-jndsb.1.1-executor",
+      "resolved_sha": "d39e17eb0c0d09fa73c25de1c77b85f667b8a010",
       "repo_path": "../../../../specialists/.worktrees/unitAI-jndsb.1.1/unitAI-jndsb.1.1-executor",
       "source_path": "config/skills"
     },
