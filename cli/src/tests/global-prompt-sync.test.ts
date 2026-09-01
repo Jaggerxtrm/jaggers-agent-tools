@@ -1,7 +1,6 @@
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GLOBAL_PROMPT_END_MARKER as END,
@@ -265,6 +264,15 @@ describe('multi-block migration', () => {
     expect(() => renderManagedGlobalPrompt(mismatch, CANONICAL)).toThrow(/ambiguous|nested|overlap|orphan/);
   });
 
+  it('refuses when a nested/crossing marker intersects the owned span (validation precedes owned fast path)', () => {
+    // Operator block nested inside the owned span.
+    const crossing = `${OWNED_START}\ncore\n${START}\noperator\n${END}\nmore\n${OWNED_END}`;
+    expect(() => renderManagedGlobalPrompt(crossing, CANONICAL)).toThrow(/ambiguous|nested|overlap|orphan/);
+    // Owned block nested inside an operator block (crossing span).
+    const crossSpan = `${START}\nop\n${OWNED_START}\nowned\n${OWNED_END}\n${END}`;
+    expect(() => renderManagedGlobalPrompt(crossSpan, CANONICAL)).toThrow(/ambiguous|nested|overlap|orphan/);
+  });
+
   it('preserves outside bytes exactly in a mixed-EOL file (original-offset splice)', () => {
     const head = '# user header\r\nplain lf line\n'; // mixed EOL on purpose
     const stale = CANONICAL.trim().replace('- Keep dependent steps sequential', '- Old line');
@@ -359,6 +367,70 @@ describe('syncGlobalPrompts', () => {
     expect(await fs.readFile(claudeFile, 'utf8')).toBe(malformedClaude);
   });
 
+  it('refuses to overwrite a target created after planning (exclusive-create guard)', async () => {
+    const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
+    const claudeFile = path.join(process.env.HOME as string, '.claude', 'CLAUDE.md');
+    // pi is absent at plan time; a concurrent writer creates it between plan
+    // and write with its own content — that file must never be overwritten.
+    const concurrent = '# concurrent creation\nuser content\n';
+    const pending = syncGlobalPrompts(opts({
+      _beforeWrite: async () => { await fs.outputFile(piFile, concurrent); },
+    }));
+    await expect(pending).rejects.toThrow(/appeared during sync|concurrent creation/);
+    expect(await fs.readFile(piFile, 'utf8')).toBe(concurrent); // new file preserved
+    expect(fs.existsSync(claudeFile)).toBe(false); // never created
+  });
+
+  it('rolls back the first target when the second target commit fails (both originally present)', async () => {
+    const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
+    const claudeFile = path.join(process.env.HOME as string, '.claude', 'CLAUDE.md');
+    const piOriginal = `${LEGACY_BODY}\n`;
+    const claudeOriginal = `${OWNED_START}\nstale body\n${OWNED_END}\n`;
+    await fs.outputFile(piFile, piOriginal);
+    await fs.outputFile(claudeFile, claudeOriginal);
+
+    const realRename = fs.rename;
+    let renameCalls = 0;
+    const renameSpy = vi.spyOn(fs, 'rename');
+    renameSpy.mockImplementation(async (from: unknown, to: unknown) => {
+      renameCalls++;
+      if (renameCalls === 2) throw new Error('injected second-commit failure');
+      return realRename(from as string, to as string);
+    });
+
+    await expect(syncGlobalPrompts(opts())).rejects.toThrow(GlobalPromptSyncError);
+    renameSpy.mockRestore();
+
+    // pi was already replaced, then rolled back to its exact original bytes;
+    // claude (second) was never committed, so it is still its original.
+    expect(await fs.readFile(piFile, 'utf8')).toBe(piOriginal);
+    expect(await fs.readFile(claudeFile, 'utf8')).toBe(claudeOriginal);
+  });
+
+  it('restores absence of a created first target when the second target commit fails', async () => {
+    const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
+    const claudeFile = path.join(process.env.HOME as string, '.claude', 'CLAUDE.md');
+    const claudeOriginal = `${OWNED_START}\nstale body\n${OWNED_END}\n`;
+    await fs.outputFile(claudeFile, claudeOriginal);
+    // pi does not exist → it plans a create.
+
+    const realRename = fs.rename;
+    let renameCalls = 0;
+    const renameSpy = vi.spyOn(fs, 'rename');
+    renameSpy.mockImplementation(async (from: unknown, to: unknown) => {
+      renameCalls++;
+      if (renameCalls === 2) throw new Error('injected second-commit failure');
+      return realRename(from as string, to as string);
+    });
+
+    await expect(syncGlobalPrompts(opts())).rejects.toThrow(GlobalPromptSyncError);
+    renameSpy.mockRestore();
+
+    // The created pi file was rolled back to absence; claude was untouched.
+    expect(fs.existsSync(piFile)).toBe(false);
+    expect(await fs.readFile(claudeFile, 'utf8')).toBe(claudeOriginal);
+  });
+
   it('dry-run reports without writing', async () => {
     const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
     await fs.outputFile(piFile, `${LEGACY_BODY}\n`);
@@ -422,53 +494,16 @@ describe('syncGlobalPrompts', () => {
   });
 });
 
-describe('package bin smoke (xtrm-j8kcj.9)', () => {
+describe('shipped dist (deterministic rebuild + stale-dist guard)', () => {
   const CLI_PATH = path.join(__dirname, '../../dist/index.cjs');
 
-  function runCli(args: string[]): { stdout: string; status: number | null } {
-    try {
-      // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
-      const stdout = execSync(`node ${CLI_PATH} ${args.join(' ')}`, { encoding: 'utf8', stdio: 'pipe' });
-      return { stdout, status: 0 };
-    } catch (error: any) {
-      return { stdout: error.stdout ?? '', status: error.status ?? 1 };
-    }
-  }
-
-  // The four-block fixture carried by ~/.pi/agent/APPEND_SYSTEM.md today: block
-  // 1 is the command-chaining block with an operator-appended monitor line
-  // (customized — not an exact canonical match), the other three are operator.
-  const customized = opBlock(`${CANONICAL.trim()}\n- always set background monitors when waiting for a task;`);
-  const fourBlock = [customized, opBlock(OP_AST_GREP), opBlock(OP_PROBE), `${START}\n# Repo-scoped knowledge\n${END}`].join('\n\n');
-
-  it('shipped dist runs the four-block fixture: prepends the owned block, preserves operator blocks and the monitor line byte-identical, idempotent on rerun', () => {
-    const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
-    delete process.env.PI_AGENT_DIR;
-    fs.outputFileSync(piFile, fourBlock);
-
-    const first = runCli(['_global-prompt-sync']);
-    expect(first.status).toBe(0);
-    const disk = fs.readFileSync(piFile, 'utf8');
-    // Core owned named block present at the top.
-    expect(disk.startsWith(OWNED_START)).toBe(true);
-    // All four original unnamed operator blocks survive byte-identical.
-    expect(disk).toContain(opBlock(OP_AST_GREP));
-    expect(disk).toContain(opBlock(OP_PROBE));
-    expect(disk).toContain(`${START}\n# Repo-scoped knowledge\n${END}`);
-    // The customized command-chaining block (monitor line) is not dropped.
-    expect(disk).toContain('- always set background monitors when waiting for a task;');
-    expect(disk).toContain(customized);
-
-    // Idempotent on the shipped binary: a second run does not rewrite the file.
-    const second = runCli(['_global-prompt-sync']);
-    expect(second.status).toBe(0);
-    expect(fs.readFileSync(piFile, 'utf8')).toBe(disk);
-  });
-
-  it('shipped dist carries the new structural-validation implementation (not the stale single-block build)', () => {
+  it('carries the corrected implementation and NOT the removed diagnostic command', () => {
     const bundle = fs.readFileSync(CLI_PATH, 'utf8');
-    // Named owned marker construction and new-only structural-validation error.
+    // New-only literals prove the tracked artifact was rebuilt from current
+    // source (named owned marker + structural-validation error).
     expect(bundle).toContain('GLOBAL_PROMPT_OWNED_NAME');
     expect(bundle).toContain('refusing to claim any block');
+    // The round-2 diagnostic command was deleted, not merely hidden.
+    expect(bundle).not.toContain('_global-prompt-sync');
   });
 });

@@ -59268,36 +59268,36 @@ function renderManagedGlobalPrompt(content, canonicalBody, legacyBodies = [LEGAC
   const eol = resolveEol(content);
   const ownedBlock = buildOwnedBlock(eol, body);
   const markers = parseMarkers(content);
+  const blocks = pairBlocks(markers);
+  if (!blocks) {
+    throw new GlobalPromptSyncError(
+      `ambiguous prompt-block structure: nested, overlapping, or orphaned xtrm:global-prompt markers; refusing to claim any block`
+    );
+  }
   const ownedStarts = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === "start");
-  const ownedEnds = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === "end");
-  if (ownedStarts.length === 1 && ownedEnds.length === 1 && ownedStarts[0].begin < ownedEnds[0].begin) {
+  if (ownedStarts.length > 1) {
+    throw new GlobalPromptSyncError(
+      `malformed managed (${GLOBAL_PROMPT_OWNED_NAME}) block: ${ownedStarts.length} duplicate owned blocks`
+    );
+  }
+  if (ownedStarts.length === 1) {
+    const ownedEnds = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === "end");
     const { start, end } = { start: ownedStarts[0], end: ownedEnds[0] };
     const next = `${content.slice(0, start.begin)}${ownedBlock}${content.slice(end.end)}`;
     return { next, action: next === content ? "unchanged" : "replace-block" };
   }
-  if (ownedStarts.length > 0 || ownedEnds.length > 0) {
+  const candidates = blocks.filter((b) => b.start.name === null && isOwnedBody(content, b.start, b.end, body, legacyBodies));
+  if (candidates.length === 1) {
+    const { start, end } = candidates[0];
+    const next = `${content.slice(0, start.begin)}${ownedBlock}${content.slice(end.end)}`;
+    return { next, action: next === content ? "unchanged" : "replace-block" };
+  }
+  if (candidates.length > 1) {
     throw new GlobalPromptSyncError(
-      `malformed managed (${GLOBAL_PROMPT_OWNED_NAME}) block: ${ownedStarts.length} start / ${ownedEnds.length} end markers (duplicate, orphan, or out-of-order)`
+      `ambiguous ownership: ${candidates.length} unnamed command-chaining blocks match exactly; refusing to migrate`
     );
   }
   if (markers.length > 0) {
-    const blocks = pairBlocks(markers);
-    if (!blocks) {
-      throw new GlobalPromptSyncError(
-        `ambiguous prompt-block structure: nested, overlapping, or orphaned xtrm:global-prompt markers; refusing to claim any block`
-      );
-    }
-    const candidates = blocks.filter((b) => b.start.name === null && isOwnedBody(content, b.start, b.end, body, legacyBodies));
-    if (candidates.length === 1) {
-      const { start, end } = candidates[0];
-      const next = `${content.slice(0, start.begin)}${ownedBlock}${content.slice(end.end)}`;
-      return { next, action: next === content ? "unchanged" : "replace-block" };
-    }
-    if (candidates.length > 1) {
-      throw new GlobalPromptSyncError(
-        `ambiguous ownership: ${candidates.length} unnamed command-chaining blocks match exactly; refusing to migrate`
-      );
-    }
     return { next: `${ownedBlock}${eol}${eol}${content}`, action: "prepend" };
   }
   const normalized = content.replace(/\r\n/g, "\n").trim();
@@ -59359,14 +59359,9 @@ async function planTarget(target, canonicalBody) {
   const rendered = renderManagedGlobalPrompt(original ?? "", canonicalBody);
   return { base, original, mode, rendered };
 }
-async function commitTarget(planned, opts) {
+async function stageTarget(planned, opts) {
   const { base, original, mode, rendered } = planned;
-  if (rendered.action === "unchanged") {
-    return { ...base, action: "unchanged", changed: false };
-  }
-  if (opts.dryRun) {
-    return { ...base, action: rendered.action, changed: true, dryRun: true };
-  }
+  await opts._beforeWrite?.();
   if (original !== null) {
     const current = await import_fs_extra17.default.readFile(base.file, "utf8");
     if (current !== original) {
@@ -59374,25 +59369,79 @@ async function commitTarget(planned, opts) {
         `${base.label}: ${base.file} changed during sync \u2014 refusing to write (concurrent modification)`
       );
     }
+  } else {
+    try {
+      await import_fs_extra17.default.lstat(base.file);
+      throw new GlobalPromptSyncError(
+        `${base.label}: ${base.file} appeared during sync \u2014 refusing to overwrite (concurrent creation)`
+      );
+    } catch (error51) {
+      if (error51 instanceof GlobalPromptSyncError) throw error51;
+    }
   }
-  await opts._beforeWrite?.();
+  let backupPath;
   if (original !== null) {
     const backupDir = import_node_path17.default.join(opts.home ?? import_node_os8.default.homedir(), ".xtrm", "migration-backups");
     await import_fs_extra17.default.ensureDir(backupDir);
     const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
-    await import_fs_extra17.default.copyFile(base.file, import_node_path17.default.join(backupDir, `global-prompt-${base.label}-${stamp}.md`));
+    backupPath = import_node_path17.default.join(backupDir, `global-prompt-${base.label}-${stamp}.md`);
+    await import_fs_extra17.default.copyFile(base.file, backupPath);
   }
   const parentDir = import_node_path17.default.dirname(base.file);
   await import_fs_extra17.default.ensureDir(parentDir);
   const tmpPath = import_node_path17.default.join(parentDir, `.${import_node_path17.default.basename(base.file)}.tmp-${process.pid}-${import_node_crypto9.default.randomBytes(4).toString("hex")}`);
-  try {
-    await import_fs_extra17.default.writeFile(tmpPath, rendered.next, { encoding: "utf8", mode: mode ?? 420 });
-    await import_fs_extra17.default.rename(tmpPath, base.file);
-  } catch (error51) {
-    await import_fs_extra17.default.remove(tmpPath).catch(() => void 0);
-    throw new GlobalPromptSyncError(`${base.label}: write to ${base.file} failed: ${error51.message}`);
+  await import_fs_extra17.default.writeFile(tmpPath, rendered.next, { encoding: "utf8", mode: mode ?? 420 });
+  return { base, original, mode, rendered, tmpPath, backupPath };
+}
+async function rollbackTarget(staged) {
+  if (staged.original !== null && staged.backupPath) {
+    const restoreTmp = import_node_path17.default.join(
+      import_node_path17.default.dirname(staged.base.file),
+      `.${import_node_path17.default.basename(staged.base.file)}.rollback-${process.pid}-${import_node_crypto9.default.randomBytes(4).toString("hex")}`
+    );
+    await import_fs_extra17.default.writeFile(restoreTmp, await import_fs_extra17.default.readFile(staged.backupPath, "utf8"), {
+      encoding: "utf8",
+      mode: staged.mode ?? 420
+    });
+    await import_fs_extra17.default.rename(restoreTmp, staged.base.file);
+  } else {
+    await import_fs_extra17.default.remove(staged.base.file).catch(() => void 0);
   }
-  return { ...base, action: rendered.action, changed: true };
+}
+async function commitPlanned(planned, opts) {
+  const results = new Array(planned.length);
+  const stagedByIndex = /* @__PURE__ */ new Map();
+  for (let i = 0; i < planned.length; i++) {
+    const p = planned[i];
+    const base = p.base;
+    if (p.rendered.action === "unchanged") {
+      results[i] = { ...base, action: "unchanged", changed: false };
+      continue;
+    }
+    if (opts.dryRun) {
+      results[i] = { ...base, action: p.rendered.action, changed: true, dryRun: true };
+      continue;
+    }
+    stagedByIndex.set(i, await stageTarget(p, opts));
+  }
+  const ordered = planned.map((_, i) => stagedByIndex.get(i)).filter((s) => s !== void 0);
+  if (ordered.length > 0) {
+    const committed = [];
+    try {
+      for (const s of ordered) {
+        await import_fs_extra17.default.rename(s.tmpPath, s.base.file);
+        committed.push(s);
+      }
+    } catch (error51) {
+      for (const c of committed) await rollbackTarget(c).catch(() => void 0);
+      for (const s of ordered) await import_fs_extra17.default.remove(s.tmpPath).catch(() => void 0);
+      throw new GlobalPromptSyncError(`prompt sync write failed: ${error51.message}`);
+    }
+  }
+  for (const [i, s] of stagedByIndex) {
+    results[i] = { ...s.base, action: s.rendered.action, changed: true };
+  }
+  return { targets: results };
 }
 async function syncGlobalPrompts(opts = {}) {
   const canonicalBody = opts.canonicalBody ?? await readCanonicalGlobalPromptBody();
@@ -59401,11 +59450,7 @@ async function syncGlobalPrompts(opts = {}) {
   for (const target of targets) {
     planned.push(await planTarget(target, canonicalBody));
   }
-  const results = [];
-  for (const plannedTarget of planned) {
-    results.push(await commitTarget(plannedTarget, opts));
-  }
-  return { targets: results };
+  return commitPlanned(planned, opts);
 }
 function printGlobalPromptSyncSummary(result) {
   const changed = result.targets.filter((target) => target.changed);
@@ -70932,14 +70977,6 @@ function createUpdateCommand() {
   });
 }
 
-// src/commands/global-prompt-sync-cmd.ts
-function createGlobalPromptSyncCommand() {
-  return new Command("_global-prompt-sync").description("Run the ownership-safe global prompt sync (internal diagnostic)").option("--dry-run", "Preview changes without writing", false).action(async (opts) => {
-    const result = await syncGlobalPrompts({ dryRun: opts.dryRun });
-    printGlobalPromptSyncSummary(result);
-  });
-}
-
 // src/commands/release.ts
 init_kleur();
 var import_node_fs19 = require("fs");
@@ -74529,7 +74566,6 @@ program2.addCommand(createClaudeSyncCommand());
 program2.addCommand(createDoctorCommand());
 program2.addCommand(createBootstrapCommand());
 program2.addCommand(createUpdateCommand());
-program2.addCommand(createGlobalPromptSyncCommand());
 program2.addCommand(createReleaseCommand());
 program2.addCommand(createSpecCommand());
 program2.addCommand(createMigrateCommand());

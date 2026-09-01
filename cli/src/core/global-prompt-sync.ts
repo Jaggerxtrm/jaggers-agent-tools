@@ -184,43 +184,50 @@ export function renderManagedGlobalPrompt(
   // replaced span is copied from `content` verbatim (mixed-EOL safe).
   const markers = parseMarkers(content);
 
-  // 1) Owned (command-chaining) block present? Fail closed only on malformed
-  //    ownership of this exact block — never on unknown/operator blocks.
+  // Global structural validation runs BEFORE any replacement path — including
+  // the owned fast path below. A nested/crossing/orphaned marker layout can
+  // otherwise be deleted or orphaned when a span is replaced, so we refuse
+  // rather than guess. pairBlocks returns [] for an empty marker set.
+  const blocks = pairBlocks(markers);
+  if (!blocks) {
+    throw new GlobalPromptSyncError(
+      `ambiguous prompt-block structure: nested, overlapping, or orphaned xtrm:global-prompt markers; refusing to claim any block`,
+    );
+  }
+
+  // 1) Owned (command-chaining) block present. pairBlocks guarantees the
+  //    marker structure is flat and balanced, so a single owned pair is
+  //    updated in place while every byte outside the owned span is preserved
+  //    verbatim. Multiple owned blocks are still malformed ownership (not a
+  //    structural nesting issue) and fail closed.
   const ownedStarts = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === 'start');
-  const ownedEnds = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === 'end');
-  if (ownedStarts.length === 1 && ownedEnds.length === 1 && ownedStarts[0].begin < ownedEnds[0].begin) {
+  if (ownedStarts.length > 1) {
+    throw new GlobalPromptSyncError(
+      `malformed managed (${GLOBAL_PROMPT_OWNED_NAME}) block: ${ownedStarts.length} duplicate owned blocks`,
+    );
+  }
+  if (ownedStarts.length === 1) {
+    const ownedEnds = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === 'end');
     const { start, end } = { start: ownedStarts[0], end: ownedEnds[0] };
     const next = `${content.slice(0, start.begin)}${ownedBlock}${content.slice(end.end)}`;
     return { next, action: next === content ? 'unchanged' : 'replace-block' };
   }
-  if (ownedStarts.length > 0 || ownedEnds.length > 0) {
+
+  // 2) No owned block. Migration claims an unnamed block ONLY on exact
+  //    complete-body ownership; customized same-heading blocks are preserved
+  //    byte-identical and the Core named block is prepended instead.
+  const candidates = blocks.filter((b) => b.start.name === null && isOwnedBody(content, b.start, b.end, body, legacyBodies));
+  if (candidates.length === 1) {
+    const { start, end } = candidates[0];
+    const next = `${content.slice(0, start.begin)}${ownedBlock}${content.slice(end.end)}`;
+    return { next, action: next === content ? 'unchanged' : 'replace-block' };
+  }
+  if (candidates.length > 1) {
     throw new GlobalPromptSyncError(
-      `malformed managed (${GLOBAL_PROMPT_OWNED_NAME}) block: ` +
-        `${ownedStarts.length} start / ${ownedEnds.length} end markers (duplicate, orphan, or out-of-order)`,
+      `ambiguous ownership: ${candidates.length} unnamed command-chaining blocks match exactly; refusing to migrate`,
     );
   }
-
-  // 2) No owned block. If any markers exist, structurally validate them before
-  //    considering migration so a nested/overlapped/orphaned layout cannot be
-  //    mis-claimed (actionable ambiguity rather than a wrong replacement).
   if (markers.length > 0) {
-    const blocks = pairBlocks(markers);
-    if (!blocks) {
-      throw new GlobalPromptSyncError(
-        `ambiguous prompt-block structure: nested, overlapping, or orphaned xtrm:global-prompt markers; refusing to claim any block`,
-      );
-    }
-    const candidates = blocks.filter((b) => b.start.name === null && isOwnedBody(content, b.start, b.end, body, legacyBodies));
-    if (candidates.length === 1) {
-      const { start, end } = candidates[0];
-      const next = `${content.slice(0, start.begin)}${ownedBlock}${content.slice(end.end)}`;
-      return { next, action: next === content ? 'unchanged' : 'replace-block' };
-    }
-    if (candidates.length > 1) {
-      throw new GlobalPromptSyncError(
-        `ambiguous ownership: ${candidates.length} unnamed command-chaining blocks match exactly; refusing to migrate`,
-      );
-    }
     // No exact candidate: operator blocks (possibly a customized same-heading
     // command-chaining block) are preserved byte-identical and the Core-owned
     // named block is prepended. Operator monitor-line edits survive untouched;
@@ -336,18 +343,24 @@ async function planTarget(target: GlobalPromptTarget, canonicalBody: string): Pr
   return { base, original, mode, rendered };
 }
 
-// Commit phase: applied only after every target has planned successfully.
-async function commitTarget(planned: PlannedTarget, opts: GlobalPromptSyncOptions): Promise<GlobalPromptTargetResult> {
-  const { base, original, mode, rendered } = planned;
-  if (rendered.action === 'unchanged') {
-    return { ...base, action: 'unchanged', changed: false };
-  }
-  if (opts.dryRun) {
-    return { ...base, action: rendered.action, changed: true, dryRun: true };
-  }
+interface StagedTarget {
+  base: { label: string; file: string };
+  original: string | null;
+  mode: number | undefined;
+  rendered: ManagedPromptRenderResult;
+  tmpPath: string;
+  backupPath?: string;
+}
 
-  // Concurrent-change defense: the file must be byte-identical to the content
-  // we planned against, otherwise a writer raced us and we must not clobber it.
+// Stage phase: run the pre-write guards, back up the original, and write the
+// temp file — WITHOUT replacing the target yet. Throwing here (a concurrent
+// read change or a concurrently created target) leaves every target untouched
+// because no rename has happened.
+async function stageTarget(planned: PlannedTarget, opts: GlobalPromptSyncOptions): Promise<StagedTarget> {
+  const { base, original, mode, rendered } = planned;
+  await opts._beforeWrite?.();
+
+  // Concurrent-change defense / exclusive-create guard.
   if (original !== null) {
     const current = await fs.readFile(base.file, 'utf8');
     if (current !== original) {
@@ -355,30 +368,96 @@ async function commitTarget(planned: PlannedTarget, opts: GlobalPromptSyncOption
         `${base.label}: ${base.file} changed during sync — refusing to write (concurrent modification)`,
       );
     }
+  } else {
+    // A target absent at plan time must STILL be absent before we create it;
+    // otherwise a concurrent writer's new file would be overwritten.
+    try {
+      await fs.lstat(base.file);
+      throw new GlobalPromptSyncError(
+        `${base.label}: ${base.file} appeared during sync — refusing to overwrite (concurrent creation)`,
+      );
+    } catch (error) {
+      if (error instanceof GlobalPromptSyncError) throw error;
+      // ENOENT — still absent, safe to create.
+    }
   }
 
-  await opts._beforeWrite?.();
-
+  let backupPath: string | undefined;
   if (original !== null) {
     const backupDir = path.join(opts.home ?? os.homedir(), '.xtrm', 'migration-backups');
     await fs.ensureDir(backupDir);
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- label is a closed allowlist and the timestamp is generated.
-    await fs.copyFile(base.file, path.join(backupDir, `global-prompt-${base.label}-${stamp}.md`));
+    backupPath = path.join(backupDir, `global-prompt-${base.label}-${stamp}.md`);
+    await fs.copyFile(base.file, backupPath);
   }
 
   const parentDir = path.dirname(base.file);
   await fs.ensureDir(parentDir);
   const tmpPath = path.join(parentDir, `.${path.basename(base.file)}.tmp-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
-  try {
-    await fs.writeFile(tmpPath, rendered.next, { encoding: 'utf8', mode: mode ?? 0o644 });
-    await fs.rename(tmpPath, base.file);
-  } catch (error) {
-    await fs.remove(tmpPath).catch(() => undefined);
-    throw new GlobalPromptSyncError(`${base.label}: write to ${base.file} failed: ${(error as Error).message}`);
+  await fs.writeFile(tmpPath, rendered.next, { encoding: 'utf8', mode: mode ?? 0o644 });
+  return { base, original, mode, rendered, tmpPath, backupPath };
+}
+
+// Restore a target that was already replaced in this transaction back to its
+// exact original state (original bytes, or absence when originally absent).
+async function rollbackTarget(staged: StagedTarget): Promise<void> {
+  if (staged.original !== null && staged.backupPath) {
+    const restoreTmp = path.join(
+      path.dirname(staged.base.file),
+      `.${path.basename(staged.base.file)}.rollback-${process.pid}-${crypto.randomBytes(4).toString('hex')}`,
+    );
+    await fs.writeFile(restoreTmp, await fs.readFile(staged.backupPath, 'utf8'), {
+      encoding: 'utf8',
+      mode: staged.mode ?? 0o644,
+    });
+    await fs.rename(restoreTmp, staged.base.file);
+  } else {
+    await fs.remove(staged.base.file).catch(() => undefined);
+  }
+}
+
+// Commit phase: applied only after every target has planned successfully.
+// Each target is staged (guards + backup + temp write, no target replaced),
+// then all staged targets are renamed into place. If any rename fails
+// mid-way, already-committed targets are rolled back to their exact original
+// state so every target ends unchanged (all-or-nothing across targets).
+async function commitPlanned(planned: PlannedTarget[], opts: GlobalPromptSyncOptions): Promise<GlobalPromptSyncResult> {
+  const results: GlobalPromptTargetResult[] = new Array(planned.length);
+  const stagedByIndex = new Map<number, StagedTarget>();
+  for (let i = 0; i < planned.length; i++) {
+    const p = planned[i];
+    const base = p.base;
+    if (p.rendered.action === 'unchanged') {
+      results[i] = { ...base, action: 'unchanged', changed: false };
+      continue;
+    }
+    if (opts.dryRun) {
+      results[i] = { ...base, action: p.rendered.action, changed: true, dryRun: true };
+      continue;
+    }
+    stagedByIndex.set(i, await stageTarget(p, opts));
   }
 
-  return { ...base, action: rendered.action, changed: true };
+  const ordered = planned.map((_, i) => stagedByIndex.get(i)).filter((s): s is StagedTarget => s !== undefined);
+  if (ordered.length > 0) {
+    const committed: StagedTarget[] = [];
+    try {
+      for (const s of ordered) {
+        await fs.rename(s.tmpPath, s.base.file);
+        committed.push(s);
+      }
+    } catch (error) {
+      for (const c of committed) await rollbackTarget(c).catch(() => undefined);
+      for (const s of ordered) await fs.remove(s.tmpPath).catch(() => undefined);
+      throw new GlobalPromptSyncError(`prompt sync write failed: ${(error as Error).message}`);
+    }
+  }
+
+  for (const [i, s] of stagedByIndex) {
+    results[i] = { ...s.base, action: s.rendered.action, changed: true };
+  }
+  return { targets: results };
 }
 
 /**
@@ -386,8 +465,11 @@ async function commitTarget(planned: PlannedTarget, opts: GlobalPromptSyncOption
  * Callers are responsible for invoking this once per command, never once per
  * repo (xtrm-3ljgz.2).
  *
- * Both targets are planned (read + rendered) before either is written, so a
- * malformed second target fails during preflight and leaves BOTH unchanged.
+ * All targets are planned (read + rendered) before any write: a malformed
+ * second target fails during preflight and leaves both unchanged. The commit
+ * phase then stages and renames both targets transactionally and rolls the
+ * first back if the second's replacement fails, so both end unchanged or both
+ * end replaced — never one half-applied.
  */
 export async function syncGlobalPrompts(opts: GlobalPromptSyncOptions = {}): Promise<GlobalPromptSyncResult> {
   const canonicalBody = opts.canonicalBody ?? await readCanonicalGlobalPromptBody();
@@ -398,12 +480,8 @@ export async function syncGlobalPrompts(opts: GlobalPromptSyncOptions = {}): Pro
   for (const target of targets) {
     planned.push(await planTarget(target, canonicalBody));
   }
-  // Phase B: commit every planned target.
-  const results: GlobalPromptTargetResult[] = [];
-  for (const plannedTarget of planned) {
-    results.push(await commitTarget(plannedTarget, opts));
-  }
-  return { targets: results };
+  // Phase B: stage + commit transactionally (all-or-nothing across targets).
+  return commitPlanned(planned, opts);
 }
 
 export function printGlobalPromptSyncSummary(result: GlobalPromptSyncResult): void {
