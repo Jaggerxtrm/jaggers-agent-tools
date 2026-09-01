@@ -431,6 +431,68 @@ describe('syncGlobalPrompts', () => {
     expect(await fs.readFile(claudeFile, 'utf8')).toBe(claudeOriginal);
   });
 
+  it('propagates a non-ENOENT lstat error in the exclusive-create guard (only ENOENT is treated as absence)', async () => {
+    const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
+    const claudeFile = path.join(process.env.HOME as string, '.claude', 'CLAUDE.md');
+    const claudeOriginal = `${OWNED_START}\nstale body\n${OWNED_END}\n`;
+    await fs.outputFile(claudeFile, claudeOriginal);
+    // pi is absent at plan time; the exclusive-create guard lstat hits EACCES.
+    const realLstat = fs.lstat;
+    let piLstatCalls = 0;
+    const lstatSpy = vi.spyOn(fs, 'lstat');
+    lstatSpy.mockImplementation(async (target) => {
+      if (String(target).endsWith('APPEND_SYSTEM.md')) {
+        piLstatCalls++;
+        if (piLstatCalls > 1) {
+          const err: NodeJS.ErrnoException = new Error('permission denied');
+          err.code = 'EACCES';
+          throw err;
+        }
+      }
+      return realLstat(target as string);
+    });
+
+    await expect(syncGlobalPrompts(opts())).rejects.toThrow(/cannot inspect.*EACCES|permission denied/);
+    lstatSpy.mockRestore();
+    // EACCES was NOT mistaken for absence: pi was never created, claude untouched.
+    expect(fs.existsSync(piFile)).toBe(false);
+    expect(await fs.readFile(claudeFile, 'utf8')).toBe(claudeOriginal);
+  });
+
+  it('surfaces the original commit failure, rollback failure, and affected target when rollback itself fails', async () => {
+    const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
+    const claudeFile = path.join(process.env.HOME as string, '.claude', 'CLAUDE.md');
+    await fs.outputFile(piFile, `${LEGACY_BODY}\n`);
+    await fs.outputFile(claudeFile, `${OWNED_START}\nstale body\n${OWNED_END}\n`);
+
+    const realRename = fs.rename;
+    let renameCalls = 0;
+    const renameSpy = vi.spyOn(fs, 'rename');
+    renameSpy.mockImplementation(async (from, to) => {
+      renameCalls++;
+      if (renameCalls === 2) throw new Error('injected second-commit failure');
+      if (renameCalls === 3) throw new Error('injected rollback failure');
+      return realRename(from as string, to as string);
+    });
+
+    let caught: GlobalPromptSyncError | null = null;
+    try {
+      await syncGlobalPrompts(opts());
+    } catch (error) {
+      caught = error as GlobalPromptSyncError;
+    }
+    renameSpy.mockRestore();
+    expect(caught).toBeInstanceOf(GlobalPromptSyncError);
+    // Original commit failure is present.
+    expect(caught!.message).toContain('injected second-commit failure');
+    // The rollback failure is NOT swallowed.
+    expect(caught!.message).toContain('injected rollback failure');
+    expect(caught!.message).toContain('rollback failure(s)');
+    // The affected (now-inconsistent) target path is reported.
+    expect(caught!.message).toContain(piFile);
+    expect(caught!.message).toContain('affected targets');
+  });
+
   it('dry-run reports without writing', async () => {
     const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
     await fs.outputFile(piFile, `${LEGACY_BODY}\n`);

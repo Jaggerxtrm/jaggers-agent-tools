@@ -370,7 +370,9 @@ async function stageTarget(planned: PlannedTarget, opts: GlobalPromptSyncOptions
     }
   } else {
     // A target absent at plan time must STILL be absent before we create it;
-    // otherwise a concurrent writer's new file would be overwritten.
+    // otherwise a concurrent writer's new file would be overwritten. Treat
+    // ONLY ENOENT as proof of absence — EACCES/EIO and other errors must
+    // propagate as a real failure rather than be mistaken for a missing file.
     try {
       await fs.lstat(base.file);
       throw new GlobalPromptSyncError(
@@ -378,6 +380,9 @@ async function stageTarget(planned: PlannedTarget, opts: GlobalPromptSyncOptions
       );
     } catch (error) {
       if (error instanceof GlobalPromptSyncError) throw error;
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw new GlobalPromptSyncError(`${base.label}: cannot inspect ${base.file}: ${(error as Error).message}`);
+      }
       // ENOENT — still absent, safe to create.
     }
   }
@@ -448,9 +453,32 @@ async function commitPlanned(planned: PlannedTarget[], opts: GlobalPromptSyncOpt
         committed.push(s);
       }
     } catch (error) {
-      for (const c of committed) await rollbackTarget(c).catch(() => undefined);
-      for (const s of ordered) await fs.remove(s.tmpPath).catch(() => undefined);
-      throw new GlobalPromptSyncError(`prompt sync write failed: ${(error as Error).message}`);
+      // Do NOT swallow rollback/temp-cleanup failures: surface the original
+      // commit failure together with every rollback failure and the affected
+      // target paths so an inconsistent state is never hidden.
+      const commitError = error as Error;
+      const affectedPaths = committed.map((c) => c.base.file);
+      const rollbackFailures: string[] = [];
+      for (const c of committed) {
+        try {
+          await rollbackTarget(c);
+        } catch (rollbackError) {
+          rollbackFailures.push(`${c.base.label} (${c.base.file}): ${(rollbackError as Error).message}`);
+        }
+      }
+      let cleanupFailures = 0;
+      for (const s of ordered) {
+        try {
+          await fs.remove(s.tmpPath);
+        } catch {
+          cleanupFailures++;
+        }
+      }
+      let detail = `prompt sync write failed: ${commitError.message}`;
+      if (affectedPaths.length > 0) detail += `; affected targets: ${affectedPaths.join(', ')}`;
+      if (rollbackFailures.length > 0) detail += `; rollback failure(s): ${rollbackFailures.join(' | ')}`;
+      if (cleanupFailures > 0) detail += `; ${cleanupFailures} temp file(s) could not be cleaned`;
+      throw new GlobalPromptSyncError(detail);
     }
   }
 

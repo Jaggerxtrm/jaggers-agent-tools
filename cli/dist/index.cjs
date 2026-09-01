@@ -59377,6 +59377,9 @@ async function stageTarget(planned, opts) {
       );
     } catch (error51) {
       if (error51 instanceof GlobalPromptSyncError) throw error51;
+      if (error51.code !== "ENOENT") {
+        throw new GlobalPromptSyncError(`${base.label}: cannot inspect ${base.file}: ${error51.message}`);
+      }
     }
   }
   let backupPath;
@@ -59433,9 +59436,29 @@ async function commitPlanned(planned, opts) {
         committed.push(s);
       }
     } catch (error51) {
-      for (const c of committed) await rollbackTarget(c).catch(() => void 0);
-      for (const s of ordered) await import_fs_extra17.default.remove(s.tmpPath).catch(() => void 0);
-      throw new GlobalPromptSyncError(`prompt sync write failed: ${error51.message}`);
+      const commitError = error51;
+      const affectedPaths = committed.map((c) => c.base.file);
+      const rollbackFailures = [];
+      for (const c of committed) {
+        try {
+          await rollbackTarget(c);
+        } catch (rollbackError) {
+          rollbackFailures.push(`${c.base.label} (${c.base.file}): ${rollbackError.message}`);
+        }
+      }
+      let cleanupFailures = 0;
+      for (const s of ordered) {
+        try {
+          await import_fs_extra17.default.remove(s.tmpPath);
+        } catch {
+          cleanupFailures++;
+        }
+      }
+      let detail = `prompt sync write failed: ${commitError.message}`;
+      if (affectedPaths.length > 0) detail += `; affected targets: ${affectedPaths.join(", ")}`;
+      if (rollbackFailures.length > 0) detail += `; rollback failure(s): ${rollbackFailures.join(" | ")}`;
+      if (cleanupFailures > 0) detail += `; ${cleanupFailures} temp file(s) could not be cleaned`;
+      throw new GlobalPromptSyncError(detail);
     }
   }
   for (const [i, s] of stagedByIndex) {
