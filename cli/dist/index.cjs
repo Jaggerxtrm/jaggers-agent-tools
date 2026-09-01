@@ -59192,8 +59192,9 @@ async function installFromRegistry(params) {
 }
 
 // src/core/global-prompt-sync.ts
-var GLOBAL_PROMPT_START_MARKER = "<!-- xtrm:global-prompt:start -->";
-var GLOBAL_PROMPT_END_MARKER = "<!-- xtrm:global-prompt:end -->";
+var GLOBAL_PROMPT_OWNED_NAME = "command-chaining";
+var OWNED_GLOBAL_PROMPT_START_MARKER = `<!-- xtrm:global-prompt:${GLOBAL_PROMPT_OWNED_NAME}:start -->`;
+var OWNED_GLOBAL_PROMPT_END_MARKER = `<!-- xtrm:global-prompt:${GLOBAL_PROMPT_OWNED_NAME}:end -->`;
 var LEGACY_GLOBAL_PROMPT_BODY = `Programmatic tool calling and command chaining:
 
 When a task needs several independent operations, run them in one bash call or one python cell instead of one model round trip per operation. Batch, filter, and aggregate inside the call so only the answer reaches the context window.
@@ -59215,43 +59216,98 @@ var GlobalPromptSyncError = class extends Error {
     this.name = "GlobalPromptSyncError";
   }
 };
+var MARKER_RE = /<!--\s*xtrm:global-prompt(?::([a-z0-9_-]+))?:(start|end)\s*-->/g;
+function parseMarkers(content) {
+  const markers = [];
+  MARKER_RE.lastIndex = 0;
+  let match;
+  while ((match = MARKER_RE.exec(content)) !== null) {
+    markers.push({
+      begin: match.index,
+      end: match.index + match[0].length,
+      name: match[1] ?? null,
+      dir: match[2]
+    });
+  }
+  return markers;
+}
+function pairBlocks(markers) {
+  if (markers.length === 0) return [];
+  const blocks = [];
+  const stack = [];
+  for (const mk of markers) {
+    if (mk.dir === "start") {
+      if (stack.length > 0) return null;
+      stack.push(mk);
+    } else {
+      const top = stack.pop();
+      if (!top) return null;
+      if (top.name !== mk.name) return null;
+      blocks.push({ start: top, end: mk });
+    }
+  }
+  if (stack.length > 0) return null;
+  return blocks;
+}
+function resolveEol(content) {
+  return content.includes("\r\n") ? "\r\n" : "\n";
+}
+function buildOwnedBlock(eol, body) {
+  return `${OWNED_GLOBAL_PROMPT_START_MARKER}${eol}${body.trim()}${eol}${OWNED_GLOBAL_PROMPT_END_MARKER}`;
+}
+function blockBody(content, start, end) {
+  return content.slice(start.end, end.begin).replace(/\r\n/g, "\n").trim();
+}
+function isOwnedBody(content, start, end, body, legacyBodies) {
+  const candidate = blockBody(content, start, end);
+  if (candidate === body) return true;
+  return legacyBodies.some((legacy) => candidate === legacy.trim().replace(/\r\n/g, "\n"));
+}
 function renderManagedGlobalPrompt(content, canonicalBody, legacyBodies = [LEGACY_GLOBAL_PROMPT_BODY]) {
   const body = canonicalBody.trim();
-  const eol = content.includes("\r\n") ? "\r\n" : "\n";
-  const block = `${GLOBAL_PROMPT_START_MARKER}${eol}${body}${eol}${GLOBAL_PROMPT_END_MARKER}`;
-  const normalized = content.replace(/\r\n/g, "\n");
-  const lines = normalized.split("\n");
-  const starts = lines.map((line, i) => line.trim() === GLOBAL_PROMPT_START_MARKER ? i : -1).filter((i) => i >= 0);
-  const ends = lines.map((line, i) => line.trim() === GLOBAL_PROMPT_END_MARKER ? i : -1).filter((i) => i >= 0);
-  const pair = validateMarkers(starts, ends);
-  if (pair) {
-    const next = [...lines.slice(0, pair.start), block, ...lines.slice(pair.end + 1)].join(eol);
+  const eol = resolveEol(content);
+  const ownedBlock = buildOwnedBlock(eol, body);
+  const markers = parseMarkers(content);
+  const ownedStarts = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === "start");
+  const ownedEnds = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === "end");
+  if (ownedStarts.length === 1 && ownedEnds.length === 1 && ownedStarts[0].begin < ownedEnds[0].begin) {
+    const { start, end } = { start: ownedStarts[0], end: ownedEnds[0] };
+    const next = `${content.slice(0, start.begin)}${ownedBlock}${content.slice(end.end)}`;
     return { next, action: next === content ? "unchanged" : "replace-block" };
   }
-  const trimmed = normalized.trim();
-  if (!trimmed) {
-    return { next: `${block}${eol}`, action: "create" };
+  if (ownedStarts.length > 0 || ownedEnds.length > 0) {
+    throw new GlobalPromptSyncError(
+      `malformed managed (${GLOBAL_PROMPT_OWNED_NAME}) block: ${ownedStarts.length} start / ${ownedEnds.length} end markers (duplicate, orphan, or out-of-order)`
+    );
   }
-  if (trimmed === body || legacyBodies.some((legacy) => legacy.trim() === trimmed)) {
-    return { next: `${block}${eol}`, action: "replace-whole-file" };
+  if (markers.length > 0) {
+    const blocks = pairBlocks(markers);
+    if (!blocks) {
+      throw new GlobalPromptSyncError(
+        `ambiguous prompt-block structure: nested, overlapping, or orphaned xtrm:global-prompt markers; refusing to claim any block`
+      );
+    }
+    const candidates = blocks.filter((b) => b.start.name === null && isOwnedBody(content, b.start, b.end, body, legacyBodies));
+    if (candidates.length === 1) {
+      const { start, end } = candidates[0];
+      const next = `${content.slice(0, start.begin)}${ownedBlock}${content.slice(end.end)}`;
+      return { next, action: next === content ? "unchanged" : "replace-block" };
+    }
+    if (candidates.length > 1) {
+      throw new GlobalPromptSyncError(
+        `ambiguous ownership: ${candidates.length} unnamed command-chaining blocks match exactly; refusing to migrate`
+      );
+    }
+    return { next: `${ownedBlock}${eol}${eol}${content}`, action: "prepend" };
   }
-  return { next: `${block}${eol}${eol}${content}`, action: "prepend" };
-}
-function validateMarkers(starts, ends) {
-  if (starts.length === 0 && ends.length === 0) return null;
-  if (starts.length === 1 && ends.length === 1) {
-    if (starts[0] < ends[0]) return { start: starts[0], end: ends[0] };
-    throw new GlobalPromptSyncError("end marker appears before start marker (out-of-order pair)");
+  const normalized = content.replace(/\r\n/g, "\n").trim();
+  if (!normalized) {
+    return { next: `${ownedBlock}${eol}`, action: "create" };
   }
-  if (starts.length === 0) {
-    throw new GlobalPromptSyncError(`orphan end marker (${ends.length} found, no start)`);
+  if (normalized === body || legacyBodies.some((legacy) => normalized === legacy.trim().replace(/\r\n/g, "\n"))) {
+    return { next: `${ownedBlock}${eol}`, action: "replace-whole-file" };
   }
-  if (ends.length === 0) {
-    throw new GlobalPromptSyncError(`orphan start marker (${starts.length} found, no end)`);
-  }
-  throw new GlobalPromptSyncError(
-    `malformed managed block: ${starts.length} start / ${ends.length} end markers (duplicate or nested)`
-  );
+  return { next: `${ownedBlock}${eol}${eol}${content}`, action: "prepend" };
 }
 function resolveGlobalPromptTargets(opts = {}) {
   const home = opts.home ?? import_node_os8.default.homedir();
@@ -59277,7 +59333,7 @@ async function readCanonicalGlobalPromptBody() {
     throw new GlobalPromptSyncError(`cannot read canonical global prompt asset ${assetPath}: ${error51.message}`);
   }
 }
-async function syncOneTarget(target, canonicalBody, opts) {
+async function planTarget(target, canonicalBody) {
   const base = { label: target.label, file: target.file };
   let original = null;
   let mode;
@@ -59301,6 +59357,10 @@ async function syncOneTarget(target, canonicalBody, opts) {
     }
   }
   const rendered = renderManagedGlobalPrompt(original ?? "", canonicalBody);
+  return { base, original, mode, rendered };
+}
+async function commitTarget(planned, opts) {
+  const { base, original, mode, rendered } = planned;
   if (rendered.action === "unchanged") {
     return { ...base, action: "unchanged", changed: false };
   }
@@ -59308,10 +59368,10 @@ async function syncOneTarget(target, canonicalBody, opts) {
     return { ...base, action: rendered.action, changed: true, dryRun: true };
   }
   if (original !== null) {
-    const current = await import_fs_extra17.default.readFile(target.file, "utf8");
+    const current = await import_fs_extra17.default.readFile(base.file, "utf8");
     if (current !== original) {
       throw new GlobalPromptSyncError(
-        `${target.label}: ${target.file} changed during sync \u2014 refusing to write (concurrent modification)`
+        `${base.label}: ${base.file} changed during sync \u2014 refusing to write (concurrent modification)`
       );
     }
   }
@@ -59320,26 +59380,30 @@ async function syncOneTarget(target, canonicalBody, opts) {
     const backupDir = import_node_path17.default.join(opts.home ?? import_node_os8.default.homedir(), ".xtrm", "migration-backups");
     await import_fs_extra17.default.ensureDir(backupDir);
     const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
-    await import_fs_extra17.default.copyFile(target.file, import_node_path17.default.join(backupDir, `global-prompt-${target.label}-${stamp}.md`));
+    await import_fs_extra17.default.copyFile(base.file, import_node_path17.default.join(backupDir, `global-prompt-${base.label}-${stamp}.md`));
   }
-  const parentDir = import_node_path17.default.dirname(target.file);
+  const parentDir = import_node_path17.default.dirname(base.file);
   await import_fs_extra17.default.ensureDir(parentDir);
-  const tmpPath = import_node_path17.default.join(parentDir, `.${import_node_path17.default.basename(target.file)}.tmp-${process.pid}-${import_node_crypto9.default.randomBytes(4).toString("hex")}`);
+  const tmpPath = import_node_path17.default.join(parentDir, `.${import_node_path17.default.basename(base.file)}.tmp-${process.pid}-${import_node_crypto9.default.randomBytes(4).toString("hex")}`);
   try {
     await import_fs_extra17.default.writeFile(tmpPath, rendered.next, { encoding: "utf8", mode: mode ?? 420 });
-    await import_fs_extra17.default.rename(tmpPath, target.file);
+    await import_fs_extra17.default.rename(tmpPath, base.file);
   } catch (error51) {
     await import_fs_extra17.default.remove(tmpPath).catch(() => void 0);
-    throw new GlobalPromptSyncError(`${target.label}: write to ${target.file} failed: ${error51.message}`);
+    throw new GlobalPromptSyncError(`${base.label}: write to ${base.file} failed: ${error51.message}`);
   }
   return { ...base, action: rendered.action, changed: true };
 }
 async function syncGlobalPrompts(opts = {}) {
   const canonicalBody = opts.canonicalBody ?? await readCanonicalGlobalPromptBody();
   const targets = resolveGlobalPromptTargets(opts);
-  const results = [];
+  const planned = [];
   for (const target of targets) {
-    results.push(await syncOneTarget(target, canonicalBody, opts));
+    planned.push(await planTarget(target, canonicalBody));
+  }
+  const results = [];
+  for (const plannedTarget of planned) {
+    results.push(await commitTarget(plannedTarget, opts));
   }
   return { targets: results };
 }
@@ -63487,8 +63551,8 @@ async function detectProjectFeatures(projectRoot) {
     generatedRegistry: false
   };
 }
-function upsertManagedBlock(fileContent, blockBody, startMarker = XTRM_BLOCK_START, endMarker = XTRM_BLOCK_END) {
-  const normalizedBody = blockBody.trim();
+function upsertManagedBlock(fileContent, blockBody2, startMarker = XTRM_BLOCK_START, endMarker = XTRM_BLOCK_END) {
+  const normalizedBody = blockBody2.trim();
   const managedBlock = `${startMarker}
 ${normalizedBody}
 ${endMarker}`;
@@ -70868,6 +70932,14 @@ function createUpdateCommand() {
   });
 }
 
+// src/commands/global-prompt-sync-cmd.ts
+function createGlobalPromptSyncCommand() {
+  return new Command("_global-prompt-sync").description("Run the ownership-safe global prompt sync (internal diagnostic)").option("--dry-run", "Preview changes without writing", false).action(async (opts) => {
+    const result = await syncGlobalPrompts({ dryRun: opts.dryRun });
+    printGlobalPromptSyncSummary(result);
+  });
+}
+
 // src/commands/release.ts
 init_kleur();
 var import_node_fs19 = require("fs");
@@ -74457,6 +74529,7 @@ program2.addCommand(createClaudeSyncCommand());
 program2.addCommand(createDoctorCommand());
 program2.addCommand(createBootstrapCommand());
 program2.addCommand(createUpdateCommand());
+program2.addCommand(createGlobalPromptSyncCommand());
 program2.addCommand(createReleaseCommand());
 program2.addCommand(createSpecCommand());
 program2.addCommand(createMigrateCommand());

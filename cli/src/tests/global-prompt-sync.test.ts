@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GLOBAL_PROMPT_END_MARKER as END,
@@ -236,6 +237,46 @@ describe('multi-block migration', () => {
     expect(second.action).toBe('unchanged');
     expect(second.next).toBe(first.next);
   });
+
+  it('does not claim a customized same-heading block; the Core block is prepended and the operator monitor line survives byte-identical (decision kept pending)', () => {
+    // block 1 body = canonical + an operator-appended monitor line — NOT an
+    // exact canonical match, so it is never claimed/overwritten.
+    const customized = opBlock(`${CANONICAL.trim()}\n- always set background monitors when waiting;`);
+    const result = renderManagedGlobalPrompt(customized, CANONICAL);
+    expect(result.action).toBe('prepend');
+    expect(result.next).toBe(`${OWNED_BLOCK}\n\n${customized}`);
+    expect(result.next).toContain('- always set background monitors when waiting;');
+    const second = renderManagedGlobalPrompt(result.next, CANONICAL);
+    expect(second.action).toBe('unchanged');
+    expect(second.next).toBe(result.next);
+  });
+
+  it('refuses migration on nested unnamed markers (structural validation)', () => {
+    const nested = `${START}\nouter\n${START}\n${CANONICAL.trim()}\n${END}\nrest\n${END}`;
+    expect(() => renderManagedGlobalPrompt(nested, CANONICAL)).toThrow(/ambiguous|nested|overlap|orphan/);
+  });
+
+  it('refuses migration on an orphan unnamed start marker (structural validation)', () => {
+    expect(() => renderManagedGlobalPrompt(`${START}\n${CANONICAL.trim()}` , CANONICAL)).toThrow(/ambiguous|nested|overlap|orphan/);
+  });
+
+  it('refuses migration on mismatched/overlapping markers (structural validation)', () => {
+    const mismatch = `${START}\nbody\n<!-- xtrm:global-prompt:foo:end -->`;
+    expect(() => renderManagedGlobalPrompt(mismatch, CANONICAL)).toThrow(/ambiguous|nested|overlap|orphan/);
+  });
+
+  it('preserves outside bytes exactly in a mixed-EOL file (original-offset splice)', () => {
+    const head = '# user header\r\nplain lf line\n'; // mixed EOL on purpose
+    const stale = CANONICAL.trim().replace('- Keep dependent steps sequential', '- Old line');
+    const existing = `${head}${OWNED_START}\r\nold managed body\r\n${OWNED_END}\r\n\r\ntail LF\n`;
+    const result = renderManagedGlobalPrompt(existing, CANONICAL);
+    expect(result.action).toBe('replace-block');
+    // Bytes outside the owned span are copied verbatim — no whole-file re-EOL.
+    expect(result.next.startsWith(head)).toBe(true);
+    expect(result.next.endsWith('\r\n\r\ntail LF\n')).toBe(true);
+    expect(result.next).not.toContain('- Old line');
+    expect(result.next).not.toContain('old managed body');
+  });
 });
 
 
@@ -303,6 +344,21 @@ describe('syncGlobalPrompts', () => {
     expect(await fs.readFile(piFile, 'utf8')).toBe(disk);
   });
 
+  it('leaves BOTH targets unchanged when the second target is malformed (atomic preflight)', async () => {
+    const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
+    const claudeFile = path.join(process.env.HOME as string, '.claude', 'CLAUDE.md');
+    // pi plans a change (legacy whole-file → owned block), but claude holds a
+    // malformed owned block (duplicate owned name) that fails during preflight.
+    const malformedClaude = `${OWNED_START}\nbody\n${OWNED_END}\n\n${OWNED_START}\nfragment\n${OWNED_END}`;
+    await fs.outputFile(piFile, `${LEGACY_BODY}\n`);
+    await fs.outputFile(claudeFile, malformedClaude);
+
+    await expect(syncGlobalPrompts(opts())).rejects.toThrow(GlobalPromptSyncError);
+    // Neither target was touched — planning all targets precedes any write.
+    expect(await fs.readFile(piFile, 'utf8')).toBe(`${LEGACY_BODY}\n`);
+    expect(await fs.readFile(claudeFile, 'utf8')).toBe(malformedClaude);
+  });
+
   it('dry-run reports without writing', async () => {
     const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
     await fs.outputFile(piFile, `${LEGACY_BODY}\n`);
@@ -363,5 +419,56 @@ describe('syncGlobalPrompts', () => {
     await expect(syncGlobalPrompts(opts())).rejects.toThrow(/concurrent modification/);
     readSpy.mockRestore();
     expect(await fs.readFile(piFile, 'utf8')).toBe(original); // untouched
+  });
+});
+
+describe('package bin smoke (xtrm-j8kcj.9)', () => {
+  const CLI_PATH = path.join(__dirname, '../../dist/index.cjs');
+
+  function runCli(args: string[]): { stdout: string; status: number | null } {
+    try {
+      // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
+      const stdout = execSync(`node ${CLI_PATH} ${args.join(' ')}`, { encoding: 'utf8', stdio: 'pipe' });
+      return { stdout, status: 0 };
+    } catch (error: any) {
+      return { stdout: error.stdout ?? '', status: error.status ?? 1 };
+    }
+  }
+
+  // The four-block fixture carried by ~/.pi/agent/APPEND_SYSTEM.md today: block
+  // 1 is the command-chaining block with an operator-appended monitor line
+  // (customized — not an exact canonical match), the other three are operator.
+  const customized = opBlock(`${CANONICAL.trim()}\n- always set background monitors when waiting for a task;`);
+  const fourBlock = [customized, opBlock(OP_AST_GREP), opBlock(OP_PROBE), `${START}\n# Repo-scoped knowledge\n${END}`].join('\n\n');
+
+  it('shipped dist runs the four-block fixture: prepends the owned block, preserves operator blocks and the monitor line byte-identical, idempotent on rerun', () => {
+    const piFile = path.join(process.env.HOME as string, '.pi', 'agent', 'APPEND_SYSTEM.md');
+    delete process.env.PI_AGENT_DIR;
+    fs.outputFileSync(piFile, fourBlock);
+
+    const first = runCli(['_global-prompt-sync']);
+    expect(first.status).toBe(0);
+    const disk = fs.readFileSync(piFile, 'utf8');
+    // Core owned named block present at the top.
+    expect(disk.startsWith(OWNED_START)).toBe(true);
+    // All four original unnamed operator blocks survive byte-identical.
+    expect(disk).toContain(opBlock(OP_AST_GREP));
+    expect(disk).toContain(opBlock(OP_PROBE));
+    expect(disk).toContain(`${START}\n# Repo-scoped knowledge\n${END}`);
+    // The customized command-chaining block (monitor line) is not dropped.
+    expect(disk).toContain('- always set background monitors when waiting for a task;');
+    expect(disk).toContain(customized);
+
+    // Idempotent on the shipped binary: a second run does not rewrite the file.
+    const second = runCli(['_global-prompt-sync']);
+    expect(second.status).toBe(0);
+    expect(fs.readFileSync(piFile, 'utf8')).toBe(disk);
+  });
+
+  it('shipped dist carries the new structural-validation implementation (not the stale single-block build)', () => {
+    const bundle = fs.readFileSync(CLI_PATH, 'utf8');
+    // Named owned marker construction and new-only structural-validation error.
+    expect(bundle).toContain('GLOBAL_PROMPT_OWNED_NAME');
+    expect(bundle).toContain('refusing to claim any block');
   });
 });
