@@ -7,27 +7,46 @@ import { resolvePackageRoot } from './registry-scaffold.js';
 
 /**
  * Ownership-safe synchronizer for the xtrm global system-prompt blocks
- * (xtrm-3ljgz.2).
+ * (xtrm-3ljgz.2, xtrm-j8kcj.9).
  *
- * Manages one marked block inside the native global prompt files:
+ * Manages one named block inside the native global prompt files:
  *   - ~/.pi/agent/APPEND_SYSTEM.md
  *   - ~/.claude/CLAUDE.md
  *
  * Contract:
- *   - All bytes outside one exact marker pair are preserved verbatim.
+ *   - The command-chaining block is Core-owned and is identified by its
+ *     dedicated named marker pair (<!-- xtrm:global-prompt:command-chaining:... -->).
+ *     Sync updates only that block's body to the canonical body.
+ *   - Every other xtrm:global-prompt block (unnamed or other-named) is
+ *     operator-owned and is preserved byte-identical, along with all bytes
+ *     outside every marker pair.
+ *   - Migration: an unnamed block whose first line matches the canonical
+ *     command-chaining heading is converted once into the named owned form.
+ *     This is how the current four-unnamed-block file (the command-chaining
+ *     block plus operator blocks) converges safely.
  *   - A markerless file whose trimmed content is the canonical body or the
  *     legacy whole-file body is replaced in full — the legacy file migrates
  *     into the marked form without duplication.
- *   - Orphan/duplicate/nested markers and non-regular/symlink targets fail
- *     closed: the target is never touched.
+ *   - Sync fails closed ONLY on malformed ownership of the owned block
+ *     (duplicate/orphan/out-of-order owned markers) or on ambiguous
+ *     command-chaining candidates. Unknown/operator blocks never fail and are
+ *     never touched. Non-regular/symlink targets fail closed.
  *   - Writes are atomic (same-directory temp + rename), preserve the target
  *     mode, are preceded by a fresh re-read (concurrent-change defense) and
  *     by a backup under ~/.xtrm/migration-backups.
  *   - Prompt bodies are never logged — only paths, actions, and sizes.
  */
 
+/** Name of the Core-owned command-chaining block. */
+export const GLOBAL_PROMPT_OWNED_NAME = 'command-chaining';
+
+/** Generic marker pair used by operator-owned (unknown) blocks. Never rewritten. */
 export const GLOBAL_PROMPT_START_MARKER = '<!-- xtrm:global-prompt:start -->';
 export const GLOBAL_PROMPT_END_MARKER = '<!-- xtrm:global-prompt:end -->';
+
+/** Named marker pair identifying the Core-owned command-chaining block. */
+export const OWNED_GLOBAL_PROMPT_START_MARKER = `<!-- xtrm:global-prompt:${GLOBAL_PROMPT_OWNED_NAME}:start -->`;
+export const OWNED_GLOBAL_PROMPT_END_MARKER = `<!-- xtrm:global-prompt:${GLOBAL_PROMPT_OWNED_NAME}:end -->`;
 
 /**
  * The pre-marker whole-file body that the very first sync must migrate
@@ -35,6 +54,9 @@ export const GLOBAL_PROMPT_END_MARKER = '<!-- xtrm:global-prompt:end -->';
  * feature (still carrying the python sentences the kernel tool owns today).
  * Kept as an explicit, frozen migration constant — update only when a legacy
  * migration genuinely needs a second shape.
+ *
+ * This whole-file shape is matched only when the target has no markers at
+ * all; it produces the named owned block.
  */
 export const LEGACY_GLOBAL_PROMPT_BODY = `Programmatic tool calling and command chaining:
 
@@ -66,58 +88,105 @@ export interface ManagedPromptRenderResult {
   action: ManagedPromptAction;
 }
 
+// Matches any xtrm:global-prompt marker line, named or unnamed. For a named
+// marker group 1 is the name (e.g. command-chaining) and group 2 is start/end;
+// unnamed markers leave the name group empty. Anchored and linear — no nested
+// quantifiers, so no ReDoS surface.
+const MARKER_RE = /^<!--\s*xtrm:global-prompt(?::([a-z0-9_-]+))?:(start|end)\s*-->$/;
+
+interface Marker {
+  line: number;
+  name: string | null;
+  dir: 'start' | 'end';
+}
+
+function parseMarkers(lines: readonly string[]): Marker[] {
+  const markers: Marker[] = [];
+  lines.forEach((line, i) => {
+    const match = MARKER_RE.exec(line.trim());
+    if (match) {
+      markers.push({ line: i, name: match[1] ?? null, dir: match[2] as 'start' | 'end' });
+    }
+  });
+  return markers;
+}
+
+// Reassemble with the file's dominant EOL so CRLF targets keep their line
+// endings and idempotence holds at the byte level (xtrm-3ljgz.2 review fix).
+function resolveEol(content: string): '\r\n' | '\n' {
+  return content.includes('\r\n') ? '\r\n' : '\n';
+}
+
+function buildOwnedBlock(eol: string, body: string): string {
+  return `${OWNED_GLOBAL_PROMPT_START_MARKER}${eol}${body.trim()}${eol}${OWNED_GLOBAL_PROMPT_END_MARKER}`;
+}
+
 export function renderManagedGlobalPrompt(
   content: string,
   canonicalBody: string,
   legacyBodies: readonly string[] = [LEGACY_GLOBAL_PROMPT_BODY],
 ): ManagedPromptRenderResult {
   const body = canonicalBody.trim();
-  // Reassemble with the file's dominant EOL so CRLF targets keep their line
-  // endings and idempotence holds at the byte level (xtrm-3ljgz.2 review fix).
-  const eol = content.includes('\r\n') ? '\r\n' : '\n';
-  const block = `${GLOBAL_PROMPT_START_MARKER}${eol}${body}${eol}${GLOBAL_PROMPT_END_MARKER}`;
+  const eol = resolveEol(content);
+  const ownedBlock = buildOwnedBlock(eol, body);
   // Normalize CRLF for marker/legacy detection only; bytes outside the marker
-  // span are preserved as read.
+  // span are preserved as read (rejoined with the dominant EOL).
   const normalized = content.replace(/\r\n/g, '\n');
   const lines = normalized.split('\n');
-  const starts = lines
-    .map((line, i) => (line.trim() === GLOBAL_PROMPT_START_MARKER ? i : -1))
-    .filter((i) => i >= 0);
-  const ends = lines
-    .map((line, i) => (line.trim() === GLOBAL_PROMPT_END_MARKER ? i : -1))
-    .filter((i) => i >= 0);
+  const markers = parseMarkers(lines);
 
-  const pair = validateMarkers(starts, ends);
-  if (pair) {
-    const next = [...lines.slice(0, pair.start), block, ...lines.slice(pair.end + 1)].join(eol);
+  // 1) Owned (command-chaining) block present? Fail closed only on malformed
+  //    ownership of this exact block — never on unknown/operator blocks.
+  const ownedStarts = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === 'start');
+  const ownedEnds = markers.filter((m) => m.name === GLOBAL_PROMPT_OWNED_NAME && m.dir === 'end');
+  if (ownedStarts.length === 1 && ownedEnds.length === 1 && ownedStarts[0].line < ownedEnds[0].line) {
+    const next = [...lines.slice(0, ownedStarts[0].line), ownedBlock, ...lines.slice(ownedEnds[0].line + 1)].join(eol);
     return { next, action: next === content ? 'unchanged' : 'replace-block' };
   }
+  if (ownedStarts.length > 0 || ownedEnds.length > 0) {
+    throw new GlobalPromptSyncError(
+      `malformed managed (${GLOBAL_PROMPT_OWNED_NAME}) block: ` +
+        `${ownedStarts.length} start / ${ownedEnds.length} end markers (duplicate, orphan, or out-of-order)`,
+    );
+  }
 
+  // 2) No owned block. Migrate an unnamed command-chaining block if one exists
+  //    (the current four-unnamed-block layout), else preserve operator blocks
+  //    and add the owned block.
+  const unnamedStarts = markers.filter((m) => m.name === null && m.dir === 'start');
+  if (unnamedStarts.length > 0) {
+    const signatureLine = body.split('\n')[0];
+    const candidates = unnamedStarts.flatMap((st) => {
+      const nextEnd = markers.find((m) => m.line > st.line && m.dir === 'end' && m.name === null);
+      if (!nextEnd) return [];
+      const bodyText = lines.slice(st.line + 1, nextEnd.line).join('\n').trim();
+      const firstLine = bodyText.split('\n')[0];
+      return firstLine === signatureLine ? [{ start: st, end: nextEnd }] : [];
+    });
+    if (candidates.length === 1) {
+      const { start, end } = candidates[0];
+      const next = [...lines.slice(0, start.line), ownedBlock, ...lines.slice(end.line + 1)].join(eol);
+      return { next, action: next === content ? 'unchanged' : 'replace-block' };
+    }
+    if (candidates.length > 1) {
+      throw new GlobalPromptSyncError(
+        `ambiguous ownership: ${candidates.length} unnamed command-chaining blocks found; refusing to migrate`,
+      );
+    }
+    // Operator blocks only, no command-chaining block — Core-owned block is
+    // added at the top and every operator block is preserved byte-identical.
+    return { next: `${ownedBlock}${eol}${eol}${content}`, action: 'prepend' };
+  }
+
+  // 3) No markers at all — create / replace-whole-file / prepend.
   const trimmed = normalized.trim();
   if (!trimmed) {
-    return { next: `${block}${eol}`, action: 'create' };
+    return { next: `${ownedBlock}${eol}`, action: 'create' };
   }
   if (trimmed === body || legacyBodies.some((legacy) => legacy.trim() === trimmed)) {
-    return { next: `${block}${eol}`, action: 'replace-whole-file' };
+    return { next: `${ownedBlock}${eol}`, action: 'replace-whole-file' };
   }
-  return { next: `${block}${eol}${eol}${content}`, action: 'prepend' };
-}
-
-function validateMarkers(starts: number[], ends: number[]): { start: number; end: number } | null {
-  if (starts.length === 0 && ends.length === 0) return null;
-  if (starts.length === 1 && ends.length === 1) {
-    if (starts[0] < ends[0]) return { start: starts[0], end: ends[0] };
-    throw new GlobalPromptSyncError('end marker appears before start marker (out-of-order pair)');
-  }
-  if (starts.length === 0) {
-    throw new GlobalPromptSyncError(`orphan end marker (${ends.length} found, no start)`);
-  }
-  if (ends.length === 0) {
-    throw new GlobalPromptSyncError(`orphan start marker (${starts.length} found, no end)`);
-  }
-  throw new GlobalPromptSyncError(
-    `malformed managed block: ${starts.length} start / ${ends.length} end markers (duplicate or nested)`,
-  );
+  return { next: `${ownedBlock}${eol}${eol}${content}`, action: 'prepend' };
 }
 
 export interface GlobalPromptTarget {
