@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
+import zlib from 'node:zlib';
 
 const mocked = vi.hoisted(() => {
     const runMachineBootstrap = vi.fn(async () => undefined);
@@ -151,6 +152,37 @@ vi.mock('child_process', () => ({
     spawnSync: mocked.spawnSync,
 }));
 
+function writeOctal(buf: Buffer, offset: number, value: number, digits: number): void {
+    buf.write(value.toString(8).padStart(digits, '0'), offset, digits, 'ascii');
+    buf[offset + digits] = 0;
+}
+
+function buildMinimalSkillsBackup(): Buffer {
+    const entries = ['skills/', 'skills/default/', 'skills/optional/'];
+    const chunks: Buffer[] = [];
+    for (const name of entries) {
+        const header = Buffer.alloc(512);
+        header.write(name.slice(0, 100), 0, 'utf8');
+        writeOctal(header, 100, 0o755, 7);
+        writeOctal(header, 108, 1000, 7);
+        writeOctal(header, 116, 1000, 7);
+        writeOctal(header, 124, 0, 11);
+        writeOctal(header, 136, 1700000000, 11);
+        header[156] = '5'.charCodeAt(0);
+        header.write('ustar', 257, 'ascii');
+        header.write('00', 263, 'ascii');
+        header.fill(0x20, 148, 156);
+        let sum = 0;
+        for (let i = 0; i < 512; i++) sum += header[i];
+        header.write(sum.toString(8).padStart(6, '0'), 148, 'ascii');
+        header[154] = 0;
+        header[155] = 0x20;
+        chunks.push(header);
+    }
+    chunks.push(Buffer.alloc(1024));
+    return zlib.gzipSync(Buffer.concat(chunks));
+}
+
 function setupSpawnSync(projectRoot: string, calls: string[]): void {
     // Tracks whether `gitnexus analyze` has already run. The gitnexus init phase
     // analyzes first; the later dependency-maintenance phase (Phase 8) re-checks the
@@ -187,6 +219,13 @@ function setupSpawnSync(projectRoot: string, calls: string[]): void {
         if (key === 'bd init') {
             calls.push('bd init');
             return { status: 0, stdout: 'initialized', stderr: '' };
+        }
+
+        // Internal verified global-skills backup creation during init bootstrap.
+        if (command === 'tar' && args[0] === '-czf') {
+            fs.ensureDirSync(path.dirname(args[1]));
+            fs.writeFileSync(args[1], buildMinimalSkillsBackup());
+            return { status: 0, stdout: '', stderr: '' };
         }
 
         // Dependency-maintenance probes (machine-bootstrap inventoryDeps + Phase 8

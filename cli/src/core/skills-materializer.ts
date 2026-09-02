@@ -111,7 +111,7 @@ async function buildRuntimeTempView(
   return tempRoot;
 }
 
-async function atomicSwapDirectory(tempRoot: string, targetRoot: string): Promise<void> {
+export async function atomicSwapDirectory(tempRoot: string, targetRoot: string): Promise<void> {
   const backupRoot = `${targetRoot}.bak-${randomUUID()}`;
   const targetExists = await fs.pathExists(targetRoot);
 

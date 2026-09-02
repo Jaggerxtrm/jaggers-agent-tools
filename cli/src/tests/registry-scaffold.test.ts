@@ -279,6 +279,7 @@ describe('pruneRetiredManagedSkills', () => {
     await fs.ensureDir(defaultRoot);
     await writeSkill(defaultRoot, 'using-specialists');
     await writeSkill(defaultRoot, 'using-specialists-v3');
+    await fs.writeJson(path.join(userXtrmDir, 'registry.json'), buildRegistry(['using-specialists', 'using-specialists-v3']));
 
     const registry = buildRegistry(['using-specialists']);
 
@@ -301,6 +302,7 @@ describe('pruneRetiredManagedSkills', () => {
     await fs.ensureDir(defaultRoot);
     await fs.ensureDir(activeRoot);
     await writeSkill(defaultRoot, 'using-specialists-v3');
+    await fs.writeJson(path.join(userXtrmDir, 'registry.json'), buildRegistry(['using-specialists', 'using-specialists-v3']));
     await fs.symlink(
       path.join('..', 'default', 'using-specialists-v3'),
       path.join(activeRoot, 'using-specialists-v3'),
@@ -327,6 +329,7 @@ describe('pruneRetiredManagedSkills', () => {
     await fs.ensureDir(defaultRoot);
     await fs.ensureDir(activeRoot);
     await writeSkill(defaultRoot, 'using-specialists-v3');
+    await fs.writeJson(path.join(userXtrmDir, 'registry.json'), buildRegistry(['using-specialists', 'using-specialists-v3']));
 
     // user real-dir entry that shares name with retired skill — must not be touched
     const userRealDir = path.join(activeRoot, 'using-specialists-v3');
@@ -367,6 +370,7 @@ describe('pruneRetiredManagedSkills', () => {
     await fs.ensureDir(defaultRoot);
     await fs.ensureDir(activeRoot);
     await writeSkill(defaultRoot, 'using-specialists-v3');
+    await fs.writeJson(path.join(userXtrmDir, 'registry.json'), buildRegistry(['using-specialists', 'using-specialists-v3']));
     await fs.symlink(
       path.join('..', 'default', 'using-specialists-v3'),
       path.join(activeRoot, 'using-specialists-v3'),

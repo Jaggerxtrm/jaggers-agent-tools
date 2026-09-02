@@ -527,6 +527,22 @@ describe('xtrm update', () => {
     }));
   });
 
+  it('apply fails before repo/global bootstrap work when global prompt preflight rejects', async () => {
+    const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });
+    const repo = writeRepo(tmpDir, 'repo-a');
+    resolvePackageRootMock.mockReturnValue(packageRoot);
+    syncGlobalPromptsMock.mockRejectedValue(new Error('GlobalPromptSyncError: malformed managed block'));
+
+    await expect(runUpdateCli(['--apply', '--repo', repo])).rejects.toThrow(/GlobalPromptSyncError/);
+    expect(runInstallMock).not.toHaveBeenCalled();
+    expect(ensureGlobalSkillsBootstrappedMock).not.toHaveBeenCalled();
+    expect(ensureGlobalHooksBootstrappedMock).not.toHaveBeenCalled();
+    expect(reconcileGlobalClaudeHooksMock).not.toHaveBeenCalled();
+    expect(reconcileGlobalPiHooksMock).not.toHaveBeenCalled();
+    expect(runExternalPiToolPatchMock).not.toHaveBeenCalled();
+  });
+
   it('fleet update --root runs the global prompt sync exactly once, even for many repos (xtrm-3ljgz.2)', async () => {
     const packageRoot = writePackageRoot(path.join(tmpDir, 'package-root'));
     fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.2.3' });

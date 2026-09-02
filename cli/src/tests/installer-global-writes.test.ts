@@ -194,6 +194,27 @@ describe('updatePiSettings — exactly-once global invariant (xtrm-xnymw)', () =
 // between versions is still cleaned up (the manifest is doing its job, not
 // just "delete nothing").
 describe('ensureGlobalSkillsBootstrapped safe-delete (xtrm-wiy5n.4.37)', () => {
+    async function snapshotTree(root: string): Promise<Record<string, string>> {
+        const out: Record<string, string> = {};
+        async function walk(dir: string): Promise<void> {
+            const entries = await fs.readdir(dir, { withFileTypes: true });
+            for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+                const full = path.join(dir, entry.name);
+                const rel = path.relative(root, full).split(path.sep).join('/');
+                if (entry.isDirectory()) {
+                    out[`${rel}/`] = 'dir';
+                    await walk(full);
+                } else {
+                    out[rel] = await fs.readFile(full, 'utf8');
+                }
+            }
+        }
+        if (await fs.pathExists(root)) {
+            await walk(root);
+        }
+        return out;
+    }
+
     function seedPkg(version: string, tiers: { default?: Record<string, string>; optional?: Record<string, string> }): void {
         fs.writeJsonSync(path.join(repoRoot, 'package.json'), { name: 'xtrm-tools', version });
         fs.emptyDirSync(path.join(repoRoot, '.xtrm', 'skills', 'default'));
@@ -267,7 +288,111 @@ describe('ensureGlobalSkillsBootstrapped safe-delete (xtrm-wiy5n.4.37)', () => {
         expect(fs.existsSync(path.join(homeDir, '.xtrm', 'skills', 'default', 'shipped-b', 'SKILL.md'))).toBe(true);
     });
 
-    it('proof 6: if a tracked directory is replaced with a symlink between installs, the installer refuses to traverse it and the external target survives (Codex P1)', async () => {
+    it('restores the complete skills tree when bootstrap fails after mutation', async () => {
+        seedPkg('1.0.0', {
+            default: { 'shipped-a/SKILL.md': '# shipped-a v1' },
+            optional: { 'shipped-opt/SKILL.md': '# opt v1' },
+        });
+        await bootstrap();
+
+        fs.ensureDirSync(path.dirname(userDefault()));
+        fs.writeFileSync(userDefault(), '# user default, must survive rollback');
+        fs.ensureDirSync(path.join(homeDir, '.xtrm', 'skills', 'custom-pack', 'custom-skill'));
+        fs.writeFileSync(path.join(homeDir, '.xtrm', 'skills', 'custom-pack', 'custom-skill', 'SKILL.md'), '# custom');
+
+        seedPkg('2.0.0', {
+            default: { 'shipped-b/SKILL.md': '# shipped-b v2' },
+            optional: { 'shipped-opt/SKILL.md': '# opt v2' },
+        });
+        const skillsRoot = path.join(homeDir, '.xtrm', 'skills');
+        const statePath = path.join(skillsRoot, 'state.json');
+        const before = await snapshotTree(skillsRoot);
+        const originalAppendFile = fs.appendFile.bind(fs);
+        const appendSpy = vi.spyOn(fs, 'appendFile');
+        appendSpy.mockImplementation(async (file, data, options) => {
+            if (String(file) === statePath && String(data) === '\n') {
+                throw new Error('simulated state write failure');
+            }
+            return originalAppendFile(file as never, data as never, options as never);
+        });
+
+        await expect(bootstrap()).rejects.toThrow(/simulated state write failure/);
+        appendSpy.mockRestore();
+
+        expect(await snapshotTree(skillsRoot)).toEqual(before);
+        const backups = await fs.readdir(path.join(homeDir, '.xtrm', 'migration-backups'));
+        expect(backups.some((name) => name.endsWith('.tgz'))).toBe(true);
+        expect(backups.some((name) => name.endsWith('.sha256.json'))).toBe(true);
+    });
+
+    it('fails closed before mutation when the backup archive cannot be verified', async () => {
+        seedPkg('1.0.0', {
+            default: { 'shipped-a/SKILL.md': '# shipped-a v1' },
+            optional: { 'shipped-opt/SKILL.md': '# opt v1' },
+        });
+        await bootstrap();
+
+        const before = await snapshotTree(path.join(homeDir, '.xtrm', 'skills'));
+        seedPkg('2.0.0', {
+            default: { 'shipped-b/SKILL.md': '# shipped-b v2' },
+            optional: { 'shipped-opt/SKILL.md': '# opt v2' },
+        });
+        const originalWriteJson = fs.writeJson.bind(fs);
+        const writeJsonSpy = vi.spyOn(fs, 'writeJson');
+        writeJsonSpy.mockImplementation(async (file, data, options) => {
+            if (String(file).endsWith('.sha256.json')) {
+                throw new Error('simulated backup sidecar failure');
+            }
+            return originalWriteJson(file as never, data as never, options as never);
+        });
+
+        await expect(bootstrap()).rejects.toThrow(/simulated backup sidecar failure/);
+        writeJsonSpy.mockRestore();
+
+        expect(await snapshotTree(path.join(homeDir, '.xtrm', 'skills'))).toEqual(before);
+    });
+
+    it('keeps the current root intact when final rollback placement fails once', async () => {
+        seedPkg('1.0.0', {
+            default: { 'shipped-a/SKILL.md': '# shipped-a v1' },
+            optional: { 'shipped-opt/SKILL.md': '# opt v1' },
+        });
+        await bootstrap();
+
+        fs.ensureDirSync(path.dirname(userDefault()));
+        fs.writeFileSync(userDefault(), '# user default, must survive failed final placement');
+        seedPkg('2.0.0', {
+            default: { 'shipped-b/SKILL.md': '# shipped-b v2' },
+            optional: { 'shipped-opt/SKILL.md': '# opt v2' },
+        });
+        const skillsRoot = path.join(homeDir, '.xtrm', 'skills');
+        const statePath = path.join(skillsRoot, 'state.json');
+        const originalAppendFile = fs.appendFile.bind(fs);
+        const appendSpy = vi.spyOn(fs, 'appendFile');
+        appendSpy.mockImplementation(async (file, data, options) => {
+            if (String(file) === statePath && String(data) === '\n') {
+                throw new Error('simulated state write failure');
+            }
+            return originalAppendFile(file as never, data as never, options as never);
+        });
+        const originalRename = fs.rename.bind(fs);
+        const renameSpy = vi.spyOn(fs, 'rename')
+            .mockImplementationOnce(originalRename as typeof fs.rename)
+            .mockRejectedValueOnce(new Error('simulated final placement failure'))
+            .mockImplementationOnce(originalRename as typeof fs.rename);
+
+        await expect(bootstrap()).rejects.toThrow(/Global skills rollback failed: simulated final placement failure; original error: simulated state write failure/);
+        renameSpy.mockRestore();
+        appendSpy.mockRestore();
+
+        expect(await fs.pathExists(path.join(skillsRoot, 'default', 'shipped-b', 'SKILL.md'))).toBe(true);
+        expect(await fs.pathExists(path.join(skillsRoot, 'default', 'shipped-a', 'SKILL.md'))).toBe(false);
+        expect(await fs.readFile(userDefault(), 'utf8')).toBe('# user default, must survive failed final placement');
+        const state = await fs.readJson(statePath) as { installedVersion: string };
+        expect(state.installedVersion).toBe('2.0.0');
+    });
+
+    it('proof 6: if a tracked directory is replaced with a symlink between installs, bootstrap fails closed and the external target survives (Codex P1)', async () => {
         // Adversarial: after install v1, the user (or attacker) replaces
         // default/skill-x with a symlink to a working copy outside the managed
         // root. removeTrackedEntries would previously follow the parent-dir
@@ -285,7 +410,7 @@ describe('ensureGlobalSkillsBootstrapped safe-delete (xtrm-wiy5n.4.37)', () => {
             fs.symlinkSync(external, skillDir, 'dir');
 
             seedPkg('2.0.0', { default: { 'shipped-b/SKILL.md': '# shipped v2' } });
-            await bootstrap();
+            await expect(bootstrap()).rejects.toThrow(/absolute symlink target|symbolic link/);
 
             expect(fs.readFileSync(path.join(external, 'SKILL.md'), 'utf8')).toBe('# external — must NOT be touched');
             expect(fs.readFileSync(path.join(external, 'lib.md'), 'utf8')).toBe('# external lib');
