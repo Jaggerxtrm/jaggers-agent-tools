@@ -1,0 +1,709 @@
+{
+  "content_sha256": "6d94a50da4bc7086071bb8378186ba1d64b3aa8cdcd7591c68a0c6d91edbf5cb",
+  "desired_issues": {
+    "xtrm-lk07w": {
+      "_type": "issue",
+      "comment_count": 0,
+      "created_at": "2026-08-28T13:12:49Z",
+      "created_by": "jaggerxtrm",
+      "dependency_count": 0,
+      "dependent_count": 0,
+      "description": "## PROBLEM\nSpecialists currently starts Pi with --no-extensions and reconstructs a hardcoded extension set in two separate spawn paths. The approved design and native Pi probes show that execution.extensions can instead select path/npm/git sources and each enabled source can be forwarded as one explicit -e argument, but the runtime, package artifact, update path, and clean-machine evidence do not yet implement or prove that outcome.\n\n## SUCCESS\nA released-candidate Specialists build forwards configured sources identically through PiAgentSession and direct script/serve execution, preserves user overrides across package update, loads Service Knowledge from its standalone package, and passes unit, integration, packed-artifact, local xt build, isolated-install, upgrade, and clean-machine smoke gates. Publication remains a separately approved irreversible action after reviewer PASS.\n\n## SCOPE\n/home/dawid/dev/specialists runtime/schema/loader/config/docs/tests/dist/release artifacts; Core's existing local RC pack/install/update smoke surfaces and design document; local isolated HOME/prefix/container validation using packed artifacts.\n\n## NON_GOALS\n- No custom extension package resolver or separate extensions.json.\n- No Core Pi bundle growth or arbitrary vendoring.\n- No npm publish, tag, or force-push without explicit operator confirmation after all pre-release gates.\n- No rewrite of Pi or xt interactive ambient extension discovery.\n\n## CONSTRAINTS\nSCRUTINY: high. Base Specialists work on exact origin/master 79dbecc82789e8cbc02b733c50cd4c7d867043e1; do not inherit the dirty local checkout or unmerged acc7e163. PiAgentSession impact is HIGH (8 direct, 182 depth-3); applyOverrideFields impact is CRITICAL (15 processes), so tests must precede implementation and preserve legacy gitnexus/serena semantics. No new dependency. Log only ordered configured source identifiers; never prompts, credentials, or environment values. Publication is operator-only.\n\n## VALIDATION\n- [ ] Focused schema/loader/runner/session/script-runner tests pass.\n- [ ] Full Specialists lint, test, build, package payload, and attestation gates pass.\n- [ ] Both Pi spawn paths produce identical repeated -e ordering and remote-source offline behavior.\n- [ ] Packed Specialists artifact installs over v3.21.5 in an isolated prefix and preserves ~/.config/specialists/user.json extension fields.\n- [ ] Local packed xt + Specialists artifacts pass existing installed-artifact/update suite and clean-machine/container smoke or an evidenced equivalent.\n- [ ] Security auditor and reviewer PASS on cumulative release candidate.\n- [ ] Post-publication latest install/update smoke is planned but not executed before explicit approval.\n\n## OUTPUT\nCross-repo completion report with commits/PRs, artifact versions and hashes, exact pass/fail counts, local build/install/update commands, smoke artifact paths, security/reviewer verdicts, publish decision, and any residual platform limitations.\n\n## REFERENCES\nCore design commit 21fa05cc, packages/pi-extensions/docs/specialist-extension-injection-design.md. Native probes: xtrm-qejmp. Recent state: Core PR #607 and Specialists PR #271 are latest merged surfaces; Specialists origin/master is 79dbecc8.",
+      "id": "xtrm-lk07w",
+      "issue_type": "epic",
+      "labels": [
+        "contract:ready"
+      ],
+      "notes": "Specialists-local execution epic: unitAI-jndsb. Mapping: xtrm-lk07w.1→unitAI-jndsb.1 implementation; .2→unitAI-jndsb.2 tests; .3→unitAI-jndsb.3 RC; .5→unitAI-jndsb.4 security; .6→unitAI-jndsb.5 review.\nRelease gap discovered 2026-09-02: repo skills layout v2 stores Service Knowledge under .xtrm/skills/<pack>/service-knowledge; automatic logical-name resolution and live xt claude/pi/sp run smoke are tracked by xtrm-lk07w.14-.15 and Specialists unitAI-jndsb.11-.13. Publication remains blocked on this matrix.",
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "started_at": "2026-08-28T13:13:41Z",
+      "status": "in_progress",
+      "title": "Ship manifest-configured native Pi extensions end to end",
+      "updated_at": "2026-09-02T00:03:06Z"
+    },
+    "xtrm-lk07w.16": {
+      "_type": "issue",
+      "assignee": "jaggerxtrm",
+      "comment_count": 0,
+      "created_at": "2026-09-02T15:16:08Z",
+      "created_by": "jaggerxtrm",
+      "dependencies": [
+        {
+          "created_at": "2026-09-02T15:16:08Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w",
+          "issue_id": "xtrm-lk07w.16",
+          "metadata": "{}",
+          "type": "parent-child"
+        }
+      ],
+      "dependency_count": 0,
+      "dependent_count": 1,
+      "description": "## PROBLEM\nCore commit eede9290 is fully validated but exists only on xt/core-pack-skill and has no PR. The always-dev runtime cannot follow main until this code is integrated.\n\n## SUCCESS\nA reviewed Core PR lands the exact security-approved production implementation and proof-only tests onto current origin/main without semantic drift. Main is clean and contains the accepted commit content.\n\n## SCOPE\nCore branch integration, conflict resolution, existing resolver/test/dist surfaces, PR creation, CI, and merge.\n\n## NON_GOALS\nNo npm publication. No redesign. Production launch utilities and cli/dist must remain equivalent to accepted eede9290/a9d40d76 constraints.\n\n## CONSTRAINTS\nUse an isolated branch/worktree. Preserve security-approved production bytes unless current main requires an explicitly reviewed reconciliation. Run GitNexus impact/detect and all existing gates. Never edit local main directly.\n\n## VALIDATION\n- [ ] Cumulative diff matches accepted scope.\n- [ ] 306-proof suite or current equivalent passes.\n- [ ] Typecheck, diff, dist parity, and production equivalence pass.\n- [ ] Reviewer/security gates accept the exact PR head.\n- [ ] PR merges to origin/main.\n\n## LIBRARIES\nN/A — integration of existing code only.\n\n## OUTPUT\nPR URL, merged commit, exact test counts, audit verdicts, and any reconciliation delta.",
+      "id": "xtrm-lk07w.16",
+      "issue_type": "task",
+      "labels": [
+        "contract:ready"
+      ],
+      "notes": "Paused before any integration edit: operator reported ~/.xtrm skill loss caused by validation cleanup. Resume only after global skill recovery is verified.",
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "started_at": "2026-09-02T15:16:41Z",
+      "status": "blocked",
+      "title": "integration: land validated Core resolver on main",
+      "updated_at": "2026-09-02T15:46:22Z"
+    },
+    "xtrm-lk07w.17": {
+      "_type": "issue",
+      "assignee": "jaggerxtrm",
+      "comment_count": 0,
+      "created_at": "2026-09-02T15:16:09Z",
+      "created_by": "jaggerxtrm",
+      "dependencies": [
+        {
+          "created_at": "2026-09-02T15:16:09Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w",
+          "issue_id": "xtrm-lk07w.17",
+          "metadata": "{}",
+          "type": "parent-child"
+        }
+      ],
+      "dependency_count": 0,
+      "dependent_count": 1,
+      "description": "## PROBLEM\nSpecialists runtime commit f263a228 and README commit 49c6501e are independently validated but neither is in origin/master and neither has a PR. The README branch is separate from the runtime branch.\n\n## SUCCESS\nA reviewed Specialists integration PR combines the accepted runtime/dist/config stack and README-only documentation onto current origin/master, resolves lineage safely, and lands without changing established runtime contracts.\n\n## SCOPE\nSpecialists f263a228 lineage, README 49c6501e content, release-facing documentation consistency required for main, integration tests, PR, CI, and merge.\n\n## NON_GOALS\nNo npm publication. Do not silently waive unitAI-641h0 or unitAI-x64ys. Do not claim release attestation before exact merged-artifact validation.\n\n## CONSTRAINTS\nUse an isolated branch/worktree from current origin/master. Preserve accepted trust semantics and built dist. Reconcile README by content if commit ancestry differs. Never edit local master directly.\n\n## VALIDATION\n- [ ] Full suite, focused trust, integration, build, lint, package smoke, and diff checks pass.\n- [ ] README claims match the integrated head.\n- [ ] Reviewer, seconder, and security accept exact PR head.\n- [ ] PR merges to origin/master.\n\n## LIBRARIES\nN/A — integration of existing code/documentation only.\n\n## OUTPUT\nPR URL, merged commit, changed files, exact gates, and residual blockers.",
+      "id": "xtrm-lk07w.17",
+      "issue_type": "task",
+      "labels": [
+        "contract:ready"
+      ],
+      "notes": "Paused before any integration edit: operator reported ~/.xtrm skill loss caused by validation cleanup. Resume only after global skill recovery is verified.",
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "started_at": "2026-09-02T15:16:42Z",
+      "status": "blocked",
+      "title": "integration: land Specialists runtime and README on master",
+      "updated_at": "2026-09-02T15:46:23Z"
+    },
+    "xtrm-lk07w.18": {
+      "_type": "issue",
+      "comment_count": 0,
+      "created_at": "2026-09-02T15:16:10Z",
+      "created_by": "jaggerxtrm",
+      "dependencies": [
+        {
+          "created_at": "2026-09-02T15:16:10Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w",
+          "issue_id": "xtrm-lk07w.18",
+          "metadata": "{}",
+          "type": "parent-child"
+        },
+        {
+          "created_at": "2026-09-02T15:16:11Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w.16",
+          "issue_id": "xtrm-lk07w.18",
+          "metadata": "{}",
+          "type": "blocks"
+        },
+        {
+          "created_at": "2026-09-02T15:16:11Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w.17",
+          "issue_id": "xtrm-lk07w.18",
+          "metadata": "{}",
+          "type": "blocks"
+        },
+        {
+          "created_at": "2026-09-02T15:52:11Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-qs9in",
+          "issue_id": "xtrm-lk07w.18",
+          "metadata": "{}",
+          "type": "blocks"
+        }
+      ],
+      "dependency_count": 3,
+      "dependent_count": 1,
+      "description": "## PROBLEM\nThis workstation is always-dev: global xt/xtrm/sp/specialists commands must use local default-branch builds rather than wait for npm publication. The current globals are restored package copies and do not contain the accepted candidate bytes.\n\n## SUCCESS\nAfter Core and Specialists integration PRs merge, both repositories are updated to exact merged default-branch heads, built, and linked through the Node v24.15.0 global package/bin locations. Real shell commands resolve to those local main builds and survive a new shell.\n\n## SCOPE\nLocal main checkout updates, documented project builds, npm/global package links or the existing repository-native link mechanism, bin links, version/hash capture, and rollback metadata.\n\n## NON_GOALS\nNo npm publish/tag. No links to temporary validation worktrees or feature branches. No modification of unrelated global tools.\n\n## CONSTRAINTS\nWait for both integration merges. Snapshot existing package trees and links before replacement. Keep a rollback command. Link only canonical local main checkouts. Preserve user config and global skills.\n\n## VALIDATION\n- [ ] xt/xtrm resolve to the Core local-main build.\n- [ ] sp/specialists resolve to the Specialists local-master build.\n- [ ] Runtime hashes match freshly built merged heads.\n- [ ] New-shell smoke passes.\n- [ ] Rollback metadata is complete.\n\n## LIBRARIES\nReuse npm link or the repositories existing local-link workflow; no new dependency.\n\n## OUTPUT\nExact merged heads, build commands, link targets, hashes, new-shell smoke, and rollback instructions.",
+      "id": "xtrm-lk07w.18",
+      "issue_type": "task",
+      "labels": [
+        "contract:ready"
+      ],
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "status": "open",
+      "title": "dev-runtime: link global commands to local main builds",
+      "updated_at": "2026-09-02T15:16:10Z"
+    },
+    "xtrm-lk07w.19": {
+      "_type": "issue",
+      "comment_count": 0,
+      "created_at": "2026-09-02T15:16:10Z",
+      "created_by": "jaggerxtrm",
+      "dependencies": [
+        {
+          "created_at": "2026-09-02T15:16:10Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w",
+          "issue_id": "xtrm-lk07w.19",
+          "metadata": "{}",
+          "type": "parent-child"
+        },
+        {
+          "created_at": "2026-09-02T15:16:12Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w.18",
+          "issue_id": "xtrm-lk07w.19",
+          "metadata": "{}",
+          "type": "blocks"
+        }
+      ],
+      "dependency_count": 1,
+      "dependent_count": 1,
+      "description": "## PROBLEM\nLink creation alone does not prove that the real operator commands execute the merged main code across repositories.\n\n## SUCCESS\nA post-link smoke runs real xt Pi/Claude role binding and Specialists pre-script execution from the main-linked commands, confirms project-pack machinery and extension forwarding, preserves repository/user state, and leaves zero temporary residue.\n\n## SCOPE\nInstalled command resolution, main-head hashes, one bounded consumer smoke, configuration preservation, logs, restoration fallback, and cleanup inventory.\n\n## NON_GOALS\nNo publication. No full reconciliation workflow. No waiver of security/runtime blockers.\n\n## CONSTRAINTS\nUse audit-only prompts and bounded sessions. Capture command paths and package realpaths. Do not mutate production consumer knowledge. Stop and roll back links on a main-build mismatch.\n\n## VALIDATION\n- [ ] Command/package realpaths point to local default-branch checkouts.\n- [ ] Project-pack resolution and repo-local machinery execute through real commands.\n- [ ] Extension forwarding remains active.\n- [ ] Consumer and global config hashes remain unchanged.\n- [ ] Cleanup inventory is zero.\n- [ ] Reviewer accepts the main-linked runtime receipt.\n\n## LIBRARIES\nN/A — existing commands and smoke harnesses.\n\n## OUTPUT\nMain-linked runtime receipt with exact paths, heads, hashes, smoke results, cleanup, and reviewer verdict.",
+      "id": "xtrm-lk07w.19",
+      "issue_type": "task",
+      "labels": [
+        "contract:ready"
+      ],
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "status": "open",
+      "title": "test-runner: verify always-dev main-linked runtime end to end",
+      "updated_at": "2026-09-02T15:16:10Z"
+    },
+    "xtrm-lk07w.7": {
+      "_type": "issue",
+      "comment_count": 0,
+      "created_at": "2026-08-28T13:13:01Z",
+      "created_by": "jaggerxtrm",
+      "dependencies": [
+        {
+          "created_at": "2026-08-28T15:13:01Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w",
+          "issue_id": "xtrm-lk07w.7",
+          "metadata": "{}",
+          "type": "parent-child"
+        },
+        {
+          "created_at": "2026-09-02T15:16:12Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w.19",
+          "issue_id": "xtrm-lk07w.7",
+          "metadata": "{}",
+          "type": "blocks"
+        },
+        {
+          "created_at": "2026-08-28T15:13:01Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-lk07w.6",
+          "issue_id": "xtrm-lk07w.7",
+          "metadata": "{}",
+          "type": "blocks"
+        },
+        {
+          "created_at": "2026-09-02T15:53:40Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-qs9in",
+          "issue_id": "xtrm-lk07w.7",
+          "metadata": "{}",
+          "type": "blocks"
+        }
+      ],
+      "dependency_count": 3,
+      "dependent_count": 0,
+      "description": "## PROBLEM\nLocal readiness does not make the feature available to other machines. Publication is irreversible and must occur only after evidence and explicit operator approval.\n\n## SUCCESS\nAfter explicit approval, the reviewed Specialists version is published with the intended dist-tag, registry metadata is verified, a fresh isolated install and v3.21.5→latest update pass, Core's version checker reports the new latest, and the post-release smoke remains green.\n\n## SCOPE\nnpm publication of @jaggerxtrm/specialists only, tag/release metadata required by repository policy, post-publish isolated install/update checks, and final epic closure.\n\n## NON_GOALS\n- No xtrm-tools or service-knowledge package publication unless a separate reviewed change requires it.\n- No publication before operator approval.\n\n## CONSTRAINTS\nSCRUTINY: critical. Human decision required. Verify npm identity/auth/2FA/trusted publishing immediately before action. Never force-push or republish an existing version. On any preflight mismatch, stop without side effects.\n\n## VALIDATION\n- [ ] Reviewer PASS and all prior children closed.\n- [ ] Operator explicitly approves npm publish.\n- [ ] npm view reports expected version, dist-tag, integrity, and package metadata.\n- [ ] Fresh isolated latest install exercises native extension forwarding.\n- [ ] Upgrade from 3.21.5 to latest preserves user config and passes sp doctor/list/validate.\n- [ ] Post-release Core smoke/version check passes.\n\n## OUTPUT\nPublish decision, command and registry result, package integrity, post-release smoke artifacts, or exact no-publish blocker.",
+      "id": "xtrm-lk07w.7",
+      "issue_type": "decision",
+      "labels": [
+        "contract:ready"
+      ],
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "status": "open",
+      "title": "Publish Specialists release and verify latest update",
+      "updated_at": "2026-08-28T13:13:01Z"
+    }
+  },
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:52:11Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qs9in",
+        "issue_id": "xtrm-lk07w.18",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-lk07w.18",
+      "source_field": "dependencies",
+      "target": "xtrm-qs9in",
+      "target_present_in_snapshot": true,
+      "target_title": "bug: make global-skill validation cleanup transactional and non-destructive",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-28T15:13:01Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w.6",
+        "issue_id": "xtrm-lk07w.7",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-lk07w.7",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w.6",
+      "target_present_in_snapshot": true,
+      "target_title": "reviewer: certify extension release readiness",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:53:40Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qs9in",
+        "issue_id": "xtrm-lk07w.7",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-lk07w.7",
+      "source_field": "dependencies",
+      "target": "xtrm-qs9in",
+      "target_present_in_snapshot": true,
+      "target_title": "bug: make global-skill validation cleanup transactional and non-destructive",
+      "type": "blocks"
+    }
+  ],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-lk07w.16"
+      },
+      {
+        "children": [],
+        "id": "xtrm-lk07w.17"
+      },
+      {
+        "children": [],
+        "id": "xtrm-lk07w.18"
+      },
+      {
+        "children": [],
+        "id": "xtrm-lk07w.19"
+      },
+      {
+        "children": [],
+        "id": "xtrm-lk07w.7"
+      }
+    ],
+    "id": "xtrm-lk07w"
+  },
+  "issues": {
+    "xtrm-lk07w": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-08-28T13:12:49Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nSpecialists currently starts Pi with --no-extensions and reconstructs a hardcoded extension set in two separate spawn paths. The approved design and native Pi probes show that execution.extensions can instead select path/npm/git sources and each enabled source can be forwarded as one explicit -e argument, but the runtime, package artifact, update path, and clean-machine evidence do not yet implement or prove that outcome.\n\n## SUCCESS\nA released-candidate Specialists build forwards configured sources identically through PiAgentSession and direct script/serve execution, preserves user overrides across package update, loads Service Knowledge from its standalone package, and passes unit, integration, packed-artifact, local xt build, isolated-install, upgrade, and clean-machine smoke gates. Publication remains a separately approved irreversible action after reviewer PASS.\n\n## SCOPE\n/home/dawid/dev/specialists runtime/schema/loader/config/docs/tests/dist/release artifacts; Core's existing local RC pack/install/update smoke surfaces and design document; local isolated HOME/prefix/container validation using packed artifacts.\n\n## NON_GOALS\n- No custom extension package resolver or separate extensions.json.\n- No Core Pi bundle growth or arbitrary vendoring.\n- No npm publish, tag, or force-push without explicit operator confirmation after all pre-release gates.\n- No rewrite of Pi or xt interactive ambient extension discovery.\n\n## CONSTRAINTS\nSCRUTINY: high. Base Specialists work on exact origin/master 79dbecc82789e8cbc02b733c50cd4c7d867043e1; do not inherit the dirty local checkout or unmerged acc7e163. PiAgentSession impact is HIGH (8 direct, 182 depth-3); applyOverrideFields impact is CRITICAL (15 processes), so tests must precede implementation and preserve legacy gitnexus/serena semantics. No new dependency. Log only ordered configured source identifiers; never prompts, credentials, or environment values. Publication is operator-only.\n\n## VALIDATION\n- [ ] Focused schema/loader/runner/session/script-runner tests pass.\n- [ ] Full Specialists lint, test, build, package payload, and attestation gates pass.\n- [ ] Both Pi spawn paths produce identical repeated -e ordering and remote-source offline behavior.\n- [ ] Packed Specialists artifact installs over v3.21.5 in an isolated prefix and preserves ~/.config/specialists/user.json extension fields.\n- [ ] Local packed xt + Specialists artifacts pass existing installed-artifact/update suite and clean-machine/container smoke or an evidenced equivalent.\n- [ ] Security auditor and reviewer PASS on cumulative release candidate.\n- [ ] Post-publication latest install/update smoke is planned but not executed before explicit approval.\n\n## OUTPUT\nCross-repo completion report with commits/PRs, artifact versions and hashes, exact pass/fail counts, local build/install/update commands, smoke artifact paths, security/reviewer verdicts, publish decision, and any residual platform limitations.\n\n## REFERENCES\nCore design commit 21fa05cc, packages/pi-extensions/docs/specialist-extension-injection-design.md. Native probes: xtrm-qejmp. Recent state: Core PR #607 and Specialists PR #271 are latest merged surfaces; Specialists origin/master is 79dbecc8.",
+        "id": "xtrm-lk07w",
+        "issue_type": "epic",
+        "labels": [
+          "contract:ready"
+        ],
+        "notes": "Specialists-local execution epic: unitAI-jndsb. Mapping: xtrm-lk07w.1→unitAI-jndsb.1 implementation; .2→unitAI-jndsb.2 tests; .3→unitAI-jndsb.3 RC; .5→unitAI-jndsb.4 security; .6→unitAI-jndsb.5 review.\nRelease gap discovered 2026-09-02: repo skills layout v2 stores Service Knowledge under .xtrm/skills/<pack>/service-knowledge; automatic logical-name resolution and live xt claude/pi/sp run smoke are tracked by xtrm-lk07w.14-.15 and Specialists unitAI-jndsb.11-.13. Publication remains blocked on this matrix.",
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-28T13:13:41Z",
+        "status": "in_progress",
+        "title": "Ship manifest-configured native Pi extensions end to end",
+        "updated_at": "2026-09-02T00:03:06Z"
+      }
+    },
+    "xtrm-lk07w.16": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "comment_count": 0,
+        "created_at": "2026-09-02T15:16:08Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-09-02T15:16:08Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w",
+            "issue_id": "xtrm-lk07w.16",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "## PROBLEM\nCore commit eede9290 is fully validated but exists only on xt/core-pack-skill and has no PR. The always-dev runtime cannot follow main until this code is integrated.\n\n## SUCCESS\nA reviewed Core PR lands the exact security-approved production implementation and proof-only tests onto current origin/main without semantic drift. Main is clean and contains the accepted commit content.\n\n## SCOPE\nCore branch integration, conflict resolution, existing resolver/test/dist surfaces, PR creation, CI, and merge.\n\n## NON_GOALS\nNo npm publication. No redesign. Production launch utilities and cli/dist must remain equivalent to accepted eede9290/a9d40d76 constraints.\n\n## CONSTRAINTS\nUse an isolated branch/worktree. Preserve security-approved production bytes unless current main requires an explicitly reviewed reconciliation. Run GitNexus impact/detect and all existing gates. Never edit local main directly.\n\n## VALIDATION\n- [ ] Cumulative diff matches accepted scope.\n- [ ] 306-proof suite or current equivalent passes.\n- [ ] Typecheck, diff, dist parity, and production equivalence pass.\n- [ ] Reviewer/security gates accept the exact PR head.\n- [ ] PR merges to origin/main.\n\n## LIBRARIES\nN/A — integration of existing code only.\n\n## OUTPUT\nPR URL, merged commit, exact test counts, audit verdicts, and any reconciliation delta.",
+        "id": "xtrm-lk07w.16",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready"
+        ],
+        "notes": "Paused before any integration edit: operator reported ~/.xtrm skill loss caused by validation cleanup. Resume only after global skill recovery is verified.",
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "started_at": "2026-09-02T15:16:41Z",
+        "status": "blocked",
+        "title": "integration: land validated Core resolver on main",
+        "updated_at": "2026-09-02T15:46:22Z"
+      }
+    },
+    "xtrm-lk07w.17": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "comment_count": 0,
+        "created_at": "2026-09-02T15:16:09Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-09-02T15:16:09Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w",
+            "issue_id": "xtrm-lk07w.17",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "## PROBLEM\nSpecialists runtime commit f263a228 and README commit 49c6501e are independently validated but neither is in origin/master and neither has a PR. The README branch is separate from the runtime branch.\n\n## SUCCESS\nA reviewed Specialists integration PR combines the accepted runtime/dist/config stack and README-only documentation onto current origin/master, resolves lineage safely, and lands without changing established runtime contracts.\n\n## SCOPE\nSpecialists f263a228 lineage, README 49c6501e content, release-facing documentation consistency required for main, integration tests, PR, CI, and merge.\n\n## NON_GOALS\nNo npm publication. Do not silently waive unitAI-641h0 or unitAI-x64ys. Do not claim release attestation before exact merged-artifact validation.\n\n## CONSTRAINTS\nUse an isolated branch/worktree from current origin/master. Preserve accepted trust semantics and built dist. Reconcile README by content if commit ancestry differs. Never edit local master directly.\n\n## VALIDATION\n- [ ] Full suite, focused trust, integration, build, lint, package smoke, and diff checks pass.\n- [ ] README claims match the integrated head.\n- [ ] Reviewer, seconder, and security accept exact PR head.\n- [ ] PR merges to origin/master.\n\n## LIBRARIES\nN/A — integration of existing code/documentation only.\n\n## OUTPUT\nPR URL, merged commit, changed files, exact gates, and residual blockers.",
+        "id": "xtrm-lk07w.17",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready"
+        ],
+        "notes": "Paused before any integration edit: operator reported ~/.xtrm skill loss caused by validation cleanup. Resume only after global skill recovery is verified.",
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "started_at": "2026-09-02T15:16:42Z",
+        "status": "blocked",
+        "title": "integration: land Specialists runtime and README on master",
+        "updated_at": "2026-09-02T15:46:23Z"
+      }
+    },
+    "xtrm-lk07w.18": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-09-02T15:16:10Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-09-02T15:16:10Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w",
+            "issue_id": "xtrm-lk07w.18",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-09-02T15:16:11Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w.16",
+            "issue_id": "xtrm-lk07w.18",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-09-02T15:16:11Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w.17",
+            "issue_id": "xtrm-lk07w.18",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-09-02T15:52:11Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qs9in",
+            "issue_id": "xtrm-lk07w.18",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 3,
+        "dependent_count": 1,
+        "description": "## PROBLEM\nThis workstation is always-dev: global xt/xtrm/sp/specialists commands must use local default-branch builds rather than wait for npm publication. The current globals are restored package copies and do not contain the accepted candidate bytes.\n\n## SUCCESS\nAfter Core and Specialists integration PRs merge, both repositories are updated to exact merged default-branch heads, built, and linked through the Node v24.15.0 global package/bin locations. Real shell commands resolve to those local main builds and survive a new shell.\n\n## SCOPE\nLocal main checkout updates, documented project builds, npm/global package links or the existing repository-native link mechanism, bin links, version/hash capture, and rollback metadata.\n\n## NON_GOALS\nNo npm publish/tag. No links to temporary validation worktrees or feature branches. No modification of unrelated global tools.\n\n## CONSTRAINTS\nWait for both integration merges. Snapshot existing package trees and links before replacement. Keep a rollback command. Link only canonical local main checkouts. Preserve user config and global skills.\n\n## VALIDATION\n- [ ] xt/xtrm resolve to the Core local-main build.\n- [ ] sp/specialists resolve to the Specialists local-master build.\n- [ ] Runtime hashes match freshly built merged heads.\n- [ ] New-shell smoke passes.\n- [ ] Rollback metadata is complete.\n\n## LIBRARIES\nReuse npm link or the repositories existing local-link workflow; no new dependency.\n\n## OUTPUT\nExact merged heads, build commands, link targets, hashes, new-shell smoke, and rollback instructions.",
+        "id": "xtrm-lk07w.18",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "dev-runtime: link global commands to local main builds",
+        "updated_at": "2026-09-02T15:16:10Z"
+      }
+    },
+    "xtrm-lk07w.19": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-09-02T15:16:10Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-09-02T15:16:10Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w",
+            "issue_id": "xtrm-lk07w.19",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-09-02T15:16:12Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w.18",
+            "issue_id": "xtrm-lk07w.19",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 1,
+        "description": "## PROBLEM\nLink creation alone does not prove that the real operator commands execute the merged main code across repositories.\n\n## SUCCESS\nA post-link smoke runs real xt Pi/Claude role binding and Specialists pre-script execution from the main-linked commands, confirms project-pack machinery and extension forwarding, preserves repository/user state, and leaves zero temporary residue.\n\n## SCOPE\nInstalled command resolution, main-head hashes, one bounded consumer smoke, configuration preservation, logs, restoration fallback, and cleanup inventory.\n\n## NON_GOALS\nNo publication. No full reconciliation workflow. No waiver of security/runtime blockers.\n\n## CONSTRAINTS\nUse audit-only prompts and bounded sessions. Capture command paths and package realpaths. Do not mutate production consumer knowledge. Stop and roll back links on a main-build mismatch.\n\n## VALIDATION\n- [ ] Command/package realpaths point to local default-branch checkouts.\n- [ ] Project-pack resolution and repo-local machinery execute through real commands.\n- [ ] Extension forwarding remains active.\n- [ ] Consumer and global config hashes remain unchanged.\n- [ ] Cleanup inventory is zero.\n- [ ] Reviewer accepts the main-linked runtime receipt.\n\n## LIBRARIES\nN/A — existing commands and smoke harnesses.\n\n## OUTPUT\nMain-linked runtime receipt with exact paths, heads, hashes, smoke results, cleanup, and reviewer verdict.",
+        "id": "xtrm-lk07w.19",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "test-runner: verify always-dev main-linked runtime end to end",
+        "updated_at": "2026-09-02T15:16:10Z"
+      }
+    },
+    "xtrm-lk07w.7": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-08-28T13:13:01Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-28T15:13:01Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w",
+            "issue_id": "xtrm-lk07w.7",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-09-02T15:16:12Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w.19",
+            "issue_id": "xtrm-lk07w.7",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-28T15:13:01Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-lk07w.6",
+            "issue_id": "xtrm-lk07w.7",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-09-02T15:53:40Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qs9in",
+            "issue_id": "xtrm-lk07w.7",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 3,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nLocal readiness does not make the feature available to other machines. Publication is irreversible and must occur only after evidence and explicit operator approval.\n\n## SUCCESS\nAfter explicit approval, the reviewed Specialists version is published with the intended dist-tag, registry metadata is verified, a fresh isolated install and v3.21.5→latest update pass, Core's version checker reports the new latest, and the post-release smoke remains green.\n\n## SCOPE\nnpm publication of @jaggerxtrm/specialists only, tag/release metadata required by repository policy, post-publish isolated install/update checks, and final epic closure.\n\n## NON_GOALS\n- No xtrm-tools or service-knowledge package publication unless a separate reviewed change requires it.\n- No publication before operator approval.\n\n## CONSTRAINTS\nSCRUTINY: critical. Human decision required. Verify npm identity/auth/2FA/trusted publishing immediately before action. Never force-push or republish an existing version. On any preflight mismatch, stop without side effects.\n\n## VALIDATION\n- [ ] Reviewer PASS and all prior children closed.\n- [ ] Operator explicitly approves npm publish.\n- [ ] npm view reports expected version, dist-tag, integrity, and package metadata.\n- [ ] Fresh isolated latest install exercises native extension forwarding.\n- [ ] Upgrade from 3.21.5 to latest preserves user config and passes sp doctor/list/validate.\n- [ ] Post-release Core smoke/version check passes.\n\n## OUTPUT\nPublish decision, command and registry result, package integrity, post-release smoke artifacts, or exact no-publish blocker.",
+        "id": "xtrm-lk07w.7",
+        "issue_type": "decision",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "Publish Specialists release and verify latest update",
+        "updated_at": "2026-08-28T13:13:01Z"
+      }
+    }
+  },
+  "new_comments": {},
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:16:08Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w",
+        "issue_id": "xtrm-lk07w.16",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-lk07w.16",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:16:09Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w",
+        "issue_id": "xtrm-lk07w.17",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-lk07w.17",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:16:11Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w.16",
+        "issue_id": "xtrm-lk07w.18",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-lk07w.18",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w.16",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:16:11Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w.17",
+        "issue_id": "xtrm-lk07w.18",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-lk07w.18",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w.17",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:16:10Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w",
+        "issue_id": "xtrm-lk07w.18",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-lk07w.18",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:16:12Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w.18",
+        "issue_id": "xtrm-lk07w.19",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-lk07w.19",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w.18",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:16:10Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w",
+        "issue_id": "xtrm-lk07w.19",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-lk07w.19",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-09-02T15:16:12Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w.19",
+        "issue_id": "xtrm-lk07w.7",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-lk07w.7",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w.19",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-28T15:13:01Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-lk07w",
+        "issue_id": "xtrm-lk07w.7",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-lk07w.7",
+      "source_field": "dependencies",
+      "target": "xtrm-lk07w",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/core",
+  "root_id": "xtrm-lk07w",
+  "root_title": "Ship manifest-configured native Pi extensions end to end",
+  "roundtrip": {
+    "base_package_sha256": "6d94a50da4bc7086071bb8378186ba1d64b3aa8cdcd7591c68a0c6d91edbf5cb",
+    "base_record_sha256": {
+      "xtrm-lk07w": "1fac010224abf172593ebbf1ce1b76cd554e6b9b5d35375cbbc141d1fa8867bd",
+      "xtrm-lk07w.16": "39cc0983f14316f11560ec952c19f1774e03f805c467e9bc835a5984caf56a69",
+      "xtrm-lk07w.17": "938efab20b33cb862d3e28bef9e3dec6983b95881c3311045231ab932fa362aa",
+      "xtrm-lk07w.18": "4dd16ded3315c8e05971f07d5d65d0e748b1e959873c0d13cc0ac00920d0b001",
+      "xtrm-lk07w.19": "53b13d262ec0f2e4e1bf3b0371a838b956dd78ea42d97e4b628415238db18a12",
+      "xtrm-lk07w.7": "fd612ac195005514341546fc23a0946415de52e5972b9ff8cdbf0069f088920a"
+    },
+    "edit_contract": "modify desired_issues and new_comments only; issues.*.source is immutable base state",
+    "prepared_at": "2026-09-02T17:50:45Z",
+    "schema_version": "xtrm.board-audit.roundtrip.v1"
+  },
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}
