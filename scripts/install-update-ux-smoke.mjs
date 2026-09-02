@@ -110,6 +110,9 @@ try {
   mkdirSync(userSkill, { recursive: true });
   mkdirSync(path.dirname(userHook), { recursive: true });
   writeFileSync(path.join(retiredSkill, 'SKILL.md'), '# retired\n');
+  writeFileSync(path.join(home, '.xtrm', 'skills', '.installer-manifest.json'), JSON.stringify({
+    default: ['using-specialists-v3/SKILL.md'],
+  }, null, 2));
   writeFileSync(path.join(userSkill, 'SKILL.md'), '# user\n');
   writeFileSync(userHook, `// ${secret}\n`);
   symlinkSync('../default/using-specialists-v3', activeRetiredSkill);
