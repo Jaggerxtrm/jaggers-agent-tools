@@ -56916,28 +56916,618 @@ function resolveSkillPath(mainRepoRoot, rawPath) {
   if (migratedPath !== rawPath && (0, import_node_fs2.existsSync)(migratedResolved)) return migratedResolved;
   return repoResolved;
 }
-function resolveRequestedSkills(mainRepoRoot, requested) {
+function errnoCode(error51) {
+  return error51 instanceof Error ? error51.code : void 0;
+}
+function isEnoent(error51) {
+  return errnoCode(error51) === "ENOENT";
+}
+function isPathInside(child, parent) {
+  const rel = import_node_path13.default.relative(parent, child);
+  return rel === "" || !rel.startsWith("..") && !import_node_path13.default.isAbsolute(rel);
+}
+function sanitizeDiagnosticName(value) {
+  const escaped = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
+    return `\\u{${ch.charCodeAt(0).toString(16).padStart(2, "0")}}`;
+  });
+  return escaped.length > 256 ? `${escaped.slice(0, 256)}\u2026` : escaped;
+}
+function describeSkillRequest(mainRepoRoot, skill) {
+  if (!import_node_path13.default.isAbsolute(skill)) return sanitizeDiagnosticName(skill);
+  const relative = import_node_path13.default.relative(mainRepoRoot, skill);
+  return sanitizeDiagnosticName(isPathInside(skill, mainRepoRoot) ? relative : import_node_path13.default.basename(skill));
+}
+function probePackSkillDir(skillDir, skillFile, canonicalSkillsRoot, describe3) {
+  let dirStat;
+  try {
+    dirStat = (0, import_node_fs2.lstatSync)(skillDir);
+  } catch (error51) {
+    if (isEnoent(error51)) return null;
+    throw new Error(`cannot probe project-pack skill '${sanitizeDiagnosticName(describe3)}': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) {
+    throw new Error(
+      `project-pack skill '${sanitizeDiagnosticName(describe3)}' slot is not a real directory.`
+    );
+  }
+  let fileStat;
+  try {
+    fileStat = (0, import_node_fs2.lstatSync)(skillFile);
+  } catch (error51) {
+    if (isEnoent(error51)) {
+      throw new Error(`project-pack skill '${sanitizeDiagnosticName(describe3)}' has no ${SKILL_FILE_NAME}.`);
+    }
+    throw new Error(`cannot probe ${SKILL_FILE_NAME} for project-pack skill '${sanitizeDiagnosticName(describe3)}': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
+    throw new Error(
+      `project-pack skill '${sanitizeDiagnosticName(describe3)}' ${SKILL_FILE_NAME} is not a regular file.`
+    );
+  }
+  let canonicalFile;
+  try {
+    canonicalFile = (0, import_node_fs2.realpathSync)(skillFile);
+  } catch (error51) {
+    throw new Error(`cannot canonicalize project-pack skill '${sanitizeDiagnosticName(describe3)}': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  if (!isPathInside(canonicalFile, canonicalSkillsRoot)) {
+    throw new Error(`project-pack skill '${sanitizeDiagnosticName(describe3)}' escapes the skills root.`);
+  }
+  try {
+    (0, import_node_fs2.accessSync)(skillFile, import_node_fs2.constants.R_OK);
+  } catch (error51) {
+    throw new Error(`cannot read project-pack skill '${sanitizeDiagnosticName(describe3)}': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  return skillFile;
+}
+function probeOptionalPackSkillFile(skillFile, canonicalSkillsRoot, describe3) {
+  let stat;
+  try {
+    stat = (0, import_node_fs2.lstatSync)(skillFile);
+  } catch (error51) {
+    if (isEnoent(error51)) return null;
+    throw new Error(`cannot probe project-pack skill '${sanitizeDiagnosticName(describe3)}': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error(
+      `project-pack skill '${sanitizeDiagnosticName(describe3)}' ${SKILL_FILE_NAME} is not a regular file.`
+    );
+  }
+  let canonicalFile;
+  try {
+    canonicalFile = (0, import_node_fs2.realpathSync)(skillFile);
+  } catch (error51) {
+    throw new Error(`cannot canonicalize project-pack skill '${sanitizeDiagnosticName(describe3)}': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  if (!isPathInside(canonicalFile, canonicalSkillsRoot)) {
+    throw new Error(`project-pack skill '${sanitizeDiagnosticName(describe3)}' escapes the skills root.`);
+  }
+  try {
+    (0, import_node_fs2.accessSync)(skillFile, import_node_fs2.constants.R_OK);
+  } catch (error51) {
+    throw new Error(`cannot read project-pack skill '${sanitizeDiagnosticName(describe3)}': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  return skillFile;
+}
+function resolveRepoPackSkill(mainRepoRoot, skillName) {
+  if (!isSafeRuntimeLinkName(skillName)) return null;
+  const skillsRoot = resolveSkillsRoot(mainRepoRoot);
+  let entries;
+  try {
+    entries = (0, import_node_fs2.readdirSync)(skillsRoot, { withFileTypes: true });
+  } catch (error51) {
+    if (isEnoent(error51)) return null;
+    throw new Error(`cannot enumerate project pack root '.xtrm/skills': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  let canonicalRepoRoot;
+  let canonicalSkillsRoot;
+  try {
+    canonicalRepoRoot = (0, import_node_fs2.realpathSync)(mainRepoRoot);
+    canonicalSkillsRoot = (0, import_node_fs2.realpathSync)(skillsRoot);
+  } catch (error51) {
+    if (isEnoent(error51)) return null;
+    throw new Error(`cannot canonicalize project pack root '.xtrm/skills': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  if (!isPathInside(canonicalSkillsRoot, canonicalRepoRoot)) {
+    throw new Error("project pack root '.xtrm/skills' escapes the consumer checkout root.");
+  }
+  const matches = [];
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) {
+      if (!RESERVED_PACK_NAMES.has(entry.name)) {
+        throw new Error(
+          `project pack '${sanitizeDiagnosticName(entry.name)}' at .xtrm/skills/${sanitizeDiagnosticName(entry.name)} is a symlink; packs must be real directories.`
+        );
+      }
+      continue;
+    }
+    if (!entry.isDirectory()) continue;
+    if (RESERVED_PACK_NAMES.has(entry.name)) continue;
+    const packPath = import_node_path13.default.join(skillsRoot, entry.name);
+    const rootSkill = probeOptionalPackSkillFile(
+      import_node_path13.default.join(packPath, SKILL_FILE_NAME),
+      canonicalSkillsRoot,
+      `${sanitizeDiagnosticName(entry.name)}/${SKILL_FILE_NAME}`
+    );
+    if (rootSkill) {
+      const runtimeName = readSkillRuntimeNameSync(rootSkill, entry.name);
+      assertSafeRuntimeIdentity(runtimeName, `${sanitizeDiagnosticName(entry.name)}/${SKILL_FILE_NAME}`);
+      if (runtimeName === skillName || entry.name === skillName) {
+        matches.push({
+          runtimeName,
+          canonicalPath: (0, import_node_fs2.realpathSync)(rootSkill),
+          packName: entry.name,
+          repoRelativeDir: import_node_path13.default.join(".xtrm", "skills", entry.name)
+        });
+      }
+    }
+    let children;
+    try {
+      children = (0, import_node_fs2.readdirSync)(packPath, { withFileTypes: true });
+    } catch (error51) {
+      throw new Error(`cannot enumerate pack '.xtrm/skills/${sanitizeDiagnosticName(entry.name)}': ${errnoCode(error51) ?? "UnknownError"}`);
+    }
+    for (const child of children) {
+      if (child.isSymbolicLink()) {
+        if (child.name === skillName) {
+          throw new Error(
+            `project-pack skill '${sanitizeDiagnosticName(child.name)}' slot in pack '${sanitizeDiagnosticName(entry.name)}' is a symlink; must be a real directory.`
+          );
+        }
+        continue;
+      }
+      if (!child.isDirectory()) {
+        if (child.name === skillName) {
+          throw new Error(
+            `project-pack skill '${sanitizeDiagnosticName(child.name)}' slot in pack '${sanitizeDiagnosticName(entry.name)}' is not a real directory.`
+          );
+        }
+        continue;
+      }
+      const slotDir = import_node_path13.default.join(packPath, child.name);
+      const slotFile = import_node_path13.default.join(slotDir, SKILL_FILE_NAME);
+      let slotStat;
+      try {
+        slotStat = (0, import_node_fs2.lstatSync)(slotFile);
+      } catch (error51) {
+        if (isEnoent(error51)) {
+          if (child.name === skillName) {
+            throw new Error(
+              `project-pack skill '${sanitizeDiagnosticName(child.name)}' slot in pack '${sanitizeDiagnosticName(entry.name)}' has no ${SKILL_FILE_NAME}.`
+            );
+          }
+          continue;
+        }
+        throw new Error(`cannot probe ${SKILL_FILE_NAME} for pack '${sanitizeDiagnosticName(entry.name)}': ${errnoCode(error51) ?? "UnknownError"}`);
+      }
+      if (slotStat.isSymbolicLink() || !slotStat.isFile()) {
+        throw new Error(
+          `project-pack skill '${sanitizeDiagnosticName(child.name)}' slot in pack '${sanitizeDiagnosticName(entry.name)}' ${SKILL_FILE_NAME} is not a regular file.`
+        );
+      }
+      const describe3 = `${sanitizeDiagnosticName(entry.name)}/${sanitizeDiagnosticName(child.name)}/${SKILL_FILE_NAME}`;
+      const probed = probePackSkillDir(slotDir, slotFile, canonicalSkillsRoot, describe3);
+      if (!probed) continue;
+      const runtimeName = readSkillRuntimeNameSync(slotFile, child.name);
+      assertSafeRuntimeIdentity(runtimeName, describe3);
+      if (runtimeName !== skillName && child.name !== skillName) continue;
+      matches.push({
+        runtimeName,
+        canonicalPath: (0, import_node_fs2.realpathSync)(slotFile),
+        packName: entry.name,
+        repoRelativeDir: import_node_path13.default.join(".xtrm", "skills", entry.name, child.name)
+      });
+    }
+  }
+  if (matches.length === 0) return null;
+  if (matches.length > 1) {
+    const owners = matches.map((match) => sanitizeDiagnosticName(match.repoRelativeDir)).sort((a, b) => a.localeCompare(b));
+    throw new Error(
+      `skill '${sanitizeDiagnosticName(skillName)}' is ambiguous: matches project packs '${owners.join("', '")}'. Enable one or pass an explicit path.`
+    );
+  }
+  return matches[0].canonicalPath;
+}
+function probeResolvedPackDirect(mainRepoRoot, skill, direct) {
+  const describedSkill = describeSkillRequest(mainRepoRoot, skill);
+  let canonicalSkillsRoot;
+  try {
+    const canonicalRepoRoot = (0, import_node_fs2.realpathSync)(mainRepoRoot);
+    canonicalSkillsRoot = (0, import_node_fs2.realpathSync)(resolveSkillsRoot(mainRepoRoot));
+    if (!isPathInside(canonicalSkillsRoot, canonicalRepoRoot)) {
+      throw new Error("project pack root '.xtrm/skills' escapes the consumer checkout root.");
+    }
+  } catch (error51) {
+    if (error51 instanceof Error && error51.message.includes("escapes the consumer checkout root")) throw error51;
+    if (isEnoent(error51)) {
+      throw new Error(`skill '${describedSkill}' is not a valid project-pack skill`);
+    }
+    throw new Error(`cannot canonicalize project pack root '.xtrm/skills': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  const skillDir = packSkillDir(direct);
+  const slotFile = import_node_path13.default.join(skillDir, SKILL_FILE_NAME);
+  const probed = probePackSkillDir(
+    skillDir,
+    slotFile,
+    canonicalSkillsRoot,
+    sanitizeDiagnosticName(import_node_path13.default.relative(mainRepoRoot, skillDir))
+  );
+  if (!probed) {
+    throw new Error(`skill '${describedSkill}' is not a valid project-pack skill`);
+  }
+  const entry = resolveProjectPackEntry(mainRepoRoot, direct);
+  if (!entry) {
+    throw new Error(`skill '${describedSkill}' is not a valid project-pack skill`);
+  }
+  return slotFile;
+}
+function resolveRequestedSkills(mainRepoRoot, requested, runtime = "pi") {
+  const repoView = runtime === "pi" ? ".pi" : runtime === "claude" ? ".claude" : ".agents";
+  const homeView = runtime === "pi" ? import_node_path13.default.join(".pi", "agent", "skills") : import_node_path13.default.join(repoView, "skills");
   const resolved = requested.map((skill) => {
+    const pinnedPackPath = !import_node_path13.default.isAbsolute(skill) && !skill.startsWith("~") ? isProjectPackShapePath(mainRepoRoot, import_node_path13.default.resolve(mainRepoRoot, skill)) ? import_node_path13.default.resolve(mainRepoRoot, skill) : null : null;
+    if (pinnedPackPath) {
+      return probeResolvedPackDirect(mainRepoRoot, skill, pinnedPackPath);
+    }
     const direct = resolveSkillPath(mainRepoRoot, skill);
+    if (isProjectPackShapePath(mainRepoRoot, direct)) {
+      return probeResolvedPackDirect(mainRepoRoot, skill, direct);
+    }
     if ((0, import_node_fs2.existsSync)(direct)) {
       const valid = (0, import_node_fs2.lstatSync)(direct).isDirectory() ? (0, import_node_fs2.existsSync)(import_node_path13.default.join(direct, "SKILL.md")) : import_node_path13.default.basename(direct) === "SKILL.md";
-      if (!valid) throw new Error(`skill '${skill}' is not a skill directory or SKILL.md`);
+      if (!valid) throw new Error(`skill '${describeSkillRequest(mainRepoRoot, skill)}' is not a skill directory or SKILL.md`);
       return direct;
     }
+    const repoRuntimeView = import_node_path13.default.join(mainRepoRoot, repoView, "skills", skill, SKILL_FILE_NAME);
+    if ((0, import_node_fs2.existsSync)(repoRuntimeView)) return repoRuntimeView;
+    const repoPackSkill = resolveRepoPackSkill(mainRepoRoot, skill);
     const candidates = [
-      import_node_path13.default.join(mainRepoRoot, ".pi", "skills", skill, "SKILL.md"),
-      import_node_path13.default.join(mainRepoRoot, ".claude", "skills", skill, "SKILL.md"),
-      import_node_path13.default.join(mainRepoRoot, ".agents", "skills", skill, "SKILL.md"),
-      import_node_path13.default.join(import_node_os7.default.homedir(), ".pi", "agent", "skills", skill, "SKILL.md"),
-      import_node_path13.default.join(import_node_os7.default.homedir(), ".claude", "skills", skill, "SKILL.md"),
-      import_node_path13.default.join(import_node_os7.default.homedir(), ".agents", "skills", skill, "SKILL.md"),
-      import_node_path13.default.join(import_node_os7.default.homedir(), ".xtrm", "skills", "default", skill, "SKILL.md")
+      ...repoPackSkill ? [repoPackSkill] : [],
+      import_node_path13.default.join(import_node_os7.default.homedir(), homeView, skill, SKILL_FILE_NAME),
+      import_node_path13.default.join(import_node_os7.default.homedir(), ".xtrm", "skills", "default", skill, SKILL_FILE_NAME)
     ];
     const found = candidates.find(import_node_fs2.existsSync);
-    if (!found) throw new Error(`skill '${skill}' not found`);
+    if (!found) throw new Error(`skill '${describeSkillRequest(mainRepoRoot, skill)}' not found`);
     return found;
   });
   return [...new Set(resolved.map((skillPath) => (0, import_node_fs2.realpathSync)(skillPath)))];
+}
+function isProjectPackShapePath(mainRepoRoot, resolvedPath) {
+  const rel = import_node_path13.default.relative(mainRepoRoot, resolvedPath);
+  if (rel.startsWith("..") || import_node_path13.default.isAbsolute(rel)) return false;
+  const segments = rel.split(import_node_path13.default.sep);
+  if (segments[0] !== ".xtrm" || segments[1] !== "skills") return false;
+  if (segments.length === 3) return !RESERVED_PACK_NAMES.has(segments[2]);
+  if (segments.length === 4 && segments[3] === SKILL_FILE_NAME) return true;
+  if (segments.length === 4) return !RESERVED_PACK_NAMES.has(segments[2]);
+  if (segments.length === 5 && segments[4] === SKILL_FILE_NAME) return !RESERVED_PACK_NAMES.has(segments[2]);
+  return false;
+}
+function isProjectPackSkillPath(mainRepoRoot, resolvedPath) {
+  if (!isProjectPackShapePath(mainRepoRoot, resolvedPath)) return false;
+  const rel = import_node_path13.default.relative(mainRepoRoot, resolvedPath).split(import_node_path13.default.sep);
+  const packName = rel[2];
+  const isRootForm = rel.length === 3 || rel.length === 4 && rel[3] === SKILL_FILE_NAME;
+  const slot = isRootForm ? import_node_path13.default.join(mainRepoRoot, ".xtrm", "skills", packName, SKILL_FILE_NAME) : import_node_path13.default.join(mainRepoRoot, ".xtrm", "skills", packName, rel[3], SKILL_FILE_NAME);
+  return (0, import_node_fs2.existsSync)(slot);
+}
+function readSkillFrontmatterNameSync(skillFile) {
+  let content;
+  try {
+    content = (0, import_node_fs2.readFileSync)(skillFile, { encoding: "utf8" });
+  } catch (error51) {
+    throw new Error(`cannot read project-pack skill frontmatter at '${sanitizeDiagnosticName(import_node_path13.default.basename(import_node_path13.default.dirname(skillFile)))}': ${errnoCode(error51) ?? "UnknownError"}`);
+  }
+  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatter) return null;
+  const nameLine = frontmatter[1].split(/\r?\n/).find((line) => /^name\s*:/.test(line));
+  if (!nameLine) return null;
+  return nameLine.replace(/^name\s*:/, "").trim().replace(/^["']|["']$/g, "").trim() || null;
+}
+function readSkillRuntimeNameSync(skillFile, fallbackName) {
+  return readSkillFrontmatterNameSync(skillFile) ?? fallbackName;
+}
+function assertSafeRuntimeIdentity(runtimeName, describe3) {
+  if (!isSafeRuntimeName(runtimeName) || !isSafeRuntimeLinkName(runtimeName)) {
+    throw new Error(
+      `project-pack skill '${sanitizeDiagnosticName(describe3)}' declares unsafe runtime name '${sanitizeDiagnosticName(runtimeName)}'.`
+    );
+  }
+}
+function packSkillDir(resolvedPath) {
+  return import_node_path13.default.basename(resolvedPath) === SKILL_FILE_NAME ? import_node_path13.default.dirname(resolvedPath) : resolvedPath;
+}
+function resolveProjectPackEntry(mainRepoRoot, resolvedPath) {
+  if (!isProjectPackSkillPath(mainRepoRoot, resolvedPath)) return null;
+  const rel = import_node_path13.default.relative(mainRepoRoot, resolvedPath).split(import_node_path13.default.sep);
+  const isRootForm = rel.length === 3 || rel.length === 4 && rel[3] === SKILL_FILE_NAME;
+  const packName = rel[2];
+  const skillFile = isRootForm ? import_node_path13.default.join(mainRepoRoot, ".xtrm", "skills", packName, SKILL_FILE_NAME) : import_node_path13.default.join(mainRepoRoot, ".xtrm", "skills", packName, rel[3], SKILL_FILE_NAME);
+  if (!(0, import_node_fs2.existsSync)(skillFile)) return null;
+  const fallback = isRootForm ? packName : rel[3];
+  const runtimeName = readSkillRuntimeNameSync(skillFile, fallback);
+  const describe3 = isRootForm ? import_node_path13.default.join(".xtrm", "skills", packName, SKILL_FILE_NAME) : import_node_path13.default.join(".xtrm", "skills", packName, rel[3], SKILL_FILE_NAME);
+  assertSafeRuntimeIdentity(runtimeName, describe3);
+  return {
+    runtimeName,
+    canonicalPath: (0, import_node_fs2.realpathSync)(skillFile),
+    packName,
+    repoRelativeDir: isRootForm ? import_node_path13.default.join(".xtrm", "skills", packName) : import_node_path13.default.join(".xtrm", "skills", packName, rel[3])
+  };
+}
+function bindClaudePackNames(mainRepoRoot, roleDecls, rolePrefixNames, explicitRequests, runtime = "pi") {
+  const candidates = /* @__PURE__ */ new Map();
+  const add = (raw, name, isExplicit) => {
+    if (typeof raw !== "string" || !raw) return;
+    const resolved = resolveRequestedSkills(mainRepoRoot, [raw], runtime)[0];
+    const entry = resolved ? resolveProjectPackEntry(mainRepoRoot, resolved) : null;
+    if (!entry) return;
+    const bucket = candidates.get(entry.canonicalPath) ?? { entry, names: /* @__PURE__ */ new Set(), roleOwned: false, explicitOwned: false };
+    if (isExplicit) bucket.explicitOwned = true;
+    else bucket.roleOwned = true;
+    if (name) bucket.names.add(name);
+    candidates.set(entry.canonicalPath, bucket);
+  };
+  roleDecls.forEach((decl, i) => {
+    const requestedName = rolePrefixNames ? rolePrefixNames[i] : null;
+    const name = requestedName ?? (isSafeRuntimeLinkName(decl) && !import_node_path13.default.isAbsolute(decl) && !decl.includes(import_node_path13.default.sep) ? decl : null);
+    add(decl, name, false);
+  });
+  explicitRequests.forEach((req) => {
+    const name = isSafeRuntimeLinkName(req) && !import_node_path13.default.isAbsolute(req) && !req.includes(import_node_path13.default.sep) ? req : null;
+    add(req, name, true);
+  });
+  const byName = (entry) => import_node_path13.default.basename(entry.repoRelativeDir);
+  const roleEntries = [];
+  const explicitEntries = [];
+  for (const bucket of candidates.values()) {
+    const { entry, names } = bucket;
+    const slotAlias = byName(entry);
+    for (const name of names) {
+      if (name !== slotAlias && name !== entry.runtimeName) {
+        throw new Error(
+          `project-pack skill '${sanitizeDiagnosticName(entry.repoRelativeDir)}' is requested under '${sanitizeDiagnosticName(name)}', which is neither its slot name '${sanitizeDiagnosticName(slotAlias)}' nor its canonical runtime name '${sanitizeDiagnosticName(entry.runtimeName)}'. Remove the conflicting declaration.`
+        );
+      }
+    }
+    let bound;
+    if (names.has(slotAlias)) {
+      bound = slotAlias;
+    } else if (names.has(entry.runtimeName)) {
+      bound = entry.runtimeName;
+    } else {
+      bound = entry.runtimeName;
+    }
+    if (!isSafeRuntimeName(bound)) {
+      throw new Error(
+        `project-pack skill '${sanitizeDiagnosticName(entry.repoRelativeDir)}' has unsafe bound name '${sanitizeDiagnosticName(bound)}'.`
+      );
+    }
+    const named = { ...entry, name: bound };
+    if (bucket.roleOwned || !bucket.explicitOwned) roleEntries.push(named);
+    else explicitEntries.push(named);
+  }
+  return { roleEntries, explicitEntries };
+}
+function composeClaudeExplicitLines(mainRepoRoot, explicitSkillPaths, claudePackEntries, roleCommandNames) {
+  const lines = claudeExplicitLinesFor(mainRepoRoot, explicitSkillPaths, claudePackEntries).split(/\r?\n/).filter((line) => line.startsWith("/"));
+  return lines.filter((line) => !roleCommandNames.has(line.slice(1))).join("\n");
+}
+function composeClaudeRoleBlock(mainRepoRoot, roleDecls, spPrefixNames, roleEntries, runtime = "pi") {
+  const entryByPath = new Map(roleEntries.map((entry) => [entry.canonicalPath, entry]));
+  const emitted = /* @__PURE__ */ new Set();
+  const lines = [];
+  for (let i = 0; i < roleDecls.length; i += 1) {
+    let entry;
+    try {
+      const resolved = resolveRequestedSkills(mainRepoRoot, [roleDecls[i]], runtime)[0];
+      entry = resolved ? entryByPath.get((0, import_node_fs2.realpathSync)(resolved)) : void 0;
+    } catch {
+      entry = void 0;
+    }
+    if (entry) {
+      if (emitted.has(entry.canonicalPath)) continue;
+      emitted.add(entry.canonicalPath);
+      lines.push(`/${entry.name}`);
+      continue;
+    }
+    const name = spPrefixNames?.[i] ?? (import_node_path13.default.basename(roleDecls[i]) === SKILL_FILE_NAME ? import_node_path13.default.basename(import_node_path13.default.dirname(roleDecls[i])) : import_node_path13.default.basename(roleDecls[i]));
+    lines.push(`/${name}`);
+  }
+  return lines.length === 0 ? "" : `${lines.join("\n")}
+
+`;
+}
+function isSafeRuntimeName(name) {
+  return /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name);
+}
+function projectPackSkillName(mainRepoRoot, resolvedPath) {
+  const entry = resolveProjectPackEntry(mainRepoRoot, resolvedPath);
+  return entry && isSafeRuntimeName(entry.runtimeName) ? entry.runtimeName : null;
+}
+function normalizeClaudeEntry(mainRepoRoot, item) {
+  if (typeof item === "string") {
+    const entry = resolveProjectPackEntry(mainRepoRoot, item);
+    return entry ? { ...entry, name: entry.runtimeName } : null;
+  }
+  return item;
+}
+function assertClaudePackSkillsLoadable(mainRepoRoot, resolvedPaths) {
+  const identities = /* @__PURE__ */ new Map();
+  for (const item of resolvedPaths) {
+    const entry = normalizeClaudeEntry(mainRepoRoot, item);
+    if (!entry) continue;
+    const name = entry.name;
+    if (!isSafeRuntimeName(name)) {
+      throw new Error(
+        `project pack skill in '${sanitizeDiagnosticName(entry.repoRelativeDir)}' declares unsafe runtime name '${sanitizeDiagnosticName(name)}'.`
+      );
+    }
+    const existing = identities.get(name);
+    if (existing && existing.identity !== entry.canonicalPath) {
+      const firstRel = sanitizeDiagnosticName(entry.repoRelativeDir);
+      const secondRel = sanitizeDiagnosticName(existing.dir);
+      throw new Error(
+        `skill '/${sanitizeDiagnosticName(name)}' is declared from two different project packs (${firstRel} vs ${secondRel}). Remove the duplicate declaration.`
+      );
+    }
+    identities.set(name, { identity: entry.canonicalPath, dir: entry.repoRelativeDir });
+    const requestedFile = entry.canonicalPath;
+    const mainSlotFile = import_node_path13.default.join(mainRepoRoot, ".claude", "skills", name, SKILL_FILE_NAME);
+    if ((0, import_node_fs2.existsSync)(mainSlotFile)) {
+      let localIsRequested = false;
+      try {
+        localIsRequested = (0, import_node_fs2.realpathSync)(mainSlotFile) === requestedFile;
+      } catch {
+        localIsRequested = false;
+      }
+      if (!localIsRequested) {
+        throw new Error(
+          `skill '/${sanitizeDiagnosticName(name)}' resolves to a project pack but ${import_node_path13.default.join(mainRepoRoot, ".claude", "skills", name)} already holds a different skill. Remove or rename that slot, then retry.`
+        );
+      }
+    }
+    const homeSlot = import_node_path13.default.join(import_node_os7.default.homedir(), ".claude", "skills", name);
+    if ((0, import_node_fs2.existsSync)(homeSlot)) {
+      throw new Error(
+        `skill '/${sanitizeDiagnosticName(name)}' resolves to a project pack but a same-named global skill exists at ${homeSlot}. Remove or rename the global skill, then retry.`
+      );
+    }
+    if (name !== entry.runtimeName) {
+      const canonicalSlotFile = import_node_path13.default.join(mainRepoRoot, ".claude", "skills", entry.runtimeName, SKILL_FILE_NAME);
+      if ((0, import_node_fs2.existsSync)(canonicalSlotFile)) {
+        let same = false;
+        try {
+          same = (0, import_node_fs2.realpathSync)(canonicalSlotFile) === entry.canonicalPath;
+        } catch {
+          same = false;
+        }
+        if (!same) {
+          throw new Error(
+            `skill '/${sanitizeDiagnosticName(name)}' resolves to a project pack whose canonical runtime name '${sanitizeDiagnosticName(entry.runtimeName)}' is occupied by a different skill at ${import_node_path13.default.join(mainRepoRoot, ".claude", "skills", entry.runtimeName)}. Remove or rename that slot, then retry.`
+          );
+        }
+      }
+      const canonicalHomeSlot = import_node_path13.default.join(import_node_os7.default.homedir(), ".claude", "skills", entry.runtimeName);
+      if ((0, import_node_fs2.existsSync)(canonicalHomeSlot)) {
+        throw new Error(
+          `skill '/${sanitizeDiagnosticName(name)}' resolves to a project pack whose canonical runtime name '${sanitizeDiagnosticName(entry.runtimeName)}' is shadowed by a global skill at ${canonicalHomeSlot}. Remove or rename the global skill, then retry.`
+        );
+      }
+    }
+  }
+}
+function ensureClaudePackSkillLinks(worktreePath, mainRepoRoot, resolvedPaths) {
+  const created = [];
+  try {
+    const seen = /* @__PURE__ */ new Set();
+    for (const item of resolvedPaths) {
+      const entry = normalizeClaudeEntry(mainRepoRoot, item);
+      if (!entry) continue;
+      if (seen.has(entry.canonicalPath)) continue;
+      seen.add(entry.canonicalPath);
+      const name = entry.name;
+      if (!isSafeRuntimeName(name)) {
+        throw new Error(
+          `cannot link pack skill in '${sanitizeDiagnosticName(entry.repoRelativeDir)}': unsafe runtime name '${sanitizeDiagnosticName(name)}'.`
+        );
+      }
+      const homeSlot = import_node_path13.default.join(import_node_os7.default.homedir(), ".claude", "skills", name);
+      if ((0, import_node_fs2.existsSync)(homeSlot)) {
+        throw new Error(
+          `cannot link pack skill '${sanitizeDiagnosticName(name)}' into the worktree: same-named user-global exists at ${homeSlot}. Remove or rename the global skill, then retry.`
+        );
+      }
+      const wtSkillDir = import_node_path13.default.join(worktreePath, entry.repoRelativeDir);
+      const wtSkillFile = import_node_path13.default.join(wtSkillDir, SKILL_FILE_NAME);
+      if (name !== entry.runtimeName) {
+        const wtCanonicalSlot = import_node_path13.default.join(worktreePath, ".claude", "skills", entry.runtimeName, SKILL_FILE_NAME);
+        if ((0, import_node_fs2.existsSync)(wtCanonicalSlot)) {
+          let same = false;
+          try {
+            same = (0, import_node_fs2.realpathSync)(wtCanonicalSlot) === (0, import_node_fs2.realpathSync)(wtSkillFile);
+          } catch {
+            same = false;
+          }
+          if (!same) {
+            throw new Error(
+              `cannot link pack skill '${sanitizeDiagnosticName(name)}': the worktree canonical runtime name '${sanitizeDiagnosticName(entry.runtimeName)}' slot holds different content. Remove or rename that slot, then retry.`
+            );
+          }
+        }
+      }
+      const wtSkillsRoot = resolveSkillsRoot(worktreePath);
+      let wtRoot;
+      let canonicalWtSkillsRoot;
+      try {
+        wtRoot = (0, import_node_fs2.realpathSync)(worktreePath);
+        canonicalWtSkillsRoot = (0, import_node_fs2.realpathSync)(wtSkillsRoot);
+      } catch (error51) {
+        if (isEnoent(error51)) {
+          throw new Error(
+            `cannot link pack skill '${sanitizeDiagnosticName(name)}': the worktree does not contain .xtrm/skills. Pack skills must be tracked so worktrees receive them.`
+          );
+        }
+        throw new Error(`cannot canonicalize the worktree skills root: ${errnoCode(error51) ?? "UnknownError"}`);
+      }
+      if (!isPathInside(canonicalWtSkillsRoot, wtRoot)) {
+        throw new Error(
+          `cannot link pack skill '${sanitizeDiagnosticName(name)}': the worktree skills root escapes the worktree root.`
+        );
+      }
+      const describe3 = `${sanitizeDiagnosticName(entry.repoRelativeDir)}/${SKILL_FILE_NAME}`;
+      const probed = probePackSkillDir(wtSkillDir, wtSkillFile, canonicalWtSkillsRoot, describe3);
+      if (!probed) {
+        throw new Error(
+          `cannot link pack skill '${sanitizeDiagnosticName(name)}': ${describe3} is absent from the worktree. Pack skills must be tracked so worktrees receive them.`
+        );
+      }
+      const wtRuntimeName = readSkillRuntimeNameSync(wtSkillFile, import_node_path13.default.basename(wtSkillDir));
+      if (wtRuntimeName !== entry.runtimeName) {
+        throw new Error(
+          `cannot link pack skill '${sanitizeDiagnosticName(name)}': the worktree copy at '${describe3}' declares runtime name '${sanitizeDiagnosticName(wtRuntimeName)}'.`
+        );
+      }
+      const linkPath = import_node_path13.default.join(worktreePath, ".claude", "skills", name);
+      if ((0, import_node_fs2.existsSync)(linkPath)) {
+        try {
+          const slotFile = import_node_path13.default.join(linkPath, SKILL_FILE_NAME);
+          if ((0, import_node_fs2.realpathSync)(slotFile) === (0, import_node_fs2.realpathSync)(wtSkillFile)) {
+            continue;
+          }
+        } catch {
+        }
+        throw new Error(
+          `cannot link pack skill '${name}' into the worktree: ${import_node_path13.default.join(worktreePath, ".claude", "skills", name)} already holds a different skill. Remove or rename that slot, then retry.`
+        );
+      }
+      (0, import_node_fs2.mkdirSync)(import_node_path13.default.dirname(linkPath), { recursive: true });
+      const target = import_node_path13.default.relative(import_node_path13.default.dirname(linkPath), wtSkillDir);
+      (0, import_node_fs2.symlinkSync)(target, linkPath, "dir");
+      created.push(linkPath);
+      try {
+        if ((0, import_node_fs2.realpathSync)(import_node_path13.default.join(linkPath, SKILL_FILE_NAME)) !== (0, import_node_fs2.realpathSync)(wtSkillFile)) {
+          (0, import_node_fs2.unlinkSync)(linkPath);
+          created.pop();
+          throw new Error(`pack skill link '${name}' failed identity verification and was removed.`);
+        }
+      } catch (error51) {
+        if (error51 instanceof Error && error51.message.includes("failed identity verification")) throw error51;
+        (0, import_node_fs2.unlinkSync)(linkPath);
+        created.pop();
+        throw new Error(`pack skill link '${name}' failed identity verification and was removed: ${errnoCode(error51) ?? "UnknownError"}`);
+      }
+    }
+    return created;
+  } catch (error51) {
+    for (const link of created) {
+      try {
+        (0, import_node_fs2.unlinkSync)(link);
+      } catch {
+      }
+    }
+    throw error51;
+  }
 }
 function assertClaudeSkillsDiscoverable(mainRepoRoot, requestedPaths) {
   for (const requestedPath of requestedPaths) {
@@ -56975,7 +57565,7 @@ function parseSpecialistJson(name, raw, mainRepoRoot = process.cwd()) {
   }
   const skillsSection = spec.skills;
   const rawPaths = skillsSection?.paths;
-  const skillPaths = Array.isArray(rawPaths) ? rawPaths.filter((p) => typeof p === "string" && p.length > 0).map((skillPath) => resolveSkillPath(mainRepoRoot, skillPath)) : [];
+  const skillPaths = Array.isArray(rawPaths) ? rawPaths.filter((p) => typeof p === "string" && p.length > 0) : [];
   const mode = spec.system_prompt_mode;
   if (mode === "replace") {
     process.stderr.write(kleur_default.yellow(
@@ -57002,12 +57592,14 @@ function isUnsupportedSurfaceOption(stderr) {
 }
 function resolveRole(name, mainRepoRoot = process.cwd(), runtime = "pi", allowLegacyFallback = false) {
   let result = (0, import_node_child_process.spawnSync)("sp", ["view", name, "--raw", "--surface", runtime], {
+    cwd: mainRepoRoot,
     encoding: "utf8",
     stdio: "pipe"
   });
   const stderr = (result.stderr ?? "").trim();
   if (result.status !== 0 && (runtime === "pi" || allowLegacyFallback) && isUnsupportedSurfaceOption(stderr)) {
     result = (0, import_node_child_process.spawnSync)("sp", ["view", name, "--raw"], {
+      cwd: mainRepoRoot,
       encoding: "utf8",
       stdio: "pipe"
     });
@@ -57165,14 +57757,28 @@ function checkPositionZeroSlash(body, runtime, trustedPrefix) {
 Rename the bead title or adjust --prompt so the first character is not '/'.`
   };
 }
-function claudeExplicitSkillLines(paths) {
+function claudeExplicitLinesFor(mainRepoRoot, paths, entries) {
+  const byPath = new Map(entries.map((entry) => [entry.canonicalPath, entry.name]));
   return paths.map((p) => {
-    const name = import_node_path13.default.basename(p) === "SKILL.md" ? import_node_path13.default.basename(import_node_path13.default.dirname(p)) : import_node_path13.default.basename(p);
+    let key;
+    try {
+      key = (0, import_node_fs2.realpathSync)(p);
+    } catch {
+      key = p;
+    }
+    const name = byPath.get(key) ?? (import_node_path13.default.basename(p) === "SKILL.md" ? import_node_path13.default.basename(import_node_path13.default.dirname(p)) : import_node_path13.default.basename(p));
     return `/${name}`;
   }).join("\n");
 }
-function renderDeclaredSkillPrefix(paths, runtime) {
-  const names = [...new Set(paths.map((p) => import_node_path13.default.basename(p) === "SKILL.md" ? import_node_path13.default.basename(import_node_path13.default.dirname(p)) : import_node_path13.default.basename(p)))];
+function renderDeclaredSkillPrefix(paths, runtime, mainRepoRoot = process.cwd(), entries) {
+  const byPath = new Map((entries ?? []).map((entry) => [entry.canonicalPath, entry.name]));
+  const names = [...new Set(paths.map((p) => {
+    const bound = byPath.get(realpathSyncSafe(p));
+    if (bound) return bound;
+    const packName = resolveProjectPackEntry(mainRepoRoot, p)?.runtimeName;
+    if (packName) return packName;
+    return import_node_path13.default.basename(p) === "SKILL.md" ? import_node_path13.default.basename(import_node_path13.default.dirname(p)) : import_node_path13.default.basename(p);
+  }))];
   for (const name of names) {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) {
       throw new Error(`invalid declared skill name '${name}'`);
@@ -57183,6 +57789,13 @@ function renderDeclaredSkillPrefix(paths, runtime) {
   return `${commands.join(runtime === "pi" ? " " : "\n")}
 
 `;
+}
+function realpathSyncSafe(p) {
+  try {
+    return (0, import_node_fs2.realpathSync)(p);
+  } catch {
+    return p;
+  }
 }
 function checkByteCeiling(parts) {
   if (parts.systemPrompt.includes("\0") || parts.body.includes("\0")) {
@@ -57381,6 +57994,30 @@ function gitMainRepoRoot(cwd) {
   if (!raw) return null;
   const commonDir = import_node_path13.default.isAbsolute(raw) ? raw : import_node_path13.default.resolve(cwd, raw);
   return commonDir.endsWith("/.git") || commonDir.endsWith("\\.git") ? import_node_path13.default.dirname(commonDir) : commonDir;
+}
+function rollbackLauncherWorktree(mainRepoRoot, worktreePath, branchName, deleteBranch) {
+  const removal = (0, import_node_child_process.spawnSync)("git", ["worktree", "remove", "--force", worktreePath], {
+    cwd: mainRepoRoot,
+    stdio: "pipe"
+  });
+  if (removal.status !== 0) {
+    process.stderr.write(kleur_default.yellow(
+      `  \u26A0 provisioning failed and worktree removal did not succeed; branch '${branchName}' may remain. Run 'xt worktree doctor'; manually 'git branch -D ${branchName}'
+`
+    ));
+    return;
+  }
+  if (!deleteBranch) return;
+  const branchRemoval = (0, import_node_child_process.spawnSync)("git", ["branch", "-D", branchName], {
+    cwd: mainRepoRoot,
+    stdio: "pipe"
+  });
+  if (branchRemoval.status !== 0) {
+    process.stderr.write(kleur_default.yellow(
+      `  \u26A0 worktree removed but branch '${branchName}' could not be deleted; run 'git branch -D ${branchName}'
+`
+    ));
+  }
 }
 function resolveStatuslineScript(worktreePath) {
   const localStatusline = import_node_path13.default.join(worktreePath, ".xtrm", "hooks", "statusline.mjs");
@@ -57602,13 +58239,45 @@ async function launchWorktreeSession(opts) {
     console.error(kleur_default.dim("  Use a Claude id or alias: opus, sonnet, haiku, claude-opus-5, \u2026\n"));
     process.exit(1);
   }
+  let guardedPassthrough = [];
+  if (opts.passthrough && opts.passthrough.length > 0) {
+    const guard = guardRolePassthrough(opts.passthrough);
+    if (guard.guardedError) {
+      console.error(kleur_default.red(`
+  \u2717 ${guard.guardedError}
+`));
+      process.exit(1);
+    }
+    for (const warning of guard.warnings) {
+      process.stderr.write(kleur_default.yellow(`  \u26A0 ${warning}
+`));
+    }
+    guardedPassthrough = guard.filteredArgs;
+  }
+  const currentRepoRoot = gitRepoRoot(cwd);
+  const mainRepoRoot = gitMainRepoRoot(cwd);
+  if (!currentRepoRoot || !mainRepoRoot) {
+    console.error(kleur_default.red("\n  \u2717 Not inside a git repository\n"));
+    process.exit(1);
+  }
+  if (currentRepoRoot !== mainRepoRoot) {
+    console.error(kleur_default.red("\n  \u2717 Refusing to create nested worktree from inside an existing worktree.\n"));
+    console.error(kleur_default.dim(`  current worktree: ${currentRepoRoot}`));
+    console.error(kleur_default.dim(`  main repo root:  ${mainRepoRoot}`));
+    console.error(kleur_default.dim("\n  Remediation:"));
+    console.error(kleur_default.dim("    1) cd to the main repo checkout"));
+    console.error(kleur_default.dim("    2) run xt claude|pi there (or use xt attach to resume this session)"));
+    console.error(kleur_default.dim("    3) run xt worktree doctor to inspect stale/nested entries\n"));
+    process.exit(1);
+  }
   let resolvedRole = null;
   let renderedTask;
   let composedTurn1Body = "";
   let explicitSkillPaths = [];
+  let claudePackEntries = [];
   if (roleName) {
     try {
-      resolvedRole = resolveRole(roleName, cwd, runtime, Boolean(model));
+      resolvedRole = resolveRole(roleName, mainRepoRoot, runtime, Boolean(model));
       if (opts.subordinate) {
         const coordinatorCheck = checkSubordinateRole({
           runtime,
@@ -57617,13 +58286,50 @@ async function launchWorktreeSession(opts) {
         });
         if (!coordinatorCheck.ok) throw new Error(coordinatorCheck.error);
       }
-      resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
-      explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
-      if (runtime === "claude") assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
+      const rawRoleSkillPaths = [...resolvedRole.skillPaths];
+      resolvedRole.skillPaths = resolveRequestedSkills(mainRepoRoot, rawRoleSkillPaths, runtime);
+      explicitSkillPaths = resolveRequestedSkills(mainRepoRoot, opts.skills ?? [], runtime);
       const probe2 = probeSkillPrefixAvailable();
-      const trustedSkillPrefix = probe2.ok ? renderSkillPrefix({ role: roleName, runtime, cwd }).skillPrefix : renderDeclaredSkillPrefix(resolvedRole.skillPaths, runtime);
+      let spPrefix = null;
+      if (probe2.ok) {
+        spPrefix = renderSkillPrefix({ role: roleName, runtime, cwd: mainRepoRoot }).skillPrefix;
+      }
+      let claudeRoleEntries = [];
+      let claudeExplicitLines = "";
+      if (runtime === "claude") {
+        const prefixNames = spPrefix !== null ? spPrefix.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith("/")).map((line) => line.slice(1)) : null;
+        if (prefixNames !== null && prefixNames.length !== rawRoleSkillPaths.length) {
+          throw new Error(
+            `role '${roleName}': sp skill prefix names do not align with declared skills (${prefixNames.length} prefix names vs ${rawRoleSkillPaths.length} declarations).`
+          );
+        }
+        const { roleEntries, explicitEntries } = bindClaudePackNames(
+          mainRepoRoot,
+          rawRoleSkillPaths,
+          prefixNames,
+          opts.skills ?? [],
+          runtime
+        );
+        claudeRoleEntries = roleEntries;
+        const merged = [];
+        const seen = /* @__PURE__ */ new Set();
+        for (const entry of [...roleEntries, ...explicitEntries]) {
+          if (seen.has(entry.canonicalPath)) continue;
+          seen.add(entry.canonicalPath);
+          merged.push(entry);
+        }
+        claudePackEntries = merged;
+        const claudeCombined = [...resolvedRole.skillPaths, ...explicitSkillPaths];
+        assertClaudeSkillsDiscoverable(mainRepoRoot, claudeCombined.filter((p) => !isProjectPackSkillPath(mainRepoRoot, p)));
+        assertClaudePackSkillsLoadable(mainRepoRoot, claudePackEntries);
+      }
+      const trustedSkillPrefix = runtime === "claude" ? composeClaudeRoleBlock(mainRepoRoot, rawRoleSkillPaths, spPrefix?.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith("/")).map((line) => line.slice(1)) ?? null, claudeRoleEntries, runtime) : spPrefix ?? renderDeclaredSkillPrefix(resolvedRole.skillPaths, runtime, mainRepoRoot);
       let trustedPrefix = trustedSkillPrefix;
-      const rawBody = bead ? (renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime })).initialPrompt : prompt ?? "";
+      if (runtime === "claude") {
+        const roleCommandNames = new Set(trustedSkillPrefix.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith("/")).map((line) => line.slice(1)));
+        claudeExplicitLines = composeClaudeExplicitLines(mainRepoRoot, explicitSkillPaths, claudePackEntries, roleCommandNames);
+      }
+      const rawBody = bead ? (renderedTask = renderRoleTask({ role: roleName, bead, cwd: mainRepoRoot, runtime })).initialPrompt : prompt ?? "";
       let untrustedBody = rawBody;
       if (bead && probe2.ok && trustedSkillPrefix) {
         if (!rawBody.startsWith(trustedSkillPrefix)) {
@@ -57636,8 +58342,8 @@ async function launchWorktreeSession(opts) {
         if (!rawSlashCheck.ok) throw new Error(rawSlashCheck.error);
       }
       composedTurn1Body = trustedSkillPrefix + untrustedBody;
-      if (runtime === "claude" && explicitSkillPaths.length > 0) {
-        const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}${trustedPrefix ? "\n" : "\n\n"}`;
+      if (runtime === "claude" && claudeExplicitLines.length > 0) {
+        const explicitPrefix = `${claudeExplicitLines}${trustedPrefix ? "\n" : "\n\n"}`;
         composedTurn1Body = explicitPrefix + composedTurn1Body;
         trustedPrefix = explicitPrefix + trustedPrefix;
       }
@@ -57660,12 +58366,15 @@ async function launchWorktreeSession(opts) {
     }
   } else {
     try {
-      explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
+      explicitSkillPaths = resolveRequestedSkills(mainRepoRoot, opts.skills ?? [], runtime);
       composedTurn1Body = prompt ?? "";
       let trustedPrefix = "";
       if (runtime === "claude" && explicitSkillPaths.length > 0) {
-        assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
-        trustedPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}
+        const { explicitEntries } = bindClaudePackNames(mainRepoRoot, [], null, opts.skills ?? [], runtime);
+        claudePackEntries = explicitEntries;
+        assertClaudeSkillsDiscoverable(mainRepoRoot, explicitSkillPaths.filter((p) => !isProjectPackSkillPath(mainRepoRoot, p)));
+        assertClaudePackSkillsLoadable(mainRepoRoot, claudePackEntries);
+        trustedPrefix = `${claudeExplicitLinesFor(mainRepoRoot, explicitSkillPaths, claudePackEntries)}
 
 `;
         composedTurn1Body = trustedPrefix + composedTurn1Body;
@@ -57683,37 +58392,6 @@ async function launchWorktreeSession(opts) {
 `));
       process.exit(1);
     }
-  }
-  let guardedPassthrough = [];
-  if (opts.passthrough && opts.passthrough.length > 0) {
-    const guard = guardRolePassthrough(opts.passthrough);
-    if (guard.guardedError) {
-      console.error(kleur_default.red(`
-  \u2717 ${guard.guardedError}
-`));
-      process.exit(1);
-    }
-    for (const w of guard.warnings) {
-      process.stderr.write(kleur_default.yellow(`  \u26A0 ${w}
-`));
-    }
-    guardedPassthrough = guard.filteredArgs;
-  }
-  const currentRepoRoot = gitRepoRoot(cwd);
-  const mainRepoRoot = gitMainRepoRoot(cwd);
-  if (!currentRepoRoot || !mainRepoRoot) {
-    console.error(kleur_default.red("\n  \u2717 Not inside a git repository\n"));
-    process.exit(1);
-  }
-  if (currentRepoRoot !== mainRepoRoot) {
-    console.error(kleur_default.red("\n  \u2717 Refusing to create nested worktree from inside an existing worktree.\n"));
-    console.error(kleur_default.dim(`  current worktree: ${currentRepoRoot}`));
-    console.error(kleur_default.dim(`  main repo root:  ${mainRepoRoot}`));
-    console.error(kleur_default.dim("\n  Remediation:"));
-    console.error(kleur_default.dim("    1) cd to the main repo checkout"));
-    console.error(kleur_default.dim("    2) run xt claude|pi there (or use xt attach to resume this session)"));
-    console.error(kleur_default.dim("    3) run xt worktree doctor to inspect stale/nested entries\n"));
-    process.exit(1);
   }
   const cwdBasename = import_node_path13.default.basename(mainRepoRoot);
   const slug = name ?? randomSlug(4);
@@ -57775,6 +58453,11 @@ async function launchWorktreeSession(opts) {
     console.error(kleur_default.dim("    xt worktree clean --orphans --yes\n"));
     process.exit(1);
   }
+  const branchExistedBefore = (0, import_node_child_process.spawnSync)("git", ["rev-parse", "--verify", branchName], {
+    cwd: mainRepoRoot,
+    stdio: "pipe"
+  }).status === 0;
+  const branchCreatedByLauncher = !branchExistedBefore;
   const bdResult = (0, import_node_child_process.spawnSync)("bd", ["worktree", "create", worktreePath, "--branch", branchName], {
     cwd: mainRepoRoot,
     stdio: structuredOutput ? "pipe" : "inherit"
@@ -57813,48 +58496,54 @@ async function launchWorktreeSession(opts) {
     console.log(kleur_default.dim("  note: clean git worktrees do not include ignored dependency dirs like node_modules/ or .venv/"));
     console.log(kleur_default.dim("        if lint/tests need them, run this repo's normal bootstrap inside the worktree (make bootstrap, just setup, npm ci, uv sync, etc.)\n"));
   }
-  if (runtime === "claude") {
-    const claudeDir = import_node_path13.default.join(worktreePath, ".claude");
-    try {
-      if (shouldUseGlobalSkills(worktreePath) && !worktreeHasProjectUserPacks(worktreePath)) {
-        verifyGlobalPointer();
-      } else {
-        await ensureAgentsSkillsSymlink(worktreePath);
-      }
-    } catch (error51) {
-      const message = error51 instanceof Error ? error51.message : String(error51);
-      const warning = kleur_default.dim(`  warning: could not reconcile runtime skills (${message})`);
-      if (structuredOutput) console.error(warning);
-      else console.log(warning);
-    }
-    try {
-      ensureWorktreeSpecialists(worktreePath, mainRepoRoot);
-    } catch (error51) {
-      const message = error51 instanceof Error ? error51.message : String(error51);
-      const warning = kleur_default.dim(`  warning: could not provision specialist definitions (${message})`);
-      if (structuredOutput) console.error(warning);
-      else console.log(warning);
-    }
-    const localSettings = {};
-    const statuslinePath = resolveStatuslineScript(worktreePath);
-    if (statuslinePath) {
-      localSettings.statusLine = {
-        type: "command",
-        command: `node ${JSON.stringify(statuslinePath)}`,
-        padding: 1
-      };
-    }
-    const localSettingsPath = import_node_path13.default.join(claudeDir, "settings.local.json");
-    if (Object.keys(localSettings).length > 0) {
+  try {
+    if (runtime === "claude") {
+      const claudeDir = import_node_path13.default.join(worktreePath, ".claude");
       try {
-        (0, import_node_fs2.mkdirSync)(claudeDir, { recursive: true });
-        (0, import_node_fs2.writeFileSync)(localSettingsPath, JSON.stringify(localSettings, null, 2));
-      } catch {
+        if (shouldUseGlobalSkills(worktreePath) && !worktreeHasProjectUserPacks(worktreePath)) {
+          verifyGlobalPointer();
+        } else {
+          await ensureAgentsSkillsSymlink(worktreePath);
+        }
+      } catch (error51) {
+        const message = error51 instanceof Error ? error51.message : String(error51);
+        const warning = kleur_default.dim(`  warning: could not reconcile runtime skills (${message})`);
+        if (structuredOutput) console.error(warning);
+        else console.log(warning);
+      }
+      ensureClaudePackSkillLinks(worktreePath, mainRepoRoot, claudePackEntries);
+      try {
+        ensureWorktreeSpecialists(worktreePath, mainRepoRoot);
+      } catch (error51) {
+        const message = error51 instanceof Error ? error51.message : String(error51);
+        const warning = kleur_default.dim(`  warning: could not provision specialist definitions (${message})`);
+        if (structuredOutput) console.error(warning);
+        else console.log(warning);
+      }
+      const localSettings = {};
+      const statuslinePath = resolveStatuslineScript(worktreePath);
+      if (statuslinePath) {
+        localSettings.statusLine = {
+          type: "command",
+          command: `node ${JSON.stringify(statuslinePath)}`,
+          padding: 1
+        };
+      }
+      const localSettingsPath = import_node_path13.default.join(claudeDir, "settings.local.json");
+      if (Object.keys(localSettings).length > 0) {
+        try {
+          (0, import_node_fs2.mkdirSync)(claudeDir, { recursive: true });
+          (0, import_node_fs2.writeFileSync)(localSettingsPath, JSON.stringify(localSettings, null, 2));
+        } catch {
+        }
       }
     }
-  }
-  if (runtime === "pi") {
-    await runPiLaunchPreflight(worktreePath, false);
+    if (runtime === "pi") {
+      await runPiLaunchPreflight(worktreePath, false);
+    }
+  } catch (error51) {
+    rollbackLauncherWorktree(mainRepoRoot, worktreePath, branchName, branchCreatedByLauncher);
+    throw error51;
   }
   const common = {
     runtime,
@@ -60361,9 +61050,11 @@ async function launchCodexWorktreeSession(opts) {
   let roleName;
   let developerInstructions;
   let selectedModel = opts.model;
-  let requestedSkills = resolveRequestedSkills(mainRoot, opts.skills ?? []);
+  let requestedSkills = [];
+  let roleSkillPaths = [];
   let prompt = opts.prompt;
   try {
+    requestedSkills = resolveRequestedSkills(mainRoot, opts.skills ?? [], "codex");
     if (opts.role) {
       roleName = opts.role;
       const view = (0, import_node_child_process6.spawnSync)("sp", ["view", opts.role, "--raw", "--surface", "codex"], {
@@ -60376,13 +61067,22 @@ async function launchCodexWorktreeSession(opts) {
       const role = parseSpecialistJson(opts.role, view.stdout ?? "", mainRoot);
       developerInstructions = role.systemPrompt;
       selectedModel ??= role.model;
+      roleSkillPaths = role.skillPaths;
       if (opts.bead) {
         prompt = renderCodexTask(opts.role, opts.bead, mainRoot);
       } else {
-        requestedSkills = [...role.skillPaths, ...requestedSkills];
+        requestedSkills = [...roleSkillPaths, ...requestedSkills];
       }
     }
-    requestedSkills = [...new Set(requestedSkills.map((value) => (0, import_node_fs5.realpathSync)(value)))];
+    requestedSkills = resolveRequestedSkills(mainRoot, requestedSkills, "codex");
+    const validationSet = resolveRequestedSkills(mainRoot, [...roleSkillPaths, ...requestedSkills], "codex");
+    const unsupported = validationSet.find((p) => isProjectPackSkillPath(mainRoot, p));
+    if (unsupported) {
+      const name = projectPackSkillName(mainRoot, unsupported) ?? import_node_path19.default.basename(unsupported);
+      fail(
+        `skill '${name}' resolves to a project pack under .xtrm/skills, which codex launches do not support. Enable it as a global skill or pass a global skill path.`
+      );
+    }
   } catch (error51) {
     fail(error51 instanceof Error ? error51.message : String(error51));
   }
