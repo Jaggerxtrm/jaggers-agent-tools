@@ -1,12 +1,13 @@
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
-import { afterEach, describe, expect, it } from 'vitest';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readlinkSync, realpathSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createClaudeCommand } from '../commands/claude.js';
 import { createPiCommand } from '../commands/pi.js';
 import {
     assertClaudeSkillsDiscoverable,
+    assertClaudePackSkillsLoadable,
     buildAgentEnv,
     buildBufferedRuntimeCommand,
     buildBareTmuxPlan,
@@ -16,6 +17,7 @@ import {
     chooseAttachCommand,
     createRuntimeBufferName,
     effectiveModel,
+    ensureClaudePackSkillLinks,
     claudeExplicitSkillLines,
     guardRolePassthrough,
     isForeignProviderModel,
@@ -25,9 +27,16 @@ import {
     renderDeclaredSkillPrefix,
     renderRoleTask,
     renderSkillPrefix,
+    bindClaudePackNames,
+    composeClaudeExplicitLines,
+    composeClaudeRoleBlock,
+    claudeExplicitLinesFor,
+    resolveProjectPackEntry,
     resolveRequestedSkills,
     resolveRole,
     resolveSkillPath,
+    rollbackLauncherWorktree,
+    type ClaudePackSkillEntry,
 } from '../utils/worktree-session.js';
 
 // Every plan carries the worktree + branch it publishes as lineage metadata
@@ -40,10 +49,10 @@ const WT = {
     sessionDisplayName: 'repo-xt-pi-demo',
 } as const;
 
-// Use synthetic test-only skill paths that don't exist under real repo OR
-// $HOME. resolveSkillPath's home-fallback (xtmux-1rn) then leaves them
-// deterministically repo-resolved, so assertions stay stable regardless of
-// the runner's actual $HOME contents.
+// Declared skill paths stay verbatim in the role: resolution happens once in
+// resolveRequestedSkills (xtrm-lk07w.14), so bare pack names keep their form
+// instead of being frozen into nonexistent repo-resolved paths. Plan-level
+// tests derive '/<name>' from these the same way for both forms.
 const SAMPLE_SPECIALIST = JSON.stringify({
     specialist: {
         metadata: { name: 'chain-coordinator' },
@@ -334,8 +343,13 @@ describe('role command flags', () => {
 });
 
 describe('resolveRole surface model contract', () => {
+    // resolveRole now spawns sp with cwd=mainRepoRoot (SEC-01), so the fake
+    // root must be a real directory.
+    const fakeRepoRoot = path.join(os.tmpdir(), `xtrm-role-repo-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
     const capture = path.join(os.tmpdir(), `xtrm-role-view-capture-${process.pid}`);
 
+    beforeAll(() => mkdirSync(fakeRepoRoot, { recursive: true }));
+    afterAll(() => rmSync(fakeRepoRoot, { recursive: true, force: true }));
     afterEach(() => rmSync(capture, { force: true }));
 
     it('requests Claude surface resolution and leaves a null role model unset', () => {
@@ -348,7 +362,7 @@ process.stdout.write(JSON.stringify({ specialist: { prompt: { system: 'role' }, 
         process.env.XTRM_ROLE_VIEW_CAPTURE = capture;
         try {
             withFakeSp(script, () => {
-                const role = resolveRole('chain-coordinator', '/repo/root', 'claude');
+                const role = resolveRole('chain-coordinator', fakeRepoRoot, 'claude');
                 expect(role.model).toBeUndefined();
             });
             expect(JSON.parse(readFileSync(capture, 'utf8'))).toEqual([
@@ -368,7 +382,7 @@ if (process.argv.includes('--surface')) {
 process.stdout.write(JSON.stringify({ specialist: { prompt: { system: 'role' }, execution: { model: 'openai-codex/gpt-5.6-luna' } } }));
 `;
         withFakeSp(script, () => {
-            const role = resolveRole('chain-coordinator', '/repo/root', 'pi');
+            const role = resolveRole('chain-coordinator', fakeRepoRoot, 'pi');
             expect(role.model).toBe('openai-codex/gpt-5.6-luna');
         });
     });
@@ -379,49 +393,62 @@ process.stderr.write("unknown option '--surface'");
 process.exit(1);
 `;
         withFakeSp(script, () => {
-            expect(() => resolveRole('chain-coordinator', '/repo/root', 'claude'))
+            expect(() => resolveRole('chain-coordinator', fakeRepoRoot, 'claude'))
                 .toThrow(/surface-aware Claude model resolution.*upgrade/);
         });
     });
 
-    it('allows an explicit Claude model to use legacy Specialists resolution', () => {
+    it('allows an explicit Claude model to use legacy Specialists resolution and pins the sp cwd (751b)', () => {
+        const cwdCapture = path.join(os.tmpdir(), `xtrm-legacy-cwd-${process.pid}`);
         const script = `#!/usr/bin/env node
+const fs = require('node:fs');
+fs.writeFileSync(process.env.XTRM_LEGACY_CWD, process.cwd());
 if (process.argv.includes('--surface')) {
   process.stderr.write("unknown option '--surface'");
   process.exit(1);
 }
 process.stdout.write(JSON.stringify({ specialist: { prompt: { system: 'role' }, execution: { model: 'openai-codex/gpt-5.6-luna' } } }));
 `;
-        withFakeSp(script, () => {
-            const role = resolveRole('chain-coordinator', '/repo/root', 'claude', true);
-            expect(role.model).toBe('openai-codex/gpt-5.6-luna');
-        });
+        const previousCapture = process.env.XTRM_LEGACY_CWD;
+        process.env.XTRM_LEGACY_CWD = cwdCapture;
+        try {
+            withFakeSp(script, () => {
+                const role = resolveRole('chain-coordinator', fakeRepoRoot, 'claude', true);
+                expect(role.model).toBe('openai-codex/gpt-5.6-luna');
+                // The legacy fallback spawn must run with cwd=mainRepoRoot so
+                // repo-local specs resolve from a subdirectory launch.
+                expect(path.normalize(readFileSync(cwdCapture, 'utf8'))).toBe(path.normalize(fakeRepoRoot));
+            });
+        } finally {
+            process.env.XTRM_LEGACY_CWD = previousCapture;
+            rmSync(cwdCapture, { force: true });
+        }
     });
 });
 
 describe('parseSpecialistJson', () => {
     const mainRepoRoot = '/repo/root';
 
-    it('extracts system prompt + skill paths', () => {
+    it('extracts system prompt + skill paths verbatim (resolution is deferred)', () => {
         const role = parseSpecialistJson('chain-coordinator', SAMPLE_SPECIALIST, mainRepoRoot);
         expect(role.name).toBe('chain-coordinator');
         expect(role.systemPrompt).toContain('chain coordinator');
+        // Declared paths stay raw; resolveRequestedSkills resolves them at
+        // launch (xtrm-lk07w.14 — bare names must reach pack discovery).
         expect(role.skillPaths).toEqual([
-            path.resolve(mainRepoRoot, '.xtrm/skills/test-only/synthetic-a/SKILL.md'),
-            path.resolve(mainRepoRoot, '.xtrm/skills/test-only/synthetic-b/SKILL.md'),
+            '.xtrm/skills/test-only/synthetic-a/SKILL.md',
+            '.xtrm/skills/test-only/synthetic-b/SKILL.md',
         ]);
     });
 
-    it('resolves relative skill path from mainRepoRoot', () => {
+    it('keeps relative skill path raw for launch-time resolution', () => {
         const role = parseSpecialistJson('x', JSON.stringify({
             specialist: {
                 prompt: { system: 'hi' },
                 skills: { paths: ['skills/demo/SKILL.md'] },
             },
         }), mainRepoRoot);
-        expect(role.skillPaths).toEqual([
-            path.resolve(mainRepoRoot, 'skills/demo/SKILL.md'),
-        ]);
+        expect(role.skillPaths).toEqual(['skills/demo/SKILL.md']);
     });
 
     it('preserves absolute skill path unchanged', () => {
@@ -435,16 +462,14 @@ describe('parseSpecialistJson', () => {
         expect(role.skillPaths).toEqual([absoluteSkillPath]);
     });
 
-    it('expands tilde skill path from homedir', () => {
+    it('keeps tilde skill path raw for launch-time expansion', () => {
         const role = parseSpecialistJson('x', JSON.stringify({
             specialist: {
                 prompt: { system: 'hi' },
                 skills: { paths: ['~/team/skill/SKILL.md'] },
             },
         }), mainRepoRoot);
-        expect(role.skillPaths).toEqual([
-            path.join(os.homedir(), 'team/skill/SKILL.md'),
-        ]);
+        expect(role.skillPaths).toEqual(['~/team/skill/SKILL.md']);
     });
 
     it('throws on missing specialist key', () => {
@@ -476,10 +501,7 @@ describe('parseSpecialistJson', () => {
             },
         });
         const role = parseSpecialistJson('messy', messy, mainRepoRoot);
-        expect(role.skillPaths).toEqual([
-            path.resolve(mainRepoRoot, 'a.md'),
-            path.resolve(mainRepoRoot, 'b.md'),
-        ]);
+        expect(role.skillPaths).toEqual(['a.md', 'b.md']);
     });
 
     it('honors system_prompt_mode=replace by warning and returning prompt anyway', () => {
@@ -1197,6 +1219,1269 @@ describe('resolveRequestedSkills', () => {
             rmSync(sandbox, { recursive: true, force: true });
         }
     });
+
+    // xtrm-lk07w.14: bare logical skill names resolve from v2 project packs
+    // under <repo>/.xtrm/skills/<pack>/<skill>/SKILL.md before any global
+    // fallback. Pack name is arbitrary — nothing in production logic may
+    // hard-code 'infra' or 'service-knowledge'.
+    function writePackSkill(packName: string, skillName: string): string {
+        const skillDir = path.join(fakeRepo, '.xtrm', 'skills', packName, skillName);
+        mkdirSync(skillDir, { recursive: true });
+        const skillFile = path.join(skillDir, 'SKILL.md');
+        writeFileSync(skillFile, `# ${packName}/${skillName}`);
+        return skillFile;
+    }
+
+    it('resolves a bare name from a single project pack under .xtrm/skills', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const expected = writePackSkill('infra', 'service-knowledge');
+        // A second pack that does not own the name must not interfere.
+        writePackSkill('market-data', 'data-catalog');
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toEqual([expected]);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('resolves the same bare name from an arbitrary second pack name', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const expected = writePackSkill('market-data', 'service-knowledge');
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toEqual([expected]);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('resolves the project pack skill ahead of a same-named global default', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const expected = writePackSkill('infra', 'service-knowledge');
+        const globalDefault = path.join(fakeHome, '.xtrm', 'skills', 'default', 'service-knowledge', 'SKILL.md');
+        mkdirSync(path.dirname(globalDefault), { recursive: true });
+        writeFileSync(globalDefault, '# global');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toEqual([expected]);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('fails deterministically when two packs own the same skill name', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        writePackSkill('infra', 'service-knowledge');
+        writePackSkill('market-data', 'service-knowledge');
+        // A same-named global default must not mask the ambiguity.
+        const globalDefault = path.join(fakeHome, '.xtrm', 'skills', 'default', 'service-knowledge', 'SKILL.md');
+        mkdirSync(path.dirname(globalDefault), { recursive: true });
+        writeFileSync(globalDefault, '# global');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/service-knowledge.*ambiguous/);
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/\.xtrm\/skills\/infra\/service-knowledge/);
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/\.xtrm\/skills\/market-data\/service-knowledge/);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('ignores reserved tier directories when scanning project packs', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        // 'default' and 'local-legacy' are reserved names, not packs: a skill
+        // nested under them must not resolve as a project-pack match.
+        const underDefault = path.join(fakeRepo, '.xtrm', 'skills', 'default', 'service-knowledge', 'SKILL.md');
+        mkdirSync(path.dirname(underDefault), { recursive: true });
+        writeFileSync(underDefault, '# tier default');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/skill 'service-knowledge' not found/);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('keeps an enabled repo runtime-view skill ahead of the pack source', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        writePackSkill('infra', 'service-knowledge');
+        const enabled = path.join(fakeRepo, '.pi', 'skills', 'service-knowledge', 'SKILL.md');
+        mkdirSync(path.dirname(enabled), { recursive: true });
+        writeFileSync(enabled, '# enabled');
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toEqual([enabled]);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('enabled repo runtime-view wins before pack ambiguity is consulted', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        // Two packs own the name — normally a deterministic failure — but the
+        // operator's explicit enablement resolves it first (claude runtime
+        // sees its own .claude view only).
+        writePackSkill('infra', 'service-knowledge');
+        writePackSkill('market-data', 'service-knowledge');
+        const enabled = path.join(fakeRepo, '.claude', 'skills', 'service-knowledge', 'SKILL.md');
+        mkdirSync(path.dirname(enabled), { recursive: true });
+        writeFileSync(enabled, '# enabled');
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['service-knowledge'], 'claude'))
+                .toEqual([enabled]);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('resolves runtime-targeted repo views only (SEC-07: a claude launch never sees a pi view)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        // A Pi-only enabled view and a project pack carrying the same name.
+        const piView = path.join(fakeRepo, '.pi', 'skills', 'quant', 'SKILL.md');
+        mkdirSync(path.dirname(piView), { recursive: true });
+        writeFileSync(piView, '# pi view');
+        const packSkill = writePackSkill('market-data', 'quant');
+        try {
+            // pi runtime: its own enabled view wins.
+            expect(resolveRequestedSkills(fakeRepo, ['quant'], 'pi')).toEqual([piView]);
+            // claude runtime: the pi view is invisible; the pack wins.
+            expect(resolveRequestedSkills(fakeRepo, ['quant'], 'claude')).toEqual([packSkill]);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('resolves runtime-targeted home views only (SEC-07)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const piHome = path.join(fakeHome, '.pi', 'agent', 'skills', 'quant', 'SKILL.md');
+        const claudeHome = path.join(fakeHome, '.claude', 'skills', 'quant', 'SKILL.md');
+        mkdirSync(path.dirname(piHome), { recursive: true });
+        mkdirSync(path.dirname(claudeHome), { recursive: true });
+        writeFileSync(piHome, '# pi home');
+        writeFileSync(claudeHome, '# claude home');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['quant'], 'pi')).toEqual([piHome]);
+            expect(resolveRequestedSkills(fakeRepo, ['quant'], 'claude')).toEqual([claudeHome]);
+            expect(() => resolveRequestedSkills(fakeRepo, ['quant'], 'codex')).toThrow(/not found/);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('falls through to runtime-view and global defaults when no pack owns the name', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        // The pack scan is active (real packs exist) but none owns the name:
+        // bare names must not become project-only.
+        writePackSkill('infra', 'unrelated');
+        const globalDefault = path.join(fakeHome, '.xtrm', 'skills', 'default', 'service-knowledge', 'SKILL.md');
+        mkdirSync(path.dirname(globalDefault), { recursive: true });
+        writeFileSync(globalDefault, '# global');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toEqual([globalDefault]);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('resolves via canonical runtimeName even when the directory is renamed (SEC-NEW-02)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: service-knowledge\n---\n# renamed');
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toEqual([slotFile]);
+            // The directory name also matches (dirname arm for consumer
+            // layouts), but the BOUND claude name stays canonical.
+            expect(resolveRequestedSkills(fakeRepo, ['catalog']))
+                .toEqual([slotFile]);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('resolves a pack-root SKILL.md by frontmatter name and by pack name', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const packDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra');
+        mkdirSync(packDir, { recursive: true });
+        const rootFile = path.join(packDir, 'SKILL.md');
+        writeFileSync(rootFile, '---\nname: service-knowledge\n---\n# root');
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['service-knowledge'])).toEqual([rootFile]);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('resolves a pack-root SKILL.md without frontmatter by pack name', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const packDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra');
+        mkdirSync(packDir, { recursive: true });
+        const rootFile = path.join(packDir, 'SKILL.md');
+        writeFileSync(rootFile, '# root');
+        try {
+            expect(resolveRequestedSkills(fakeRepo, ['infra'])).toEqual([rootFile]);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('fails deterministically when two packs expose one runtime name (SEC-NEW-02)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        for (const pack of ['infra', 'market-data']) {
+            const slotDir = path.join(fakeRepo, '.xtrm', 'skills', pack, 'catalog');
+            mkdirSync(slotDir, { recursive: true });
+            writeFileSync(path.join(slotDir, 'SKILL.md'), '---\nname: service-knowledge\n---\n# dup');
+        }
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/ambiguous/);
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/\.xtrm\/skills\/infra\/catalog/);
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/\.xtrm\/skills\/market-data\/catalog/);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects an unsafe frontmatter runtimeName on a dirname match (pi and claude)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        writeFileSync(path.join(slotDir, 'SKILL.md'), '---\nname: ../evil\n---\n# bad');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            for (const runtime of ['pi', 'claude', 'codex'] as const) {
+                expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge'], runtime))
+                    .toThrow(/unsafe runtime name/);
+            }
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects a control-byte frontmatter runtimeName with escaped diagnostics', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: bad\u0007name\n---\n# bad');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            let msg = '';
+            try { resolveRequestedSkills(fakeRepo, ['catalog'], 'pi'); } catch (e) {
+                msg = e instanceof Error ? e.message : String(e);
+            }
+            expect(msg).toMatch(/unsafe runtime name/);
+            expect(msg).toContain('\\u{07}');
+            expect(msg).not.toContain('\u0007');
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('project-pack probe containment (xtrm-lk07w.14)', () => {
+    const sandbox = path.join(os.tmpdir(), `xtrm-pack-probe-${process.pid}`);
+    const fakeHome = path.join(sandbox, 'home');
+    const fakeRepo = path.join(sandbox, 'repo');
+    const external = path.join(sandbox, 'external');
+
+    function setup(): void {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeHome, { recursive: true });
+    }
+
+    function writePack(packName: string, skillName: string): string {
+        const skillDir = path.join(fakeRepo, '.xtrm', 'skills', packName, skillName);
+        mkdirSync(skillDir, { recursive: true });
+        const skillFile = path.join(skillDir, 'SKILL.md');
+        writeFileSync(skillFile, `# ${packName}/${skillName}`);
+        return skillFile;
+    }
+
+    function withHomeEnv(fn: () => void): void {
+        const prev = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try { fn(); } finally { process.env.HOME = prev; }
+    }
+
+    it('rejects a skill dir that is a symlink to outside the skills root', () => {
+        setup();
+        writePack('infra', 'service-knowledge');
+        const externalSkillDir = path.join(external, 'skill-dir');
+        mkdirSync(externalSkillDir, { recursive: true });
+        writeFileSync(path.join(externalSkillDir, 'SKILL.md'), '# external');
+        rmSync(path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge'), { recursive: true });
+        symlinkSync(externalSkillDir, path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge'), 'dir');
+        withHomeEnv(() => {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/is a symlink/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects a SKILL.md that is a symlink to an external file', () => {
+        setup();
+        const skillDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(skillDir, { recursive: true });
+        const externalFile = path.join(external, 'SKILL.md');
+        mkdirSync(external, { recursive: true });
+        writeFileSync(externalFile, '# external');
+        symlinkSync(externalFile, path.join(skillDir, 'SKILL.md'), 'file');
+        withHomeEnv(() => {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/not a regular file/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects a skills root that is a symlink escaping the consumer root', () => {
+        setup();
+        const externalSkills = path.join(external, 'skills');
+        mkdirSync(path.join(externalSkills, 'infra', 'service-knowledge'), { recursive: true });
+        writeFileSync(path.join(externalSkills, 'infra', 'service-knowledge', 'SKILL.md'), '# external');
+        mkdirSync(path.join(fakeRepo, '.xtrm'), { recursive: true });
+        symlinkSync(externalSkills, path.join(fakeRepo, '.xtrm', 'skills'), 'dir');
+        withHomeEnv(() => {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/escapes the consumer checkout root/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('propagates an unreadable SKILL.md with a sanitized repo-relative message', () => {
+        setup();
+        const skillFile = writePack('infra', 'service-knowledge');
+        chmodSync(skillFile, 0);
+        try {
+            withHomeEnv(() => {
+                let msg = '';
+                try { resolveRequestedSkills(fakeRepo, ['service-knowledge']); } catch (e) {
+                    msg = e instanceof Error ? e.message : String(e);
+                }
+                expect(msg).toMatch(/project-pack skill 'infra\/service-knowledge\/SKILL\.md'/);
+                // No absolute host paths leak into the message.
+                expect(msg).not.toContain(sandbox);
+            });
+        } finally {
+            chmodSync(skillFile, 0o644);
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects a SKILL.md that is a directory', () => {
+        setup();
+        const skillDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(path.join(skillDir, 'SKILL.md'), { recursive: true });
+        withHomeEnv(() => {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/not a regular file/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('throws when a requested-name skill dir exists without SKILL.md', () => {
+        setup();
+        const skillDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(skillDir, { recursive: true });
+        withHomeEnv(() => {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/has no SKILL\.md/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('throws when the requested-name skill slot is a non-directory file', () => {
+        setup();
+        const packDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra');
+        mkdirSync(packDir, { recursive: true });
+        writeFileSync(path.join(packDir, 'service-knowledge'), '# not a dir');
+        withHomeEnv(() => {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/not a real directory/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('throws on a dangling SKILL.md symlink in a renamed child dir (SEC-FINAL-03)', () => {
+        setup();
+        // Child dir name differs from the requested runtime name; a DANGLING
+        // SKILL.md symlink is still a present violation — never a skip that
+        // falls through to the global fallback.
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(slotDir, { recursive: true });
+        symlinkSync(path.join(external, 'missing-target.md'), path.join(slotDir, 'SKILL.md'), 'file');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/SKILL\.md is not a regular file/);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('propagates lstat permission errors on child SKILL candidates (SEC-FINAL-03)', () => {
+        setup();
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(slotDir, { recursive: true });
+        writeFileSync(path.join(slotDir, 'SKILL.md'), '# skill');
+        chmodSync(slotDir, 0);
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            let msg = '';
+            try { resolveRequestedSkills(fakeRepo, ['service-knowledge']); } catch (e) {
+                msg = e instanceof Error ? e.message : String(e);
+            }
+            expect(msg).toMatch(/cannot probe|EACCES/);
+            expect(msg).not.toContain(sandbox);
+        } finally {
+            chmodSync(slotDir, 0o755);
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('fails loudly on a top-level non-reserved symlink pack (never global fallback)', () => {
+        setup();
+        const externalPack = path.join(external, 'pack');
+        mkdirSync(path.join(externalPack, 'service-knowledge'), { recursive: true });
+        writeFileSync(path.join(externalPack, 'service-knowledge', 'SKILL.md'), '# external');
+        mkdirSync(path.join(fakeRepo, '.xtrm', 'skills'), { recursive: true });
+        symlinkSync(externalPack, path.join(fakeRepo, '.xtrm', 'skills', 'infra'), 'dir');
+        withHomeEnv(() => {
+            expect(() => resolveRequestedSkills(fakeRepo, ['service-knowledge']))
+                .toThrow(/is a symlink/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('sanitizes and bounds hostile skill-request diagnostics for every runtime', () => {
+        setup();
+        const controls = 'bad\n\u001b]52;c;payload\u0007\u009b';
+        const requests = [
+            `.xtrm/skills/infra/${controls}${'x'.repeat(512)}`,
+            path.join(external, `${controls}${'y'.repeat(512)}`),
+        ];
+        withHomeEnv(() => {
+            for (const runtime of ['pi', 'claude', 'codex'] as const) {
+                for (const request of requests) {
+                    let message = '';
+                    try { resolveRequestedSkills(fakeRepo, [request], runtime); } catch (error) {
+                        message = error instanceof Error ? error.message : String(error);
+                    }
+                    expect(message).toContain('\\u{0a}');
+                    expect(message).toContain('\\u{1b}');
+                    expect(message).toContain('\\u{07}');
+                    expect(message).toContain('\\u{9b}');
+                    expect(message).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
+                    expect(message).not.toContain(sandbox);
+                    expect(message.length).toBeLessThan(400);
+                }
+            }
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('treats an explicit pack-root DIRECTORY as pack-shaped for pi and codex (751b HIGH)', () => {
+        setup();
+        // Missing root SKILL.md -> malformed/missing must fail before launch.
+        const packDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra');
+        mkdirSync(packDir, { recursive: true });
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            for (const runtime of ['pi', 'codex'] as const) {
+                expect(() => resolveRequestedSkills(fakeRepo, [packDir], runtime))
+                    .toThrow(/has no SKILL\.md/);
+            }
+            // Valid root skill (frontmatter runtime name) resolves for both.
+            writeFileSync(path.join(packDir, 'SKILL.md'), '---\nname: service-knowledge\n---\n# root');
+            expect(resolveRequestedSkills(fakeRepo, [packDir], 'pi')).toEqual([path.join(packDir, 'SKILL.md')]);
+            expect(resolveRequestedSkills(fakeRepo, [packDir], 'codex')).toEqual([path.join(packDir, 'SKILL.md')]);
+            // Malformed root SKILL.md (unsafe identity) fails for both.
+            rmSync(path.join(packDir, 'SKILL.md'));
+            writeFileSync(path.join(packDir, 'SKILL.md'), '---\nname: ../evil\n---\n# bad');
+            expect(() => resolveRequestedSkills(fakeRepo, [packDir], 'pi')).toThrow(/unsafe runtime name/);
+            expect(() => resolveRequestedSkills(fakeRepo, [packDir], 'codex')).toThrow(/unsafe runtime name/);
+            // Full pi/codex matrix across child dir/file + root file forms.
+            const childDir = path.join(packDir, 'catalog');
+            for (const runtime of ['pi', 'codex'] as const) {
+                // absent slot -> fail, no home fallback
+                expect(() => resolveRequestedSkills(fakeRepo, [childDir], runtime)).toThrow();
+                expect(() => resolveRequestedSkills(fakeRepo, [path.join(childDir, 'SKILL.md')], runtime)).toThrow();
+                expect(() => resolveRequestedSkills(fakeRepo, [path.join(packDir, 'SKILL.md')], runtime)).toThrow();
+            }
+            const repoSlotFile = path.join(childDir, 'SKILL.md');
+            mkdirSync(childDir, { recursive: true });
+            writeFileSync(repoSlotFile, '---\nname: catalog-skill\n---\n# repo');
+            rmSync(path.join(packDir, 'SKILL.md'));
+            for (const runtime of ['pi', 'codex'] as const) {
+                expect(resolveRequestedSkills(fakeRepo, [childDir], runtime)).toEqual([repoSlotFile]);
+                expect(resolveRequestedSkills(fakeRepo, [path.join(childDir, 'SKILL.md')], runtime)).toEqual([repoSlotFile]);
+            }
+            writeFileSync(path.join(packDir, 'SKILL.md'), '---\nname: service-knowledge\n---\n# root');
+            expect(resolveRequestedSkills(fakeRepo, [packDir], 'pi')).toEqual([path.join(packDir, 'SKILL.md')]);
+            expect(resolveRequestedSkills(fakeRepo, [packDir], 'codex')).toEqual([path.join(packDir, 'SKILL.md')]);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('pins RELATIVE pack-shaped requests to the repo root; HOME content never selected (c7e)', () => {
+        setup();
+        // Repo lacks the pack skill, HOME has matching content under .xtrm:
+        // the relative request must fail prelaunch, never home-fallback.
+        const homeSlot = path.join(fakeHome, '.xtrm', 'skills', 'infra', 'catalog', 'SKILL.md');
+        mkdirSync(path.dirname(homeSlot), { recursive: true });
+        writeFileSync(homeSlot, '# home content');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            for (const runtime of ['pi', 'claude', 'codex'] as const) {
+                // child dir + child file forms.
+                expect(() => resolveRequestedSkills(fakeRepo, ['.xtrm/skills/infra/catalog'], runtime))
+                    .toThrow(/not a valid project-pack skill/);
+                expect(() => resolveRequestedSkills(fakeRepo, ['.xtrm/skills/infra/catalog/SKILL.md'], runtime))
+                    .toThrow(/not a valid project-pack skill/);
+            }
+            // Pack-root DIRECTORY and root-file forms: repo missing, home has
+            // root skill -> still pinned to repo, fails.
+            const homeRoot = path.join(fakeHome, '.xtrm', 'skills', 'infra', 'SKILL.md');
+            mkdirSync(path.dirname(homeRoot), { recursive: true });
+            writeFileSync(homeRoot, '# home root');
+            expect(() => resolveRequestedSkills(fakeRepo, ['.xtrm/skills/infra'], 'pi'))
+                .toThrow(/not a valid project-pack skill/);
+            expect(() => resolveRequestedSkills(fakeRepo, ['.xtrm/skills/infra/SKILL.md'], 'claude'))
+                .toThrow(/not a valid project-pack skill/);
+            // When the repo pack exists and is valid it resolves to the REPO
+            // skill (never home), even with matching HOME content.
+            const repoSlot = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog', 'SKILL.md');
+            mkdirSync(path.dirname(repoSlot), { recursive: true });
+            writeFileSync(repoSlot, '---\nname: catalog-skill\n---\n# repo');
+            expect(resolveRequestedSkills(fakeRepo, ['.xtrm/skills/infra/catalog'], 'pi')).toEqual([repoSlot]);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('parses frontmatter runtime names beyond 8KiB (751b)', () => {
+        setup();
+        const skillDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(skillDir, { recursive: true });
+        const pad = '# ' + 'x'.repeat(9 * 1024);
+        const skillFile = path.join(skillDir, 'SKILL.md');
+        writeFileSync(skillFile, `---\n${pad}\nname: service-knowledge\n---\n# long`);
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            const resolved = resolveRequestedSkills(fakeRepo, ['service-knowledge'], 'claude');
+            expect(resolved).toEqual([skillFile]);
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('normalizes explicit pack DIRECT paths through the strict probe for every runtime (SEC-196-03)', () => {
+        setup();
+        // Unsafe frontmatter identity on a DIRECT absolute pack path.
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: ../evil\n---\n# bad');
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            for (const runtime of ['pi', 'claude', 'codex'] as const) {
+                // Directory form and SKILL.md form both fail pre-launch.
+                expect(() => resolveRequestedSkills(fakeRepo, [slotFile], runtime))
+                    .toThrow(/unsafe runtime name/);
+                expect(() => resolveRequestedSkills(fakeRepo, [slotDir], runtime))
+                    .toThrow(/unsafe runtime name/);
+            }
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects malformed explicit pack DIRECT paths for pi before launch (SEC-196-03)', () => {
+        const cases: Array<{ setup: () => string; match: RegExp }> = [
+            {
+                // dangling SKILL.md symlink: pack-shaped direct route -> the
+                // strict probe reports the malformed link, never a generic
+                // fallback and never a forwarded pi path
+                setup: () => {
+                    const dir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+                    mkdirSync(dir, { recursive: true });
+                    symlinkSync(path.join(external, 'gone.md'), path.join(dir, 'SKILL.md'), 'file');
+                    return path.join(dir, 'SKILL.md');
+                },
+                match: /not a regular file/,
+            },
+            {
+                // SKILL.md is a directory: pack-shaped -> strict probe rejects
+                setup: () => {
+                    const dir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+                    mkdirSync(path.join(dir, 'SKILL.md'), { recursive: true });
+                    return path.join(dir, 'SKILL.md');
+                },
+                match: /not a regular file/,
+            },
+            {
+                // control-byte frontmatter name with escaped diagnostic
+                setup: () => {
+                    const dir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+                    mkdirSync(dir, { recursive: true });
+                    writeFileSync(path.join(dir, 'SKILL.md'), '---\nname: bad\u0007name\n---\n# x');
+                    return path.join(dir, 'SKILL.md');
+                },
+                match: /unsafe runtime name/,
+            },
+        ];
+        const previousHome = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try {
+            for (const c of cases) {
+                rmSync(sandbox, { recursive: true, force: true });
+                mkdirSync(fakeRepo, { recursive: true });
+                mkdirSync(fakeHome, { recursive: true });
+                const target = c.setup();
+                expect(() => resolveRequestedSkills(fakeRepo, [target], 'pi')).toThrow(c.match);
+            }
+        } finally {
+            process.env.HOME = previousHome;
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('claude pack-skill loadability', () => {
+    const sandbox = path.join(os.tmpdir(), `xtrm-claude-pack-links-${process.pid}`);
+    const fakeHome = path.join(sandbox, 'home');
+    const fakeRepo = path.join(sandbox, 'repo');
+    const fakeWorktree = path.join(sandbox, 'worktree');
+
+    function setupPack(packName: string, skillName: string): string {
+        const skillDir = path.join(fakeRepo, '.xtrm', 'skills', packName, skillName);
+        mkdirSync(skillDir, { recursive: true });
+        const skillFile = path.join(skillDir, 'SKILL.md');
+        writeFileSync(skillFile, `# ${packName}/${skillName}`);
+        return skillFile;
+    }
+
+    // SEC-05: launcher links the WORKTREE-LOCAL tracked copy of the pack. A
+    // real worktree receives the pack via git checkout, so fixtures mirror the
+    // pack skill into the fake worktree.
+    function mirrorPackToWorktree(packName: string, skillName: string): string {
+        const wtSkillFile = path.join(fakeWorktree, '.xtrm', 'skills', packName, skillName, 'SKILL.md');
+        mkdirSync(path.dirname(wtSkillFile), { recursive: true });
+        writeFileSync(wtSkillFile, `# ${packName}/${skillName}`);
+        return wtSkillFile;
+    }
+
+    function withHomeEnv(fn: () => void): void {
+        const prev = process.env.HOME;
+        process.env.HOME = fakeHome;
+        try { fn(); } finally { process.env.HOME = prev; }
+    }
+
+    it('links pack-tier skills into the worktree .claude/skills as /<name>', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const skillFile = setupPack('infra', 'service-knowledge');
+        const wtSkillFile = mirrorPackToWorktree('infra', 'service-knowledge');
+        withHomeEnv(() => {
+            // The resolver returns MAIN-ROOT pack paths; materialization maps
+            // them onto the worktree-local tracked copies.
+            const created = ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [skillFile]);
+            const link = path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge');
+            expect(created).toEqual([link]);
+            // Targets resolve relative to the link's own directory (.claude/skills)
+            // and point at the WORKTREE-LOCAL pack copy.
+            expect(readlinkSync(link)).toBe(path.relative(path.dirname(link), path.dirname(wtSkillFile)));
+            expect(realpathSync(path.join(link, 'SKILL.md'))).toBe(wtSkillFile);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('fails when the worktree-local pack copy is absent (pack must be tracked)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const skillFile = setupPack('infra', 'service-knowledge');
+        withHomeEnv(() => {
+            expect(() => ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [skillFile]))
+                .toThrow(/must be tracked/);
+            expect(existsSync(path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge'))).toBe(false);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('never overwrites an occupied worktree slot', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        setupPack('infra', 'service-knowledge');
+        mirrorPackToWorktree('infra', 'service-knowledge');
+        const occupant = path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge', 'SKILL.md');
+        mkdirSync(path.dirname(occupant), { recursive: true });
+        writeFileSync(occupant, '# repo-owned');
+        withHomeEnv(() => {
+            expect(() => ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [
+                path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge'),
+            ]))
+                .toThrow(/already holds a different skill/);
+            expect(readFileSync(occupant, 'utf8')).toBe('# repo-owned');
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('accepts an occupied worktree slot that already resolves to the requested skill', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        setupPack('infra', 'service-knowledge');
+        const wtSkillDir = path.join(fakeWorktree, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(wtSkillDir, { recursive: true });
+        writeFileSync(path.join(wtSkillDir, 'SKILL.md'), '# skill');
+        const existingLink = path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge');
+        mkdirSync(path.dirname(existingLink), { recursive: true });
+        symlinkSync(wtSkillDir, existingLink, 'dir');
+        withHomeEnv(() => {
+            const resolvedDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+            expect(ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [resolvedDir])).toEqual([]);
+            expect(existsSync(existingLink)).toBe(true);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('fails hard on a same-named user-global slot instead of shadowing', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const skillFile = setupPack('infra', 'service-knowledge');
+        const globalSlot = path.join(fakeHome, '.claude', 'skills', 'service-knowledge');
+        mkdirSync(globalSlot, { recursive: true });
+        writeFileSync(path.join(globalSlot, 'SKILL.md'), '# global');
+        withHomeEnv(() => {
+            expect(() => ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [skillFile]))
+                .toThrow(/same-named user-global/);
+            expect(existsSync(path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge'))).toBe(false);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('links directory-form pack paths to the worktree skill dir, not the pack root', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const skillDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(skillDir, { recursive: true });
+        writeFileSync(path.join(skillDir, 'SKILL.md'), '# skill');
+        const wtSkillDir = path.join(fakeWorktree, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(wtSkillDir, { recursive: true });
+        writeFileSync(path.join(wtSkillDir, 'SKILL.md'), '# skill');
+        withHomeEnv(() => {
+            const created = ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [skillDir]);
+            const link = path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge');
+            expect(created).toEqual([link]);
+            expect(realpathSync(link)).toBe(wtSkillDir);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects a deeper descendant of a pack skill as non-pack and requires native discovery', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const descendant = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge', 'nested', 'SKILL.md');
+        mkdirSync(path.dirname(descendant), { recursive: true });
+        writeFileSync(descendant, '# nested');
+        withHomeEnv(() => {
+            // Pack helpers ignore it: it is not a pack skill and no link is
+            // materialized.
+            expect(ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [descendant])).toEqual([]);
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [descendant])).not.toThrow();
+            // Acceptance evidence is the production gate: claude must discover
+            // the exact canonical skill natively or the launch fails. Nothing
+            // is discoverable under the fake root, so the native gate rejects
+            // the dead slash before launch.
+            expect(() => assertClaudeSkillsDiscoverable(fakeRepo, [descendant]))
+                .toThrow(/not discoverable by Claude/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('leaves non-pack paths untouched', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const native = path.join(fakeRepo, '.pi', 'skills', 'multiplexing', 'SKILL.md');
+        mkdirSync(path.dirname(native), { recursive: true });
+        writeFileSync(native, '# native');
+        withHomeEnv(() => {
+            expect(ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [native])).toEqual([]);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects an explicit/role pack skill shadowed by a same-named global default', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const skillFile = setupPack('infra', 'service-knowledge');
+        const globalSlot = path.join(fakeHome, '.claude', 'skills', 'service-knowledge');
+        mkdirSync(globalSlot, { recursive: true });
+        writeFileSync(path.join(globalSlot, 'SKILL.md'), '# global');
+        withHomeEnv(() => {
+            // The gate takes the combined role-declared + explicit set; a
+            // role-declared pack path alone must be rejected the same way.
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [skillFile]))
+                .toThrow(/same-named global/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects an explicit pack skill whose main-root slot holds different content', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const skillFile = setupPack('infra', 'service-knowledge');
+        const other = path.join(fakeRepo, '.claude', 'skills', 'service-knowledge', 'SKILL.md');
+        mkdirSync(path.dirname(other), { recursive: true });
+        writeFileSync(other, '# different');
+        withHomeEnv(() => {
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [skillFile]))
+                .toThrow(/already holds a different skill/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects two different project packs behind one slash name before creation (SEC-06)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const fromA = setupPack('infra', 'service-knowledge');
+        const fromB = setupPack('market-data', 'service-knowledge');
+        withHomeEnv(() => {
+            let msg = '';
+            try { assertClaudePackSkillsLoadable(fakeRepo, [fromA, fromB]); } catch (e) {
+                msg = e instanceof Error ? e.message : String(e);
+            }
+            expect(msg).toMatch(/declared from two different project packs/);
+            expect(msg).toContain('.xtrm/skills/infra/service-knowledge');
+            expect(msg).toContain('.xtrm/skills/market-data/service-knowledge');
+            expect(msg).not.toContain(sandbox);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('uses the canonical runtimeName for shadow and conflict identity (SEC-NEW-02)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        // Directory 'catalog' but canonical runtime identity 'service-knowledge'.
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: service-knowledge\n---\n# renamed');
+        const globalSlot = path.join(fakeHome, '.claude', 'skills', 'service-knowledge');
+        mkdirSync(globalSlot, { recursive: true });
+        writeFileSync(path.join(globalSlot, 'SKILL.md'), '# global');
+        withHomeEnv(() => {
+            // The shadow check must key on the runtimeName, not the 'catalog'
+            // directory basename.
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [slotFile]))
+                .toThrow(/'\/service-knowledge'.*same-named global/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('links claude skills by canonical runtimeName, not directory name (SEC-NEW-02)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: service-knowledge\n---\n# renamed');
+        const wtSlotDir = path.join(fakeWorktree, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(wtSlotDir, { recursive: true });
+        writeFileSync(path.join(wtSlotDir, 'SKILL.md'), '---\nname: service-knowledge\n---\n# renamed');
+        withHomeEnv(() => {
+            const created = ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [slotFile]);
+            // The link is '/service-knowledge', never '/catalog'.
+            const link = path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge');
+            expect(created).toEqual([link]);
+            expect(existsSync(path.join(fakeWorktree, '.claude', 'skills', 'catalog'))).toBe(false);
+            expect(realpathSync(path.join(link, 'SKILL.md'))).toBe(path.join(wtSlotDir, 'SKILL.md'));
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects a divergent worktree copy whose runtimeName differs (SEC-NEW-02)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: service-knowledge\n---\n# renamed');
+        const wtSlotDir = path.join(fakeWorktree, '.xtrm', 'skills', 'infra', 'catalog');
+        mkdirSync(wtSlotDir, { recursive: true });
+        // Worktree copy has a DIFFERENT runtime identity.
+        writeFileSync(path.join(wtSlotDir, 'SKILL.md'), '---\nname: other-skill\n---\n# divergent');
+        withHomeEnv(() => {
+            expect(() => ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, [slotFile]))
+                .toThrow(/declares runtime name 'other-skill'/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects an unsafe runtimeName at the claude preflight gate', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: ../evil\n---\n# bad');
+        withHomeEnv(() => {
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [slotFile]))
+                .toThrow(/unsafe runtime name/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects divergent canonical runtimeName shadow when bound alias differs (reviewer 7f5)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        withHomeEnv(() => {
+            // Bound alias 'service-knowledge'; canonical runtime name slot in
+            // the main root holds DIFFERENT content -> reject. The alias entry
+            // (bound via the deterministic policy) drives the divergent check.
+            const [entry] = bindClaudePackNames(fakeRepo, [slotFile], ['service-knowledge'], [], 'claude').roleEntries;
+            const canonicalSlot = path.join(fakeRepo, '.claude', 'skills', 'infra-xt-claude-sk-reconcile-infra-service-knowledge', 'SKILL.md');
+            mkdirSync(path.dirname(canonicalSlot), { recursive: true });
+            writeFileSync(canonicalSlot, '# different');
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [entry]))
+                .toThrow(/canonical runtime name .* occupied by a different skill/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('allows same canonical content in the divergent runtimeName slot (reviewer 7f5)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        writeFileSync(path.join(slotDir, 'SKILL.md'), '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        const canonicalSlot = path.join(fakeRepo, '.claude', 'skills', 'infra-xt-claude-sk-reconcile-infra-service-knowledge');
+        mkdirSync(path.dirname(canonicalSlot), { recursive: true });
+        symlinkSync(slotDir, canonicalSlot, 'dir');
+        withHomeEnv(() => {
+            const [entry] = bindClaudePackNames(fakeRepo, [path.join(slotDir, 'SKILL.md')], ['service-knowledge'], [], 'claude').roleEntries;
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [entry])).not.toThrow();
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects a divergent canonical runtimeName user-global shadow (reviewer 7f5)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        const globalSlot = path.join(fakeHome, '.claude', 'skills', 'infra-xt-claude-sk-reconcile-infra-service-knowledge');
+        mkdirSync(globalSlot, { recursive: true });
+        writeFileSync(path.join(globalSlot, 'SKILL.md'), '# global');
+        withHomeEnv(() => {
+            const [entry] = bindClaudePackNames(fakeRepo, [slotFile], ['service-knowledge'], [], 'claude').roleEntries;
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [entry]))
+                .toThrow(/shadowed by a global skill/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('pairs prefix names by declaration index across mixed pack+global declarations (probe available)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        // Canonical service-knowledge-sync shape: pack service-knowledge at
+        // index 0, two GLOBAL skills at indices 1-2.
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        const globals = [
+            path.join(fakeHome, '.xtrm', 'skills', 'default', 'gitnexus-impact-analysis', 'SKILL.md'),
+            path.join(fakeHome, '.xtrm', 'skills', 'default', 'gitnexus-exploring', 'SKILL.md'),
+        ];
+        for (const g of globals) mkdirSync(path.dirname(g), { recursive: true });
+        writeFileSync(globals[0], '# gn1');
+        writeFileSync(globals[1], '# gn2');
+        const wtSlotDir = path.join(fakeWorktree, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(wtSlotDir, { recursive: true });
+        writeFileSync(path.join(wtSlotDir, 'SKILL.md'), '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        withHomeEnv(() => {
+            // sp renders the prefix across ALL three declarations, in order;
+            // binding maps each prefix name to its declaration identity.
+            const prefixNames = ['service-knowledge', 'gitnexus-impact-analysis', 'gitnexus-exploring'];
+            const { roleEntries, explicitEntries } = bindClaudePackNames(
+                fakeRepo,
+                [slotFile, globals[0], globals[1]],
+                prefixNames,
+                [],
+                'claude',
+            );
+            expect(explicitEntries).toHaveLength(0);
+            expect(roleEntries).toHaveLength(1);
+            expect(roleEntries[0].name).toBe('service-knowledge');
+            // Materialize and verify the alias link.
+            const created = ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, roleEntries);
+            expect(created).toEqual([path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge')]);
+            expect(realpathSync(path.join(created[0], 'SKILL.md'))).toBe(path.join(wtSlotDir, 'SKILL.md'));
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('binds runtimeName when the sp renderer is unavailable (probe unavailable)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        try {
+            // No prefix names (fallback): entry binds runtimeName, which is
+            // exactly what renderDeclaredSkillPrefix with the entries emits
+            // (agreement between prefix and link).
+            const { roleEntries } = bindClaudePackNames(fakeRepo, [slotFile], null, [], 'claude');
+            expect(roleEntries).toHaveLength(1);
+            expect(roleEntries[0].name).toBe('infra-xt-claude-sk-reconcile-infra-service-knowledge');
+            expect(renderDeclaredSkillPrefix([slotFile], 'claude', fakeRepo, roleEntries))
+                .toBe('/infra-xt-claude-sk-reconcile-infra-service-knowledge\n\n');
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('coalesces role + explicit identities into one bound name, order independent (SEC-fa12)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        const wtSlotDir = path.join(fakeWorktree, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(wtSlotDir, { recursive: true });
+        writeFileSync(path.join(wtSlotDir, 'SKILL.md'), '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        withHomeEnv(() => {
+            // Role declaration (sp-resolved slot path) + explicit --skill of
+            // the SAME slot; both request orders must bind the same name.
+            const a = bindClaudePackNames(fakeRepo, [slotFile], ['service-knowledge'], [slotFile], 'claude');
+            const b = bindClaudePackNames(fakeRepo, [slotFile], ['service-knowledge'], ['service-knowledge'], 'claude');
+            for (const result of [a, b]) {
+                const merged = [...result.roleEntries, ...result.explicitEntries]
+                    .filter((e, i, all) => all.findIndex((x) => x.canonicalPath === e.canonicalPath) === i);
+                expect(merged).toHaveLength(1);
+                expect(merged[0].name).toBe('service-knowledge');
+            }
+            // Explicit command for the identity is dropped from turn-1 because
+            // the role prefix already carries '/service-knowledge'.
+            const mergedFor = (r: { roleEntries: Array<{ canonicalPath: string; name: string }>; explicitEntries: Array<{ canonicalPath: string; name: string }> }): ClaudePackSkillEntry[] =>
+                [...r.roleEntries, ...r.explicitEntries] as ClaudePackSkillEntry[];
+            const lines = composeClaudeExplicitLines(fakeRepo, [slotFile], mergedFor(a), new Set(['service-knowledge']));
+            expect(lines).toBe('');
+            // Materialize one alias link.
+            const created = ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, mergedFor(a));
+            expect(created).toEqual([path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge')]);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('composes the fallback role block + explicit alias to one command (ca9/751b)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        mkdirSync(fakeWorktree, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        const wtSlotDir = path.join(fakeWorktree, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(wtSlotDir, { recursive: true });
+        writeFileSync(path.join(wtSlotDir, 'SKILL.md'), '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        withHomeEnv(() => {
+            // Fallback (no sp prefix names): role declares the slot PATH,
+            // explicit --skill names the ALIAS for the same identity.
+            const { roleEntries, explicitEntries } = bindClaudePackNames(fakeRepo, [slotFile], null, ['service-knowledge'], 'claude');
+            expect(roleEntries).toHaveLength(1);
+            expect(roleEntries[0].name).toBe('service-knowledge');
+            expect(explicitEntries).toHaveLength(0);
+            // Role block carries the single command; explicit adds nothing.
+            const block = composeClaudeRoleBlock(fakeRepo, [slotFile], null, roleEntries, 'claude');
+            expect(block).toBe('/service-knowledge\n\n');
+            const explicitLines = composeClaudeExplicitLines(fakeRepo, [slotFile], [...roleEntries, ...explicitEntries], new Set(['service-knowledge']));
+            expect(explicitLines).toBe('');
+            // One alias link materialized.
+            const created = ensureClaudePackSkillLinks(fakeWorktree, fakeRepo, roleEntries);
+            expect(created).toEqual([path.join(fakeWorktree, '.claude', 'skills', 'service-knowledge')]);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects role declarations that name a skill outside its slot/runtime names (reviewer 78)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        try {
+            // 'other-alias' is neither the slot name nor the canonical runtime
+            // name: must reject before creation, not bind.
+            expect(() => bindClaudePackNames(fakeRepo, [slotFile, slotFile], ['service-knowledge', 'other-alias'], [], 'claude'))
+                .toThrow(/neither its slot name/);
+            // Canonical runtimeName as the second name is allowed; slot wins.
+            const { roleEntries } = bindClaudePackNames(
+                fakeRepo,
+                [slotFile, slotFile],
+                ['service-knowledge', 'infra-xt-claude-sk-reconcile-infra-service-knowledge'],
+                [],
+                'claude',
+            );
+            expect(roleEntries).toHaveLength(1);
+            expect(roleEntries[0].name).toBe('service-knowledge');
+            // Per-declaration reconstruction: exactly one command.
+            const block = composeClaudeRoleBlock(fakeRepo, [slotFile, slotFile], ['service-knowledge', 'infra-xt-claude-sk-reconcile-infra-service-knowledge'], roleEntries, 'claude');
+            expect(block).toBe('/service-knowledge\n\n');
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('binds explicit permutations deterministically to the slot alias (SEC-03)', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const slotDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(slotDir, { recursive: true });
+        const slotFile = path.join(slotDir, 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: infra-xt-claude-sk-reconcile-infra-service-knowledge\n---\n# real');
+        try {
+            // Every ordering of {abs path, SKILL.md path, bare slot alias,
+            // canonical runtime name} binds the slot alias.
+            const orders = [
+                [slotFile, 'service-knowledge'],
+                ['service-knowledge', slotFile],
+                [path.join(slotDir, 'SKILL.md'), 'service-knowledge'],
+                ['service-knowledge', 'infra-xt-claude-sk-reconcile-infra-service-knowledge', slotFile],
+            ];
+            for (const req of orders) {
+                const { explicitEntries } = bindClaudePackNames(fakeRepo, [], null, req, 'claude');
+                expect(explicitEntries).toHaveLength(1);
+                expect(explicitEntries[0].name).toBe('service-knowledge');
+            }
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('accepts the same project pack path declared twice', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const skillFile = setupPack('infra', 'service-knowledge');
+        withHomeEnv(() => {
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [skillFile, skillFile])).not.toThrow();
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('rejects a same-named global even when the local slot already holds the requested skill', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const skillDir = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'service-knowledge');
+        mkdirSync(skillDir, { recursive: true });
+        const skillFile = path.join(skillDir, 'SKILL.md');
+        writeFileSync(skillFile, '# skill');
+        // Local slot already resolves to the requested pack skill...
+        const localSlot = path.join(fakeRepo, '.claude', 'skills', 'service-knowledge');
+        mkdirSync(path.dirname(localSlot), { recursive: true });
+        symlinkSync(skillDir, localSlot, 'dir');
+        // ...but a different same-named global exists: the pack skill would
+        // still be shadowed for claude (user-global wins), so it must fail.
+        const globalSlot = path.join(fakeHome, '.claude', 'skills', 'service-knowledge');
+        mkdirSync(globalSlot, { recursive: true });
+        writeFileSync(path.join(globalSlot, 'SKILL.md'), '# global');
+        withHomeEnv(() => {
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [skillFile]))
+                .toThrow(/same-named global/);
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    it('accepts an explicit pack skill with free runtime slots', () => {
+        rmSync(sandbox, { recursive: true, force: true });
+        mkdirSync(fakeRepo, { recursive: true });
+        const skillFile = setupPack('infra', 'service-knowledge');
+        withHomeEnv(() => {
+            expect(() => assertClaudePackSkillsLoadable(fakeRepo, [skillFile])).not.toThrow();
+        });
+        rmSync(sandbox, { recursive: true, force: true });
+    });
 });
 
 describe('assertClaudeSkillsDiscoverable', () => {
@@ -1369,6 +2654,19 @@ describe('claudeExplicitSkillLines', () => {
     it('returns empty string when no paths given', () => {
         expect(claudeExplicitSkillLines([])).toBe('');
     });
+
+    it('renders the canonical runtimeName for renamed pack skills (SEC-NEW-02)', () => {
+        const sandbox = path.join(os.tmpdir(), `xtrm-explicit-lines-${process.pid}`);
+        const fakeRepo = path.join(sandbox, 'repo');
+        mkdirSync(path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog'), { recursive: true });
+        const slotFile = path.join(fakeRepo, '.xtrm', 'skills', 'infra', 'catalog', 'SKILL.md');
+        writeFileSync(slotFile, '---\nname: service-knowledge\n---\n# renamed');
+        try {
+            expect(claudeExplicitSkillLines([slotFile], fakeRepo)).toBe('/service-knowledge');
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
 });
 
 describe('resolveSkillPath', () => {
@@ -1444,5 +2742,57 @@ describe('resolveSkillPath', () => {
             expect(resolveSkillPath(fakeRepo, '~/foo/bar.md'))
                 .toBe(path.join(fakeHome, 'foo/bar.md'));
         });
+    });
+});
+
+describe('rollbackLauncherWorktree', () => {
+    function setupRepo(repo: string, branch: string, wt: string): { git: (args: string[], cwd?: string) => ReturnType<typeof spawnSync> } {
+        mkdirSync(repo, { recursive: true });
+        const git = (args: string[], cwd = repo) => spawnSync('git', args, { cwd, encoding: 'utf8' });
+        git(['init', '-b', 'main', '-q']);
+        writeFileSync(path.join(repo, 'README.md'), '# r');
+        git(['add', '-A']);
+        git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init']);
+        git(['worktree', 'add', '-b', branch, wt]);
+        return { git };
+    }
+
+    it('removes the worktree AND its branch with no residual ref (SEC-06 + SEC-FINAL-01)', () => {
+        const sandbox = path.join(os.tmpdir(), `xtrm-rollback-${process.pid}`);
+        const repo = path.join(sandbox, 'repo');
+        const wt = path.join(repo, '.xtrm', 'worktrees', 'demo');
+        const { git } = setupRepo(repo, 'xt/demo', wt);
+        expect(existsSync(wt)).toBe(true);
+        expect(git(['rev-parse', '--verify', 'refs/heads/xt/demo']).status).toBe(0);
+        try {
+            // deleteBranch=true: THIS invocation created the branch.
+            rollbackLauncherWorktree(repo, wt, 'xt/demo', true);
+            expect(existsSync(wt)).toBe(false);
+            expect(git(['rev-parse', '--verify', 'refs/heads/xt/demo']).status).not.toBe(0);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it('preserves a pre-existing reused branch when rollback runs (SEC-FINAL-01)', () => {
+        const sandbox = path.join(os.tmpdir(), `xtrm-rollback-reuse-${process.pid}`);
+        const repo = path.join(sandbox, 'repo');
+        const wt = path.join(repo, '.xtrm', 'worktrees', 'demo');
+        const { git } = setupRepo(repo, 'xt/demo', wt);
+        // A second worktree reuses the SAME branch (launcher reuse mode).
+        const wt2 = path.join(repo, '.xtrm', 'worktrees', 'demo2');
+        git(['worktree', 'add', wt2, 'xt/demo']);
+        expect(existsSync(wt)).toBe(true);
+        const before = git(['rev-parse', 'refs/heads/xt/demo']);
+        try {
+            // deleteBranch=false: the branch pre-existed; a provisioning
+            // failure of THIS invocation must not delete it.
+            rollbackLauncherWorktree(repo, wt, 'xt/demo', false);
+            expect(existsSync(wt)).toBe(false);
+            expect(git(['rev-parse', '--verify', 'refs/heads/xt/demo']).status).toBe(0);
+            expect(git(['rev-parse', 'refs/heads/xt/demo']).stdout).toBe(before.stdout);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
     });
 });
