@@ -6,24 +6,28 @@
 // outright). This module owns the restore archive path:
 //
 //   1. inspectBackupArchive  — parse every tar entry; reject absolute / `..`
-//      names, symlink / hardlink / special entries, malformed or truncated
-//      archives, and any entry outside the expected component root
-//      (`skills/...` or `hooks/...`) BEFORE a single byte reaches the
-//      destination. Archive bytes are parsed by us (stdlib zlib + tar format),
-//      never trusted to tar's own extraction.
+//      names, malformed or truncated archives, and any entry outside the
+//      expected component root (`skills/...` or `hooks/...`) BEFORE a single
+//      byte reaches the destination. By default, link and special entries are
+//      rejected. Internal callers may opt into symlink support, but only for
+//      validated relative in-root targets. Archive bytes are parsed by us
+//      (stdlib zlib + tar format), never trusted to tar's own extraction.
 //   2. extractValidatedBackup — replay the already-validated entries into a
-//      private mkdtemp staging dir (paths cannot escape: only regular
-//      files/directories with validated relative names are written).
+//      private mkdtemp staging dir (paths cannot escape: regular
+//      files/directories are written directly; validated symlinks are created
+//      only when the caller explicitly enabled them).
 //   3. assertStagedTreeSafe — recursive lstat walk proving the staged tree
-//      contains nothing but regular files and directories, then the caller
-//      swaps it into place.
+//      contains only regular files/directories by default, or validated in-root
+//      symlinks when explicitly allowed, then the caller swaps it into place.
 //
 // Supported tar surface is deliberately narrow: USTAR/GNU headers with regular
 // file ('0') and directory ('5') entries, GNU long-name ('L') entries (xtrm
 // backups contain them for deep skill paths), and pax `path=` overrides ('x').
-// Every other typeflag — links, devices, FIFOs, sparse, pax-global, long-link
-// — is rejected. Checksums are verified (space- or NUL-filled, like GNU tar)
-// so structurally corrupt headers cannot slip through.
+// Symbolic links ('2') stay rejected unless `allowSymlinks` is enabled, and
+// even then only relative in-root targets are accepted. Every other typeflag —
+// hard links, devices, FIFOs, sparse, pax-global, long-link — is rejected.
+// Checksums are verified (space- or NUL-filled, like GNU tar) so structurally
+// corrupt headers cannot slip through.
 //
 // Diagnostics name archive entry paths and types, never file bodies.
 
@@ -36,9 +40,16 @@ export type BackupComponent = 'skills' | 'hooks';
 export interface ValidatedBackupEntry {
   /** POSIX-style relative path, no leading './', no '..', no empty segments. */
   relPath: string;
-  kind: 'file' | 'dir';
+  kind: 'file' | 'dir' | 'symlink';
   /** Stored mode (octal) from the archive header. */
   mode: number;
+  /** Relative symlink target when kind === 'symlink'. */
+  linkTarget?: string;
+}
+
+interface BackupArchiveOptions {
+  /** Default false. When true, allow only validated relative symlinks that stay inside the component root. */
+  allowSymlinks?: boolean;
 }
 
 const COMPONENT_ROOT: Record<BackupComponent, string> = {
@@ -153,11 +164,28 @@ function parsePaxPath(data: Buffer): string | null {
  * (empty when `skipData`). Throws on the first unsafe or malformed entry, so
  * a full scan rejects the archive before extraction begins.
  */
+function validateSymlinkTarget(relPath: string, rawTarget: string, component: BackupComponent): string {
+  const target = rawTarget.split('\0')[0] ?? '';
+  if (target === '') {
+    throw rejected(`entry '${relPath}' has an empty symlink target`);
+  }
+  if (path.posix.isAbsolute(target)) {
+    throw rejected(`entry '${relPath}' has an absolute symlink target '${target}'`);
+  }
+  const root = COMPONENT_ROOT[component];
+  const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(relPath), target));
+  if (resolved !== root && !resolved.startsWith(`${root}/`)) {
+    throw rejected(`entry '${relPath}' has a symlink target '${target}' that escapes the ${component} restore root`);
+  }
+  return target;
+}
+
 function walkTarBuffer(
   buf: Buffer,
   component: BackupComponent,
   onEntry: (entry: ValidatedBackupEntry, data: Buffer) => void,
   skipData: boolean,
+  options: BackupArchiveOptions = {},
 ): void {
   const root = COMPONENT_ROOT[component];
   let pos = 0;
@@ -214,15 +242,15 @@ function walkTarBuffer(
       rawName = tarHeaderName(header);
     }
 
+    const relPath = normalizeEntryPath(rawName);
     const linkKind = ENTRY_TYPE_NAMES[typeflag];
-    if (linkKind !== undefined) {
+    if (linkKind !== undefined && !(typeflag === '2' && options.allowSymlinks)) {
       throw rejected(`entry '${rawName}' is a ${linkKind}; restorable backups contain only regular files and directories`);
     }
-    if (typeflag !== '0' && typeflag !== '\0' && typeflag !== '5') {
+    if (typeflag !== '0' && typeflag !== '\0' && typeflag !== '5' && !(typeflag === '2' && options.allowSymlinks)) {
       throw rejected(`entry has unsupported tar type '${typeflag}'`);
     }
 
-    const relPath = normalizeEntryPath(rawName);
     if (relPath !== root && !relPath.startsWith(`${root}/`)) {
       throw rejected(
         `entry '${relPath}' is outside the ${component} restore root — expected '${root}/...' layout`,
@@ -232,8 +260,9 @@ function walkTarBuffer(
     onEntry(
       {
         relPath,
-        kind: typeflag === '5' ? 'dir' : 'file',
+        kind: typeflag === '5' ? 'dir' : typeflag === '2' ? 'symlink' : 'file',
         mode: parseOctalField(header, 100, 8) || 0o644,
+        linkTarget: typeflag === '2' ? validateSymlinkTarget(relPath, cutAtNul(header.subarray(157, 257)).toString('utf8'), component) : undefined,
       },
       skipData ? Buffer.alloc(0) : data,
     );
@@ -263,16 +292,18 @@ function readArchiveBytes(archivePath: string): Buffer {
 
 /**
  * Pre-scan an operator-supplied backup archive. Throws before any destination
- * mutation on: absolute / `..` paths, symlink / hardlink / special entries,
- * malformed or truncated archives, entries outside the component root, and a
- * skills backup missing `skills/default/`. Returns the validated entry list.
+ * mutation on: absolute / `..` paths, malformed or truncated archives, entries
+ * outside the component root, and a skills backup missing `skills/default/`.
+ * By default symlink, hardlink, and special entries are rejected. With
+ * `allowSymlinks`, only validated relative symlinks that stay inside the
+ * component root are accepted. Returns the validated entry list.
  */
-export function inspectBackupArchive(archivePath: string, component: BackupComponent): ValidatedBackupEntry[] {
+export function inspectBackupArchive(archivePath: string, component: BackupComponent, options: BackupArchiveOptions = {}): ValidatedBackupEntry[] {
   const buf = readArchiveBytes(archivePath);
   const entries: ValidatedBackupEntry[] = [];
   walkTarBuffer(buf, component, (entry) => {
     entries.push(entry);
-  }, true);
+  }, true, options);
   if (entries.length === 0) {
     throw rejected('contains no entries');
   }
@@ -297,6 +328,7 @@ export function extractValidatedBackup(
   archivePath: string,
   component: BackupComponent,
   stagingDir: string,
+  options: BackupArchiveOptions = {},
 ): void {
   const buf = readArchiveBytes(archivePath);
   const chmodQueue: Array<{ target: string; mode: number }> = [];
@@ -304,12 +336,17 @@ export function extractValidatedBackup(
     const dest = path.join(stagingDir, ...entry.relPath.split('/'));
     if (entry.kind === 'dir') {
       fs.mkdirSync(dest, { recursive: true });
-    } else {
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, data, { mode: 0o600 });
+      chmodQueue.push({ target: dest, mode: entry.mode & 0o777 });
+      return;
     }
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    if (entry.kind === 'symlink') {
+      fs.symlinkSync(entry.linkTarget ?? '', dest);
+      return;
+    }
+    fs.writeFileSync(dest, data, { mode: 0o600 });
     chmodQueue.push({ target: dest, mode: entry.mode & 0o777 });
-  }, false);
+  }, false, options);
   for (const { target, mode } of chmodQueue) {
     fs.chmodSync(target, mode);
   }
@@ -330,7 +367,7 @@ function describeStagedEntryType(stats: fs.Stats): string {
  * top level is exactly the component root, and a skills tree contains
  * `skills/default/`.
  */
-export async function assertStagedTreeSafe(stagingDir: string, component: BackupComponent): Promise<void> {
+export async function assertStagedTreeSafe(stagingDir: string, component: BackupComponent, options: BackupArchiveOptions = {}): Promise<void> {
   const root = COMPONENT_ROOT[component];
   const top = await fs.readdir(stagingDir, { withFileTypes: true });
   const topNames = top.map((entry) => entry.name).sort();
@@ -348,6 +385,23 @@ export async function assertStagedTreeSafe(stagingDir: string, component: Backup
       const rel = path.relative(stagingDir, target).split(path.sep).join('/');
       if (stats.isDirectory()) {
         stack.push(target);
+      } else if (stats.isSymbolicLink()) {
+        if (!options.allowSymlinks) {
+          throw rejected(`staged entry '${rel}' is ${describeStagedEntryType(stats)}`);
+        }
+        const linkTarget = await fs.readlink(target);
+        if (path.isAbsolute(linkTarget)) {
+          throw rejected(`staged symlink '${rel}' has an absolute target '${linkTarget}'`);
+        }
+        const componentRoot = path.join(stagingDir, root);
+        const resolvedTarget = path.resolve(path.dirname(target), linkTarget);
+        const resolvedRoot = path.resolve(componentRoot);
+        if (resolvedTarget !== resolvedRoot && !resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`)) {
+          throw rejected(`staged symlink '${rel}' escapes the ${component} restore root`);
+        }
+        if (!await fs.pathExists(resolvedTarget)) {
+          throw rejected(`staged symlink '${rel}' points at a missing target`);
+        }
       } else if (!stats.isFile()) {
         throw rejected(`staged entry '${rel}' is ${describeStagedEntryType(stats)}`);
       }

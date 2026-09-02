@@ -6,6 +6,7 @@ import { t } from '../utils/theme.js';
 import { checkDrift } from './drift.js';
 import { confirmDestructiveAction } from '../utils/confirmation.js';
 import { shouldUseGlobalSkills } from './global-skills-flag.js';
+import { INSTALLER_MANIFEST_FILENAME, readManifestJson } from './installer-manifest.js';
 import { resolveGlobalSkillsRoot } from './skills-layout.js';
 
 declare const __dirname: string;
@@ -178,6 +179,32 @@ export function collectManagedDefaultSkillNames(registry: RegistryManifest): Set
     return names;
 }
 
+function collectTopLevelNames(relPaths: readonly string[]): Set<string> {
+    const names = new Set<string>();
+    for (const relPath of relPaths) {
+        const first = relPath.split('/')[0];
+        if (first) names.add(first);
+    }
+    return names;
+}
+
+async function readPreviouslyManagedDefaultSkillNames(userXtrmDir: string, defaultRoot: string): Promise<Set<string>> {
+    const globalDefaultRoot = path.join(resolveGlobalSkillsRoot(), 'default');
+    // Canonical path comparison only; this does not access a resolved user path.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    if (path.resolve(defaultRoot) === path.resolve(globalDefaultRoot)) {
+        const manifestPath = path.join(resolveGlobalSkillsRoot(), INSTALLER_MANIFEST_FILENAME);
+        const manifest = await readManifestJson<{ default?: string[] }>(manifestPath, {});
+        return collectTopLevelNames(manifest.default ?? []);
+    }
+
+    // userXtrmDir is the caller-selected .xtrm scope; only its fixed registry child is read.
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    const snapshotPath = path.join(userXtrmDir, 'registry.json');
+    const snapshot = await readManifestJson<RegistryManifest | null>(snapshotPath, null);
+    return snapshot ? collectManagedDefaultSkillNames(snapshot) : new Set<string>();
+}
+
 async function isDirLike(entryPath: string, entryStat: import('fs').Stats): Promise<boolean> {
     if (entryStat.isDirectory()) return true;
     if (!entryStat.isSymbolicLink()) return false;
@@ -209,11 +236,22 @@ export async function pruneRetiredManagedSkills(params: {
         return { removed: [] };
     }
 
+    const previouslyManagedNames = await readPreviouslyManagedDefaultSkillNames(userXtrmDir, defaultRoot);
+    if (previouslyManagedNames.size === 0) {
+        return { removed: [] };
+    }
+    const retiredManagedNames = new Set(
+        [...previouslyManagedNames].filter(name => !managedNames.has(name)),
+    );
+    if (retiredManagedNames.size === 0) {
+        return { removed: [] };
+    }
+
     const onDisk = await fs.readdir(defaultRoot);
     const removed: string[] = [];
 
     for (const name of onDisk) {
-        if (managedNames.has(name)) continue;
+        if (!retiredManagedNames.has(name)) continue;
 
         // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         const entryPath = path.join(defaultRoot, name);
