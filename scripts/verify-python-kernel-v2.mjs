@@ -79,6 +79,18 @@ for (const [label, re] of auditMarkers) {
   else fail(label);
 }
 
+// --- memory doctrine: preflight digest ---
+const preflightMarkers = [
+  ["preflight digest defined", /def preflight\(repo, path/],
+  ["preflight bound into _ns", /_ns\["preflight"\] = preflight/],
+  ["preflight survives reset (durable prelude)", /try:\n        _ns\["preflight"\] = preflight/],
+  ["full-body record format", /--format=%x1e%x1f%h%x1f%ad%x1f%s%x1f%b/],
+];
+for (const [label, re] of preflightMarkers) {
+  if (re.test(src)) ok(label);
+  else fail(label);
+}
+
 // --- test coverage ---
 const testMarkers = [
   ["discovery unit test", /discoverSkillModules\(\[fx\.dir\]\)/],
@@ -86,6 +98,7 @@ const testMarkers = [
   ["reload test", /reloadSkills\(\)/],
   ["truncation test", /truncateOutput/],
   ["audit flow test", /audit seam: kernel-side mutation entries/],
+  ["preflight binding test", /preflight: durable prelude binding/],
 ];
 for (const [label, re] of testMarkers) {
   if (re.test(tests)) ok(label);
@@ -97,5 +110,5 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`  - ${f}`);
   process.exit(1);
 }
-console.log(`\nverify-python-kernel-v2: all ${skillbridgeMarkers.length + qolMarkers.length + auditMarkers.length + testMarkers.length} checks passed.`);
+console.log(`\nverify-python-kernel-v2: all ${skillbridgeMarkers.length + qolMarkers.length + auditMarkers.length + preflightMarkers.length + testMarkers.length} checks passed.`);
 process.exit(0);
