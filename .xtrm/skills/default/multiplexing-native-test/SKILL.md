@@ -459,9 +459,9 @@ Prefer durable result surfaces over conversational text:
 3. `sp result <job-id> --json` for actual Specialist jobs.
 4. Native peer reply/message for coordination context.
 5. Pi/Claude transcript only when the conversation itself is the evidence.
-6. `tmux capture-pane` only for transient UI/debugging state.
+6. `tmux capture-pane` only for transient live-state UI/debugging.
 
-Never make `capture-pane` the final-result protocol.
+Never make `capture-pane` the final-result protocol — it is live-state only.
 
 A native delivery receipt means transport progress, not result validity.
 
