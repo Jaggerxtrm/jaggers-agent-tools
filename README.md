@@ -24,11 +24,11 @@ A live statusline renders in every Claude Code session: active claim, open issue
 
 ### Specialists
 
-Specialists are first-class in v0.7.19. `xtrm-tools` vendors specialist skills into `~/.xtrm/skills/default/` (global SSOT), keeps user fallback under `~/.xtrm/skills/user/packs/`, and runs the release-contract handshake through `.github/workflows/specialists-validation.yml`. `sp` is a runtime prerequisite for specialist commands.
+`sp` (`@jaggerxtrm/specialists`) is the runtime companion for specialist execution (`sp run`, `sp view`, `sp render-task`). `xtrm-tools` vendors specialist-owned skills into `~/.xtrm/skills/default/` (global SSOT) and keeps user-authored packs under `~/.xtrm/skills/user/packs/`. Consumer repos carry project packs at `.xtrm/skills/<pack>/` — the new **service-knowledge** pack (`service-knowledge` at `.xtrm/skills/<pack>/service-knowledge`) is resolved at `xt pi --role` / `xt claude --role` launch time: bare logical names like `service-knowledge` are matched against enabled views, project packs, and the global default (`xtrm-lk07w.14`). The release-contract handshake runs through `.github/workflows/specialists-validation.yml`; `sp` is a runtime prerequisite for specialist commands.
 
 ---
 
-**Version 0.11.0** | [Complete Guide](XTRM-GUIDE.md) | [Changelog](CHANGELOG.md)
+**Version 0.11.6** | [Complete Guide](XTRM-GUIDE.md) | [Changelog](CHANGELOG.md)
 
 ---
 
@@ -85,6 +85,9 @@ npx -y github:xtrm-dev/core init
 ```bash
 # Start a sandboxed session in a worktree
 xt claude my-feature
+# or with a bead + specialist role (skills auto-loaded at turn 1)
+xt pi --role planner --bead <id>
+xt claude --role reviewer --bead <id> --prompt 'review the auth changes'
 
 # Publish that worktree: rebase, push, open PR, optional cleanup
 xt end
@@ -95,6 +98,8 @@ xt memory update
 # If multiple xt/* PRs are open, drain the merge queue oldest-first
 xt merge
 ```
+
+Launch `xt pi --role <name>` / `xt claude --role <name>` resolves skills via `sp view <name>` — bare names like `service-knowledge` are resolved from project packs (`.xtrm/skills/<pack>/service-knowledge`), then enabled views, then global default. See [docs/xt-pi-role.md](docs/xt-pi-role.md) for flags (`--bead`, `--prompt`, `--model`, `--skill`, `--subordinate`) and the Pi/Claude behavior matrix.
 
 `xt end` handles one worktree session at a time. `xt merge` is the follow-up queue operator: it inspects open `xt/*` PRs, processes them FIFO, waits for green CI on the oldest PR, merges it with `--rebase`, then rebases the remaining queued xt branches and repeats. `xt memory update` shells out to the `memory-processor` specialist, which condenses bd memories and current project state into `.xtrm/memory.md`; use `--dry-run` to inspect without writing.
 
@@ -124,7 +129,16 @@ xt update --apply --root ~/projects
 xt update --apply --all-repos  # patches and commits each changed repo
 ```
 
-If a repo is reported as incomplete or a newly shipped skill is missing, bootstrap or rebuild the active view:
+Enable optional packs and verify the active view:
+
+```bash
+xt skills enable code-quality          # default: --global
+xt skills enable xt-optional --global  # senior-*, docker-expert, python-testing, obsidian-cli
+xt skills list                         # global inventory
+xt skills list --local                 # composed project view
+```
+
+If a repo is reported as incomplete or a newly shipped skill is missing, rebuild the active view:
 
 ```bash
 cd <repo>
@@ -175,7 +189,7 @@ sp prune-stale-defaults --root <repo-or-root>
 | **Session Flow** | both | Claim sync, stop gate, `xt end` reminder in worktrees |
 | **Quality Gates** | both | Auto linting (ESLint, tsc, ruff, mypy) on file edits |
 | **GitNexus** | Claude | Knowledge graph context for code exploration |
-| **Service Skills** | Pi | Territory-based Docker service skill activation |
+| **Service Knowledge** | both (Pi + Claude) | Project-pack resolution — consumer repos carry `.xtrm/skills/<pack>/service-knowledge`; bare `service-knowledge` resolved at `xt pi --role` / `xt claude --role` launch (`xtrm-lk07w.14`) |
 
 ### Privacy & Telemetry
 
@@ -184,7 +198,7 @@ sp prune-stale-defaults --root <repo-or-root>
 
 ### Skills
 
-Skills are resolved through a three-tier registry in `.xtrm/skills/` (`default` + `optional` + `user`). `xt init` populates the global catalog; activate optional packs with `xt skills enable <pack>`. Current optional pack catalog: `research-methods`, `code-quality`, `security-ops`, `data-engineering`, and `architecture-design`.
+Skills are resolved through a three-tier registry in `.xtrm/skills/` (`default` + `optional` + `user`). `xt init` populates the global catalog; activate optional packs with `xt skills enable <pack>` (default scope: `--global`). Current optional packs (six): `research-methods`, `code-quality`, `security-ops`, `data-engineering`, `architecture-design`, and `xt-optional` (holds `senior-backend`, `senior-devops`, `senior-security`, `senior-data-scientist`, `docker-expert`, `python-testing`, `obsidian-cli`). Full live catalog: `xt skills list` / [docs/skills.md](docs/skills.md).
 
 Skills are organized into two categories: **xtrm workflow** skills built specifically for the xtrm stack, and **general-purpose** expert skills that work in any project.
 
@@ -197,51 +211,59 @@ These skills implement the xtrm-specific development workflow — session manage
 | `using-xtrm` | Session operating manual — when to use which tool |
 | `using-quality-gates` | Quality gate workflow — TDD guard, lint/typecheck cycle |
 | `using-tdd` | Test-driven development with 80%+ coverage enforcement |
-| `using-service-skills` | Service catalog discovery and expert persona activation |
+| `using-script-specialists` | One-shot `sp script` specialist invocation (template-driven, no beads) |
 | `xt-end` | Autonomous session close — rebase, push, PR, cleanup |
 | `xt-merge` | FIFO PR merge queue for xt worktree sessions |
 | `planning` | Structured issue board from any spec, with phases and deps |
 | `test-planning` | Test coverage planning alongside implementation work |
 | `delegating` | Cost-optimized task delegation to background agents |
-| `using-specialists` | Specialist routing and execution workflow (current vendored contract) |
+| `using-specialists` | Specialist routing and execution workflow (vendored contract) |
 | `using-specialists-auto` | Auto-mode specialists execution and handoff flow |
-| `update-specialists` | Reconcile specialists runtime drift and xtrm-managed asset drift |
+| `update-specialists` | Reconcile specialists runtime drift vs xtrm-managed assets |
 | `update-xt` | Refresh xtrm-managed assets across one repo or many |
-| `issue-triage` | Board hygiene: specialist-only semantic duplicate clustering and graph rewiring |
+| `issue-triage` | Board hygiene: semantic duplicate clustering and graph rewiring |
 | `releasing` | Release-contract workflow and publish gating |
 | `xt-debugging` | Runtime debugging, traces, and failure triage |
 | `init-session` | Session bootstrap and context setup |
 | `session-close-report` | End-of-session report generation and handoff |
-| `orchestrating-agents` | Multi-model orchestration (Gemini, Qwen handshake) |
+| `starting-and-resuming-work` | Orient, delegate, and hand off across sessions |
+| `multiplexing` / `multiplexing-team` | Terminal multiplexing + team coordination primitives |
+| `sre-triage` | SRE incident triage (service-knowledge aware) |
+| `deploy-monitor` | Deploy verification (service-knowledge aware) |
+| `capacity-reclaim` | Capacity forecasting and safe reclaim (disk/tmpfs/swap/inodes) |
+| `verified-audit` | Over-engineering and efficiency audits |
+| `spec-dispatch` | PRD → runnable bd board compilation |
 | `sync-docs` | Doc audit and structural sync across a sprint |
 | `skill-creator` | Create, improve, and evaluate skills |
 | `specialists-creator` | Create and validate `.specialist.yaml` definitions |
 | `find-skills` | Discover and install skills on demand |
-| `creating-service-skills` | Generate operational service skill packages |
-| `scoping-service-skills` | Task intake and service routing |
-| `updating-service-skills` | Detect drift and sync expert persona docs |
+| `authoring-workflows` | Author reliable agent workflows |
 | `prompt-improving` | Apply Claude XML best practices to prompts |
+| `premortem` | Pre-implementation risk analysis |
+| `security-pipeline` | Security scanning baseline (gitleaks, semgrep, osv-scanner) |
+| `updating-dependencies` | Dependency update workflow |
 
-#### General-Purpose Expert Skills
+#### General-Purpose & Supporting Skills (curated)
 
-Domain expert skills that can be used in any project, independent of the xtrm workflow.
+A curated subset — the full live catalog is `xt skills list` / [docs/skills.md](docs/skills.md). Domain packs like `senior-backend`, `docker-expert`, `python-testing`, and `obsidian-cli` live in the `xt-optional` optional pack (`xt skills enable xt-optional`).
 
 | Skill | Purpose |
 |-------|---------|
-| `senior-backend` | NodeJS, Express, Go, Python, Postgres, REST/GraphQL |
-| `senior-devops` | CI/CD, infrastructure as code, cloud platforms |
-| `senior-security` | AppSec, pen testing, threat modeling, crypto |
-| `senior-data-scientist` | Statistics, ML, A/B testing, causal inference |
-| `docker-expert` | Multi-stage builds, Compose, container security |
-| `python-testing` | pytest, TDD, fixtures, mocking, coverage |
-| `hook-development` | PreToolUse/PostToolUse hook authoring |
 | `clean-code` | Pragmatic coding standards, no over-engineering |
+| `code-review` | Structured code review workflow |
+| `hook-development` | PreToolUse/PostToolUse hook authoring |
+| `using-kpi` / `using-nodes` | KPI tracking and distributed node workflows |
 | `gitnexus-exploring` | Navigate unfamiliar code via knowledge graph |
 | `gitnexus-impact-analysis` | Blast radius before making code changes |
 | `gitnexus-debugging` | Trace bugs through call chains |
 | `gitnexus-refactoring` | Plan safe refactors via dependency mapping |
-| `obsidian-cli` | Interact with Obsidian vaults via CLI |
+| `gitnexus-cli` / `gitnexus-guide` | GitNexus CLI and usage patterns |
 | `deepwiki` | Query repository/library docs via DeepWiki |
+| `github-search` | GitHub code and issue search (ghgrep) |
+| `vaultctl` | Obsidian vault control and automation |
+| `last30days` | Recent activity summarization |
+| `find-docs` | Discover documentation across sources |
+| `agent-docs-maintainer` | Maintain agent-facing documentation |
 
 ---
 
@@ -277,24 +299,27 @@ xtrm <command> [options]
 
 | Command | Description |
 |---------|-------------|
-| `claude` | Launch Claude Code in a sandboxed worktree |
-| `pi` | Launch Pi in a sandboxed worktree |
+| `claude` | Launch Claude Code in a sandboxed worktree (`--role` for specialist roles) |
+| `pi` | Launch Pi in a sandboxed worktree (`--role` for specialist roles) |
 | `init` | Bootstrap xtrm with phased installer: machine → Claude → Pi → project |
 | `status` | Read-only diff view |
 | `reset` | Reset xtrm-managed state |
-| `clean` | Remove orphaned hooks |
+| `clean` | [deprecated] Remove orphaned hooks — use `xt update [--apply]` |
 | `end` | Close worktree session: rebase, push, PR, cleanup |
-| `worktree` | Worktree operations: list and clean |
-| `attach` | Re-attach to an existing worktree and resume the Claude or Pi session |
+| `worktree` | Worktree operations: list, clean, reap |
+| `attach` | Re-attach to an existing worktree and resume the Claude/Pi/Codex session |
 | `docs` | Documentation inspection and drift-check suite |
 | `memory` | Memory synthesis and update flow |
 | `merge` | Drain queued `xt/*` PRs via `xt-merge` |
 | `debug` | Watch hook and bd lifecycle events in real time |
 | `report` | Session and workflow report generation |
-| `skills` | Skills catalog and enable/disable management |
+| `skills` | Skills catalog and enable/disable management (`list`, `enable`, `disable`, `create-pack`) |
 | `claude-sync` | Sync Claude-specific settings and managed state |
 | `doctor` | Health checks, drift, and Pi package reporting |
 | `update` | Refresh xtrm-managed files for one repo or many (`--apply` writes; dry-run by default) |
+| `migrate` | One-time per-repo migration: skills/hooks to global scope |
+| `version` | Print xtrm-tools build identity (package, version, commit) |
+| `spec` | PRD-level intent artifacts that compile to bd issues via the planner |
 | `release` | Release flow and publish helpers |
 | `help` | Show command help |
 
@@ -356,7 +381,9 @@ See [XTRM-GUIDE.md](XTRM-GUIDE.md) for the full `bd` command reference.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| 0.11.0 | 2026-07-17 | Launcher, role-model isolation, verified audits, release metadata, and concise changelogs |
+| 0.11.6 | 2026-08-20 | PATH-based pi lookup fix (see [CHANGELOG.md](CHANGELOG.md)) |
+| 0.11.5 | 2026-08-20 | Launch hardening, Pi rendering polish, `xt worktree reap`, Codex runtime (experimental), Python kernel doctrine |
+| 0.11.0 | 2026-07-16 | Launcher, role-model isolation, verified audits, release metadata, and concise changelogs |
 | 0.7.21 | 2026-05-16 | Pi extension polish and current package line; update flow verified for xtrm-managed skills and specialists runtime |
 | 0.7.20 | 2026-05-15 | Worktree bootstrap guidance and Pi external tool overlay/chrome release |
 | 0.7.19 | 2026-05-14 | README, CLI, and docs synced to shipped npm package; release-contract and specialists workflow fully documented |
