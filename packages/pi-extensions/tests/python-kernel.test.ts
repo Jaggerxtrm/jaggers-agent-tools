@@ -312,6 +312,20 @@ describe("python-kernel managed extension", () => {
       const guard = await kernel.runCell(`preflight(${JSON.stringify(fx.dir)}, "nope.ts")`, false);
       expect(guard.error).toBeNull();
       expect(guard.stdout).toContain("0 commits");
+      // memory topic: a generic module name keys nothing, so walk up to the
+      // nearest meaningful directory ("index" -> "python-kernel").
+      expect(guard.stdout).toContain("memory topic: nope");
+      const generic = await kernel.runCell(
+        `preflight(${JSON.stringify(fx.dir)}, "pkg/python-kernel/index.ts")`,
+        false,
+      );
+      expect(generic.error).toBeNull();
+      expect(generic.stdout).toContain("memory topic: python-kernel");
+      const nested = await kernel.runCell(
+        `preflight(${JSON.stringify(fx.dir)}, "pkg/xtrm-ui/index/main.ts")`,
+        false,
+      );
+      expect(nested.stdout).toContain("memory topic: xtrm-ui");
       // durable: reset clears user state, prelude survives (xtrm-vs7f8 invariant)
       await kernel.runCell("x = 1", true, fx.dir);
       const after = await kernel.runCell("callable(preflight)", false);
