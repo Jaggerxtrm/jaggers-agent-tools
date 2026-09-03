@@ -112,6 +112,12 @@ def _apply_prelude():
         _ns["sk_rebuild"] = sk_rebuild
     except NameError:
         pass
+    # Re-bind the file-scoped memory-retrieval digest (module scope, defined
+    # below; resolved at call time). Durable like the rest of the prelude.
+    try:
+        _ns["preflight"] = preflight
+    except NameError:
+        pass
 
 
 _apply_prelude()
@@ -139,6 +145,51 @@ def sk_rebuild():
 
 # Bind the in-kernel helper into _ns (cells eval in _ns, not module scope).
 _ns["sk_rebuild"] = sk_rebuild
+
+def preflight(repo, path, n=4):
+    """File-scoped memory-retrieval digest (memory doctrine: progressive
+    retrieval, never bulk). For ONE file: full commit messages with bodies
+    (git log --follow), pending diff --stat, and bd memories hits for the
+    basename. Read-only (no _AUDIT entries); prints a bounded digest and
+    returns the commit records (hash, date, subject, body). 0 commits
+    usually means a wrong path — treat it as a failed preflight."""
+    import subprocess as _sp
+
+    def _git(*_a):
+        return _sp.run(["git", "-C", repo, *_a], capture_output=True, text=True).stdout
+
+    _fs, _rs = chr(31), chr(30)
+    _raw = _git("log", "--follow", "--no-merges", "--date=short",
+                "--format=%x1e%x1f%h%x1f%ad%x1f%s%x1f%b", "--", path)
+    _cs = []
+    for _x in (_x for _x in _raw.split(_rs) if _x.strip()):
+        _p = [_f.strip("\\n") for _f in _x.strip(_fs).split(_fs)]
+        if len(_p) >= 4:
+            _cs.append((_p[0], _p[1], _p[2], _fs.join(_p[3:])))
+    if not _cs:
+        print("== %s: 0 commits — wrong path? ==" % path)
+        return []
+    _diff = _git("diff", "HEAD", "--stat", "--", path).strip()
+    try:
+        _mem = _sp.run(["bd", "memories", path.rsplit("/", 1)[-1]],
+                       capture_output=True, text=True, cwd=repo).stdout or ""
+    except Exception:
+        _mem = ""
+    _keys = [_l.strip() for _l in _mem.splitlines()
+             if _l.strip() and not _l.startswith("Memories")][::2][:6]
+    print("== %s: %d commits ==" % (path, len(_cs)))
+    for _h, _d, _s, _b in _cs[:n]:
+        _body = " / ".join(_l.strip() for _l in _b.splitlines() if _l.strip())[:110]
+        print("  %s %s %s%s" % (_d, _h, _s[:72], "\\n         " + _body if _body else ""))
+    if _diff:
+        print("== pending diff ==\\n" + _diff)
+    if _keys:
+        print("== bd memory keys: %s ==" % _keys)
+    return _cs
+
+
+# Bind the preflight digest into _ns (memory-doctrine workbench helper).
+_ns["preflight"] = preflight
 
 def _reload_skills():
     """Re-import every mounted skill module (dev-loop honesty: del sys.modules,
@@ -792,11 +843,13 @@ export default function pythonKernelExtension(pi: ExtensionAPI, opts: PythonKern
 		description:
 			"Execute Python code in a persistent interpreter. Variables, imports, and functions persist across calls until reset: true. Code runs with your user permissions and is not sandboxed — treat a cell like any shell command. Run shell commands with subprocess when needed; for a project's own tests, scripts, and CLIs use the project's documented environment instead." +
 			"\nPrelude pre-loaded: json, re, os, sys, subprocess, Path (from pathlib)." +
+			"\nPrelude function: preflight(repo, path, n=4) — file-scoped memory retrieval for one file: git log --follow with full bodies, pending diff --stat, bd memory keys; prints a bounded digest. Run it before editing a file, fixing a bug, or implementing, and whenever gitnexus flags a file/symbol as critical or medium impact." +
 			importableLine,
 
 		promptSnippet: "python - run code in a persistent kernel; state survives across calls",
 		promptGuidelines: [
 			"Use python for multi-step processing, parsing, aggregation, and fan-out: one cell replaces many round trips, and named variables persist across cells.",
+			"preflight(repo, path) is bound at boot: file-scoped memory retrieval (commits with bodies, pending diff, bd memory keys) before editing a flagged file; prints a digest, never the raw corpus.",
 			"python state persists across calls (variables, imports, functions); pass reset: true to clear it.",
 			"os.chdir() inside a cell persists; reset returns to the working directory.",
 			"Code runs with your user permissions and is not sandboxed; treat a cell like a shell command.",
