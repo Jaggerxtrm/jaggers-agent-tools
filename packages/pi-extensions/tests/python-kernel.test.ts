@@ -300,6 +300,29 @@ describe("python-kernel managed extension", () => {
     }
   });
 
+  test("preflight: durable prelude binding, hermetic wrong-path guard, read-only digest", async () => {
+    const fx = tmpBase();
+    try {
+      const kernel = new PythonKernel(fx.dir, () => {});
+      // bound at boot
+      const boot = await kernel.runCell("callable(preflight)", false);
+      expect(boot.error).toBeNull();
+      expect(boot.stdout.trim()).toBe("True");
+      // hermetic: tmpdir has no git history -> the wrong-path guard fires, no raise
+      const guard = await kernel.runCell(`preflight(${JSON.stringify(fx.dir)}, "nope.ts")`, false);
+      expect(guard.error).toBeNull();
+      expect(guard.stdout).toContain("0 commits");
+      // durable: reset clears user state, prelude survives (xtrm-vs7f8 invariant)
+      await kernel.runCell("x = 1", true, fx.dir);
+      const after = await kernel.runCell("callable(preflight)", false);
+      expect(after.error).toBeNull();
+      expect(after.stdout.trim()).toBe("True");
+      kernel.kill();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
   test("eval and exec semantics both work and exceptions carry traceback details", async () => {
     const fx = tmpBase();
     try {

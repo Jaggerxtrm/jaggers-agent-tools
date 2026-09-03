@@ -37,6 +37,19 @@ Path("out").mkdir(exist_ok=True)
 subprocess.run(["echo", "hi"], capture_output=True, text=True).stdout
 ```
 
+The prelude also binds one function:
+
+```python
+preflight(repo, path, n=4)
+```
+
+File-scoped memory retrieval (memory doctrine: progressive retrieval, never
+bulk). For one file: full commit messages with bodies (`git log --follow`),
+pending `diff --stat`, and `bd memories` keys for the basename — printed as a
+bounded digest, returning the commit records. Read-only. 0 commits means a
+wrong path. Run it before editing a file, fixing a bug, implementing, or when
+gitnexus flags a file/symbol as critical or medium impact.
+
 ## skillbridge — python-backed skills as importable modules
 
 Skill modules following the prime-agent Agent Skills convention
