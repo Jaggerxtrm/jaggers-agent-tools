@@ -4,71 +4,43 @@
   "source": {
     "kind": "ref",
     "ref": "feat/skills-v4-runtime-doctrine",
-    "resolved_sha": "b5f4b7974b27d1619980f8aff691277459d250eb",
+    "resolved_sha": "7af606c75b57e5d1c139aa5649a5667edc596cf7",
     "repo_path": "../specialists",
     "source_path": "config/skills"
   },
   "skills": [
-    "specialists-creator",
     "update-specialists",
-    "using-kpi",
-    "using-nodes",
-    "using-script-specialists",
     "using-specialists"
   ],
   "placements": {
-    "specialists-creator": {
-      "tier": "optional",
-      "pack": "specialists-advanced"
-    },
     "update-specialists": {
       "tier": "optional",
       "pack": "xtrm-maintenance"
-    },
-    "using-kpi": {
-      "tier": "optional",
-      "pack": "specialists-advanced"
-    },
-    "using-nodes": {
-      "tier": "optional",
-      "pack": "specialists-advanced"
-    },
-    "using-script-specialists": {
-      "tier": "optional",
-      "pack": "specialists-advanced"
     },
     "using-specialists": {
       "tier": "default"
     }
   },
   "files": {
-    "specialists-creator": {
-      "scripts/audit-spec-uniformity.mjs": "72bc5772d8fc4f8afdd323668bac6db5ed75582c",
-      "scripts/resolve-specialists-root.mjs": "6bd6a3593e4ce89f39a3024d35f7033e78858397",
-      "scripts/scaffold-specialist.ts": "e993d46432492429b72ccac5ac498813026013af",
-      "scripts/validate-specialist.ts": "19f298eae0e0dbc809d0fa6ac282bf204cec1d4c",
-      "SKILL.md": "beadc60d98766eab19baab0aff4515c659fe78cd"
-    },
     "update-specialists": {
       "SKILL.md": "109fcbf874fc58baa93f8a0ebc942a2a1f34cd58"
-    },
-    "using-kpi": {
-      "SKILL.md": "f8a95705123af816b6c37209543e396408e326ac"
-    },
-    "using-nodes": {
-      "SKILL.md": "bf1e34a0a54b68b78f34f636b94aa21ebac97fae"
-    },
-    "using-script-specialists": {
-      "SKILL.md": "836a1f11ac2e3b255cb9cc48f96f6fc3fbb582fe"
     },
     "using-specialists": {
       "references/bead-contracts.md": "1a5698a5869f55bc5531514142e58946acbd6278",
       "references/chain-recipes.md": "42f02267eed5fa18dc33b814a7b1c7a054fddb8c",
       "references/dispatch-preconditions.md": "ce5e270d76e173cab628b2c5a9edf8d5df0a86f8",
+      "references/kpi.md": "4dc459b3c775c48a867b53f67c947183be702105",
       "references/merge-and-integration.md": "22ea211e322d971242110dc1ebfa65d6f1e31f68",
       "references/monitoring.md": "089ddb679fd644e32fd608d657807e04fd9d9efe",
+      "references/nodes.md": "8f1ada01a2940601fe758757d0ab1bfe0a7b6e60",
       "references/registry-and-locations.md": "4e1449af6cd3dc273da21d6aad439141e747dd07",
-      "SKILL.md": "8079105952f707f95b0509dc8c0190e380c7fe63"
+      "references/script-class.md": "795a05041a1c5676a82bb3fda0051d0e6608d82a",
+      "references/specialist-definitions.md": "3b9cbd5179260d1bc2a9b10659e23424c52e1509",
+      "scripts/specialist-definitions/audit-spec-uniformity.mjs": "72bc5772d8fc4f8afdd323668bac6db5ed75582c",
+      "scripts/specialist-definitions/resolve-specialists-root.mjs": "6bd6a3593e4ce89f39a3024d35f7033e78858397",
+      "scripts/specialist-definitions/scaffold-specialist.ts": "e993d46432492429b72ccac5ac498813026013af",
+      "scripts/specialist-definitions/validate-specialist.ts": "19f298eae0e0dbc809d0fa6ac282bf204cec1d4c",
+      "SKILL.md": "704c7fad7afb0dd0a0500d76323cc929f5db026c"
     }
   }
 }
