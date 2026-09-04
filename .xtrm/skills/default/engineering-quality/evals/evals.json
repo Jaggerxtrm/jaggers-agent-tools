@@ -1,0 +1,65 @@
+{
+  "skill_name": "engineering-quality",
+  "version": 1,
+  "purpose": "Regression tests for causal debugging behavior. Each case contains tempting but insufficient correlation evidence; a good run reconstructs provenance and proves a mechanism before proposing remediation.",
+  "evals": [
+    {
+      "id": "recent-red-herring",
+      "prompt": "A test started failing today. There are two commits in the last hour: the newest changes comments/docs in the failing file, the earlier commit changes a default consumed by the failing call path. Diagnose and propose the fix.",
+      "must": [
+        "establish a last-known-good / first-known-bad window or equivalent evidence",
+        "inspect recent commit bodies and diffs rather than blaming the newest commit",
+        "trace the failing data/control path",
+        "identify the causal change only after its mechanism explains the failure",
+        "preserve the original valid intent in the proposed remediation"
+      ],
+      "must_not": [
+        "declare the newest commit causal from timestamp/path proximity alone",
+        "stack speculative fixes before a falsifiable hypothesis"
+      ]
+    },
+    {
+      "id": "change-exposes-old-defect",
+      "prompt": "A deployment immediately precedes a production error. The deployed commit correctly enables a previously-unused code path, but the null-handling bug inside that path predates the commit by months. Perform the RCA.",
+      "must": [
+        "distinguish introduced-by from exposed-by",
+        "reconstruct why the enabling change was made from commit/PR/Bead evidence when available",
+        "trace to the older defective assumption",
+        "avoid reverting the valid enabling change unless evidence shows that is the correct containment action"
+      ],
+      "must_not": [
+        "equate deploy correlation with source root cause",
+        "erase the valid behavior the deployment was intended to add without discussing that contract"
+      ]
+    },
+    {
+      "id": "revert-breaks-original-contract",
+      "prompt": "A recent refactor appears to correlate with a latency regression. Reverting it makes the benchmark fast again, but its commit body and Bead show it fixed a data-loss bug. Decide what to do.",
+      "must": [
+        "treat the revert as evidence/experiment rather than the final fix",
+        "record the original data-loss contract as a constraint",
+        "profile or otherwise prove the new latency mechanism",
+        "propose a change that preserves the data-loss fix while removing the measured bottleneck",
+        "verify both correctness and performance afterward"
+      ],
+      "must_not": [
+        "ship the revert solely because performance improves",
+        "optimize without a measured baseline and post-change comparison"
+      ]
+    },
+    {
+      "id": "sre-downstream-symptom",
+      "prompt": "Grafana shows errors in service C after a deploy to service A. Service Graph shows A -> B -> C; Tempo bad traces first become abnormal in B, while C only reports the downstream failure. Prometheus confirms B latency changed at deploy time. Identify the investigation plan.",
+      "must": [
+        "use topology to traverse upstream rather than treating C as the root because it alerts",
+        "correlate Grafana/Prometheus/Tempo over the same incident window",
+        "connect the first abnormal span to the deployed artifact and its change provenance",
+        "require a causal mechanism before attributing the incident to the deployment"
+      ],
+      "must_not": [
+        "start by editing service C",
+        "treat a single dashboard panel or alert as sufficient RCA evidence"
+      ]
+    }
+  ]
+}
