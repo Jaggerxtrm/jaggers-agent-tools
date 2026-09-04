@@ -1,12 +1,8 @@
 name: Semgrep
 
-# SAST scanner — replaces CodeQL on private user-owned repos where GitHub
-# Advanced Security is unavailable. Free, runs entirely in CI.
-#
-# Diff-aware: on PRs, semgrep ci auto-compares HEAD against the base branch
-# and only flags NEW findings. We do NOT trigger on push to main because
-# `semgrep ci` has no baseline there and would re-flag pre-existing debt
-# every commit. The weekly schedule covers the full-scan use case.
+# SAST scanner. On PRs, semgrep ci compares against the merge-base and blocks
+# new findings. Scheduled runs provide the broad historical scan without
+# turning pre-existing debt into unrelated PR failures.
 
 on:
   pull_request:
@@ -25,9 +21,9 @@ jobs:
       image: semgrep/semgrep
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          fetch-depth: 0  # full history for baseline diff
+          fetch-depth: 0
 
       - name: Semgrep CI
         run: semgrep ci
