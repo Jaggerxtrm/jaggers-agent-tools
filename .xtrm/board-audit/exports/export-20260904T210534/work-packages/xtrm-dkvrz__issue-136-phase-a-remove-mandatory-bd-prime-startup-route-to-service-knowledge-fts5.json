@@ -1,0 +1,45 @@
+{
+  "content_sha256": "55b67f1bbc7905fbf855a418c7b1e8bc7016770227e14ffbea8918070fcc92ba",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-dkvrz"
+  },
+  "issues": {
+    "xtrm-dkvrz": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "comment_count": 0,
+        "created_at": "2026-09-04T17:26:26Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nUpstream xtrm-dev/core canonical templates/skills mandate 'bd prime' at session start and reference legacy service-skills paths. Editing Mercury consumers alone would regress after XTRM refresh. Jira ISSUE-136 Phase A (load-bearing).\n\n## SUCCESS\nNo canonical generated startup block requires bd prime; targeted Beads discovery + Service Knowledge routing present; agent-docs-maintainer uses service-knowledge naming; evals/tests pass.\n\n## SCOPE\n- templates/claude-md-fragments/bd-workflow.md\n- .xtrm/config/instructions/agents-top.md\n- .xtrm/config/instructions/claude-top.md\n- skills/using-xtrm/SKILL.md\n- .xtrm/skills/default/using-xtrm/SKILL.md\n- .xtrm/skills/default/starting-and-resuming-work/SKILL.md\n- .xtrm/skills/default/agent-docs-maintainer/ (SKILL + refs + evals)\n- installer/help output presenting bd prime as normal startup\n- regression tests/evals for generated startup blocks\n\n## NON_GOALS\n- Phase B (service-knowledge package docs) and Phase C (Mercury consumers)\n- Removing bd prime command itself; it stays as opt-in diagnostic\n\n## VALIDATION\n- grep: no mandatory/automatic bd prime in generated fixtures\n- targeted Beads commands documented; AGENTS vs CLAUDE distinct\n- SK routing present where applicable; evals/tests pass\n\n## OUTPUT\nPR link + Jira ISSUE-136 progress comment.",
+        "heartbeat_at": "2026-09-04T19:02:45Z",
+        "id": "xtrm-dkvrz",
+        "issue_type": "task",
+        "lease_expires_at": "2026-09-04T19:07:45Z",
+        "notes": "Phase A implementation complete in worktree. 16 files changed: agents-top, claude-top (targeted session-start, SK routing, legacy alias note), bd-workflow fragment 1.0.2->1.1.0, both using-xtrm skills, starting-and-resuming-work + surfaces, using-specialists-auto + registry-and-locations, agent-docs-maintainer SKILL + both templates (SK sections), evals.json (e3 updated + new eval 6 for mandatory-bd-prime), install.ts next-steps, root AGENTS.md + CLAUDE.md regenerated content. Validation: V1 no mandatory bd prime (grep empty), V2 targeted Beads present, V3 SK index-query routing present, V4 tops distinct, V5 6 evals; vitest 8/8 pass, pytest 5/5 pass, forbidden-phrases 0 violations, tsc clean. Registry hash churn reverted (pre-existing version drift, unrelated). Remaining: commit + PR + Jira comment.",
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "started_at": "2026-09-04T17:26:32Z",
+        "status": "in_progress",
+        "title": "ISSUE-136 Phase A: remove mandatory bd prime startup, route to Service Knowledge FTS5",
+        "updated_at": "2026-09-04T19:02:45Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/core",
+  "root_id": "xtrm-dkvrz",
+  "root_title": "ISSUE-136 Phase A: remove mandatory bd prime startup, route to Service Knowledge FTS5",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}
