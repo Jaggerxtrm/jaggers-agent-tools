@@ -41,9 +41,6 @@ jobs:
       run: npm run check:package
 
     - name: CHANGELOG.md [Unreleased] is an empty placeholder
-      # Guard: no branch commits generated [Unreleased] entries. They are produced from
-      # the git log at release time by `npm version`, so a branch that carries them adds
-      # nothing and conflicts every other open PR on the next merge.
       run: npm run changelog:check
 
     - name: Build contracts package
@@ -79,6 +76,16 @@ jobs:
         node scripts/compile-policies.mjs --check
         node scripts/compile-policies.mjs --check-pi
 
+    - name: Generate registry reconciliation artifact
+      run: npm run gen-registry
+
+    - name: Upload generated registry
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: skills-v4-generated-registry
+        path: .xtrm/registry.json
+        if-no-files-found: error
+
     - name: Verify specialists vendor and package registry freshness
       run: |
         npm run check:skills-ownership
@@ -105,8 +112,6 @@ jobs:
     - name: Forbidden-phrase drift guard
       run: npm run check:forbidden-phrases
 
-    # No Specialists checkout on the runner, so this skips unless SPECIALISTS_REPO_PATH
-    # is provided; prepublishOnly re-vendors from the immutable resolved_sha.
     - name: Vendored Specialists skill parity guard
       run: npm run check:vendored-specialists-parity
 
