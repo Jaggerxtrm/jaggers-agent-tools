@@ -27,7 +27,7 @@ preserved when they remain useful even if the old prompt/manual is rewritten.
 | `init-session` | absorbed/runtime-owned | `starting-and-resuming-work` + runtime hooks/CLI | Cold-start/claim/continuity mechanics are no longer a separate prompt. |
 | `session-close-report` | absorbed/runtime-owned | `starting-and-resuming-work`, `xtrm-maintenance` | Durable handoff/finalization replaces a separate report trigger. |
 | `xt-end` | absorbed | `xtrm-maintenance/references/finalize.md` + current repo workflow | Session finalization is maintenance/continuity behavior. |
-| `xt-merge` | moved/retained optional | `optional/xt-optional` | XTRM-specific merge helper stays opt-in rather than default doctrine. |
+| `xt-merge` skill | runtime-owned / retired duplicate prompt | Core `xt merge` CLI + Specialists `config/specialists/xt-merge.specialist.json` | The CLI performs authority/preflight checks and dispatches the canonical `xt-merge` Specialist. No managed skill root is required. |
 | `xt-debugging` | absorbed | `engineering-quality` + `gitnexus` | Causal debugging and code-graph tracing are composed directly. |
 | `clean-code` | absorbed | `engineering-quality/references/reduction.md` | Coding/reduction discipline remains part of ordinary engineering quality. |
 | `code-review` | absorbed | `engineering-quality/references/review.md` | Review evidence is a default engineering phase. |
