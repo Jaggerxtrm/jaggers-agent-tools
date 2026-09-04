@@ -5,9 +5,9 @@ description: >
   debugging, observability-driven diagnosis, deploy verification, capacity/resource
   pressure, rollback evidence, and service-specific routing. Use when an alert fires, a
   service is unhealthy, a deployment may have regressed behavior, resource pressure
-  appears, or an operator asks what changed and why production broke. Reconstruct the
-  chain from runtime symptom through traces/metrics/dashboards to deploy, commit, Bead,
-  and original change intent before choosing a remediation.
+  appears, or an operator asks what changed and why production broke. Prefer the `mcpq`
+  CLI for compact, on-demand access to Grafana/Prometheus/OpenTelemetry MCP surfaces
+  instead of loading their tool schemas and context into every agent by default.
 ---
 
 # SRE Ops
@@ -44,10 +44,58 @@ The bundled `scripts/` directory contains deterministic historical-alert helpers
 from the previous SRE triage skill. Execute them when the reference calls for them; do not
 load script source unless debugging the helper itself.
 
+## `mcpq` is the default observability access path
+
+XTRM environments can expose large MCP surfaces for Grafana, Prometheus, Tempo/OpenTelemetry
+and related systems. Do not inject those complete MCP schemas into every SRE agent by
+default. Prefer `mcpq`: it discovers configured sidecars and invokes only the tool needed
+for the current evidence question.
+
+Start with discovery:
+
+```bash
+mcpq servers
+mcpq prometheus list-tools
+mcpq grafana list-tools
+```
+
+Then inspect only the selected tool and invoke it:
+
+```bash
+mcpq prometheus describe <tool>
+mcpq prometheus call <tool> --arg query='<promql>' --json
+
+mcpq grafana describe <tool>
+mcpq grafana call <tool> ... --json
+```
+
+Use the same `list-tools -> describe -> call` pattern for configured tracing/OpenTelemetry
+servers. Server names and tool prefixes are project configuration, normally discovered
+from `.mcpq.json`/`mcpq servers`; never freeze Mercury- or repo-specific prefixes in this
+generic skill.
+
+This is a context-budget rule as well as an operator convenience:
+
+```text
+agent needs one observability fact
+  -> mcpq discovers server/tool
+  -> describe only that tool if needed
+  -> call it
+  -> retain compact evidence/result
+
+not:
+agent starts
+  -> preload Grafana + Prometheus + OTel MCP schemas and unrelated tools
+```
+
+If `mcpq` is unavailable, use a native/read-only observability surface when available.
+Only fall back to cached health/runbook files after live query surfaces fail, and mark the
+result `UNKNOWN` when required live evidence cannot be obtained.
+
 ## Observability is an evidence system
 
-When the project provides Prometheus, Grafana, Tempo/OpenTelemetry, logs, and direct health
-signals, use them together rather than treating one green query as proof.
+When the project provides Prometheus, Grafana, Tempo/OpenTelemetry, logs, profiles and
+direct health signals, use them together rather than treating one green query as proof.
 
 - **Prometheus**: alerts, availability, error/latency/throughput/freshness/saturation and
   relevant before/after time series.
@@ -56,26 +104,49 @@ signals, use them together rather than treating one green query as proof.
   Grafana to a screenshot or a single headline number.
 - **Tempo / tracing**: search the affected time window and services, follow representative
   traces across service boundaries, inspect error spans/status/duration and compare bad
-  traces with known-good traces.
+  traces with known-good traces. Use trace-to-logs/metrics/profiles and exemplars when the
+  stack exposes them.
+- **Service topology**: prefer live trace-derived service/dependency graphs when available;
+  an alerting downstream service is not automatically the root cause.
 - **Logs**: correlate using timestamps, request/trace/correlation IDs and first occurrence.
+- **Change intelligence**: align deploys, config/feature-flag changes, dependency/schema
+  changes and manual interventions with the same incident timeline.
 - **Deployment/source history**: identify the artifact/revision and the work that created
   it.
 
-Use the current MCP/mcpq/native observability surfaces and live help. Project-specific
-server/tool prefixes are discovered, never hardcoded into this generic skill.
+## Service knowledge and runbook freshness
+
+Operational knowledge is owned by XTRM `service-knowledge`, not duplicated into this
+skill. When a repository has service knowledge, use its current service skill/runbook for
+service-specific diagnostics and remediation.
+
+Check freshness when the incident depends on service-specific assumptions:
+
+```bash
+service-knowledge status
+service-knowledge drift
+```
+
+Drift is advisory, not a reason to block an incident investigation. Continue with live
+observability plus commit history, then reconcile through `/updating-service-knowledge`.
+A successful reconcile updates service knowledge including `Failure Modes`, `Data Flows`,
+`Cross-Service Health Check`, and `Deploy & Runbook`; clear the drift marker/rebuild the
+index only after that reconcile succeeds.
 
 ## SRE invariants
 
 1. Live runtime evidence beats cached documentation.
-2. A recent change is a suspect only after timing/path evidence connects it to the failure.
-3. Diagnose before mutating production; read-only evidence collection is the first phase.
-4. Query relevant Grafana dashboards fully when they exist, alongside raw metrics/traces.
-5. Route affected services to current service knowledge/specialists when available.
-6. Missing required observability is `UNKNOWN`/`BLOCKED`, never healthy.
-7. A deploy monitor proves the intended artifact is actually running before judging it.
-8. The first abnormal deploy-window sample is actionable; do not hide it in an average.
-9. Operational changes require explicit ownership, rollback, and post-change evidence.
-10. Record the root cause including deploy/commit/work-contract provenance, not only the
+2. Use `mcpq` for targeted observability access when configured; avoid eager MCP schema
+   loading that adds unrelated context to the agent.
+3. A recent change is a suspect only after timing/path evidence connects it to the failure.
+4. Diagnose before mutating production; read-only evidence collection is the first phase.
+5. Query relevant Grafana dashboards fully when they exist, alongside raw metrics/traces.
+6. Route affected services to current service knowledge/specialists when available.
+7. Missing required observability is `UNKNOWN`/`BLOCKED`, never healthy.
+8. A deploy monitor proves the intended artifact is actually running before judging it.
+9. The first abnormal deploy-window sample is actionable; do not hide it in an average.
+10. Operational changes require explicit ownership, rollback, and post-change evidence.
+11. Record the root cause including deploy/commit/work-contract provenance, not only the
     immediate technical symptom.
 
 ## XTRM integration
