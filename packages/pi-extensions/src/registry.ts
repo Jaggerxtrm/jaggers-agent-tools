@@ -8,7 +8,6 @@ import gitCheckpointExtension from "./extensions/git-checkpoint.ts";
 import pythonKernelExtension from "./extensions/python-kernel.ts";
 import qualityGatesExtension from "./extensions/quality-gates.ts";
 import readLineNumbersExtension from "./extensions/read-line-numbers.ts";
-import serviceSkillsExtension from "./extensions/service-skills.ts";
 import sessionFlowExtension from "./extensions/session-flow.ts";
 import spTerminalOverlayExtension from "./extensions/sp-terminal-overlay.ts";
 import xtrmLoaderExtension from "./extensions/xtrm-loader.ts";
@@ -28,7 +27,6 @@ const availableManagedPiExtensions: readonly ManagedPiExtension[] = [
   { id: "python-kernel", register: pythonKernelExtension },
   { id: "quality-gates", register: qualityGatesExtension },
   { id: "read-line-numbers", register: readLineNumbersExtension },
-  { id: "service-skills", register: serviceSkillsExtension },
   { id: "session-flow", register: sessionFlowExtension },
   { id: "sp-terminal-overlay", register: spTerminalOverlayExtension },
   { id: "xtrm-loader", register: xtrmLoaderExtension },
