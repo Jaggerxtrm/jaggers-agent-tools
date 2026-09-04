@@ -15,16 +15,32 @@ Before editing:
 3. Establish the first known bad observation and, if possible, a last known good one.
 4. Identify the failing boundary: function, process, request, job, service, data flow, or
    deployment.
-5. If the problem is intermittent, gather timestamps/correlation IDs and enough examples
-   to identify the affected subset.
+5. If intermittent, gather timestamps/correlation IDs and enough examples to identify the
+   affected subset.
 
 If it cannot be reproduced, gather more evidence instead of guessing a fix.
 
-## Phase 2 — reconstruct recent-change provenance
+## Phase 2 — reconstruct change provenance
 
-For a regression, recent history is a primary evidence source, not a final afterthought.
+For a regression, history is a primary evidence source, not a final afterthought.
 
-Inspect commits on the affected path and around the first-bad time:
+Use the bundled deterministic helper when available to collect a bounded candidate set
+without repeatedly reconstructing Git commands:
+
+```bash
+node <engineering-quality-skill-dir>/scripts/change-provenance.mjs \
+  --repo <repo> --path <affected-path> --since '<last-known-good>' --max 40
+
+# Inspect one exact candidate with full body/files:
+node <engineering-quality-skill-dir>/scripts/change-provenance.mjs \
+  --repo <repo> --sha <commit>
+```
+
+It deliberately does **not** identify a culprit. It emits commit bodies, parents,
+author/commit timestamps and changed paths for the reasoning layer to correlate with the
+failure.
+
+Manual Git equivalents remain useful:
 
 ```bash
 git log --format=fuller --decorate --date=iso -- <affected-path>
@@ -33,72 +49,71 @@ git log -p -- <affected-path>
 git blame -L <start>,<end> <file>
 ```
 
-When the regression window is bounded and a deterministic reproduction exists, consider
+When the regression window is bounded and a deterministic reproduction exists, use
 `git bisect` rather than manually guessing among many commits.
 
 For each credible change, reconstruct:
 
 ```text
 commit
-  -> complete commit subject/body and diff
+  -> complete commit subject/body and actual diff
   -> authoring branch/worktree/peer when recoverable
-  -> PR and its review/discussion
+  -> PR and review/discussion
   -> Bead contract / dependencies / notes / close reason
   -> Specialist or agent result when that work produced the change
-  -> original problem and intended success condition
+  -> original problem, constraints and intended success condition
 ```
 
-Use `gh`, `bd`, `xt worktree list` / topology, and `sp result` or current equivalents when
+Use `gh`, `bd`, XTRM worktree/topology state, and `sp result` or current equivalents when
 those surfaces exist. Exact commands are runtime-dependent; use live help.
 
-The commit body is valuable because XTRM agents normally record the reasoning and scope of
-a change. But it is not authority: compare the stated intent with the actual diff and
-current contract.
+The commit body is valuable because XTRM agents normally record reasoning and scope. But
+it is not authority: compare stated intent with the actual diff and current contract.
 
-Do not simply revert the newest commit. A changed line may be correct in isolation and
-only expose an older assumption elsewhere. Understand why the change existed before
-undoing it.
+Classify candidate relationship precisely:
+
+- **introduced by** — the change added the defective behavior/assumption;
+- **exposed by** — the change validly activated or reached a pre-existing defect;
+- **correlated with** — nearby in time/path, but no causal mechanism proven.
+
+Do not simply revert the newest commit. A changed line may be correct and only expose an
+older assumption elsewhere. Understand why the change existed before undoing it.
 
 ## Phase 3 — trace code/data/control flow
 
 Use `/gitnexus` plus targeted source reads to connect candidate changes to the symptom.
-
-Typical sequence:
 
 ```text
 query error/symptom
   -> identify process and suspect symbols
   -> inspect callers/callees and data/control flow
   -> inspect recent changes to those symbols/processes
-  -> read source to confirm the actual behavior
+  -> read source to confirm actual behavior
 ```
 
 For bad values, trace backwards until the value is created or corrupted. For missing
 behavior, trace forward to where the expected action should occur. At component
-boundaries, verify what enters and exits rather than assuming configuration/data
-propagation.
+boundaries, verify what enters and exits rather than assuming config/data propagation.
 
-Useful questions:
+Ask:
 
-- Where is the first point the state becomes wrong?
+- Where is the first point state becomes wrong?
 - What exact input/state reaches that point?
-- Which caller or upstream component supplied it?
+- Which caller/upstream component supplied it?
 - Did a recent commit change that assumption, ordering, schema, timeout, or default?
-- Which downstream callers depend on the old/new behavior?
+- Which downstream callers depend on old/new behavior?
 
 ## Phase 4 — build one falsifiable hypothesis
 
-State the hypothesis explicitly:
+State it explicitly:
 
 ```text
 I think <change/state> causes <symptom> because <observed causal mechanism>.
 If true, <minimal experiment/evidence> should show <expected result>.
 ```
 
-Test one variable at a time. Do not pile speculative fixes together.
-
-When a hypothesis fails, discard it and incorporate the new evidence. Do not add another
-patch on top.
+Test one variable at a time. Do not pile speculative fixes together. When a hypothesis
+fails, discard it and incorporate the new evidence.
 
 ## Phase 5 — compare with working behavior
 
@@ -108,43 +123,48 @@ request/service, previous deployment, or equivalent implementation.
 List relevant differences and explain which one can produce the symptom. Avoid “that
 cannot matter” assumptions until evidence rules the difference out.
 
+For an RCA with a tempting recent change, deliberately search for a red herring: a newer
+commit touching the same file, a deploy-adjacent change outside the path, or a healthy
+execution that uses the suspected path. A causal explanation should survive that check.
+
 ## Phase 6 — fix the cause
 
-Once the cause is confirmed:
+Once cause is confirmed:
 
 1. create/strengthen the smallest reproduction or regression test when practical;
 2. make one targeted fix;
-3. preserve the valid intent of the change that introduced/exposed the regression;
+3. preserve valid intent of the change that introduced/exposed the regression;
 4. re-run the original failing case;
 5. run affected regression/integration checks;
 6. inspect GitNexus blast radius for shared-symbol changes;
-7. record the causal chain in the durable work item.
+7. record the causal chain in durable work.
 
-A useful root-cause note is concise but complete:
+A useful root-cause note:
 
 ```text
-First bad: <time/version/commit/deploy>
-Introduced/exposed by: <sha/PR/bead>
-Original intent: <why that change existed>
-Mechanism: <how it produces this failure>
-Evidence: <trace/test/log/diff>
-Fix: <what changed and why it preserves intent>
-Regression proof: <tests/runtime evidence>
+Last good / first bad:
+Introduced / exposed / correlated by:
+Commit / PR / Bead / worker:
+Original intent:
+Mechanism:
+Evidence and counterevidence:
+Fix:
+Regression proof:
 ```
 
 ## Performance regressions
 
-Measure before optimizing. Compare the current bad state with a known-good baseline and
-trace the changed hot path. Use language/runtime profilers when needed, then correlate the
-hotspot with recent commits and its callers via GitNexus. A slower release with a nearby
-commit is correlation until the profile/control-flow evidence explains the cost.
+Measure before optimizing. Compare current bad state with a known-good baseline and trace
+the changed hot path. Use language/runtime profilers when needed, then correlate the
+hotspot with recent commits and callers via GitNexus. A slower release plus nearby commit
+is correlation until profile/control-flow evidence explains the cost.
 
 ## Stop conditions
 
-Stop and reconsider the architecture/assumptions when repeated fixes fail for different
-reasons or reveal widening hidden coupling. Three failed “fixes” without a stable causal
-model is evidence that the current hypothesis or architecture is wrong, not a reason for
-a fourth speculative patch.
+Stop and reconsider architecture/assumptions when repeated fixes fail for different
+reasons or reveal widening hidden coupling. Three failed fixes without a stable causal
+model is evidence the hypothesis or architecture is wrong, not a reason for a fourth
+speculative patch.
 
 Never replace causal investigation with “try this and see” under time pressure. Fast
 incident response benefits more, not less, from knowing which change to revert or repair.
