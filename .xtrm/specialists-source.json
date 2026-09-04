@@ -4,7 +4,7 @@
   "source": {
     "kind": "ref",
     "ref": "feat/skills-v4-runtime-doctrine",
-    "resolved_sha": "7af606c75b57e5d1c139aa5649a5667edc596cf7",
+    "resolved_sha": "245a38936d8285568ebd2cac5db4364fdd706a1a",
     "repo_path": "../specialists",
     "source_path": "config/skills"
   },
@@ -29,7 +29,7 @@
       "references/bead-contracts.md": "1a5698a5869f55bc5531514142e58946acbd6278",
       "references/chain-recipes.md": "42f02267eed5fa18dc33b814a7b1c7a054fddb8c",
       "references/dispatch-preconditions.md": "ce5e270d76e173cab628b2c5a9edf8d5df0a86f8",
-      "references/kpi.md": "4dc459b3c775c48a867b53f67c947183be702105",
+      "references/kpi.md": "93caf443c4f3d19f824b4ebbec133a902addb520",
       "references/merge-and-integration.md": "22ea211e322d971242110dc1ebfa65d6f1e31f68",
       "references/monitoring.md": "089ddb679fd644e32fd608d657807e04fd9d9efe",
       "references/nodes.md": "8f1ada01a2940601fe758757d0ab1bfe0a7b6e60",
