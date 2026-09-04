@@ -1,7 +1,10 @@
 {
   "schemaVersion": "1",
   "name": "security-ops",
-  "version": "2.0.0",
-  "description": "Security review, dependency/secrets scanning and operational security evidence",
-  "skills": ["security-ops"]
+  "version": "3.0.0",
+  "description": "Security review, security baseline bootstrap, dependency/secrets scanning, and operational security evidence",
+  "skills": [
+    "security-ops",
+    "security-bootstrap"
+  ]
 }
