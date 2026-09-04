@@ -1,46 +1,64 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": 1,
+  "version": 2,
   "owners": {
     "releasing": {
       "owner": "xtrm-tools",
       "source": "xtrm-tools",
       "kind": "skill"
     },
-    "update-specialists": {
+    "using-specialists": {
       "owner": "specialists",
       "source": "specialists",
-      "kind": "skill"
-    },
-    "using-kpi": {
-      "owner": "specialists",
-      "source": "specialists",
-      "kind": "skill"
-    },
-    "using-nodes": {
-      "owner": "specialists",
-      "source": "specialists",
-      "kind": "skill"
+      "kind": "skill",
+      "placement": {
+        "tier": "default"
+      }
     },
     "specialists-creator": {
       "owner": "specialists",
       "source": "specialists",
-      "kind": "skill"
+      "kind": "skill",
+      "placement": {
+        "tier": "optional",
+        "pack": "specialists-advanced"
+      }
     },
-    "using-specialists": {
+    "using-kpi": {
       "owner": "specialists",
       "source": "specialists",
-      "kind": "skill"
+      "kind": "skill",
+      "placement": {
+        "tier": "optional",
+        "pack": "specialists-advanced"
+      }
+    },
+    "using-nodes": {
+      "owner": "specialists",
+      "source": "specialists",
+      "kind": "skill",
+      "placement": {
+        "tier": "optional",
+        "pack": "specialists-advanced"
+      }
     },
     "using-script-specialists": {
       "owner": "specialists",
       "source": "specialists",
-      "kind": "skill"
+      "kind": "skill",
+      "placement": {
+        "tier": "optional",
+        "pack": "specialists-advanced"
+      }
     },
-    "using-specialists-auto": {
+    "update-specialists": {
       "owner": "specialists",
       "source": "specialists",
-      "kind": "skill"
+      "kind": "skill",
+      "placement": {
+        "tier": "optional",
+        "pack": "xtrm-maintenance"
+      }
     }
   },
   "mirrors": {
