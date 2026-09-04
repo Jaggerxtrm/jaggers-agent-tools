@@ -1,6 +1,6 @@
 # XTRM Agent Workflow
 
-> Full reference: `XTRM-GUIDE.md` | Session manual: `/using-xtrm` skill.
+> Full reference: `/using-xtrm` skill (or `XTRM-GUIDE.md` where present).
 > This is a compact managed block. Use CLI `--help` and skills for details; do not paste full manuals here.
 > Shared canonical contract (`.xtrm/config/instructions/agent-contract.md`); the sections between the contract markers are byte-identical in both tops. Only the trailing Runtime notes differ.
 
@@ -93,7 +93,7 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 
 ## Rule conflict — TaskCreate / TodoWrite
 
-`bd prime` (auto-injected at SessionStart) says *"Prohibited: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking"*. **This project overrides that line.** Runtime-local task planning (TaskCreate / TodoWrite-style features when the runtime provides them) is used *alongside* beads for non-trivial work — beads remains authoritative for ownership, dependencies, memory gates, and closure; local task plans are ephemeral execution tracking scoped to the active bead. Do not create MEMORY.md files (the bd prime rule against those still holds).
+If a `bd prime` full-context run (opt-in diagnostic) reports *"Prohibited: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking"*, **this project overrides that line.** Runtime-local task planning (TaskCreate / TodoWrite-style features when the runtime provides them) is used *alongside* beads for non-trivial work — beads remains the durable authority for ownership, dependencies, memory gates, and closure; local task plans are ephemeral execution tracking scoped to the active bead. Do not create MEMORY.md files (the bd prime rule against those still holds).
 
 ## Project intelligence — on demand (xtrm-x12p3)
 
