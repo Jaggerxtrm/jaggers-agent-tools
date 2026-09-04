@@ -7,50 +7,6 @@
       "source": "xtrm-tools",
       "kind": "skill"
     },
-    "using-specialists": {
-      "owner": "specialists",
-      "source": "specialists",
-      "kind": "skill",
-      "placement": {
-        "tier": "default"
-      }
-    },
-    "specialists-creator": {
-      "owner": "specialists",
-      "source": "specialists",
-      "kind": "skill",
-      "placement": {
-        "tier": "optional",
-        "pack": "specialists-advanced"
-      }
-    },
-    "using-kpi": {
-      "owner": "specialists",
-      "source": "specialists",
-      "kind": "skill",
-      "placement": {
-        "tier": "optional",
-        "pack": "specialists-advanced"
-      }
-    },
-    "using-nodes": {
-      "owner": "specialists",
-      "source": "specialists",
-      "kind": "skill",
-      "placement": {
-        "tier": "optional",
-        "pack": "specialists-advanced"
-      }
-    },
-    "using-script-specialists": {
-      "owner": "specialists",
-      "source": "specialists",
-      "kind": "skill",
-      "placement": {
-        "tier": "optional",
-        "pack": "specialists-advanced"
-      }
-    },
     "update-specialists": {
       "owner": "specialists",
       "source": "specialists",
@@ -58,6 +14,14 @@
       "placement": {
         "tier": "optional",
         "pack": "xtrm-maintenance"
+      }
+    },
+    "using-specialists": {
+      "owner": "specialists",
+      "source": "specialists",
+      "kind": "skill",
+      "placement": {
+        "tier": "default"
       }
     }
   },
@@ -67,7 +31,7 @@
       "source_path": "config/skills",
       "release": {
         "package": "specialists",
-        "sha": "unknown"
+        "sha": "7af606c75b57e5d1c139aa5649a5667edc596cf7"
       }
     }
   }
