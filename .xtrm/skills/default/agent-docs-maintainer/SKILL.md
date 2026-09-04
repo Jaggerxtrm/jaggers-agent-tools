@@ -134,7 +134,7 @@ Run the audit again and check:
 - no stale project names
 - no code fence count explosion
 - skill references point to installed skills or clearly say “latest available”
-- `CLAUDE.md` and `AGENTS.md` are intentionally different when both exist
+- `CLAUDE.md` carries the same effective contract as `AGENTS.md`: parity of the shared body, never a bare "see AGENTS.md" pointer; only small additive runtime-specific notes may differ
 
 ## Rewrite checklist
 

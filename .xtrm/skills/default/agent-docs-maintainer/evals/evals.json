@@ -30,6 +30,11 @@
    "id": 6,
    "prompt": "Audit a CLAUDE.md whose Session Start mandates 'bd prime at session start' with no Service Knowledge routing.",
    "expected_output": "Flags mandatory/automatic bd prime startup as a violation, requires replacement with targeted Beads lookup plus Service Knowledge status/query routing where installed, and notes bd prime remains opt-in diagnostic only."
+  },
+  {
+   "id": 7,
+   "prompt": "Review a CLAUDE.md that says 'see AGENTS.md for the full repo contract' instead of carrying the contract body.",
+   "expected_output": "Rejects the pointer as non-equivalent startup context: requires the shared contract body present in CLAUDE.md itself, with only small additive Claude-specific notes; cites the parity rule."
   }
  ]
 }

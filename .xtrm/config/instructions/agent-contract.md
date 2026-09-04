@@ -1,10 +1,15 @@
-# XTRM Agent Workflow
+# XTRM agent contract — shared canonical body (ISSUE-136)
 
-> Full reference: `XTRM-GUIDE.md` | Session manual: `/using-xtrm` skill.
-> This is a compact managed block. Use CLI `--help` and skills for details; do not paste full manuals here.
-> Shared canonical contract (`.xtrm/config/instructions/agent-contract.md`); the sections between the contract markers are byte-identical in both tops. Only the trailing Runtime notes differ.
+> Generated from ONE canonical source: `.xtrm/config/instructions/agent-contract.md`.
+> `agents-top.md` and `claude-top.md` are thin wrappers that embed this body
+> verbatim between the contract markers, then append a small runtime suffix.
+> Durable edits belong HERE. Never edit the rendered copies between markers.
+> Parity is enforced by `cli/src/tests/agent-contract-parity.test.ts`.
+> `bd prime` is an explicit opt-in diagnostic/full-context command only —
+> never mandatory or automatic at session start.
 
 <!-- contract:start -->
+
 ## Canonical Sources
 - **CLI `--help` is canonical.** Run `<tool> --help` or `<tool> <subcmd> --help` when unsure; skills own **when**, help owns **how**.
 - Managed blocks (`agents-top.md`, `claude-top.md`, `/using-xtrm`) are compact routers, not replacements for `--help`.
@@ -129,11 +134,5 @@ xtrm-loader no longer embeds project bodies in every request. Read them when the
 
 - `xt` in a sandboxed worktree uses the same flags across runtimes; see `/using-xtrm` for the runtime-specific launch shape.
 - `xt end` — close session: commit / push / PR / cleanup when appropriate.
+
 <!-- contract:end -->
-
-## Runtime notes (Pi / runtime-neutral)
-
-- Project skills catalog: Pi's native `<available_skills>` metadata; force-load a skill's body at turn 1 via `/skill:<name>`.
-- Full workflow examples + prompt-shaping guidance: `/skill:using-xtrm` (on demand — no longer eager-injected on Pi).
-- Use background process tooling for long-running servers, watchers, and log tails instead of shell backgrounding.
-- Worktree launch: `xt pi` — launch Pi in a sandboxed worktree; `xt pi --role <specialist>` for an interactive specialist session (e.g. `chain-coordinator`, `pr-reviewer`, `sre-triage`). Coordination and escalation live in `/multiplexing` Pattern 7 and `/using-specialists`.

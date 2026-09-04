@@ -64,3 +64,5 @@ For full syntax, use each CLI's `--help`.
 ```
 
 Keep this template under 300 lines unless the project has a documented exception.
+
+`CLAUDE.md` MUST carry the same effective contract as `AGENTS.md` (shared body: session start, operating rules, skill routing, essential commands). Never write a bare "see AGENTS.md" pointer — Claude loads `CLAUDE.md` directly and the pointer text is not the contract. Claude-only additions stay small: hooks/MCP/skill-invocation notes only.

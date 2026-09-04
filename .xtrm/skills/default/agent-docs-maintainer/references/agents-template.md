@@ -42,4 +42,4 @@ If Service Knowledge is installed, check `service-knowledge status` / `index sta
 Max 5-10 active, current gotchas. No history.
 ```
 
-`AGENTS.md` should be more portable than `CLAUDE.md`. Keep Claude-only instructions out unless explicitly scoped.
+`AGENTS.md` and `CLAUDE.md` MUST expose the same effective contract: identical shared body (session start, operating rules, skill routing, essential commands), never a bare "see AGENTS.md" pointer in `CLAUDE.md`. Claude-only instructions stay small and additive (hooks/MCP/skill-invocation notes). Keep Claude-only instructions out of `AGENTS.md` unless explicitly scoped.
