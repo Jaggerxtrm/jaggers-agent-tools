@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Hash-compares every vendored Specialists skill file against the exact upstream
+// Compares every vendored Specialists runtime file against the exact upstream
 // source.resolved_sha and the placement declared in the v2 vendor manifest.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -9,8 +9,8 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(readFileSync(path.join(repoRoot, '.xtrm/specialists-source.json'), 'utf8'));
-if (manifest.version !== 2) {
-  console.error('vendored-specialists-parity: expected specialists-source manifest v2');
+if (manifest.version !== 2 || manifest.digest !== 'git-blob-sha1') {
+  console.error('vendored-specialists-parity: expected v2 git-blob-sha1 manifest');
   process.exit(1);
 }
 
@@ -39,29 +39,32 @@ function destination(skill, rel) {
   throw new Error(`invalid placement for ${skill}: ${JSON.stringify(placement)}`);
 }
 
-const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
+function gitBlobId(buf) {
+  return createHash('sha1').update(Buffer.from(`blob ${buf.length}\0`)).update(buf).digest('hex');
+}
+
 let failures = 0;
 for (const [skill, files] of Object.entries(manifest.files ?? {})) {
-  for (const rel of Object.keys(files)) {
-    const vendoredPath = destination(skill, rel);
-    let upstreamBytes;
+  for (const [rel, manifestBlob] of Object.entries(files)) {
+    const upstreamPath = `${sourcePath}/${skill}/${rel}`;
+    let upstreamBlob;
     try {
-      upstreamBytes = execFileSync('git', ['-C', upstream, 'show', `${sha}:${sourcePath}/${skill}/${rel}`], { maxBuffer: 1 << 28 });
+      upstreamBlob = execFileSync('git', ['-C', upstream, 'rev-parse', `${sha}:${upstreamPath}`], { encoding: 'utf8' }).trim();
     } catch {
       console.error(`${skill}/${rel}  missing upstream at ${sourcePath} @ ${sha.slice(0, 12)}`);
       failures += 1;
       continue;
     }
 
-    const want = sha256(upstreamBytes);
-    const got = existsSync(vendoredPath) ? sha256(readFileSync(vendoredPath)) : 'ABSENT';
-    const manifestHash = files[rel];
-    if (want !== manifestHash) {
-      console.error(`${skill}/${rel}  manifest=${String(manifestHash).slice(0, 16)} upstream=${want.slice(0, 16)}`);
+    if (upstreamBlob !== manifestBlob) {
+      console.error(`${skill}/${rel}  manifest=${String(manifestBlob).slice(0, 16)} upstream=${upstreamBlob.slice(0, 16)}`);
       failures += 1;
     }
-    if (want !== got) {
-      console.error(`${path.relative(repoRoot, vendoredPath)}  upstream=${want.slice(0, 16)} vendored=${got.slice(0, 16)}`);
+
+    const vendoredPath = destination(skill, rel);
+    const vendoredBlob = existsSync(vendoredPath) ? gitBlobId(readFileSync(vendoredPath)) : 'ABSENT';
+    if (upstreamBlob !== vendoredBlob) {
+      console.error(`${path.relative(repoRoot, vendoredPath)}  upstream=${upstreamBlob.slice(0, 16)} vendored=${vendoredBlob.slice(0, 16)}`);
       failures += 1;
     }
   }
