@@ -1,0 +1,76 @@
+{
+  "content_sha256": "04f4d0934ca055f5eaa33017566857b8638e54fc444084952ae9f08f50fb21b1",
+  "desired_issues": {
+    "xtrm-j2wp9": {
+      "_type": "issue",
+      "assignee": "jaggerxtrm",
+      "comment_count": 0,
+      "created_at": "2026-09-04T15:14:00Z",
+      "created_by": "jaggerxtrm",
+      "dependency_count": 0,
+      "dependent_count": 0,
+      "description": "## PROBLEM\nThe 2026-09-03..04 worktree session unknowingly built 16 pi-extensions commits on a diverged local main: python-kernel v2 (prelude, QoL, audit seam, release path, e2e smoke), service-knowledge ext v1 suite + its relocation to @jaggerxtrm/pi-service-knowledge, in-kernel binding, drift detection, READMEs/manifest blurbs, orphaned service-skills cleanup. Meanwhile origin/main shipped v0.12.0 (5 commits). The stack must be rebased onto published main and landed as a clean PR.\n## SUCCESS\nLinear PR from the 16-commit stack rebased onto origin/main 04c1867b: all conflicts resolved with no behavior change beyond resolution, changelog:check green, version files NOT bumped (release already cut), no global-state mutation, targeted + affected suites green, CI green, merged.\n## CONSTRAINTS\nIsolated worktree only; canonical /home/dawid/dev/core is on an unrelated feature branch and dirty — never touch it. Preserve the 16-commit history (rebase, no squash). No version bumps (0.12.0 already released). No npm publish, no tag.",
+      "heartbeat_at": "2026-09-04T15:14:02Z",
+      "id": "xtrm-j2wp9",
+      "issue_type": "task",
+      "lease_expires_at": "2026-09-04T15:19:02Z",
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "started_at": "2026-09-04T15:14:02Z",
+      "status": "in_progress",
+      "title": "feat(pi-extensions): rebase rescued python-kernel/service-knowledge stack onto main and land cleanly",
+      "updated_at": "2026-09-04T15:14:02Z"
+    }
+  },
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-j2wp9"
+  },
+  "issues": {
+    "xtrm-j2wp9": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "comment_count": 0,
+        "created_at": "2026-09-04T15:14:00Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nThe 2026-09-03..04 worktree session unknowingly built 16 pi-extensions commits on a diverged local main: python-kernel v2 (prelude, QoL, audit seam, release path, e2e smoke), service-knowledge ext v1 suite + its relocation to @jaggerxtrm/pi-service-knowledge, in-kernel binding, drift detection, READMEs/manifest blurbs, orphaned service-skills cleanup. Meanwhile origin/main shipped v0.12.0 (5 commits). The stack must be rebased onto published main and landed as a clean PR.\n## SUCCESS\nLinear PR from the 16-commit stack rebased onto origin/main 04c1867b: all conflicts resolved with no behavior change beyond resolution, changelog:check green, version files NOT bumped (release already cut), no global-state mutation, targeted + affected suites green, CI green, merged.\n## CONSTRAINTS\nIsolated worktree only; canonical /home/dawid/dev/core is on an unrelated feature branch and dirty — never touch it. Preserve the 16-commit history (rebase, no squash). No version bumps (0.12.0 already released). No npm publish, no tag.",
+        "heartbeat_at": "2026-09-04T15:14:02Z",
+        "id": "xtrm-j2wp9",
+        "issue_type": "task",
+        "lease_expires_at": "2026-09-04T15:19:02Z",
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "started_at": "2026-09-04T15:14:02Z",
+        "status": "in_progress",
+        "title": "feat(pi-extensions): rebase rescued python-kernel/service-knowledge stack onto main and land cleanly",
+        "updated_at": "2026-09-04T15:14:02Z"
+      }
+    }
+  },
+  "new_comments": {},
+  "relations": [],
+  "repository": "xtrm-dev/core",
+  "root_id": "xtrm-j2wp9",
+  "root_title": "feat(pi-extensions): rebase rescued python-kernel/service-knowledge stack onto main and land cleanly",
+  "roundtrip": {
+    "base_package_sha256": "04f4d0934ca055f5eaa33017566857b8638e54fc444084952ae9f08f50fb21b1",
+    "base_record_sha256": {
+      "xtrm-j2wp9": "790ae2d77971cf240c5302f2c25f4bf40e36cdda12e6225ca1c15c492cccd0fd"
+    },
+    "edit_contract": "modify desired_issues and new_comments only; issues.*.source is immutable base state",
+    "prepared_at": "2026-09-04T15:41:47Z",
+    "schema_version": "xtrm.board-audit.roundtrip.v1"
+  },
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}
