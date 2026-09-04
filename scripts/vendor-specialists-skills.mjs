@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -127,17 +126,12 @@ async function removePreviousVendoredPaths(previousManifest, currentEntries) {
   for (const target of cleanup.keys()) await fs.rm(target, { recursive: true, force: true });
 }
 
-function sha256(bytes) {
-  return crypto.createHash('sha256').update(bytes).digest('hex');
-}
-
 function sortObject(value) {
   return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 function shouldVendor(relativePath) {
-  // Evals and iterative workspaces remain in the Specialists source repo. They are
-  // development fixtures, not runtime skill payload. Core vendors only executable/runtime content.
+  // Evals/workspaces are source-repo development fixtures, not runtime payload.
   return relativePath.length > 0
     && !relativePath.startsWith('evals/')
     && !relativePath.startsWith('workspace/');
@@ -158,20 +152,18 @@ async function vendorSkill({ specialistsRepoPath, resolvedSha, sourcePath, skill
   await fs.mkdir(destination, { recursive: true });
 
   const files = await listSkillFiles(specialistsRepoPath, resolvedSha, sourcePath, skillName);
-  const hashes = {};
-  const blobs = {};
+  const gitBlobs = {};
   for (const { fullPath, relativePath } of files) {
     const bytes = await gitBytes(specialistsRepoPath, ['show', `${resolvedSha}:${fullPath}`]);
     const target = path.join(destination, ...relativePath.split('/'));
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(target, bytes);
-    hashes[relativePath] = sha256(bytes);
-    blobs[relativePath] = await gitText(specialistsRepoPath, ['rev-parse', `${resolvedSha}:${fullPath}`]);
+    gitBlobs[relativePath] = await gitText(specialistsRepoPath, ['rev-parse', `${resolvedSha}:${fullPath}`]);
   }
 
   const location = placement.tier === 'default' ? 'default' : `optional/${placement.pack}`;
   console.log(`Vendored ${skillName} @ ${resolvedSha.slice(0, 12)} -> ${location}`);
-  return { hashes: sortObject(hashes), blobs: sortObject(blobs) };
+  return sortObject(gitBlobs);
 }
 
 async function main() {
@@ -193,7 +185,6 @@ async function main() {
   await removePreviousVendoredPaths(previousManifest, entries);
 
   const files = {};
-  const blobs = {};
   const placements = {};
   for (const entry of entries) {
     if (entry.placement.tier === 'optional') {
@@ -202,14 +193,13 @@ async function main() {
         `Missing optional pack for ${entry.skillName}: ${entry.placement.pack}`,
       );
     }
-    const result = await vendorSkill({ specialistsRepoPath, resolvedSha, sourcePath, ...entry });
-    files[entry.skillName] = result.hashes;
-    blobs[entry.skillName] = result.blobs;
+    files[entry.skillName] = await vendorSkill({ specialistsRepoPath, resolvedSha, sourcePath, ...entry });
     placements[entry.skillName] = entry.placement;
   }
 
   const manifest = {
     version: 2,
+    digest: 'git-blob-sha1',
     source: {
       ...source,
       ...(detectedRef && detectedRef !== 'HEAD' ? { ref: detectedRef } : {}),
@@ -220,7 +210,6 @@ async function main() {
     skills: entries.map(({ skillName }) => skillName),
     placements: sortObject(placements),
     files: sortObject(files),
-    blobs: sortObject(blobs),
   };
 
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
