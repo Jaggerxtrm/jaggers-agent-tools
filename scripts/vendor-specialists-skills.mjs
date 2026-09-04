@@ -118,17 +118,13 @@ function specialistsEntries(ownershipManifest) {
 async function removePreviousVendoredPaths(previousManifest, currentEntries) {
   const cleanup = new Map();
   for (const skillName of previousManifest?.skills ?? []) {
-    const placement = previousPlacement(previousManifest, skillName);
-    cleanup.set(destinationDir(skillName, placement), true);
+    cleanup.set(destinationDir(skillName, previousPlacement(previousManifest, skillName)), true);
   }
   for (const { skillName, placement } of currentEntries) {
-    // v1 always wrote to default; remove it even when the new placement is optional.
-    cleanup.set(path.join(defaultRoot, skillName), true);
+    cleanup.set(path.join(defaultRoot, skillName), true); // v1 compatibility cleanup
     cleanup.set(destinationDir(skillName, placement), true);
   }
-  for (const target of cleanup.keys()) {
-    await fs.rm(target, { recursive: true, force: true });
-  }
+  for (const target of cleanup.keys()) await fs.rm(target, { recursive: true, force: true });
 }
 
 function sha256(bytes) {
@@ -139,15 +135,22 @@ function sortObject(value) {
   return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
 }
 
+function shouldVendor(relativePath) {
+  // Evals and iterative workspaces remain in the Specialists source repo. They are
+  // development fixtures, not runtime skill payload. Core vendors only executable/runtime content.
+  return relativePath.length > 0
+    && !relativePath.startsWith('evals/')
+    && !relativePath.startsWith('workspace/');
+}
+
 async function listSkillFiles(specialistsRepoPath, resolvedSha, sourcePath, skillName) {
   const prefix = `${sourcePath}/${skillName}`.replaceAll('\\', '/');
   const output = await gitText(specialistsRepoPath, ['ls-tree', '-r', '--name-only', resolvedSha, '--', prefix]);
-  const files = output ? output.split('\n').filter(Boolean) : [];
-  if (files.length === 0) throw new Error(`Missing specialists skill at ${resolvedSha}:${prefix}`);
-  return files.map((fullPath) => ({
-    fullPath,
-    relativePath: fullPath.slice(prefix.length + 1),
-  }));
+  const files = (output ? output.split('\n').filter(Boolean) : [])
+    .map((fullPath) => ({ fullPath, relativePath: fullPath.slice(prefix.length + 1) }))
+    .filter(({ relativePath }) => shouldVendor(relativePath));
+  if (files.length === 0) throw new Error(`Missing runtime Specialists skill content at ${resolvedSha}:${prefix}`);
+  return files;
 }
 
 async function vendorSkill({ specialistsRepoPath, resolvedSha, sourcePath, skillName, placement }) {
@@ -199,12 +202,7 @@ async function main() {
         `Missing optional pack for ${entry.skillName}: ${entry.placement.pack}`,
       );
     }
-    const result = await vendorSkill({
-      specialistsRepoPath,
-      resolvedSha,
-      sourcePath,
-      ...entry,
-    });
+    const result = await vendorSkill({ specialistsRepoPath, resolvedSha, sourcePath, ...entry });
     files[entry.skillName] = result.hashes;
     blobs[entry.skillName] = result.blobs;
     placements[entry.skillName] = entry.placement;
