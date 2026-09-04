@@ -1,7 +1,10 @@
 {
   "schemaVersion": "1",
   "name": "xtrm-maintenance",
-  "version": "1.0.0",
-  "description": "XTRM release, update, documentation, dependency and session maintenance",
-  "skills": ["xtrm-maintenance"]
+  "version": "1.1.0",
+  "description": "XTRM release, update, documentation, dependency, Specialists refresh, and session maintenance",
+  "skills": [
+    "xtrm-maintenance",
+    "update-specialists"
+  ]
 }
