@@ -4,7 +4,7 @@
   "source": {
     "kind": "ref",
     "ref": "feat/skills-v4-runtime-doctrine",
-    "resolved_sha": "245a38936d8285568ebd2cac5db4364fdd706a1a",
+    "resolved_sha": "164bfcd136abce1976e2b86c938a8eee4b34e007",
     "repo_path": "../specialists",
     "source_path": "config/skills"
   },
