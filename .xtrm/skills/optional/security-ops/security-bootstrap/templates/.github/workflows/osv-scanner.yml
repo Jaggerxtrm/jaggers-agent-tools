@@ -1,12 +1,12 @@
 name: OSV Scanner
 
-# Vulnerability scanner from Google's OSV.dev — replaces Dependency Review on
-# user-private repos where Dependency Review (a GHAS feature) is unavailable.
-# Scans manifests + lockfiles against the OSV.dev database.
+# Dependency vulnerability scan. XTRM policy treats ordinary PR findings as
+# advisory and keeps push/scheduled scans blocking. SECURITY_FORCED
+# classification is handled by the dependency-update workflow when installed.
 
 on:
   push:
-    branches: [main, master]    # scan immediately after every merge
+    branches: [main, master]
   pull_request:
     branches: [main, master]
   schedule:
@@ -19,15 +19,14 @@ jobs:
   scan:
     name: OSV scan
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Run OSV-Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2
+        uses: google/osv-scanner-action/osv-scanner-action@baa4139e56d6312335d899e6ba045fa16d1d3d0b # v2.5.1
         with:
-          # Note: --skip-git was removed in v2.3+. Recursive scan walks the
-          # working tree and respects .gitignore by default.
           scan-args: |-
             --recursive
             ./
