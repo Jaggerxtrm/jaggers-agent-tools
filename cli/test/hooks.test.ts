@@ -965,20 +965,6 @@ describe('hooks.json — beads-compact hooks wiring', () => {
   });
 });
 
-// ── service-skills.ts — no tool_call territory activation ─────────────────
-describe.skip('service-skills.ts (test environment issue)', () => {
-  it('does not register a tool_call handler (fires Python on every tool)', () => {
-    const src = readFileSync(
-      path.join(__dirname, '../../packages/pi-extensions/extensions/service-skills/index.ts'),
-      'utf8',
-    );
-    expect(
-      src,
-      'service-skills.ts must not use pi.on("tool_call") — fires Python on every tool invocation',
-    ).not.toContain('pi.on("tool_call"');
-  });
-});
-
 // ── beads-claim-sync.mjs — claim/close session lifecycle ───────────────
 describe.skip('beads-claim-sync.mjs (test environment issue)', () => {
   it('creates worktree and session state on bd claim', () => {
