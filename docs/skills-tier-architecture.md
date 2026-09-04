@@ -111,7 +111,7 @@ The global `default/` entry is **no longer a symlink** to the repo `skills/` dir
 - **Mutability**: Read-only — managed by xtrm updates
 - **Discovery**: Direct child directories with `SKILL.md`
 
-Contains baseline skills required for bootstrapping and core workflows: `using-xtrm`, `sync-docs`, `planning`, `test-planning`, `xt-end`, `xt-merge`, `deepwiki`, `specialists-creator`, `using-specialists`, GitNexus skills, senior-* specialists, etc.
+Contains the nine universal default skills: `using-xtrm`, `starting-and-resuming-work`, `multiplexing`, `planning`, `engineering-quality`, `using-specialists`, `gitnexus`, `skill-creator`, and `find-skills`.
 
 ### Global optional (Tier 2)
 
@@ -122,7 +122,7 @@ Contains baseline skills required for bootstrapping and core workflows: `using-x
 
 Contains add-on packs that extend or replace default definitions. Packs can provide new skills or managed replacements.
 
-Current optional domain pack catalog: `research-methods`, `code-quality`, `security-ops`, `data-engineering`, and `architecture-design`.
+Current optional pack catalog: `architecture-design`, `data-engineering`, `personal-tools`, `research-methods`, `security-ops`, `sre-ops`, `xt-optional`, `xtrm-development`, and `xtrm-maintenance`.
 
 ### Global user (Tier 3)
 

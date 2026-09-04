@@ -76,16 +76,6 @@ jobs:
         node scripts/compile-policies.mjs --check
         node scripts/compile-policies.mjs --check-pi
 
-    - name: Generate registry reconciliation artifact
-      run: npm run gen-registry
-
-    - name: Upload generated registry
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-      with:
-        name: skills-v4-generated-registry
-        path: .xtrm/registry.json
-        if-no-files-found: error
-
     - name: Verify specialists vendor and package registry freshness
       run: |
         npm run check:skills-ownership
