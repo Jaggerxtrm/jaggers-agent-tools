@@ -13,8 +13,13 @@ async function readJson(filePath) {
   return JSON.parse(await fs.readFile(filePath, 'utf8'));
 }
 
+function gitBlobId(content) {
+  const header = Buffer.from(`blob ${content.length}\0`);
+  return crypto.createHash('sha1').update(header).update(content).digest('hex');
+}
+
 async function hashFile(filePath) {
-  return crypto.createHash('sha256').update(await fs.readFile(filePath)).digest('hex');
+  return gitBlobId(await fs.readFile(filePath));
 }
 
 async function collectFileHashes(rootDir) {
@@ -48,6 +53,7 @@ function destinationDir(manifest, skillName) {
 async function main() {
   const manifest = await readJson(manifestPath);
   assert(manifest.version === 2, 'manifest version mismatch; expected v2 placement-aware manifest');
+  assert(manifest.digest === 'git-blob-sha1', 'manifest digest mismatch');
   assert(Array.isArray(manifest.skills) && manifest.skills.length > 0, 'manifest skills missing');
   assert(manifest.source?.resolved_sha, 'manifest source.resolved_sha missing');
   assert(manifest.placements && typeof manifest.placements === 'object', 'manifest placements missing');
@@ -61,7 +67,7 @@ async function main() {
 
     assert(JSON.stringify(expectedPaths) === JSON.stringify(actualPaths), `file set mismatch for ${skillName}`);
     for (const relativePath of expectedPaths) {
-      assert(actualFiles[relativePath] === expectedFiles[relativePath], `hash mismatch for ${skillName}/${relativePath}`);
+      assert(actualFiles[relativePath] === expectedFiles[relativePath], `blob mismatch for ${skillName}/${relativePath}`);
     }
   }
 
