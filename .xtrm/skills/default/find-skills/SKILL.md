@@ -1,133 +1,63 @@
 ---
 name: find-skills
-description: Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill.
+description: >
+  Discover additional Agent Skills and decide whether to import them into XTRM. Use when
+  the user asks for a skill/capability that is not already present, wants to browse the
+  skills ecosystem, or wants to adopt a third-party skill. Search is allowed; installation
+  into managed XTRM state is governed. Audit instructions, scripts, dependencies,
+  provenance, trigger overlap, and placement before enabling anything.
 ---
 
 # Find Skills
 
-This skill helps you discover and install skills from the open agent skills ecosystem.
-
-## When to Use This Skill
-
-Use this skill when the user:
-
-- Asks "how do I do X" where X might be a common task with an existing skill
-- Says "find a skill for X" or "is there a skill for X"
-- Asks "can you do X" where X is a specialized capability
-- Expresses interest in extending agent capabilities
-- Wants to search for tools, templates, or workflows
-- Mentions they wish they had help with a specific domain (design, testing, deployment, etc.)
-
-## What is the Skills CLI?
-
-The Skills CLI (`npx skills`) is the package manager for the open agent skills ecosystem. Skills are modular packages that extend agent capabilities with specialized knowledge, workflows, and tools.
-
-**Key commands:**
-
-- `npx skills find [query]` - Search for skills interactively or by keyword
-- `npx skills add <package>` - Install a skill from GitHub or other sources
-- `npx skills check` - Check for skill updates
-- `npx skills update` - Update all installed skills
-
-**Browse skills at:** https://skills.sh/
-
-## How to Help Users Find Skills
-
-### Step 1: Understand What They Need
-
-When a user asks for help with something, identify:
-
-1. The domain (e.g., React, testing, design, deployment)
-2. The specific task (e.g., writing tests, creating animations, reviewing PRs)
-3. Whether this is a common enough task that a skill likely exists
-
-### Step 2: Search for Skills
-
-Run the find command with a relevant query:
+First check what XTRM already provides:
 
 ```bash
-npx skills find [query]
+xt skills list --global
+xt skills list --local
 ```
 
-For example:
+If an existing default or enabled pack covers the task, use it instead of importing an
+overlapping third-party skill.
 
-- User asks "how do I make my React app faster?" → `npx skills find react performance`
-- User asks "can you help me with PR reviews?" → `npx skills find pr review`
-- User asks "I need to create a changelog" → `npx skills find changelog`
+## Discover
 
-The command will return results like:
+Use current public skill registries/search tools when useful. `npx skills find <query>`
+may be used as discovery if installed, but its install command is not the XTRM governance
+path.
 
-```
-Install with npx skills add <owner/repo@skill>
+For each candidate record:
 
-vercel-labs/agent-skills@vercel-react-best-practices
-└ https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices
-```
+- source repository/publisher and license;
+- exact skill directory/version/commit when possible;
+- description and trigger overlap with XTRM skills;
+- bundled scripts/assets/dependencies;
+- network/credential/file-write behavior;
+- whether the value is procedure, live connectivity, or deterministic code.
 
-### Step 3: Present Options to the User
+## Audit before import
 
-When you find relevant skills, present them to the user with:
+Read the full `SKILL.md` and executable files. Reject or isolate skills that surprise the
+stated purpose, request broad credentials/permissions without need, install opaque code,
+or duplicate an existing XTRM authority.
 
-1. The skill name and what it does
-2. The install command they can run
-3. A link to learn more at skills.sh
+A skill from the public ecosystem is closer to a dependency than to a harmless README.
 
-Example response:
+## Place through XTRM
 
-```
-I found a skill that might help! The "vercel-react-best-practices" skill provides
-React and Next.js performance optimization guidelines from Vercel Engineering.
+For accepted content, create or use an appropriate user/optional pack via the current
+`xt skills` lifecycle. Preserve provenance/version information in the pack or adjacent
+metadata. Enable it explicitly for the runtimes/scope that need it.
 
-To install it:
-npx skills add vercel-labs/agent-skills@vercel-react-best-practices
+Do **not** run unattended global install commands such as `npx skills add ... -g -y` into
+XTRM-managed locations. They bypass XTRM's source of truth and review boundary.
 
-Learn more: https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices
-```
+## Prefer the right primitive
 
-### Step 4: Offer to Install
+- Stable procedure/judgment -> skill.
+- Deterministic repeated mechanics -> script/tool inside a governed skill or package.
+- Live data/authenticated system access -> MCP/tool/service plus a skill that teaches the
+  workflow when needed.
 
-If the user wants to proceed, you can install the skill for them:
-
-```bash
-npx skills add <owner/repo@skill> -g -y
-```
-
-The `-g` flag installs globally (user-level) and `-y` skips confirmation prompts.
-
-## Common Skill Categories
-
-When searching, consider these common categories:
-
-| Category        | Example Queries                          |
-| --------------- | ---------------------------------------- |
-| Web Development | react, nextjs, typescript, css, tailwind |
-| Testing         | testing, jest, playwright, e2e           |
-| DevOps          | deploy, docker, kubernetes, ci-cd        |
-| Documentation   | docs, readme, changelog, api-docs        |
-| Code Quality    | review, lint, refactor, best-practices   |
-| Design          | ui, ux, design-system, accessibility     |
-| Productivity    | workflow, automation, git                |
-
-## Tips for Effective Searches
-
-1. **Use specific keywords**: "react testing" is better than just "testing"
-2. **Try alternative terms**: If "deploy" doesn't work, try "deployment" or "ci-cd"
-3. **Check popular sources**: Many skills come from `vercel-labs/agent-skills` or `ComposioHQ/awesome-claude-skills`
-
-## When No Skills Are Found
-
-If no relevant skills exist:
-
-1. Acknowledge that no existing skill was found
-2. Offer to help with the task directly using your general capabilities
-3. Suggest the user could create their own skill with `npx skills init`
-
-Example:
-
-```
-I searched for skills related to "xyz" but didn't find any matches.
-I can still help you with this task directly! Would you like me to proceed?
-
-If this is something you do often, you could create your own skill:
-npx skills init my-xyz-skill
-```
+If no trustworthy skill exists, use `/skill-creator` to build the smallest local skill
+from the actual recurring gap rather than importing a broad collection.
