@@ -24,15 +24,23 @@ If a short summary is not enough for a fresh agent to understand the repo, add a
 | xtrm workflow / beads gates | `/using-xtrm`; CLI details: `bd --help`, `xt --help` |
 | Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists` |
 | GitNexus impact/debug/refactor | `/gitnexus-impact-analysis`, `/gitnexus-debugging`, `/gitnexus-refactoring` |
-| Service routing and docs/project context | `/scope`, `/using-service-skills` when service registry/skills exist |
+| Service routing and docs/project context | `/scope`, `/using-service-knowledge` when Service Knowledge is installed |
 | Release/session close | `/releasing`, `/xt-end`, `/session-close-report` |
 ## Project map
 - `<path>` — <purpose>
 - `<path>` — <purpose>
 - `<path>` — <purpose>
 
+## Service Knowledge (service-hosting repos)
+- Check state first: `service-knowledge status`, `service-knowledge index stats` (rebuild when stale/absent).
+- Retrieve: `service-knowledge index query "<3-5 task terms>" --bundle` (or `--paths <file>`, `--service-id <id>`); read only cited evidence.
+## Project map
+- `<path>` — <purpose>
+- `<path>` — <purpose>
+- `<path>` — <purpose>
+
 ## Claude Code notes
-- Use the canonical service-skills skill set as the project/service documentation substrate; note stale/missing service skills before relying on them.
+- Route service/project context through Service Knowledge (`service-knowledge index query "<terms>" --bundle` after checking status/stats); treat stale/absent index explicitly and rebuild before relying on ranked evidence.
 - Use GitNexus before changing existing symbols.
 - Prefer targeted reads over full-file dumps.
 
@@ -56,3 +64,5 @@ For full syntax, use each CLI's `--help`.
 ```
 
 Keep this template under 300 lines unless the project has a documented exception.
+
+`CLAUDE.md` MUST carry the same effective contract as `AGENTS.md` (shared body: session start, operating rules, skill routing, essential commands). Never write a bare "see AGENTS.md" pointer — Claude loads `CLAUDE.md` directly and the pointer text is not the contract. Claude-only additions stay small: hooks/MCP/skill-invocation notes only.

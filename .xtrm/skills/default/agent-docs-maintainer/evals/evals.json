@@ -1,30 +1,40 @@
 {
-  "skill_name": "agent-docs-maintainer",
-  "evals": [
-    {
-      "id": 1,
-      "prompt": "Audit CLAUDE.md and AGENTS.md in this repo and propose a compact rewrite plan without editing files.",
-      "expected_output": "Reports line counts, repo-identity status, bloat causes, stale/duplicate sections, and a section-by-section rewrite plan."
-    },
-    {
-      "id": 2,
-      "prompt": "Clean a bloated AGENTS.md that contains a full bd command reference, docker command cookbook, SQL examples, and stale project name.",
-      "expected_output": "Replaces manuals with skill/--help pointers, preserves current project map/gotchas, and flags stale names."
-    },
-    {
-      "id": 3,
-      "prompt": "Create a new CLAUDE.md for a repo with service skills and GitNexus enabled.",
-      "expected_output": "Uses the compact template, includes GitNexus safety notes, and routes service/project context through /scope or using-service-skills."
-    },
-    {
-      "id": 4,
-      "prompt": "Audit six sibling repos whose CLAUDE.md files begin with identical xtrm managed boilerplate and no explanation of what each repo owns.",
-      "expected_output": "Flags missing repo identity before managed blocks and recommends adding a Stack Overview / Repo Identity section instead of reporting the docs as clean."
-    },
-    {
-      "id": 5,
-      "prompt": "Review a 450-line CLAUDE.md where the first 140 lines are a current Stack Overview and the remaining content is compact routing guidance.",
-      "expected_output": "Does not recommend trimming the valuable Stack Overview just because total lines exceed 300; applies line-budget warnings to routing/managed boilerplate separately."
-    }
-  ]
+ "skill_name": "agent-docs-maintainer",
+ "evals": [
+  {
+   "id": 1,
+   "prompt": "Audit CLAUDE.md and AGENTS.md in this repo and propose a compact rewrite plan without editing files.",
+   "expected_output": "Reports line counts, repo-identity status, bloat causes, stale/duplicate sections, and a section-by-section rewrite plan."
+  },
+  {
+   "id": 2,
+   "prompt": "Clean a bloated AGENTS.md that contains a full bd command reference, docker command cookbook, SQL examples, and stale project name.",
+   "expected_output": "Replaces manuals with skill/--help pointers, preserves current project map/gotchas, and flags stale names."
+  },
+  {
+   "id": 3,
+   "prompt": "Create a new CLAUDE.md for a repo with service skills and GitNexus enabled.",
+   "expected_output": "Uses the compact template, includes GitNexus safety notes, and routes service/project context through Service Knowledge (service-knowledge index query --bundle after status/stats check, /scope or /using-service-knowledge)."
+  },
+  {
+   "id": 4,
+   "prompt": "Audit six sibling repos whose CLAUDE.md files begin with identical xtrm managed boilerplate and no explanation of what each repo owns.",
+   "expected_output": "Flags missing repo identity before managed blocks and recommends adding a Stack Overview / Repo Identity section instead of reporting the docs as clean."
+  },
+  {
+   "id": 5,
+   "prompt": "Review a 450-line CLAUDE.md where the first 140 lines are a current Stack Overview and the remaining content is compact routing guidance.",
+   "expected_output": "Does not recommend trimming the valuable Stack Overview just because total lines exceed 300; applies line-budget warnings to routing/managed boilerplate separately."
+  },
+  {
+   "id": 6,
+   "prompt": "Audit a CLAUDE.md whose Session Start mandates 'bd prime at session start' with no Service Knowledge routing.",
+   "expected_output": "Flags mandatory/automatic bd prime startup as a violation, requires replacement with targeted Beads lookup plus Service Knowledge status/query routing where installed, and notes bd prime remains opt-in diagnostic only."
+  },
+  {
+   "id": 7,
+   "prompt": "Review a CLAUDE.md that says 'see AGENTS.md for the full repo contract' instead of carrying the contract body.",
+   "expected_output": "Rejects the pointer as non-equivalent startup context: requires the shared contract body present in CLAUDE.md itself, with only small additive Claude-specific notes; cites the parity rule."
+  }
+ ]
 }

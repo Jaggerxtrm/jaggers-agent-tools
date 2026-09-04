@@ -57,8 +57,7 @@ and to anything you launch.
 Whether you're starting fresh or taking over, the first question is what state the world
 is actually in — not what the last summary said it was.
 
-The board is usually the fastest answer. `bd prime` loads workflow context; `bd ready`,
-`bd blocked`, and `bd show <id>` give specifics; `bv --robot-triage` adds graph-aware
+The board is usually the fastest answer. Targeted lookup (`bd list --status=in_progress`, `bd ready`, `bd blocked`, `bd show <id>`, `bd search "<task terms>"`) gives specifics; `bv --robot-triage` adds graph-aware
 ranking, unblock targets, and health (use only `--robot-*` flags — bare `bv` opens a TUI
 that blocks the session). `xt topology` joins panes, roles, specialist jobs, beads,
 worktrees, branches and PRs into one read-only projection, which is often the single most
@@ -216,7 +215,7 @@ Prefer binary, checkable milestones over percentages. Percentages hide non-progr
 | Several concurrent sessions | `/multiplexing`, `xtmux mux-help`, `xtmux help` |
 | Being a delegated pane | `/multiplexing-team` |
 | Deterministic fan-out / gates | `/authoring-workflows`, `Workflow` |
-| Board triage and planning | `bd prime`, `bv --robot-triage`, `/planning`, `/issue-triage` |
+| Board triage and planning | `bd ready` / `bd search`, `bv --robot-triage`, `/planning`, `/issue-triage` |
 | Joined view of everything running | `xt topology` |
 | Session bootstrap / close | `/init-session`, `/xt-end`, `/session-close-report` |
 
@@ -225,4 +224,4 @@ rather than orientation.
 
 The environment is larger than this file. When something here doesn't match what you're
 looking at, trust what you observe and go find the real surface — `--help`, `mux-help`,
-`bd prime`, `/find-skills`. Documentation drifts; running systems don't.
+targeted `bd` lookup, `/find-skills`. Documentation drifts; running systems don't.

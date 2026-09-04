@@ -71559,7 +71559,7 @@ function printNextSteps() {
   console.log(b("  Next steps\n"));
   console.log(d("  In your project:"));
   console.log(`  xtrm init                     ${d("initialize beads + gitnexus for this repo")}`);
-  console.log(`  bd prime                      ${d("load session context and available work")}`);
+  console.log(`  bd list --status=in_progress    ${d("see active claims (targeted lookup)")}`);
   console.log(`  bv --robot-triage             ${d("graph-aware triage \u2014 find highest-impact work")}`);
   console.log(`  bd update <id> --claim        ${d("claim an issue before editing any file")}`);
   console.log(`  bd close <id>                 ${d("close when done")}`);

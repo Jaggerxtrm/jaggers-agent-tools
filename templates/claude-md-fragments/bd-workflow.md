@@ -1,20 +1,27 @@
 ---
 name: bd-workflow
-version: 1.0.2
+version: 1.1.0
 description: bd issue tracking + bv triage + git/worktree workflow + active gates
 ---
 # XTRM Agent Workflow
 
 > Full reference: [XTRM-GUIDE.md](XTRM-GUIDE.md) | Session manual: `/using-xtrm` skill
-> Run `bd prime` at session start (or after `/compact`) for live beads workflow context.
+> Session start is targeted, not a bulk dump: repo identity first, then Service
+> Knowledge retrieval for service context, then targeted Beads lookup for
+> executable work. `bd prime` is opt-in diagnostic only — never automatic.
 
-## Session Start
+## Session Start (targeted)
 
-1. `bd prime` — load workflow context and active claims
-2. `bd memories <keyword>` — retrieve memories relevant to today's task
-3. `bd recall <key>` — retrieve a specific memory by key if needed
-4. `bv --robot-triage` — graph-aware triage: ranked picks, unblock targets, project health
-5. `bd update <id> --claim` — claim before any file edit
+1. Read repo identity + non-negotiable rules first (`AGENTS.md` / `CLAUDE.md` top).
+2. Service context (service-hosting repos): check `service-knowledge status` /
+   `service-knowledge index stats` (rebuild when stale/absent), then
+   `service-knowledge index query "<3-5 task terms>" --bundle` (or `--paths`,
+   `--service-id`). Read only cited service SKILL/evidence.
+3. Executable work: targeted Beads lookup — `bd list --status=in_progress`,
+   `bd ready`, `bd search "<task terms>"`, `bd show <id>` (`bv --robot-triage`
+   only when graph-aware prioritization is needed) — then
+   `bd update <id> --claim` before edits. `bd memories <topic>` / `bd recall`
+   only when history is relevant.
 
 ## Execution Interaction Policy
 
