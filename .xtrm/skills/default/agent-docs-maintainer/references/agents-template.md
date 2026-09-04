@@ -21,7 +21,7 @@ If a short summary is not enough for a fresh agent to understand the repo, add a
 |---|---|
 | xtrm/beads workflow | `/using-xtrm`, `bd --help`, `xt --help` |
 | Specialists | latest `/using-specialists-*`, prefer `/using-specialists`; check `sp --help` and `sp list` |
-| Service expertise and docs/project context | `/scope`, `/using-service-skills` if service skills are present |
+| Service expertise and docs/project context | `/scope`, `/using-service-knowledge` if Service Knowledge is installed |
 | Planning/tests/docs | `/planning`, `/test-planning`, `/sync-docs` |
 ## Project map
 - `<path>` — <purpose>
@@ -30,13 +30,13 @@ If a short summary is not enough for a fresh agent to understand the repo, add a
 
 ## Runtime notes
 - Pi: use process tool for long-running commands.
-- Generic agents: use available code navigation tools, but route project/service context through the canonical service-skills skill set.
+- Generic agents: use available code navigation tools, but route project/service context through Service Knowledge when installed.
 
 ## Essential commands
 List only the handful needed every session: bd inspect/claim/close, specialist discovery/status if relevant, mandatory GitNexus calls, and project validation commands. For full syntax, use `--help`.
 
 ## Services
-If service registry or service skills exist, route service tasks through `/scope` before touching service code; note stale/missing service skills before relying on them.
+If Service Knowledge is installed, check `service-knowledge status` / `index stats` (rebuild when stale/absent), then retrieve with `service-knowledge index query "<task terms>" --bundle` and read only cited evidence before touching service code.
 
 ## Current gotchas
 Max 5-10 active, current gotchas. No history.

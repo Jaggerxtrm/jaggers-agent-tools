@@ -119,7 +119,7 @@ safe to kill blindly.
 
 ## bd / bv
 
-`bd prime` at session start (and after compaction) loads live workflow context. `bd` owns
+Targeted Beads lookup at session start (and after compaction) replaces any bulk context dump. `bd` owns
 creating, claiming and closing; `bv` owns *what to work on*.
 
 ```

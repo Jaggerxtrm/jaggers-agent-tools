@@ -11,7 +11,7 @@ Clearly distinguish verified facts, observations, assumptions, inferences, recom
 
 Up to two task systems coexist in this repo. Where the runtime exposes both, use both; do not substitute one for the other. On a runtime with no task tools, beads alone is correct and complete — do not invent or call a native task API the runtime does not expose.
 
-- **Beads (`bd`)** — top-level durable tracking, on every runtime. Authoritative for ownership, dependencies, cross-session memory, and closure. Read the rest of this file and run `bd prime` for beads context before starting work. File, claim, and close work here.
+- **Beads (`bd`)** — top-level durable tracking, on every runtime. Authoritative for ownership, dependencies, cross-session memory, and closure. Read the rest of this file and use targeted lookup (`bd ready`, `bd show <id>`) before starting work. File, claim, and close work here.
 - **The runtime's own task system, when the runtime has one** — this-session execution tracking. Use it to mirror the active bead and break it into smaller intermediate steps. Ephemeral; does not replace beads. Names differ per runtime; read the runtime's own tool list rather than assuming a name.
 
 Rule: on a runtime that exposes task tools, when you pick up a bead, create native tasks that track it — reference the bead ID in each task title (e.g. `N.N summary — status (worker %NNNN)`) — and add any smaller intermediate steps as native sub-tasks. Beads own the durable record; native tasks own the in-flight breakdown.
@@ -28,15 +28,22 @@ Example native task list mirroring beads:
 # XTRM Agent Workflow
 
 > Full reference: [XTRM-GUIDE.md](XTRM-GUIDE.md)
-> Run `bd prime` at session start (or after context reset) for live beads workflow context.
+> Session start is targeted, not a bulk dump: repo identity first, then Service
+> Knowledge retrieval for service context, then targeted Beads lookup for
+> executable work. `bd prime` is opt-in diagnostic only — never automatic.
 
-## Session Start
+## Session Start (targeted)
 
-1. `bd prime` — load workflow context and active claims
-2. `bd memories <keyword>` — retrieve memories relevant to today's task
-3. `bd recall <key>` — retrieve a specific memory by key if needed
-4. `bv --robot-triage` — graph-aware triage: ranked picks, unblock targets, project health
-5. `bd update <id> --claim` — claim before any file edit
+1. Read repo identity + non-negotiable rules first (top of this file).
+2. Service context (service-hosting repos): check `service-knowledge status` /
+   `service-knowledge index stats` (rebuild when stale/absent), then
+   `service-knowledge index query "<3-5 task terms>" --bundle` (or `--paths`,
+   `--service-id`). Read only cited service SKILL/evidence.
+3. Executable work: targeted Beads lookup — `bd list --status=in_progress`,
+   `bd ready`, `bd search "<task terms>"`, `bd show <id>` (`bv --robot-triage`
+   only when graph-aware prioritization is needed) — then
+   `bd update <id> --claim` before edits. `bd memories` / `bd recall`
+   only when history is relevant.
 
 ## Execution Interaction Policy
 

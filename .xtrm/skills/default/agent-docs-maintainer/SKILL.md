@@ -64,7 +64,7 @@ Keep only session-critical guidance in agent docs.
 | skill routing table | copied project wiki/tutorial content |
 | compact project map | code examples, SQL snippets, migration tutorials |
 | active gotchas, max 10 | stale warnings, completed fixes, archaeology |
-| canonical service-skills routing for docs/project/service context | full service registry dumps |
+| Service Knowledge routing (`/scope`, `/using-service-knowledge`) for docs/project/service context | full service registry dumps |
 
 ### 4. Keep a tiny essential command surface
 
@@ -94,7 +94,7 @@ For GitNexus debugging/refactor/impact workflows, load the matching `/gitnexus-*
 - GitNexus MCP requirements
 - Claude hook behavior
 - Claude-only skill invocation notes
-- canonical service-skills routing for project/service context
+- Service Knowledge routing (`/scope`, `/using-service-knowledge`) for project/service context.
 
 `AGENTS.md` should stay runtime-neutral or Pi-friendly:
 - xtrm workflow summary
@@ -156,7 +156,7 @@ Before finishing, verify:
 
 ```md
 ## Issue tracking
-Run `bd prime` at session start, claim with `bd update <id> --claim` before edits, and close with a memory ack before committing. Use `bd --help` for full command syntax and `/using-xtrm` for workflow details.
+Run targeted Beads lookup at session start (`bd ready`, `bd show <id>`), claim with `bd update <id> --claim` before edits, and close with a memory ack before committing. Use `bd --help` for full command syntax and `/using-xtrm` for workflow details. (`bd prime` is opt-in diagnostic only.)
 ```
 
 **Specialists dump → skill pointer**
@@ -170,5 +170,5 @@ For substantial implementation, review, debugging, test generation, or orchestra
 
 ```md
 ## Services
-This repo has service-specific operational knowledge. Use `/scope "<task>"` or load `/using-service-skills` for service/documentation/project context before touching service code. Keep detailed runbooks in the canonical service-skills skill set or docs, not in this always-loaded guide.
+This repo has service-specific operational knowledge. Check Service Knowledge state first (`service-knowledge status`, `service-knowledge index stats`; rebuild when stale/absent), then retrieve with `service-knowledge index query "<3-5 task terms>" --bundle` (or `--paths` / `--service-id`) and read only the cited service SKILL/evidence. Keep detailed runbooks in the Service Knowledge skill set or docs, not in this always-loaded guide.
 ```

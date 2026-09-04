@@ -11,7 +11,7 @@ Clearly distinguish verified facts, observations, assumptions, inferences, recom
 
 Two task systems coexist in this repo. Use both; do not substitute one for the other.
 
-- **Beads (`bd`)** — top-level durable tracking. Authoritative for ownership, dependencies, cross-session memory, and closure. Read the rest of this file and run `bd prime` for beads context before starting work. File, claim, and close work here.
+- **Beads (`bd`)** — top-level durable tracking. Authoritative for ownership, dependencies, cross-session memory, and closure. Read the rest of this file and use targeted lookup (`bd ready`, `bd show <id>`) before starting work. File, claim, and close work here.
 - **Native integrated task system** (`TaskCreate` / `TaskList` / `TaskGet` / `TaskUpdate` / `TaskExecute`) — this-session execution tracking. Use it to mirror the active bead and break it into smaller intermediate steps. Ephemeral; does not replace beads.
 
 Rule: when you pick up a bead, create native tasks that track it — reference the bead ID in each task title (e.g. `N.N summary — status (worker %NNNN)`) — and add any smaller intermediate steps as native sub-tasks. Beads own the durable record; native tasks own the in-flight breakdown.
@@ -37,7 +37,7 @@ This file is a compact routing guide for Claude Code sessions in `xtrm-tools`. I
 - Use beads as the authoritative issue tracker and normal work lifecycle. Inspect/claim/close with `bd` before and after edits.
 - To proceed on any non-trivial or multi-step Claude Code work, use Claude Code task planning features (TaskCreate/TodoWrite-style when available) alongside normal bead operations. The local plan must mirror the active bead scope and never replace beads for ownership, dependencies, memory gates, or closure.
 - Specialists are a normal operational surface here. Before specialist work, check `sp --help` and `sp list` / `specialists list` so you know the available roles and current CLI shape.
-- For documentation, service understanding, and project/service context, use the canonical service-skills skill set (`/scope`, `/using-service-skills`) as the primary knowledge substrate.
+- For documentation, service understanding, and project/service context, use Service Knowledge (`service-knowledge index query "<terms>" --bundle` after checking `status` / `index stats`; `/scope`, `/using-service-knowledge`) as the primary knowledge substrate where installed.
 - Never commit while a bead claim is open. Close the bead and satisfy memory ack first.
 - Before editing an existing function, class, or method, run GitNexus impact analysis.
 - Before committing, run `gitnexus_detect_changes()` for scope verification.
@@ -47,12 +47,12 @@ This file is a compact routing guide for Claude Code sessions in `xtrm-tools`. I
 - `cli/dist` is tracked; rebuild with `npm run build` when CLI source changes.
 - Ask before destructive, irreversible, production-impacting, or history-rewriting actions.
 
-## Session start
+## Session start (targeted — no bulk context dump)
 
-1. `bd prime` — load workflow context.
-2. `bd memories <topic>` — retrieve relevant memory before answering questions or changing workflow-sensitive code.
-3. `bv --robot-triage` or `bv --robot-next` — choose work when needed. Never run bare `bv`.
-4. `bd update <id> --claim` — claim before edits.
+1. Read repo identity + non-negotiable rules above first.
+2. Service context (this repo has none installed — skip unless a registry appears): check `service-knowledge status` / `index stats`, then `service-knowledge index query "<terms>" --bundle`; read only cited evidence.
+3. Executable work: targeted lookup — `bd list --status=in_progress`, `bd ready`, `bd search "<task terms>"`, `bd show <id>` (`bv --robot-triage` only when graph-aware ranking is needed) — then `bd update <id> --claim` before edits.
+4. `bd memories <topic>` only when history is relevant. `bd prime` is opt-in diagnostic only.
 
 For full xtrm/beads workflow details, load `/using-xtrm` and use `bd --help`, `bd <cmd> --help`, `xt --help`.
 
@@ -64,12 +64,12 @@ For full xtrm/beads workflow details, load `/using-xtrm` and use `bd --help`, `b
 | Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists`; `sp --help` / `specialists --help` |
 | Planning feature/epic work | `/planning` plus `/test-planning` |
 | Tests and quality workflow | `/using-quality-gates`, `/using-tdd`, `/test-planning` |
-| Docs sync | `/sync-docs`; use the canonical service-skills skill set for project/service context |
+| Docs sync | `/sync-docs`; use Service Knowledge (`service-knowledge index query`) for project/service context where installed |
 | Release | `/releasing` |
 | Session close / PR flow | `/xt-end`, `/session-close-report`, `/xt-merge` |
 | Skill creation/update | `/skill-creator` |
 | Hook work | `/hook-development` |
-| Service routing | `/scope`, `/using-service-skills` when service territories exist |
+| Service routing | `/scope`, `/using-service-knowledge` (Service Knowledge `index query --bundle`) where installed |
 | GitNexus exploration/debug/refactor | matching `/gitnexus-*` skill |
 | Pi long-running commands | `/pi-processes`; use the `process` tool |
 
@@ -96,8 +96,7 @@ Keep only the commands an agent needs without another manual. Use `--help` for f
 
 ### Beads / xtrm workflow
 
-- `bd prime` — load workflow context and active claims.
-- `bd ready` — list unblocked open issues.
+- `bd ready` — list unblocked open issues (`bd prime` is opt-in diagnostic only).
 - `bd list --status=in_progress` — see active claims.
 - `bd show <id>` — inspect detail, deps, blockers, notes.
 - `bd update <id> --claim` — claim before edits.
@@ -136,7 +135,7 @@ Keep only the commands an agent needs without another manual. Use `--help` for f
 ## Claude Code notes
 
 - For non-trivial or multi-step Claude Code work, create and maintain a small internal task plan before proceeding; keep it synchronized with the active bead and clear/complete it as work progresses.
-- For service/documentation context, route through `/scope` and the canonical service-skills skill set first.
+- For service/documentation context, route through Service Knowledge (`service-knowledge index query`) first where installed.
 - Use GitNexus for unfamiliar code execution flows before grepping large trees.
 - Use `structured_return` for tests, builds, lint, typecheck, and other quality commands.
 - Use `process` for long-running servers/watchers/log tails.

@@ -9,16 +9,17 @@
 - Managed blocks and installed skills update via `xt update --apply`; consumers see changes on the next run.
 - Check runtime versions with `xt version --check-updates` (`npm outdated -g` fallback) for `xtrm-tools`, `@jaggerxtrm/xtmux`, and `@jaggerxtrm/specialists`.
 
-## Session start
+## Session start (targeted — no bulk context dump)
 
-1. `bd prime` — load workflow context and active claims.
-2. `bd memories <topic>` / `bd recall <key>` — retrieve durable context before answering questions or changing workflow-sensitive code.
-3. Catch up on recent work: check handoff/next-session beads, latest `xt report` handoffs, recent merged/closed PRs, and `bd list --status=in_progress`.
-4. `bv --robot-triage --format toon` or `bv --robot-next` — choose work when needed. Never run bare `bv`.
-5. If board state is unclear, run `/issue-triage` or the robot triage/plan commands before editing.
-6. For service/docs/project context, run `/scope` or `/using-service-skills`; note stale/missing service skills before relying on them.
-7. `bd ready` / `bd show <id>` / `bd update <id> --claim` — inspect and claim before edits.
-8. For non-trivial work, use Claude Code task planning features (TaskCreate/TodoWrite-style when available) before proceeding; keep the plan synchronized with the active bead.
+1. Read repo identity + non-negotiable rules at the top of `CLAUDE.md` first.
+2. `bd memories <topic>` / `bd recall <key>` — retrieve durable context only when history is relevant.
+3. For service/docs/project context: check Service Knowledge state (`service-knowledge status`, `service-knowledge index stats`; rebuild when stale/absent), then retrieve with targeted queries (`service-knowledge index query "<3-5 task terms>" --bundle`, `--paths <file>`, or `--service-id <id>`). Read only the cited service SKILL/evidence. Skip when the repo has no service registry.
+4. For executable work: use targeted Beads lookup (`bd list --status=in_progress`, `bd ready`, `bd search "<task terms>"`, `bd show <id>`; `bv --robot-triage --format toon` only when graph-aware prioritization is needed), then `bd update <id> --claim` before edits.
+5. Catch up on recent work: check handoff/next-session beads, latest `xt report` handoffs, and recent merged/closed PRs.
+6. If board state is unclear, run `/issue-triage` or the robot triage/plan commands before editing.
+7. For non-trivial work, use Claude Code task planning features (TaskCreate/TodoWrite-style when available) before proceeding; keep the plan synchronized with the active bead.
+
+`bd prime` is an explicit opt-in diagnostic/full-context command only — never mandatory or automatic at session start.
 
 ## Operating rules
 
@@ -50,7 +51,7 @@
 
 Use these as the minimal operational surface; use `--help` for full syntax.
 
-- `bd prime`, `bd ready`, `bd list --status=in_progress`, `bd show <id>`
+- `bd ready`, `bd list --status=in_progress`, `bd show <id>` — inspect work (`bd prime` is opt-in full-context diagnostic only)
 - `bd update <id> --claim`, `bd remember "<insight>"`, `bd close <id> --reason="..."`
 - `bd set-state <id> <dim>=<val> --reason="..."`, `bd state <id> <dim>` — operational state labels (e.g. `contract=ready`, `patrol=muted`, `health=healthy`)
 - `bd ready --claim` — atomic claim-on-ready; `bd ready --explain` — why an issue is ready/blocked
@@ -69,7 +70,7 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 | Specialist orchestration | **WHEN:** work is substantial enough to delegate (implementation, review, debug, test, or merge chains); use latest `/using-specialists-*`, prefer `/using-specialists`; check `sp --help` + `sp list` first |
 | Multi-pane coordination | **WHEN:** coordinating ≥2 tmux sessions or dispatching to a delegated pane; use `/multiplexing`; delegated panes use `/multiplexing-team` |
 | xtmux CLI (messaging, handoff, agent-state) | `xtmux --help`, `xtmux <cmd> --help` first |
-| Service/docs/project context | canonical service-skills skill set: `/scope`, `/using-service-skills` |
+| Service/docs/project context | Service Knowledge skill set: `/scope`, `/using-service-knowledge` (legacy `/using-service-skills` alias) |
 | Planning/tests/docs | `/planning`, `/test-planning`, `/sync-docs` |
 | Board unclear/backlog messy | `/issue-triage`; `bv --robot-triage --format toon`; `bv --robot-plan` |
 | Release/session close | `/releasing`, `/xt-end`, `/session-close-report`, `/xt-merge` |
@@ -104,6 +105,7 @@ xtrm-loader no longer embeds project bodies in every request. Read them when the
 - Project rules: `.claude/rules/**/*.md`.
 - Project skills catalog: Claude's native skill discovery (`~/.claude/skills/`); force-load a skill's body at turn 1 via `/skill-<name>`.
 - Durable cross-session knowledge: `bd memories <topic>` / `bd recall <key>` / `bd remember "<insight>"`.
+- Service/project evidence (service-hosting repos): `service-knowledge index query "<3-5 task terms>" --bundle` after checking `service-knowledge status` / `index stats`; read only cited evidence.
 - Full workflow examples + prompt-shaping guidance: `/using-xtrm` on demand for both runtimes.
 - Auto-injected essential (small): shared bd memory doctrine (`.xtrm/config/instructions/memory-doctrine.md`) — `bd memories` retrieval leads; live code/state wins.
 
