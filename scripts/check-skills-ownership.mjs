@@ -8,15 +8,6 @@ const manifestPath = path.join(repoRoot, 'docs', 'skills-ownership.json');
 const releasePath = path.join(repoRoot, 'docs', 'skills-ownership.release.json');
 const docsPath = path.join(repoRoot, 'docs', 'skills-ownership.md');
 
-const specialistsEntries = [
-  'specialists-creator',
-  'update-specialists',
-  'using-kpi',
-  'using-nodes',
-  'using-script-specialists',
-  'using-specialists',
-];
-
 async function readJson(filePath) {
   return JSON.parse(await fs.readFile(filePath, 'utf8'));
 }
@@ -31,14 +22,22 @@ function placementPath(name, placement) {
   return path.join(repoRoot, '.xtrm/skills/optional', placement.pack, name);
 }
 
+function specialistsEntries(manifest) {
+  return Object.entries(manifest.owners ?? {})
+    .filter(([, entry]) => entry.owner === 'specialists')
+    .map(([name, entry]) => ({ name, entry }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 async function validateManifest(manifest) {
   assert(manifest?.version === 2, 'manifest version must be 2');
   assert(manifest.owners?.releasing?.owner === 'xtrm-tools', 'releasing owner mismatch');
   assert(!manifest.owners?.['using-specialists-auto'], 'retired using-specialists-auto must not be vendored');
 
-  for (const name of specialistsEntries) {
-    const entry = manifest.owners?.[name];
-    assert(entry?.owner === 'specialists', `missing specialists owner entry: ${name}`);
+  const entries = specialistsEntries(manifest);
+  assert(entries.length > 0, 'no Specialists-owned skill entries');
+
+  for (const { name, entry } of entries) {
     const placement = entry.placement;
     assert(placement, `missing placement for ${name}`);
     const target = placementPath(name, placement);
@@ -56,29 +55,38 @@ async function validateManifest(manifest) {
     }
   }
 
-  assert(manifest.owners['using-specialists'].placement.tier === 'default', 'using-specialists must remain default');
+  assert(manifest.owners['using-specialists']?.placement?.tier === 'default', 'using-specialists must remain default');
+  return entries;
 }
 
-function validateDocs(docsText) {
-  for (const name of specialistsEntries) {
-    assert(docsText.includes(`\`${name}\``), `docs missing skill name: ${name}`);
+function validateDocs(docsText, entries) {
+  for (const { name } of entries) {
+    assert(docsText.includes(`\`${name}\``), `docs missing Specialists skill name: ${name}`);
   }
   assert(docsText.includes('Machine-readable source:'), 'docs missing manifest note');
   assert(docsText.includes('docs/skills-ownership.json'), 'docs missing manifest path');
   assert(docsText.includes('placement'), 'docs missing placement contract');
 }
 
-function validateRelease(release, manifest) {
+function validateRelease(release, manifest, entries) {
   const mirror = release?.mirrors?.specialists;
   assert(mirror?.package === 'specialists', 'specialists release package mismatch');
   assert(Array.isArray(mirror.assets), 'specialists release assets missing');
-  assert(mirror.assets.length === specialistsEntries.length, 'specialists release asset count mismatch');
 
-  for (const name of specialistsEntries) {
-    assert(mirror.assets.includes(name), `release missing ${name}`);
+  const names = entries.map(({ name }) => name);
+  assert(JSON.stringify([...mirror.assets].sort()) === JSON.stringify(names), 'specialists release asset set mismatch');
+
+  for (const { name } of entries) {
     assert(manifest.owners[name]?.owner === 'specialists', `release asset not specialists-owned: ${name}`);
-    assert(JSON.stringify(mirror.placements?.[name]) === JSON.stringify(manifest.owners[name].placement), `release placement mismatch: ${name}`);
+    assert(
+      JSON.stringify(mirror.placements?.[name]) === JSON.stringify(manifest.owners[name].placement),
+      `release placement mismatch: ${name}`,
+    );
   }
+
+  const declaredSha = manifest.mirrors?.specialists?.release?.sha;
+  assert(declaredSha && declaredSha !== 'unknown', 'manifest Specialists release SHA missing');
+  assert(mirror.sha === declaredSha, 'release/manifest Specialists SHA mismatch');
 }
 
 async function main() {
@@ -88,10 +96,10 @@ async function main() {
     fs.readFile(docsPath, 'utf8'),
   ]);
 
-  await validateManifest(manifest);
-  validateDocs(docsText);
-  validateRelease(release, manifest);
-  console.log('Skills ownership + placement manifest OK');
+  const entries = await validateManifest(manifest);
+  validateDocs(docsText, entries);
+  validateRelease(release, manifest, entries);
+  console.log(`Skills ownership + placement manifest OK — ${entries.length} Specialists-owned skill(s)`);
 }
 
 main().catch((error) => {
