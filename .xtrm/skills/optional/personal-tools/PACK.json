@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1",
+  "name": "personal-tools",
+  "version": "1.0.0",
+  "description": "Optional user productivity tools that are not part of the XTRM operating contract",
+  "skills": ["vaultctl"]
+}
