@@ -1,7 +1,10 @@
 {
   "schemaVersion": "1",
   "name": "xtrm-development",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Develop XTRM hooks, runtime integrations, deterministic workflows and debugging surfaces",
-  "skills": ["xtrm-development"]
+  "skills": [
+    "xtrm-development",
+    "hook-development"
+  ]
 }
