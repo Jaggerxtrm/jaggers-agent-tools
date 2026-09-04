@@ -1,88 +1,63 @@
 #!/usr/bin/env bash
-# Bootstrap the security pipeline on a target repo.
-# Reference doc: SECURITY-PIPELINE.md
-#
-# Usage:  ./scripts/security-bootstrap.sh <target-repo-path>
-#
-# What it does:
-#   1. Copies the 11 baseline files (warns on conflicts; never overwrites silently)
-#   2. Detects package ecosystems and writes a tailored dependabot.yml
-#   3. Opens a feat(security) PR via gh
-#   4. Enables Dependabot/Secret scanning/Push protection via `gh api`
-#
-# What you still do manually:
-#   - Codex Connector install (UI: chatgpt.com/codex/cloud/settings/general)
-#   - Branch protection rule (won't enforce on free tier but document intent)
-
+# Bootstrap/reconcile the XTRM security baseline on one repository.
+# Review the generated diff and repository policy before merging.
 set -euo pipefail
 
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <target-repo-path>" >&2
-    exit 1
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <target-repo-path>" >&2
+  exit 1
 fi
 
 TARGET="$(cd "$1" && pwd)"
 SOURCE="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [ ! -d "$TARGET/.git" ]; then
-    echo "❌ $TARGET is not a git repository" >&2
-    exit 1
+  echo "error: $TARGET is not a git repository" >&2
+  exit 1
 fi
 
 cd "$TARGET"
-SLUG=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || echo "?")
-echo "── Target: $TARGET ($SLUG) ──"
+command -v gh >/dev/null || { echo "error: gh is required" >&2; exit 1; }
+gh auth status >/dev/null 2>&1 || { echo "error: gh is not authenticated" >&2; exit 1; }
 
-# ── 1. Detect ecosystems for dependabot.yml ───────────────────────────────
+SLUG="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name // "main"')"
+BRANCH="feat/security-bootstrap-$(date +%Y%m%d)"
+
+echo "Target: $SLUG (default branch: $DEFAULT_BRANCH)"
+
+# Detect dependency ecosystems. Keep one block per root ecosystem; monorepos
+# must be reviewed manually after generation.
 ECOSYSTEMS=()
-# pip ecosystem covers BOTH requirements*.txt and pyproject.toml — emit a
-# single 'pip' entry to avoid duplicate dependabot blocks for /.
 HAS_PIP=0
 if [ -f requirements.txt ] || find . -maxdepth 3 -name 'requirements*.txt' -not -path '*/node_modules/*' -print -quit | grep -q .; then
-    HAS_PIP=1
+  HAS_PIP=1
 fi
 [ -f pyproject.toml ] && HAS_PIP=1
-[ "$HAS_PIP" = "1" ] && ECOSYSTEMS+=("pip")
-[ -f package.json ] && [ "$(cat package.json | python3 -c 'import json,sys;d=json.load(sys.stdin);print(len(d))' 2>/dev/null)" -gt 1 ] && ECOSYSTEMS+=("npm")
-find . -maxdepth 5 -name 'Dockerfile' -not -path '*/node_modules/*' -print -quit | grep -q . && ECOSYSTEMS+=("docker")
-[ -f go.mod ] && ECOSYSTEMS+=("gomod")
-[ -f Cargo.toml ] && ECOSYSTEMS+=("cargo")
-ECOSYSTEMS+=("github-actions")  # always
+[ "$HAS_PIP" = 1 ] && ECOSYSTEMS+=(pip)
+[ -f package.json ] && ECOSYSTEMS+=(npm)
+find . -maxdepth 5 -name Dockerfile -not -path '*/node_modules/*' -print -quit | grep -q . && ECOSYSTEMS+=(docker)
+[ -f go.mod ] && ECOSYSTEMS+=(gomod)
+[ -f Cargo.toml ] && ECOSYSTEMS+=(cargo)
+ECOSYSTEMS+=(github-actions)
 
-echo "  Detected ecosystems: ${ECOSYSTEMS[*]}"
-
-# ── 2. Branch ─────────────────────────────────────────────────────────────
-BRANCH="feat/security-bootstrap-$(date +%Y%m%d)"
 git fetch origin --quiet
 git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
 
-# ── 3. Copy files (conflict-aware) ────────────────────────────────────────
 copy_file() {
-    local rel="$1"
-    # Try templates/ first (skill layout), then SOURCE root (legacy layout)
-    local src="$SOURCE/templates/$rel"
-    [ -f "$src" ] || src="$SOURCE/$rel"
-    local dst="$TARGET/$rel"
-    if [ ! -f "$src" ]; then
-        echo "  ⚠️  source missing: $rel (looked in templates/ and root)"
-        return
-    fi
-    mkdir -p "$(dirname "$dst")"
-    if [ -f "$dst" ]; then
-        if cmp -s "$src" "$dst"; then
-            echo "  ✓ $rel (already identical)"
-        else
-            echo "  ⚠️  $rel exists and differs — backing up to $rel.bak"
-            cp "$dst" "$dst.bak"
-            cp "$src" "$dst"
-        fi
-    else
-        cp "$src" "$dst"
-        echo "  + $rel"
-    fi
+  local rel="$1"
+  local src="$SOURCE/templates/$rel"
+  local dst="$TARGET/$rel"
+  [ -f "$src" ] || { echo "warning: template missing: $rel" >&2; return; }
+  mkdir -p "$(dirname "$dst")"
+  if [ -f "$dst" ] && ! cmp -s "$src" "$dst"; then
+    cp "$dst" "$dst.bak"
+    echo "warning: preserved existing $rel as $rel.bak"
+  fi
+  cp "$src" "$dst"
+  echo "updated: $rel"
 }
 
-echo "── Copying baseline files ──"
 copy_file .github/workflows/osv-scanner.yml
 copy_file .github/workflows/semgrep.yml
 copy_file .github/workflows/gitleaks.yml
@@ -91,204 +66,97 @@ copy_file .semgrepignore
 copy_file .pre-commit-config.yaml
 copy_file scripts/semgrep-diff.sh
 copy_file scripts/security-scan.sh
+chmod +x scripts/semgrep-diff.sh scripts/security-scan.sh 2>/dev/null || true
 
-# Ensure scripts are executable
-chmod +x "$TARGET/scripts/semgrep-diff.sh" "$TARGET/scripts/security-scan.sh" 2>/dev/null || true
-
-# ── 4. Generate dependabot.yml tailored to ecosystems ─────────────────────
-DEPABOT="$TARGET/.github/dependabot.yml"
-if [ -f "$DEPABOT" ]; then
-    echo "  ⚠️  $DEPABOT exists — leaving untouched (review manually)"
+DEPENDABOT="$TARGET/.github/dependabot.yml"
+if [ -e "$DEPENDABOT" ]; then
+  echo "preserved: .github/dependabot.yml already exists; reconcile it manually"
 else
-    {
-        echo "# Dependabot — generated by security-bootstrap.sh on $(date +%F)"
-        echo "version: 2"
-        echo "updates:"
-        for eco in "${ECOSYSTEMS[@]}"; do
-            case "$eco" in
-                pip)
-                    cat <<'EOF'
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: Europe/Rome
-    open-pull-requests-limit: 5
-    labels: [dependencies, python]
-    groups:
-      python-minor-and-patch:
-        update-types: [minor, patch]
-EOF
-                    ;;
-                npm)
-                    cat <<'EOF'
-  - package-ecosystem: npm
+  mkdir -p "$TARGET/.github"
+  {
+    echo "# Generated by XTRM security-bootstrap on $(date +%F). Review monorepo directories."
+    echo "version: 2"
+    echo "updates:"
+    for eco in "${ECOSYSTEMS[@]}"; do
+      label="$eco"
+      [ "$eco" = pip ] && label=python
+      [ "$eco" = npm ] && label=javascript
+      cat <<EOF
+  - package-ecosystem: $eco
     directory: /
     schedule:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
-    labels: [dependencies, javascript]
-    groups:
-      npm-minor-and-patch:
-        update-types: [minor, patch]
+    labels: [dependencies, $label]
 EOF
-                    ;;
-                docker)
-                    cat <<'EOF'
-  - package-ecosystem: docker
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 3
-    labels: [dependencies, docker]
-EOF
-                    ;;
-                gomod)
-                    cat <<'EOF'
-  - package-ecosystem: gomod
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    labels: [dependencies, go]
-EOF
-                    ;;
-                cargo)
-                    cat <<'EOF'
-  - package-ecosystem: cargo
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    labels: [dependencies, rust]
-EOF
-                    ;;
-                github-actions)
-                    cat <<'EOF'
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 3
-    labels: [dependencies, github-actions]
-    groups:
-      actions-all:
-        patterns: ["*"]
-EOF
-                    ;;
-            esac
-        done
-    } > "$DEPABOT"
-    echo "  + .github/dependabot.yml ($(echo "${ECOSYSTEMS[*]}" | wc -w) ecosystems)"
+    done
+  } > "$DEPENDABOT"
+  echo "created: .github/dependabot.yml"
 fi
 
-# ── 5. .githooks/pre-push (install wrapper if existing, install baseline if absent) ──
-# Codex-audit-driven design (do NOT regress): existing pre-push hooks may
-#   (a) end with `exit 0` — appending baseline makes it unreachable
-#   (b) read stdin (push refs) — single-pass, baseline would see EOF
-# Solution: when a pre-push exists, move it to pre-push.local and install a
-# managed wrapper that runs baseline FIRST (preserving stdin via tee) and
-# then re-feeds stdin to pre-push.local.
-PREPUSH_SRC=""
-for cand in "$SOURCE/templates/.githooks/pre-push.template" "$SOURCE/.githooks/pre-push"; do
-    [ -f "$cand" ] && PREPUSH_SRC="$cand" && break
-done
-if [ -z "$PREPUSH_SRC" ]; then
-    echo "  ⚠️  no pre-push baseline found; skipping hooks"
-else
-    mkdir -p "$TARGET/.githooks"
-    BASELINE="$TARGET/.githooks/.security-pipeline-baseline"
-    cp "$PREPUSH_SRC" "$BASELINE"
-    chmod +x "$BASELINE"
-    if [ -f "$TARGET/.githooks/pre-push" ] && ! grep -q "security-pipeline-managed-wrapper" "$TARGET/.githooks/pre-push" 2>/dev/null; then
-        # Existing hook present and not yet our wrapper — move it aside.
-        # Preserve any pre-existing pre-push.local first so we never clobber it.
-        if [ -f "$TARGET/.githooks/pre-push.local" ]; then
-            ts=$(date +%s)
-            mv "$TARGET/.githooks/pre-push.local" "$TARGET/.githooks/pre-push.local.bak.$ts"
-            echo "  ↪ existing pre-push.local preserved as pre-push.local.bak.$ts"
-        fi
-        mv "$TARGET/.githooks/pre-push" "$TARGET/.githooks/pre-push.local"
-        chmod +x "$TARGET/.githooks/pre-push.local"
-        echo "  ↪ existing .githooks/pre-push moved to pre-push.local"
+# Preserve any existing pre-push implementation behind a managed wrapper. Both
+# hooks receive the original refs on stdin. Do not silently replace local logic.
+PREPUSH_SRC="$SOURCE/templates/.githooks/pre-push.template"
+if [ -f "$PREPUSH_SRC" ]; then
+  mkdir -p "$TARGET/.githooks"
+  cp "$PREPUSH_SRC" "$TARGET/.githooks/.security-pipeline-baseline"
+  chmod +x "$TARGET/.githooks/.security-pipeline-baseline"
+
+  if [ -f "$TARGET/.githooks/pre-push" ] && ! grep -q 'security-pipeline-managed-wrapper' "$TARGET/.githooks/pre-push"; then
+    if [ -e "$TARGET/.githooks/pre-push.local" ]; then
+      mv "$TARGET/.githooks/pre-push.local" "$TARGET/.githooks/pre-push.local.bak.$(date +%s)"
     fi
-    cat > "$TARGET/.githooks/pre-push" <<'WRAPEOF'
+    mv "$TARGET/.githooks/pre-push" "$TARGET/.githooks/pre-push.local"
+    chmod +x "$TARGET/.githooks/pre-push.local"
+  fi
+
+  cat > "$TARGET/.githooks/pre-push" <<'EOF'
 #!/usr/bin/env bash
-# security-pipeline-managed-wrapper — installed by security-bootstrap.sh
-# Runs the security baseline first, then any user-local pre-push hook.
-# Both receive the original push refs on stdin.
+# security-pipeline-managed-wrapper
 set -uo pipefail
-
-REFS=$(cat)
-HOOKS_DIR=$(dirname "$0")
-
-# 1. Baseline: anti-direct-main + pre-commit pre-push chain
-if [ -x "$HOOKS_DIR/.security-pipeline-baseline" ]; then
-    echo "$REFS" | "$HOOKS_DIR/.security-pipeline-baseline" "$@"
+REFS="$(cat)"
+HOOKS_DIR="$(dirname "$0")"
+for hook in .security-pipeline-baseline pre-push.local; do
+  if [ -x "$HOOKS_DIR/$hook" ]; then
+    echo "$REFS" | "$HOOKS_DIR/$hook" "$@"
     rc=$?
-    [ $rc -ne 0 ] && exit $rc
+    [ "$rc" -eq 0 ] || exit "$rc"
+  fi
+done
+EOF
+  chmod +x "$TARGET/.githooks/pre-push"
 fi
 
-# 2. User-local hook (preserves any pre-existing logic)
-if [ -x "$HOOKS_DIR/pre-push.local" ]; then
-    echo "$REFS" | "$HOOKS_DIR/pre-push.local" "$@"
-    rc=$?
-    [ $rc -ne 0 ] && exit $rc
-fi
+# Show scope before mutation. The caller is expected to inspect this diff.
+git status --short
+git diff -- .github .gitleaks.toml .semgrepignore .pre-commit-config.yaml scripts .githooks || true
 
-exit 0
-WRAPEOF
-    chmod +x "$TARGET/.githooks/pre-push"
-    echo "  + .githooks/pre-push (managed wrapper) + .security-pipeline-baseline"
-fi
-
-# ── 6. Commit + PR ────────────────────────────────────────────────────────
-git add .github .gitleaks.toml .semgrepignore .pre-commit-config.yaml scripts/ .githooks/ 2>/dev/null || true
+git add .github .gitleaks.toml .semgrepignore .pre-commit-config.yaml scripts .githooks 2>/dev/null || true
 if git diff --cached --quiet; then
-    echo "── No changes to commit ──"
-else
-    git commit -m "feat(security): bootstrap security pipeline
-
-Applies the xtrm security-pipeline baseline. See SECURITY-PIPELINE.md (in
-whichever repo carries the long-form reference) for the full narrative.
-
-Includes: dependabot, osv-scanner, semgrep, gitleaks, pre-commit hooks,
-anti-direct-main-push, local audit scripts.
-
-Detected ecosystems: ${ECOSYSTEMS[*]}
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>" --no-verify
-    git push -u origin "$BRANCH" --no-verify
-    PR_URL=$(gh pr create --fill 2>&1 | grep -oE 'https://github.com/[^ ]+/pull/[0-9]+' | head -1)
-    echo "── PR opened: $PR_URL ──"
+  echo "No security-bootstrap changes to commit."
+  exit 0
 fi
 
-# ── 7. Enable security features via gh api ────────────────────────────────
-echo "── Enabling repo security features ──"
-gh api -X PATCH "/repos/$SLUG" \
-    -f 'security_and_analysis[secret_scanning][status]=enabled' \
-    -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled' \
-    >/dev/null 2>&1 && echo "  ✓ secret scanning + push protection" || echo "  ⚠️  secret scanning toggle failed (may already be on, or needs higher token scope)"
+git commit -m "feat(security): bootstrap repository security baseline"
+git push -u origin "$BRANCH"
+PR_URL="$(gh pr create --base "$DEFAULT_BRANCH" --head "$BRANCH" --title 'feat(security): bootstrap repository security baseline' --body 'Generated by the XTRM security-bootstrap skill. Review repository-specific scanner placement, allowlists, branch/ruleset policy, and CI results before merge.')"
+echo "PR: $PR_URL"
 
-gh api -X PUT "/repos/$SLUG/vulnerability-alerts" >/dev/null 2>&1 \
-    && echo "  ✓ Dependabot alerts" || echo "  ⚠️  vulnerability alerts toggle failed"
+# Best-effort repository security toggles. Failure is explicit and does not
+# invalidate the generated PR because token/repository permissions vary.
+if gh api -X PATCH "/repos/$SLUG" \
+  -f 'security_and_analysis[secret_scanning][status]=enabled' \
+  -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled' >/dev/null 2>&1; then
+  echo "enabled: secret scanning + push protection"
+else
+  echo "warning: could not enable secret scanning/push protection; verify repository settings"
+fi
 
-gh api -X PUT "/repos/$SLUG/automated-security-fixes" >/dev/null 2>&1 \
-    && echo "  ✓ Dependabot security updates" || echo "  ⚠️  automated security fixes toggle failed"
+if gh api -X PUT "/repos/$SLUG/vulnerability-alerts" >/dev/null 2>&1; then
+  echo "enabled: Dependabot vulnerability alerts"
+else
+  echo "warning: could not enable Dependabot vulnerability alerts"
+fi
 
-echo
-echo "✅ Bootstrap complete for $SLUG"
-echo
-echo "Manual follow-up:"
-echo "  1. Install Codex Connector: https://chatgpt.com/codex/cloud/settings/general"
-echo "  2. Settings → Branches → Add classic protection rule for main"
-echo "     Required checks: OSV scan, Semgrep scan, Gitleaks scan"
-echo "  3. cd $TARGET && make install-hooks"
-echo "  4. After PR merges, verify the three CI checks turn green"
+echo "Next: inspect the PR, verify current ruleset/branch requirements, and observe CI."
