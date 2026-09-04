@@ -1,0 +1,213 @@
+---
+name: releasing
+description: >-
+  Cut a release end-to-end. Promotes the existing [Unreleased] CHANGELOG block
+  to a dated [vX.Y.Z] section, bumps the version (if the repo has a version
+  manifest), rebuilds (if there's a build step), commits, tags, pushes, and
+  publishes to a package registry (if the repo publishes one). Works for npm
+  and non-npm repos alike.
+version: 2.2.0
+disable-model-invocation: true
+---
+
+# releasing
+
+End-to-end release skill. Drives the release directly with bash; no `xt release`
+wrapper. Expects `[Unreleased]` in `CHANGELOG.md` to be either populated by the
+`session-close-report` skill (Step 6) across the contributing sessions, or — on a
+`/setup-git-cliff` repo — an empty placeholder that the release step generates
+from the git log.
+
+## When to use
+
+The operator says "release it", "ship vX.Y.Z", "cut a tag", or just "release".
+
+## Preconditions
+
+- Run the global-surface smoke container before publishing and again after. It is the only gate
+  that checks what the packages install into a user's HOME, and nothing runs it for you. Commands
+  and the expected pre-release failure: `docs/release.md`, "Global-surface smoke container".
+
+- Working tree clean except whitelisted release artifacts.
+- `CHANGELOG.md` exists with an `[Unreleased]` block.
+- On the publish branch (usually `master`).
+- If this repo publishes to a package registry, registry auth is set up
+  (e.g. `npm whoami` succeeds).
+
+If the project has no `CHANGELOG.md`, stop and ask the operator.
+
+## Flow
+
+### 1. Decide version
+
+```bash
+git tag --sort=-v:refname | head -3        # last release
+git log <last-tag>..HEAD --oneline | wc -l # commit count since
+```
+
+Default is patch bump. Operator may say `--minor`, `--major`, or specify
+`vX.Y.Z` explicitly. If the in-range work added user-facing surface (new flags,
+new endpoints, new commands), bump minor unless operator says otherwise.
+
+### 2. Inspect [Unreleased]
+
+```bash
+sed -n '/## \[Unreleased\]/,/## \[/p' CHANGELOG.md
+```
+
+Decision:
+
+- **Populated and complete** (covers the user-facing changes since last tag):
+  proceed to Step 3.
+- **Empty, and this repo runs the git-cliff pipeline** (`changelog/cliff.toml` +
+  `scripts/changelog-update.mjs` — see `/setup-git-cliff`): that is the expected
+  state, not a gap. The block is a placeholder on purpose — a per-branch block
+  makes every merge conflict every other open pull request. Run
+  `node scripts/changelog-update.mjs --preview` to see what the release will
+  contain, then proceed to Step 3; the `--tag` run generates the section from
+  the git log.
+- **Empty, stale, or gappy, and this repo does NOT run git-cliff**: dispatch
+  `/setup-git-cliff` to install the pipeline, run the updater, then
+  re-inspect. Hand-writing bullets from `git log <last-tag>..HEAD` is a
+  one-off fallback only — prefer fixing it with the pipeline so the next
+  release doesn't hit the same gap.
+- **Empty** because commits since last tag are pure-internal (refactors,
+  doc-only): proceed; the released section will be near-empty.
+
+### 3. Promote [Unreleased] → [vX.Y.Z]
+
+Edit `CHANGELOG.md`:
+
+- Insert a new empty `## [Unreleased]` block at the top.
+- Rename the previous `[Unreleased]` to `## [vX.Y.Z] — YYYY-MM-DD` (today's
+  date).
+- Keep the section bodies (Added / Changed / Fixed / etc.) untouched.
+- If this repo runs the git-cliff pipeline (`changelog/cliff.toml` +
+  `scripts/changelog-update.mjs` — see `/setup-git-cliff`), do not hand-promote:
+  `node scripts/changelog-update.mjs --tag vX.Y.Z` writes the whole section from
+  the git log and leaves an empty `[Unreleased]` above it. `npm version` runs it
+  for you. The generated bullets are per-commit and terse — draft a short prose
+  summary — one paragraph, or one per major theme if the release spans
+  several — of the release's main takeaways, and insert it directly under
+  the version heading, above the categorized groups. Ground it in the
+  bullets and commits already in the section; don't invent scope that
+  isn't there.
+
+### 4. Bump version (if this repo has a version manifest)
+
+```bash
+# npm:    package.json "version", package-lock.json (top + packages[""])
+# Rust:   Cargo.toml "version" (+ Cargo.lock if it pins the workspace member)
+# Python: pyproject.toml "version" (or a bare VERSION file)
+```
+
+Edit whatever manifest(s) this repo actually tracks. If the version lives
+only in the git tag — no manifest — skip this step entirely.
+
+### 5. Build (if this repo has a build step)
+
+```bash
+npm run build   # or this repo's equivalent, e.g. cargo build --release
+git status --short
+```
+
+Tracked build output may or may not change (often byte-identical when HEAD
+already had a fresh build). Skip entirely if nothing is built/tracked.
+
+### 6. Verify release scope
+
+```bash
+git status --short
+git diff --stat
+```
+
+Allowed paths only:
+
+- `CHANGELOG.md`
+- the version manifest(s) touched in Step 4 (if any)
+- built artifacts touched in Step 5 (if tracked)
+
+Anything else dirty → stop, fix scope, retry. Stash unrelated untracked files
+(e.g. downstream specialist leakage in `.specialists/user/`) before continuing.
+
+### 7. Commit, tag, push
+
+```bash
+git add CHANGELOG.md <version manifest(s) from Step 4> <build artifacts from Step 5>  # only what's tracked and touched
+git commit -m "release: vX.Y.Z"
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin <branch>
+git push origin vX.Y.Z
+```
+
+### 8. Publish (if this repo publishes to a registry)
+
+```bash
+npm publish --access public    # --access public for scoped packages
+# or this repo's equivalent: cargo publish, twine upload, etc.
+```
+
+Skip entirely for repos that only ship via git tags (internal tools, apps).
+
+### 9. Refresh global toolchain
+
+If this project ships a CLI the operator uses globally:
+
+```bash
+npm i -g <package>@X.Y.Z   # or this repo's equivalent global-install command
+<cli> --version
+```
+
+### 10. Confirm
+
+```bash
+git tag --list 'v*' | tail -3
+git log --oneline -1
+git status --short
+npm view <package> version   # only if published in Step 8
+```
+
+### 11. Optional: GitHub release
+
+```bash
+gh release create vX.Y.Z --notes "$(sed -n '/## \[vX.Y.Z\]/,/## \[/p' CHANGELOG.md | head -n -1)"
+```
+
+## Why this design
+
+- `session-close-report` already drafts user-facing prose per session and
+  appends to `[Unreleased]` (Step 6 of that skill). The release-time work is
+  therefore small: promote, bump, build, commit, tag, push, publish.
+- For repos on the `/setup-git-cliff` pipeline, `[Unreleased]` bullets come
+  from `git-cliff` per-commit instead — accurate but terse. Step 3 adds a
+  short prose highlights paragraph at promotion time so the changelog still
+  reads as a narrative, not just a flat commit list.
+- Keeping the deterministic mutations in bash (driven by this skill) avoids
+  three failure modes seen with the old `xt release` wrapper: hardcoded
+  workspace paths, wrong specialist invocation, and a regex template engine
+  that over-greedy-matches `$VAR` patterns inside report prose.
+- The `changelog-keeper` specialist dispatch is retired: `/setup-git-cliff`
+  regenerates `[Unreleased]` deterministically from the git log, which is
+  strictly more reliable than reconciling gaps from xt reports by hand.
+- Version bump, build, and publish are each conditional on this repo actually
+  having a version manifest, build step, or registry to publish to — an
+  internal tool or docs-only repo can go straight from promote to tag/push.
+
+## Parallel sessions
+
+Two operators racing the same version: first `git push origin vX.Y.Z` wins;
+second sees a non-fast-forward / tag-exists error and aborts. Operator picks
+the next version and retries.
+
+## Don't
+
+- Don't call `xt release prepare` / `xt release publish` — retired. See
+  `unitAI-g29jv`.
+- Don't broaden the release diff with source/docs/config changes. File a
+  separate bead.
+- Don't pre-stage unrelated files. The release scope check should see a clean
+  tree except whitelisted release artifacts.
+- Don't invent CHANGELOG entries from `git log -p`. The reports + existing
+  `[Unreleased]` are the input.
+- Don't `git push --force` or rewrite tags. If a release ships wrong, cut a
+  patch.
