@@ -35,6 +35,8 @@ it up without reconstructing your private context.
    against the current tree, tests, runtime state, or external system.
 6. **Continuity is part of execution.** If the work can outlive this context, arm or
    prepare continuation before the context becomes unreliable.
+7. **Debug causally.** For regressions, reconstruct symptom -> runtime/code path -> recent
+   change -> commit/PR/Bead/worker intent -> causal mechanism before proposing a fix.
 
 ## Contract quality applies to every worker
 
@@ -145,11 +147,12 @@ enforcement plane; skills are the judgment/procedure plane.
 | Cold start, takeover, context pressure, handoff, resume | `/starting-and-resuming-work` |
 | Coordinate peers/subagents and replies/wakeups | `/multiplexing` |
 | Build/promote contracts, decompose work, triage/test-plan | `/planning` |
+| Debug regressions, review, test, verify, reduce complexity | `/engineering-quality` |
 | Use supervised Specialist roles/jobs | `/using-specialists` |
-| Explore/debug/refactor with code graph evidence | `/gitnexus` |
+| Explore code graph, callers/processes, blast radius | `/gitnexus` |
 | Create or improve skills | `/skill-creator` |
 | Find/import additional governed skills | `/find-skills` |
-| Operational/SRE work when pack is enabled | `/sre-ops` |
+| Production/SRE investigation when pack is enabled | `/sre-ops` |
 
 Load the focused skill when you reach that phase. Do not preload every manual.
 
