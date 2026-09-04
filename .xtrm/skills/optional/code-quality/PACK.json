@@ -1,7 +1,0 @@
-{
-  "schemaVersion": "1",
-  "name": "code-quality",
-  "version": "2.0.0",
-  "description": "Code review, debugging, test discipline, verification and reduction",
-  "skills": ["code-quality"]
-}
