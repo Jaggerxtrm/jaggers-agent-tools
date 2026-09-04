@@ -2,16 +2,23 @@
   "mirrors": {
     "specialists": {
       "package": "specialists",
-      "sha": "unknown",
+      "sha": "b5f4b7974b27d1619980f8aff691277459d250eb",
       "assets": [
+        "specialists-creator",
         "update-specialists",
         "using-kpi",
         "using-nodes",
-        "specialists-creator",
-        "using-specialists",
         "using-script-specialists",
-        "using-specialists-auto"
-      ]
+        "using-specialists"
+      ],
+      "placements": {
+        "using-specialists": { "tier": "default" },
+        "specialists-creator": { "tier": "optional", "pack": "specialists-advanced" },
+        "using-kpi": { "tier": "optional", "pack": "specialists-advanced" },
+        "using-nodes": { "tier": "optional", "pack": "specialists-advanced" },
+        "using-script-specialists": { "tier": "optional", "pack": "specialists-advanced" },
+        "update-specialists": { "tier": "optional", "pack": "xtrm-maintenance" }
+      }
     }
   }
 }
