@@ -130,7 +130,7 @@
       "install_scope": "global",
       "files": {
         "agent-docs-maintainer/references/agents-template.md": {
-          "hash": "d6f95ee3b715b459f45cafe51aeb159bafdc7e30411403a481113dcb501efcb7",
+          "hash": "c42aa14dc3eeba2a952705b681ccb302d120ba1b449811c1cb80eba4458e6c1a",
           "version": "0.12.0"
         },
         "agent-docs-maintainer/references/audit-rules.md": {
@@ -138,7 +138,7 @@
           "version": "0.12.0"
         },
         "agent-docs-maintainer/references/claude-template.md": {
-          "hash": "a62fb14342279bac7edd7c53c463f3cb136bb5c23fc53e38dcba2d6aef2b728f",
+          "hash": "4be3b88782f39974dac0601a0fb0b88c0dc85a0ed3511ee9359d42770b9e648d",
           "version": "0.12.0"
         },
         "agent-docs-maintainer/references/stack-overview-template.md": {
@@ -150,7 +150,7 @@
           "version": "0.12.0"
         },
         "agent-docs-maintainer/SKILL.md": {
-          "hash": "024e98d238203efffe5bf6db84c8ff9126dbef8c22c882944be2e2a7837efb9f",
+          "hash": "9386f04332657c9e101177e6474e2af0da8fb53eb8ef5d907dd3c8a02324b65b",
           "version": "0.12.0"
         },
         "authoring-workflows/SKILL.md": {
@@ -902,7 +902,7 @@
           "version": "0.12.0"
         },
         "using-specialists-auto/SKILL.md": {
-          "hash": "59983e83446892285f7bf6b90c5845c7acc7824ffbd47a193fa144dec971cf47",
+          "hash": "7b63cb642f414a86b278f47dc9cc539a19c80d06f63093e2ab8e3ddadf6fb9b7",
           "version": "0.12.0"
         },
         "using-specialists/references/bead-contracts.md": {
@@ -930,7 +930,7 @@
           "version": "0.12.0"
         },
         "using-specialists/references/registry-and-locations.md": {
-          "hash": "b6ea000d2664850d074383246d9881ae14ed813ffb27ad7a5ca844049458c3c0",
+          "hash": "d02cb1c2e68f59e14f57d8fda7e80e109fe5666bbd33cae4c0ab8f9b10814460",
           "version": "0.12.0"
         },
         "using-specialists/SKILL.md": {
