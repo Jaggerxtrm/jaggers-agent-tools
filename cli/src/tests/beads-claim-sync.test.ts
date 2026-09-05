@@ -12,7 +12,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-async function runHook(command: string) {
+async function runHook(command: string, stdout = '') {
   const root = await mkdtemp(join(tmpdir(), 'beads-claim-sync-'));
   tempDirs.push(root);
   await mkdir(join(root, '.beads'));
@@ -28,7 +28,7 @@ async function runHook(command: string) {
     cwd: root,
     session_id: 'session-1',
     tool_input: { command },
-    tool_response: { exit_code: 0 },
+    tool_response: { exit_code: 0, stdout },
   });
   const result = spawnSync(process.execPath, [hookPath.pathname], {
     input,
@@ -52,11 +52,33 @@ describe('beads claim sync lifecycle ownership', () => {
   it.each([
     ['claim', 'bd update xtrm-1 --claim'],
     ['close', 'bd close xtrm-1 --reason done'],
-  ])('keeps %s workflow behavior without emitting a competing lifecycle database', async (_name, command) => {
+  ])('keeps raw bd %s compatibility without emitting a competing lifecycle database', async (_name, command) => {
     const { root, result } = await runHook(command);
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('Beads');
+    expect(result.stdout).toContain('XTRM work');
+    expect(await exists(join(root, '.xtrm', 'debug.db'))).toBe(false);
+  });
+
+  it('binds xt work start receipt to the current Claude session', async () => {
+    const { root, result } = await runHook(
+      'xt work start "Fix README"',
+      'XTRM_WORK_RECEIPT {"schema":"xt.work.receipt.v1","action":"start","bead":"xtrm-checkin"}\n✓ work created + claimed: xtrm-checkin',
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('claimed `xtrm-checkin`');
+    expect(await exists(join(root, '.xtrm', 'statusline-claim'))).toBe(true);
+  });
+
+  it('records xt work done receipt as a close lifecycle transition', async () => {
+    const { root, result } = await runHook(
+      'xt work done xtrm-checkin --reason "validated"',
+      'XTRM_WORK_RECEIPT {"schema":"xt.work.receipt.v1","action":"done","bead":"xtrm-checkin"}',
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('`xtrm-checkin` closed');
     expect(await exists(join(root, '.xtrm', 'debug.db'))).toBe(false);
   });
 });
