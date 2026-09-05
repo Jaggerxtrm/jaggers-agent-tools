@@ -8,27 +8,32 @@
 // ── Shared workflow steps ────────────────────────────────────────────
 
 export const SESSION_CLOSE_PROTOCOL =
-  '  bd close <id> --reason="..."\n' +
+  '  xt work done <id> --reason="<validated result>"\n' +
   '  xt end\n';
 
 export const COMMIT_NEXT_STEPS =
-  '  bd close <id> --reason="..."   ← closes issue\n' +
-  '  xt end                          ← push, PR, merge, worktree cleanup\n';
+  '  xt work done <id> --reason="<validated result>"   ← closes durable work through current gates\n' +
+  '  xt end                                             ← push, PR, merge, worktree cleanup\n';
 
 // ── Edit gate messages ───────────────────────────────────────────
 
 export function editBlockMessage(_sessionId) {
   return (
-    '🚫 No active claim — claim an issue first.\n' +
-    '  bd update <id> --claim\n'
+    '🚫 No active work identity — check in before editing.\n' +
+    '  existing tracked work: xt work start --bead <id>\n' +
+    '  bounded local work:   xt work start "<short title>" --validation "<proof>"\n' +
+    '  substantial work:     /planning first\n' +
+    '  lifecycle help:       xt work guide\n'
   );
 }
 
 export function editBlockFallbackMessage() {
   return (
-    '🚫 No active issue — create one before editing.\n' +
-    '  bd create --title="<task>" --type=task --priority=2\n' +
-    '  bd update <id> --claim\n'
+    '🚫 No active work identity — create or claim tracked work before editing.\n' +
+    '  existing tracked work: xt work start --bead <id>\n' +
+    '  bounded local work:   xt work start "<short title>" --validation "<proof>"\n' +
+    '  substantial work:     /planning first\n' +
+    '  lifecycle help:       xt work guide\n'
   );
 }
 
@@ -37,7 +42,7 @@ export function editBlockFallbackMessage() {
 export function commitBlockMessage(summary, claimed) {
   const issueSummary = summary ?? `  Claimed: ${claimed}`;
   return (
-    '🚫 Close open issues before committing.\n\n' +
+    '🚫 Close open work before committing.\n\n' +
     `${issueSummary}\n\n` +
     'Next steps:\n' + COMMIT_NEXT_STEPS
   );
@@ -48,9 +53,9 @@ export function commitBlockMessage(summary, claimed) {
 export function stopBlockMessage(summary, claimed) {
   const issueSummary = summary ?? `  Claimed: ${claimed}`;
   return (
-    '🚫 Unresolved issues — close before stopping.\n\n' +
+    '🚫 Unresolved work — close or deliberately continue it before stopping.\n\n' +
     `${issueSummary}\n\n` +
-    'Next steps:\n' + SESSION_CLOSE_PROTOCOL
+    'If complete:\n' + SESSION_CLOSE_PROTOCOL
   );
 }
 
