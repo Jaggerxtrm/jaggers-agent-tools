@@ -3,7 +3,7 @@ title: Hooks Reference
 scope: hooks
 category: reference
 version: 2.0.0
-updated: 2026-09-04
+updated: 2026-09-05
 description: "Current XTRM hook policy, compiled wiring, shipped payload, and lifecycle behavior"
 source_of_truth_for:
   - "policies/*.json"
@@ -11,7 +11,7 @@ source_of_truth_for:
   - ".xtrm/hooks/**"
   - "packages/pi-extensions/extensions/**"
 domain: [hooks, claude, pi, enforcement]
-updated_at: 2026-09-04
+updated_at: 2026-09-05
 ---
 
 # Hooks Reference
@@ -64,7 +64,7 @@ The compiled `.xtrm/config/hooks.json` is the definitive current event/matcher l
 | Matcher | Hook | Behavior |
 |---|---|---|
 | `Edit|Write|MultiEdit|NotebookEdit` | `worktree-boundary.mjs` | enforces managed worktree mutation boundary |
-| same | `beads-edit-gate.mjs` | enforces required claimed-work contract before edits |
+| same | `beads-edit-gate.mjs` | enforces required claimed durable work identity before edits; remediation points to `xt work` |
 | `Agent` | `specialists-agent-guard.mjs` | prevents raw Agent dispatch when Specialists-governed execution applies |
 | `Bash` | `beads-commit-gate.mjs` | guards commit lifecycle against unresolved claimed work |
 
@@ -108,6 +108,10 @@ Beads events
 Core hook telemetry/KV
   = runtime/session diagnostics and enforcement state
 ```
+
+The worker-facing abstraction is `xt work`. Today it delegates to Beads; a future
+substrate execution entity may replace that implementation without changing the rule that
+every mutation belongs to durable tracked work.
 
 Consumers must not treat older `bd.claimed`, `bd.closed`, `bd.claim`, or `bd.close`
 diagnostic records as independent authoritative lifecycle events.
@@ -191,11 +195,28 @@ If Pi behavior diverges:
 node scripts/compile-policies.mjs --check-pi
 ```
 
-For a blocked edit/commit, inspect the current Beads claim/work state and the exact gate
-message before clearing any state manually. Do not bypass a valid gate merely to continue.
+For a blocked edit, follow the gate rather than clearing state manually:
+
+```bash
+# existing tracked work
+xt work start --bead <id>
+
+# bounded local work
+xt work start "<short title>" --validation "<proof>"
+
+# substantial/ambiguous/multi-worker work
+# use /planning first
+
+xt work guide
+```
+
+If the gate still appears wrong after legitimate work is claimed, inspect the current
+Beads claim/session state and exact runtime message before clearing any KV marker. Never
+bypass a valid gate merely to continue.
 
 ## Related
 
+- `.xtrm/config/work-lifecycle.md` / `xt work guide` — durable work-identity contract
 - `/hook-development` — authoring/change workflow
 - `/engineering-quality` — code/debug/test/review discipline
 - `/multiplexing` — inter-agent messaging and reply obligations
