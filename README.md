@@ -1,116 +1,259 @@
-# XTRM-Tools
+# XTRM
 
-**xtrm** (`xt`) is a durable agentic workflow system for Claude Code, Pi, Codex, and Specialists. It combines Beads-backed work contracts, worktree/session lifecycle, deterministic hooks/extensions, composable skills, code-graph context, and multi-agent coordination so work can move between agents without depending on one chat transcript.
+**XTRM (`xt`) is a durable multi-agent coding runtime for Pi, Claude Code, Codex, and Specialists.**
 
-## What XTRM provides
+It gives coding workers an isolated place to work, a durable contract to work from, the tools and skills they need, and a way to coordinate with other workers without rebuilding the whole system from chat history every time.
 
-### Beads — durable work contracts
-
-[Beads](https://github.com/Jaggerxtrm/beads) is the durable work/state layer. Agents claim work before editing, keep requirements and evidence on the work item, and leave handoffs that another session or worker can resume.
-
-Useful commands:
-
-```bash
-bd ready
-bd show <id>
-bd update <id> --claim
-bd close <id> --reason "Done"
-bd memories <topic>
+```text
+xt pi / xt claude / xt codex
+            │
+            ├── isolated worktree + durable session
+            ├── project/system context
+            ├── skills + tools + deterministic hooks
+            ├── Bead work contract + tracked state
+            ├── native/extension peer coordination
+            └── Specialists when the work is role-shaped
 ```
 
-A dispatchable XTRM work item is a contract, not only a title. The v4 planning doctrine expects clear `PROBLEM`, `SUCCESS`, `SCOPE`, `NON_GOALS`, `CONSTRAINTS`, `VALIDATION`, and `OUTPUT` sections when work is ready for another agent.
+Pi is the harness I use most and the richest XTRM integration, but the runtime is deliberately harness-aware rather than Pi-only.
 
-### Hooks and extensions — deterministic enforcement
+> **Give every worker a great contract.**
 
-Policies in `policies/` compile into the runtime-specific hook/extension layer. Deterministic lifecycle rules belong here rather than in prompts that agents must remember manually.
+That is the principle most of XTRM grows out of.
 
-Current enforcement includes Beads edit/commit/stop behavior, worktree boundaries, quality checks, project-memory injection, compact/session restoration, Specialist agent guards, GitNexus enrichment, worktree reap checks, debug logging, and inbox/continuation reminders where the runtime supports them.
+## Planning is part of the runtime
+
+One thing we keep removing from agents is the need to rediscover the system before they can do the job.
+
+In XTRM, that system is the codebase.
+
+Before substantial work is dispatched, planning is a real stage. We want to know what changed recently, which code paths are involved, what already exists and should be reused, the blast radius, dependencies, constraints, likely failure modes, and what will actually prove the work is complete.
+
+Then we write the Bead.
+
+Not a better side prompt. A durable work contract.
+
+A dispatchable contract has these baseline fields:
+
+```text
+PROBLEM
+SUCCESS
+SCOPE
+NON_GOALS
+CONSTRAINTS
+VALIDATION
+OUTPUT
+```
+
+For substantial, ambiguous, high-risk, or review-sensitive work, add explicit `SCRUTINY` so the worker also knows what deserves adversarial attention.
+
+Two rules matter a lot:
+
+1. **A draft task can exist, but it cannot run.** A draft may still contain unknowns; dispatch requires a grounded contract.
+2. **For tracked work, the Bead is the prompt.** If an important requirement exists only in the orchestrator's head, chat history, or an extra side prompt, the contract is wrong. Fix the contract.
+
+The worker should spend its turn solving the job, not reconstructing what the job was supposed to be.
+
+[Beads](https://github.com/Jaggerxtrm/beads) is the durable issue/work-state dependency underneath this model: roughly an agent-native Jira-like board backed by Dolt. It gives contracts identity, dependencies, claims, state, history, evidence, and a place for the next worker to resume. Beads is an important substrate; it is not the definition of XTRM.
+
+## The model call is downstream
+
+The same failure mode shows up outside software.
+
+A coding agent can be given a repository and waste half a turn rediscovering what changed, what matters, and which abstractions are real. A market agent can be handed raw feeds and produce a convincing answer while silently reconstructing the wrong market state.
+
+The architecture is the same:
+
+```text
+CODE
+
+repository
+  → system understanding
+  → planning
+  → work contract
+  → worker
+
+
+MARKETS
+
+feeds
+  → domain model
+  → structured market state
+  → agent
+```
+
+More raw context does not decide what matters. Somebody has to understand the domain well enough to structure it first.
+
+Better models help downstream of that work. They do not remove the need to understand your own system or domain. If anything, agents make expertise more valuable because encoded expertise can be reused across workers instead of re-explained in every session.
+
+**Not agents replacing expertise. Making expertise executable.**
+
+## One system, multiple workers
+
+XTRM workers are told that they are participating in a multi-agent system rather than acting as isolated chats.
+
+The launcher gives each worker an isolated worktree/session and can inject role-specific system context, tools, skills, and the Bead contract:
+
+```bash
+xt pi feature-name
+xt claude feature-name
+xt codex feature-name
+
+xt pi --role executor --bead <id>
+xt claude --role reviewer --bead <id>
+```
+
+The normal choice is the smallest execution shape that fits the job:
+
+- keep coherent work in the current session when it already has the right context;
+- use native subagents for bounded independent questions;
+- use `xt pi`, `xt claude`, or `xt codex` peers for long-lived or isolated parallel work;
+- use Specialists for governed role-shaped execution;
+- use deterministic scripts/tools for mechanics that do not need model judgment.
+
+### Coordination is native-first
+
+XTRM does not require tmux message scraping to make agents talk to each other. The `multiplexing` skill defines coordination semantics—ownership, send/ask/reply behavior, continuation, wakeup, and durable handoff—while using the best native or extension transport available.
+
+In the Pi environment I use:
+
+- [`pi-intercom`](https://github.com/nicobailon/pi-intercom) by [@nicopreme](https://x.com/nicopreme) for targeted Pi ↔ Pi communication;
+- [`pi-claude-link`](https://github.com/alonw0/pi-claude-link) by [@alonw0](https://github.com/alonw0) for Pi ↔ Claude Code communication through Claude's cross-session messaging protocol;
+- Claude Code's own peer/team messaging (`SendMessage` and related native surfaces) for Claude ↔ Claude coordination when available.
+
+Peer messages are coordination input, not a substitute for user authority or durable work state. The durable source remains the contract, repository, Bead, and recorded execution evidence.
+
+## Pi is the deepest XTRM integration
+
+Pi is my preferred harness because its extension model lets XTRM expose the runtime without hiding what the agent is doing.
+
+### `xtrm-ui`
+
+XTRM ships its own Pi UI layer as part of `@jaggerxtrm/pi-extensions`.
+
+I tailored it around how I supervise agents: I usually want to see the commands they run, which tools they call, how those tools are being used, and enough output to intervene when critical work starts going in the wrong direction.
+
+`xtrm-ui` therefore keeps execution visible while making it denser rather than opaque. It owns XTRM's Pi header, themes, editor density, and native/external tool presentation. Tool execution remains Pi-native; the UI changes presentation rather than mutating model-facing results. XTRM's `custom-footer` extension owns the compact status/footer surface.
+
+See [docs/xtrm-ui.md](docs/xtrm-ui.md).
+
+### Persistent Python kernel
+
+The Pi extension package also ships `python-kernel`, a persistent sequential `python` tool. Variables, imports, and functions survive across calls until reset. The current implementation also supports Python-backed skills as importable kernel modules, a small standard-library prelude, bounded output/truncation behavior, and a mutation-audit seam.
+
+The goal is the same as elsewhere in XTRM: do not make the worker reconstruct useful machinery repeatedly when a stable runtime primitive can provide it.
+
+### Managed Pi environment
+
+`xt init` / `xt update` manage the Pi environment XTRM expects rather than leaving every machine to accumulate a different ad-hoc package set.
+
+The managed set includes code intelligence, structured returns, guardrails, goals/tasks/background work, subagents, MCP access, Mermaid rendering, XTRM extensions/service knowledge, inter-agent communication, structural code search, worktrees, and process helpers.
+
+Representative packages include:
+
+```text
+pi-gitnexus
+@robhowley/pi-structured-return
+@aliou/pi-guardrails
+@narumitw/pi-goal
+DietrichGebert/ponytail
+@tintinweb/pi-tasks
+pi-background-tasks
+@gotgenes/pi-subagents
+pi-mcp-adapter
+pi-mermaid-viewer
+@jaggerxtrm/pi-extensions
+@jaggerxtrm/pi-service-knowledge
+pi-intercom
+alonw0/pi-claude-link
+pi-ast-grep
+@zenobius/pi-worktrees
+@aliou/pi-processes
+```
+
+The live managed registry in Core is authority for exact install selectors. Local Core development may load `packages/pi-extensions` from the checkout, but the portable managed identity is `npm:@jaggerxtrm/pi-extensions`—never a developer-specific absolute path.
+
+## Understand the codebase before changing it
+
+XTRM treats codebase understanding as part of execution rather than optional browsing.
+
+GitNexus is a default code-intelligence dependency and skill surface for graph exploration, blast-radius analysis, debugging, refactoring, and review. `pi-ast-grep` adds structural code search to the Pi environment. Normal text/CLI/repository search remains available where it is the better primitive.
+
+For regressions, `engineering-quality` requires causal reconstruction rather than speculative patching:
+
+```text
+symptom
+  → first bad observation
+  → failing code / data / control path
+  → recent relevant change
+  → commit body + diff
+  → PR / Bead / worker intent
+  → causal mechanism
+  → smallest correction that preserves valid intent
+  → regression proof
+```
+
+The point is not to blame the newest commit. It is to understand what changed, why it changed, how that change reached the failing path, and whether it introduced the defect, exposed an older defect, or is merely correlated with it.
+
+## Deterministic enforcement where judgment is unnecessary
+
+Skills teach procedures and judgment. Hooks/extensions enforce lifecycle rules. Scripts handle deterministic mechanics.
+
+XTRM currently uses deterministic runtime machinery for things such as:
+
+- Bead claim/edit/commit/stop lifecycle;
+- worktree boundaries and stale-worktree checks;
+- quality checks;
+- project-memory and compact/session restoration;
+- Specialist execution boundaries;
+- GitNexus enrichment;
+- pending coordination/reply reminders;
+- debug/runtime event logging.
+
+This keeps critical workflow rules out of prose that a model might simply forget.
 
 See [docs/hooks.md](docs/hooks.md) and [docs/policies.md](docs/policies.md).
 
-### Skills v4 — small universal surface, opt-in domain stacks
+## Skills v4
 
-XTRM v4 deliberately keeps the always-active skill surface small. The universal defaults are:
+The always-active skill surface is intentionally small:
 
 | Skill | Purpose |
 |---|---|
-| `using-xtrm` | XTRM operating doctrine, work contracts, evidence, multi-agent expectations, minimal engineering |
-| `starting-and-resuming-work` | cold start, takeover, continuation, handoff, context-pressure recovery |
-| `multiplexing` | native-first peer/subagent coordination, replies, wakeups, continuation |
-| `planning` | durable contracts, decomposition, board triage, test strategy, premortem |
-| `engineering-quality` | causal debugging, review, testing, verification, evidence-backed reduction |
-| `using-specialists` | Specialists execution backend plus advanced Specialist references/assets |
-| `gitnexus` | code-graph exploration, impact, debugging, refactoring, review support |
-| `skill-creator` | skill authoring, progressive disclosure, scripts, evals and promotion discipline |
+| `using-xtrm` | system doctrine, contracts, evidence, multi-agent behavior |
+| `starting-and-resuming-work` | cold start, continuation, handoff, context-pressure recovery |
+| `multiplexing` | native-first peer coordination and continuation |
+| `planning` | contracts, decomposition, board triage, tests, premortem |
+| `engineering-quality` | causal debugging, review, testing, verification, reduction |
+| `using-specialists` | Specialists execution plus advanced Specialist references/assets |
+| `gitnexus` | code-graph exploration, impact, debugging, refactoring, review |
+| `skill-creator` | skill authoring, scripts, evals and promotion discipline |
 | `find-skills` | governed discovery/import of additional skills |
 
-The main design rule is that **XTRM agents work as participants in a durable multi-agent system, not as isolated sessions**. The same contract-quality and evidence rules apply whether work stays in the current agent, moves to an `xt pi` / `xt claude` / `xt codex` peer, uses a native subagent, or dispatches a Specialist.
+Domain-specific capabilities stay opt-in so every worker does not pay their context/routing cost:
 
-Domain and maintainer capabilities live in optional packs:
+`architecture-design`, `data-engineering`, `personal-tools`, `research-methods`, `security-ops`, `sre-ops`, `xt-optional`, `xtrm-development`, and `xtrm-maintenance`.
 
-| Pack | Purpose |
-|---|---|
-| `architecture-design` | architecture and design methods |
-| `data-engineering` | data, SQL and storage engineering |
-| `personal-tools` | personal opt-in tooling such as `vaultctl` |
-| `research-methods` | documentation/code/recent/deep research and fact checking |
-| `security-ops` | security investigation and repository security bootstrap |
-| `sre-ops` | live SRE/observability, causal production debugging, deploy/capacity workflows |
-| `xt-optional` | specialized XTRM/operator helpers that should not be universal |
-| `xtrm-development` | XTRM hooks/extensions/workflow/runtime development |
-| `xtrm-maintenance` | releases, dependency updates, docs sync, Specialists updates and maintenance |
+See [docs/skills.md](docs/skills.md) and [docs/skills-v4-preservation-matrix.md](docs/skills-v4-preservation-matrix.md).
 
-The full current catalog and v3→v4 disposition are documented in [docs/skills.md](docs/skills.md) and [docs/skills-v4-preservation-matrix.md](docs/skills-v4-preservation-matrix.md).
+## Specialists
 
-### Specialists
+[`@jaggerxtrm/specialists`](https://www.npmjs.com/package/@jaggerxtrm/specialists) is XTRM's governed role/job execution backend.
 
-`sp` (`@jaggerxtrm/specialists`) is XTRM's governed role/job execution backend. Core vendors the `using-specialists` runtime doctrine from an exact pinned Specialists commit. `update-specialists` remains a separate maintenance workflow inside the `xtrm-maintenance` pack.
+`using-specialists` is the single runtime skill entry point. KPI analysis, NodeSupervisor, script-class execution, and Specialist-definition authoring live underneath it as references/assets rather than four more always-visible skills.
 
-Advanced Specialist surfaces no longer consume separate active skill roots. KPI analysis, NodeSupervisor, script-class execution, and Specialist-definition authoring live under `using-specialists` as references and deterministic assets:
-
-```text
-using-specialists/
-├── SKILL.md
-├── references/
-│   ├── kpi.md
-│   ├── nodes.md
-│   ├── script-class.md
-│   └── specialist-definitions.md
-└── scripts/specialist-definitions/
-```
-
-Use the live registry/CLI when exact roles or flags matter:
+Use the live CLI/registry when exact roles matter:
 
 ```bash
 specialists list --full
 sp help
 ```
 
-See [docs/skills-ownership.md](docs/skills-ownership.md) for vendor/source invariants.
+## SRE and service knowledge
 
-### Engineering quality and causal debugging
+The optional `sre-ops` pack applies the same causal-reconstruction idea to production incidents. It correlates metrics, Grafana dashboards/panel queries, traces, logs, service topology, deploy identity, commits, PRs, Beads, and worker intent.
 
-`engineering-quality` is universal because debugging, review, testing and completion evidence are normal engineering work. Regression debugging is explicitly causal:
-
-```text
-symptom
-  -> first bad observation
-  -> failing code/data/control path
-  -> candidate change
-  -> commit body + diff
-  -> PR / Bead / worker intent
-  -> causal mechanism
-  -> smallest corrective change
-  -> regression proof
-```
-
-The bundled provenance helper can collect repetitive Git evidence while the agent remains responsible for causal judgment.
-
-### SRE Ops and low-context observability
-
-Enable `sre-ops` for infrastructure/production environments. XTRM prefers `mcpq` as the low-context CLI for querying MCP observability servers instead of dumping every Grafana/Prometheus/Tempo/OpenTelemetry tool schema into the agent context.
-
-The progressive discovery flow is:
+For observability MCP servers, XTRM prefers the low-context `mcpq` CLI rather than injecting every Grafana/Prometheus/Tempo/OpenTelemetry schema into the agent by default:
 
 ```bash
 mcpq servers
@@ -119,290 +262,84 @@ mcpq <server> describe <tool>
 mcpq <server> call <tool> ... --json
 ```
 
-SRE causal reconstruction correlates metrics, Grafana panels/queries, traces, logs, service topology, deploy/change identity, commits, PRs, Beads and worker intent. Service-specific runbook freshness belongs to the `service-knowledge` subsystem rather than being duplicated inside generic SRE guidance.
+Service-specific topology/runbook freshness belongs to the `service-knowledge` subsystem. Generic SRE reasoning should consume that knowledge, not duplicate it.
 
-### Board audit
+## Durable board state
 
-Current board publication uses the gen-2 permanent export mechanism. Beads/Dolt remains authority; `board-audit checkpoint` publishes only board-audit transport artifacts into the permanent orphan branch:
+Beads/Dolt remains board authority. For durable external/export inspection, the current board-audit gen-2 mechanism publishes only board transport artifacts to the permanent orphan branch:
 
 ```text
 board-audit-export-do-not-cancel
 ```
 
-The old on-demand `issue-triage` exporter is retired. See the v4 preservation matrix and board-audit package documentation for the exact transport/reconcile distinction.
+That replaces the old one-shot `issue-triage` exporter.
 
----
-
-**Version 0.12.0** | [Complete Guide](XTRM-GUIDE.md) | [Changelog](CHANGELOG.md)
-
----
-
-## Documentation
-
-| Doc | Contents |
-|---|---|
-| [XTRM-GUIDE.md](XTRM-GUIDE.md) | Full architecture, concepts and workflow reference |
-| [docs/skills.md](docs/skills.md) | Current skills-v4 tiers, defaults, optional packs and runtime composition |
-| [docs/skills-v4-preservation-matrix.md](docs/skills-v4-preservation-matrix.md) | Normative v3→v4 capability disposition |
-| [docs/skills-ownership.md](docs/skills-ownership.md) | Core/Specialists skill ownership and publish contract |
-| [docs/skills-tier-architecture.md](docs/skills-tier-architecture.md) | Deeper skill tier/runtime implementation |
-| [docs/hooks.md](docs/hooks.md) | Current hook wiring, gate logic and ownership |
-| [docs/policies.md](docs/policies.md) | Policy compiler/schema and runtime parity |
-| [docs/pi-extensions.md](docs/pi-extensions.md) | Pi extension integration and managed sync |
-| [docs/worktrees.md](docs/worktrees.md) | `xt` worktrees, attach/end/reap and isolation |
-| [docs/xt-pi-role.md](docs/xt-pi-role.md) | `xt pi --role` / `xt claude --role` specialist launch behavior |
-| [docs/mcp-servers.md](docs/mcp-servers.md) | MCP server configuration |
-| [docs/bash-tools.md](docs/bash-tools.md) | Bash/CLI helpers and when to prefer them over MCP schema loading |
-| [docs/cli-architecture.md](docs/cli-architecture.md) | CLI internals, install/update and composition |
-| [docs/docs-commands.md](docs/docs-commands.md) | Documentation inspection/cross-check commands |
-| [docs/project-skills.md](docs/project-skills.md) | Project/user skill migration notes |
-| [docs/testing.md](docs/testing.md) | Integration and runtime validation checklist |
-| [docs/release.md](docs/release.md) | Release/publish contract |
-| [CHANGELOG.md](CHANGELOG.md) | Full version history |
-
----
-
-## Quick Start
+## Quick start
 
 ```bash
 npm install -g xtrm-tools @jaggerxtrm/specialists
 
-# Bootstrap global managed skills/runtime state.
 xt bootstrap
-
-# Initialize the current repository.
 xtrm init
 
-# Verify the installation.
 xt --version
 sp --version
 xt doctor
 ```
 
-One-line project bootstrap:
+Start work:
 
 ```bash
-npx -y github:xtrm-dev/core init
-```
+xt pi feature-name
+xt claude feature-name
+xt codex feature-name
 
-### Typical workflow
+# tracked role-shaped work
+xt pi --role executor --bead <id>
+xt claude --role reviewer --bead <id>
 
-```bash
-# Start a sandboxed peer session in a worktree.
-xt claude my-feature
-# or
-xt pi my-feature
-
-# Launch with a Specialist role/work contract.
-xt pi --role planner --bead <id>
-xt claude --role reviewer --bead <id> --prompt 'review the auth changes'
-
-# Re-attach to durable work.
+# resume / finish
 xt attach
-
-# Publish/close one worktree session.
 xt end
-
-# Refresh durable project memory from Beads/current state.
-xt memory update
-
-# Drain the xt/* PR queue when appropriate.
-xt merge
 ```
 
-`xt merge` is an XTRM CLI workflow backed by the canonical `xt-merge` Specialist; it is not a separate default Agent Skill.
-
-### Skills and packs
-
-Managed skills are composed from:
-
-```text
-~/.xtrm/skills/
-├── default/        # package-managed universal skills
-├── optional/       # package-managed opt-in packs
-├── <user-pack>/    # user-managed global packs
-└── active/         # generated global runtime view
-
-<repo>/.xtrm/skills/
-├── <user-pack>/    # project-local user packs
-├── active/         # generated project runtime view
-└── state.json
-```
-
-Create user packs as flat siblings, outside managed `default/` and `optional/`:
-
-```bash
-xt skills create-pack <name> --global
-xt skills create-pack <name> --local
-```
-
-Inspect and enable managed packs:
+Inspect skills and optional packs:
 
 ```bash
 xt skills list --global --json
 xt skills list --local --json
-
 xt skills enable sre-ops --global
-xt skills enable research-methods --global
-xt skills enable xtrm-development --local
-xt skills disable sre-ops --global
 ```
 
-Use `xt skills --help` for flags supported by the installed release.
-
-To verify universal skill composition after bootstrap/update:
+Update managed runtime state:
 
 ```bash
-ls ~/.xtrm/skills/default/using-xtrm/SKILL.md
-ls -l ~/.xtrm/skills/active/using-xtrm
-ls -l .xtrm/skills/active/using-xtrm
-ls -l .claude/skills/using-xtrm
+xt update --repo .          # preview
+xt update --apply --repo .  # reconcile
+xt doctor
 ```
 
-### Keeping XTRM and Specialists updated
+Use live `xt <command> --help`, `sp help`, and `specialists list --full` for exact flags and runtime-specific capabilities.
 
-Update installed packages first because `xt update` reconciles package-owned assets from the installed release:
+## Documentation
 
-```bash
-npm install -g xtrm-tools@latest @jaggerxtrm/specialists@latest
-xt --version
-sp --version
-```
-
-Preview and apply managed-asset drift:
-
-```bash
-xt update --repo .
-xt update --root ~/dev
-xt update --all-repos
-
-xt update --apply --repo .
-xt update --apply --root ~/dev
-xt update --apply --all-repos
-```
-
-Specialists runtime drift and XTRM-managed asset drift remain separate ownership tracks. Use current `sp doctor --help`, `xt doctor --help`, and `xt update --help` instead of relying on frozen command recipes.
-
----
-
-## What's Included
-
-### Core enforcement and context
-
-| Component | Runtime | Purpose |
-|---|---|---|
-| **Beads gates** | Claude + Pi integrations | claim/edit/commit/stop lifecycle and durable work state |
-| **Session flow** | runtime-specific adapters | claim sync, compact/session state, continuation/handoff reminders |
-| **Quality gates** | Claude + Pi integrations | deterministic lint/typecheck checks on relevant edits |
-| **Worktree boundary/reap** | supported runtime hooks | prevent unsafe cross-worktree edits and detect stale worktrees |
-| **GitNexus** | supported runtime integrations | code-graph context and impact evidence |
-| **Specialists agent guard** | supported runtime hooks | protect Specialist-owned execution boundaries |
-| **Project memory** | supported runtime hooks | inject project memory doctrine without eagerly loading full `using-xtrm` content |
-
-### Privacy and telemetry
-
-**xtrm-tools does not send source code or usage analytics to an XTRM-owned telemetry service.** External tools/providers used by the operator retain their own data policies. XTRM runtime state, Beads data, hooks, skills and local observability/logging remain operator-controlled.
-
----
-
-## Policy System
-
-Policies in `policies/` are the source definitions compiled into managed runtime hook configuration and adapters.
-
-Current policy files include:
-
-| Policy | Purpose |
+| Document | Purpose |
 |---|---|
-| `beads.json` | Beads lifecycle gates |
-| `session-flow.json` | session/claim/stop flow |
-| `quality-gates.json` | language quality checks |
-| `quality-gates-env.json` | startup environment checks for quality tooling |
-| `gitnexus.json` | code-graph enrichment |
-| `using-xtrm.json` | project-memory/system doctrine injection boundary |
-| `worktree-boundary.json` | block unsafe edits outside the active worktree |
-| `worktree-reap.json` | stale worktree sweep/reap integration |
-| `specialists-agent-guard.json` | Specialist execution boundary |
-| `inbox-reminder.json` | pending coordination/reply reminder |
-| `xtrm-debug-logger.json` | XTRM lifecycle/tool debug logging |
-
-```bash
-node scripts/compile-policies.mjs
-node scripts/compile-policies.mjs --check
-```
-
-See [docs/policies.md](docs/policies.md) and [docs/hooks.md](docs/hooks.md).
+| [XTRM-GUIDE.md](XTRM-GUIDE.md) | full architecture and workflow reference |
+| [docs/worktrees.md](docs/worktrees.md) | `xt` worktrees, attach/end/reap and isolation |
+| [docs/xt-pi-role.md](docs/xt-pi-role.md) | role launcher and Specialist behavior |
+| [docs/xtrm-ui.md](docs/xtrm-ui.md) | XTRM Pi UI/themes/tool rendering |
+| [docs/pi-extensions.md](docs/pi-extensions.md) | Pi extension/runtime integration |
+| [docs/skills.md](docs/skills.md) | current skills-v4 catalog and tier model |
+| [docs/skills-v4-preservation-matrix.md](docs/skills-v4-preservation-matrix.md) | v3 → v4 capability disposition |
+| [docs/skills-ownership.md](docs/skills-ownership.md) | Core/Specialists skill ownership and vendoring |
+| [docs/hooks.md](docs/hooks.md) | deterministic hooks and event wiring |
+| [docs/policies.md](docs/policies.md) | policy compiler and runtime parity |
+| [docs/cli-architecture.md](docs/cli-architecture.md) | install/update/composition internals |
+| [docs/testing.md](docs/testing.md) | validation checklist |
+| [docs/release.md](docs/release.md) | release/publish contract |
+| [CHANGELOG.md](CHANGELOG.md) | version history |
 
 ---
 
-## CLI Commands
-
-```text
-xtrm <command> [options]
-```
-
-| Command | Description |
-|---|---|
-| `claude` | launch Claude Code in an XTRM worktree/session |
-| `pi` | launch Pi in an XTRM worktree/session |
-| `init` | bootstrap XTRM machine/runtime/project state |
-| `status` | read-only XTRM/project status |
-| `reset` | reset XTRM-managed state according to current CLI contract |
-| `end` | close/publish one worktree session |
-| `worktree` | worktree list/clean/reap operations |
-| `attach` | re-attach to an existing worktree/session |
-| `docs` | documentation inspection and drift checks |
-| `memory` | durable memory synthesis/update |
-| `merge` | queue/integration workflow using the canonical `xt-merge` Specialist |
-| `debug` | inspect XTRM hook/Beads lifecycle events |
-| `report` | session/workflow reporting |
-| `skills` | list/enable/disable/create managed or user skill packs |
-| `claude-sync` | reconcile Claude-specific managed state |
-| `doctor` | health/drift/runtime checks |
-| `update` | preview/apply XTRM-managed asset updates |
-| `migrate` | migrate older per-repo managed layouts |
-| `version` | print package/build identity |
-| `spec` | specification/intention surfaces that feed durable planning |
-| `release` | release helpers where supported by the installed CLI |
-| `help` | command help |
-
-Use live `xt <command> --help` as the authority for exact flags and behavior.
-
----
-
-## MCP and CLI research surfaces
-
-Configured MCP servers/tools vary by installation. XTRM favors progressive discovery and narrow requests rather than eagerly loading large remote schemas.
-
-Common code/documentation surfaces include GitNexus, GitHub code search, documentation providers and operator-enabled plugins. For observability, `mcpq` is the preferred low-context CLI interface when the environment exposes Grafana/Prometheus/Tempo/OpenTelemetry through MCP.
-
-See [docs/mcp-servers.md](docs/mcp-servers.md) and [docs/bash-tools.md](docs/bash-tools.md).
-
----
-
-## Issue Tracking
-
-```bash
-bd ready
-bd show <id>
-bd update <id> --claim
-bd close <id> --reason "Done"
-```
-
-See [XTRM-GUIDE.md](XTRM-GUIDE.md) and the current `bd --help` output for the full contract.
-
----
-
-## Version History
-
-| Version | Date | Highlights |
-|---|---|---|
-| 0.12.0 | 2026-09-04 | Skills-v4 consolidation, universal multi-agent/contract doctrine, causal engineering quality, SRE/mcpq guidance, current service-knowledge and board-audit ownership |
-| 0.11.6 | 2026-08-20 | PATH-based Pi lookup fix |
-| 0.11.5 | 2026-08-20 | launch hardening, Pi rendering polish, worktree reap, Codex runtime experiments, Python-kernel work |
-| 0.11.0 | 2026-07-16 | launcher, role-model isolation, verified audits and release metadata |
-
-See [CHANGELOG.md](CHANGELOG.md) for full history.
-
----
-
-MIT License
+**Version 0.12.0** · MIT License
