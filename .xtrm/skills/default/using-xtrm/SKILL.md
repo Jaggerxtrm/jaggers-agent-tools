@@ -204,7 +204,6 @@ Hooks/extensions are the enforcement plane; skills are the judgment/procedure pl
 | Create or improve skills | `/skill-creator` |
 | Find/import additional governed skills | `/find-skills` |
 | Production/SRE investigation when pack is enabled | `/sre-ops` |
-
 Load the focused skill when you reach that phase. Do not preload every manual.
 
 ## Completion rule

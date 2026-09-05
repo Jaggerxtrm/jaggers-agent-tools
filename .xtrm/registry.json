@@ -31,7 +31,7 @@
           "version": "0.12.0"
         },
         "beads-gate-messages.mjs": {
-          "hash": "941cb07e8e649c3a958c0d0604199b4cd105fadf238d9fda449fb41812fc8d9c",
+          "hash": "4a2b6711d75808eeb83488e31f34214a129d0e6f3f451bafb3e94090e0a8f497",
           "version": "0.12.0"
         },
         "beads-gate-utils.mjs": {
@@ -226,11 +226,11 @@
           "version": "0.12.0"
         },
         "planning/SKILL.md": {
-          "hash": "b877b0e6d9cb7db1302e601cf36ea0e96b3ddc03cdb36019a7c74a4ab9d73255",
+          "hash": "5f0d5d844effb48a61759b6f08b380d29ddb27a8915d383296a886ab2349a9e9",
           "version": "0.12.0"
         },
         "README.txt": {
-          "hash": "589836aa1223a3949491e504779852d6e3a84f5ec5df8f89456dfa160db0d8ea",
+          "hash": "9c6c0da1dd60cc416bca5e817f3566eb9ab5f4edb80e760c1ccdf6eff6395d6d",
           "version": "0.12.0"
         },
         "skill-creator/agents/analyzer.md": {
@@ -310,7 +310,7 @@
           "version": "0.12.0"
         },
         "starting-and-resuming-work/SKILL.md": {
-          "hash": "887e87dc4cd6c0ce38686ffe7f24df99b8bd13089d1825d065eeec2f99ba4517",
+          "hash": "907909ed0da37488954e8915cb3775871fb414a70213713298d0453866fa343e",
           "version": "0.12.0"
         },
         "using-specialists/references/bead-contracts.md": {
@@ -374,7 +374,7 @@
           "version": "0.12.0"
         },
         "using-xtrm/SKILL.md": {
-          "hash": "b40409dcd74a83c9327ca26550e799ce7f322cbe60ffb97eea27dbb503142dd6",
+          "hash": "574aa3fb9d2a14484f6e02f4bbd0373284fd85d4bb11c430779c6602b7f85038",
           "version": "0.12.0"
         }
       }
@@ -948,7 +948,7 @@
           "version": "0.12.0"
         },
         "pi/install-schema.json": {
-          "hash": "279694ec588612af7609a1ef01d37f2df48a74f748a1ca7c1716dbd5d9439a38",
+          "hash": "bc4873f9bc401d598259cbbd2114b71aeafb6d7d98d7b1c10f71b793ce696029",
           "version": "0.12.0"
         },
         "pi/models.json.template": {
@@ -960,7 +960,7 @@
           "version": "0.12.0"
         },
         "pi/settings.json.template": {
-          "hash": "df2462ce1014292a2c40399776efb283b61b19d38ed72bdc62700d2a35e3dc88",
+          "hash": "b3e8c178c288f5d15e3f53f33bf675d03ad22e1fefefa1a863900df2686426f6",
           "version": "0.12.0"
         },
         "README.md": {
@@ -969,6 +969,10 @@
         },
         "settings.json": {
           "hash": "f1366a2009edb6050dab0dc5dc43fa70e96adf251befd1ddf0c42e1d42d5da56",
+          "version": "0.12.0"
+        },
+        "work-lifecycle.md": {
+          "hash": "a53a983b4e58dfd4d9c0ccdeb2d2a9a13869eb0ceb1948e0598407c7a6b4e78a",
           "version": "0.12.0"
         }
       }
