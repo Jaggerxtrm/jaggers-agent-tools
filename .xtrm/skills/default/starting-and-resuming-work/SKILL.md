@@ -1,129 +1,129 @@
 ---
 name: starting-and-resuming-work
 description: >
-  Start, resume, take over, or hand off XTRM work without losing reality. Use whenever a
-  session begins or resumes, the user says continue/pick up/catch up, an agent inherits
-  another worker's task, work will outlive one context window, context usage is becoming
-  unsafe, or a running lane appears stalled. Re-derive live state, identify the durable
-  contract and current ownership, choose/verify a continuation mechanism, and hand off
-  before context pressure makes the current agent unreliable.
+  Re-enter, resume, take over, or continue existing XTRM work without losing reality. Use
+  when a fresh session inherits tracked work, the user says continue/pick up/catch up, an
+  agent takes over another worker's lane, context pressure requires continuation, or a
+  running lane appears stalled. Re-derive live state, recover the durable work identity,
+  verify ownership/worktree/runtime state, and continue from recorded evidence. Generic
+  work identity and progress-journal doctrine belong to /using-xtrm and `xt work`.
 ---
 
 # Starting and Resuming Work
 
-Continuity is a first-class part of XTRM. A session ending is normal; work disappearing
-with it is a failure.
+This skill is about **re-entry**, not the general requirement to track work.
 
-## Cold start or takeover
+`/using-xtrm` owns the invariant that every mutating worker has a claimed durable work
+identity. `xt work` owns the worker-facing lifecycle commands. Use this skill when work
+already exists and a session must recover or continue it safely.
 
-Reconstruct reality from durable/live sources before making a new plan.
+## Re-enter reality
 
-1. Identify the repository/worktree and current branch.
-2. Read the active or referenced bead contracts and their current states.
-3. Inspect recent relevant commits/PRs and validation when the task depends on them.
-4. Inspect active XTRM workers/jobs/topology when other agents may still own work.
-5. Retrieve relevant `bd memories` only when history will help locate a decision or trap.
-6. Compare inherited summaries with live state; correct stale claims before continuing.
+Do not rebuild a plan from chat history first.
 
-Useful surfaces include `bd prime`, `bd ready`, `bd show`, `bd list`, `xt topology`, and
-current runtime/worker status commands. Use live `--help` when exact syntax matters.
+1. Identify repository/worktree and current branch.
+2. Recover the relevant durable work identity (`xt work status [id]`, referenced Bead,
+   or explicit user/worker handoff).
+3. Read the current work contract/journal and related issue/dependency state.
+4. Inspect recent relevant commits/PRs/diff and validation that may have changed.
+5. Inspect active XTRM workers/jobs/topology when another participant may still own work.
+6. Retrieve targeted memory only when history is needed to locate a decision or trap.
+7. Compare inherited summaries with live state and correct stale claims before continuing.
 
-Do not mechanically run every command. Ask what fact you need, then use the cheapest
-live source that answers it.
+Use the cheapest live source that answers the question. `bd prime` is an opt-in diagnostic,
+not a mandatory startup ritual.
 
-## Establish the current ownership map
+## Resume the durable identity
 
-Before editing or dispatching, know:
+When the correct work item is known:
+
+```bash
+xt work resume <id>
+xt work status <id>
+```
+
+Do not create a second execution/check-in Bead merely because a new context window or
+worker took over. Resume the existing identity unless ownership genuinely split into a
+new independently tracked piece of work.
+
+## Reconstruct the ownership map
+
+Before mutation or new dispatch, know:
 
 ```text
 work item -> current owner -> workspace/branch -> expected output -> blocker/reply state
 ```
 
 If ownership is ambiguous, resolve it before creating another worker. Duplicate agents on
-the same task are not redundancy; they are a race unless explicitly coordinated.
+the same mutable scope are a race unless explicitly coordinated.
 
-## Long work: prepare continuation early
+If the resumed worker discovers that the current item is only a lightweight check-in but
+the work has become substantial, ambiguous, high-risk, or consumable by another worker,
+route to `/planning` before continuing large mutation.
 
-If the work is likely to outlive this context, decide how it continues before starting a
-long phase. Depending on the active harness this may be a native goal/loop/schedule,
-XTRM peer ownership, a Specialist job, a monitor/wakeup facility, or an explicit human
-handoff.
-
-Do not assume a continuation primitive exists because an old skill mentioned it. Inspect
-the current runtime and verify that the chosen mechanism is actually armed.
-
-## Context-pressure rule
+## Context pressure
 
 Treat context capacity as an execution resource.
 
-When the remaining context is no longer comfortably sufficient for the next coherent
-phase, stop starting new large work. Do this before summarization quality degrades.
+When remaining context is no longer comfortably sufficient for the next coherent phase:
 
 ```text
-context pressure detected
-  -> finish or stop at a clean boundary
-  -> persist current facts/evidence
-  -> reconcile bead + branch/worktree + running workers
-  -> record next single action and unresolved decisions
-  -> hand off or compact through a supported mechanism
-  -> verify the successor/continuation can actually resume
+finish or stop at a clean boundary
+  -> record meaningful progress/evidence with xt work note
+  -> reconcile branch/worktree + running workers/replies
+  -> make the next action explicit in durable state
+  -> hand ownership to a supported continuation mechanism
+  -> successor resumes the same work identity
 ```
 
-Do not spend the last useful context budget trying to complete “one more phase” while the
-handoff still exists only in your head.
+Do not spend the final useful context budget writing a ceremonial handoff document that
+duplicates the Bead journal, repository, commits, tests, PR, or worker results.
 
-## What a durable handoff contains
+Create a separate checked-in report only when the report itself is a requested artifact
+or carries evidence that does not belong in normal work state.
 
-A successor should not need your transcript. Persist:
+## Takeover from another worker
 
-- the exact bead/work contract and current state;
-- what changed and where the durable changes live;
-- validation already run, including failures and skipped checks;
-- active workers/jobs and what they are expected to return;
-- pending replies/decisions/blockers;
-- facts that were re-verified recently;
-- corrections to stale earlier assumptions;
-- the next single action;
-- deliberate non-actions and why they remain deferred.
+A successor should not need the predecessor's transcript.
 
-Use bead notes, checked-in docs/reports when appropriate, commits/branches, and runtime
-state. A chat summary alone is not a handoff.
+Verify:
 
-## Resume from a handoff
+- the current contract or lightweight execution scope;
+- what actually changed in the repository and where it lives;
+- validation already run, including failures/skips;
+- active workers/jobs and unconsumed results;
+- pending replies, decisions, blockers, and dependencies;
+- the next recorded action;
+- deliberate non-actions or scope exclusions that still matter.
 
-Do not trust completion labels blindly.
-
-1. Read the handoff and contract.
-2. Verify the branch/worktree and current diff.
-3. Check whether referenced workers/jobs are still active or already produced results.
-4. Re-run only the live checks that can have changed since the handoff.
-5. Continue from the recorded next action if it is still valid; otherwise update the
-   durable record before changing direction.
+Worker summaries and old notes are leads. Re-check consequential claims against live
+state before acting.
 
 ## Stalled work
 
-Silence is not success. When a lane appears stalled, distinguish:
+Silence is not success. Distinguish:
 
 - worker still computing;
 - worker waiting for input/reply;
-- continuation/wakeup not armed;
-- job failed/crashed;
+- continuation/wakeup was never armed;
+- worker/job crashed;
 - result completed but parent never consumed it;
 - ownership changed and the lane is obsolete.
 
 Use `/multiplexing` for peer/subagent coordination and `/using-specialists` for
 Specialist-specific job evidence.
 
-## Session close
+When the stall changes work reality, record that transition with `xt work note` rather
+than preserving it only in chat.
 
-A normal close is a handoff to the future, even when no other agent starts immediately.
+## Close/relinquish
 
-- reconcile durable work state;
-- verify no important result or reply is stranded;
-- record validation truthfully;
-- leave the repository/worktree in the intended lifecycle state;
-- use the current `xt` reporting/end surfaces when they are part of the active workflow,
-  checking live help rather than preserving old command recipes here.
+A session ending does not necessarily mean the work item closes.
 
-The goal is not a ceremonial report. The goal is that the next participant can recover
-correct state quickly and safely.
+- If the work is complete and validated, close it through `xt work done ...`.
+- If another worker/context continues it, leave the work open and current, then transfer
+  ownership through the supported runtime/coordination mechanism.
+- If blocked, record the blocker/dependency truthfully instead of forcing a completion.
+
+The success criterion is simple: the next participant can recover current reality quickly
+from durable work state + repository/runtime evidence.
