@@ -74,6 +74,26 @@ function getOwnedSkills(ownership) {
     .sort();
 }
 
+// skills-v4: specialists-owned assets live at their manifest placement
+// (default tier OR optional/<pack>), not always under .xtrm/skills/default.
+function getOwnedPlacements(ownership) {
+  const owners = ownership?.owners;
+  if (!owners || typeof owners !== 'object') throw new Error('skills ownership manifest missing owners');
+  const placements = new Map();
+  for (const [name, entry] of Object.entries(owners)) {
+    if (entry?.owner !== 'specialists') continue;
+    const tier = entry?.placement?.tier ?? 'default';
+    if (tier === 'optional') {
+      const pack = entry?.placement?.pack;
+      if (!pack) throw new Error(`specialists-owned skill ${name}: optional placement missing pack`);
+      placements.set(name, path.join('.xtrm', 'skills', 'optional', pack, name));
+    } else {
+      placements.set(name, path.join('.xtrm', 'skills', 'default', name));
+    }
+  }
+  return placements;
+}
+
 function getContractSkills(contract) {
   const shipped = contract?.shipped_skills;
   if (!Array.isArray(shipped)) throw new Error('asset-contract missing shipped_skills array');
@@ -88,6 +108,7 @@ async function main() {
   const { contractPath, vendorRoot } = parseArgs(process.argv);
   const [contract, ownership] = await Promise.all([readJson(contractPath), readJson(ownershipPath)]);
   const ownedSkills = new Set(getOwnedSkills(ownership));
+  const ownedPlacements = getOwnedPlacements(ownership);
   const shippedSkills = getContractSkills(contract);
   const rows = [];
   const failures = [];
@@ -110,7 +131,12 @@ async function main() {
     }
 
     const basename = path.basename(assetPath);
-    const mirrorPath = path.join(vendorRoot, skillName, basename);
+    // Placement-aware mirror path; --vendor-root remains the fallback for
+    // manifests without placement data.
+    const placedSkillDir = ownedPlacements.get(skillName);
+    const mirrorPath = placedSkillDir
+      ? path.join(repoRoot, placedSkillDir, basename)
+      : path.join(vendorRoot, skillName, basename);
     if (!(await fileExists(mirrorPath))) {
       const reason = `missing mirror file for ${skillName}: ${path.relative(repoRoot, mirrorPath)}`;
       rows.push([skillName, path.relative(repoRoot, mirrorPath), 'missing file', 'FAIL']);
