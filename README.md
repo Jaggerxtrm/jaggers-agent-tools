@@ -56,6 +56,55 @@ The worker should spend its turn solving the job, not reconstructing what the jo
 
 [Beads](https://github.com/Jaggerxtrm/beads) is the durable issue/work-state dependency underneath this model: roughly an agent-native Jira-like board backed by Dolt. It gives contracts identity, dependencies, claims, state, history, evidence, and a place for the next worker to resume. Beads is an important substrate; it is not the definition of XTRM.
 
+## No anonymous mutation
+
+Planning and execution identity are related, but they are not the same thing.
+
+Every mutating worker must check in before it edits. XTRM keeps the claim gate strict and makes the legitimate path cheap:
+
+```text
+existing Bead already represents the work
+  → xt work start --bead <id>
+
+substantial / ambiguous / multi-worker work
+  → /planning
+  → contract-quality Bead
+  → xt work start --bead <id>
+
+small bounded local change
+  → xt work start "<short title>" [--validation "<proof>"]
+```
+
+The last form creates and claims a lightweight execution/check-in Bead. It is the worker's durable journal for that bounded piece of work, not a fake seven-section plan.
+
+```bash
+xt work note "identified affected path; implementation next"
+xt work status
+xt work done --reason "validated result"
+```
+
+Progress is recorded at meaningful state transitions—scope changes, completed phases, blockers, validation results, consumed reviews—not after every tool call.
+
+If the work grows in scope or another worker will consume it, the lightweight check-in is no longer enough: run `/planning` and promote or replace it with contract-quality work.
+
+When a check-in serves an existing issue, use a non-blocking relation rather than lying to the dependency graph:
+
+```bash
+xt work start "<bounded session work>" --relates <issue-id>
+```
+
+This is deliberately exposed as `xt work` rather than teaching every worker raw Beads mechanics. Today the implementation is Beads-backed; later the same worker-facing lifecycle can move to the substrate execution entity without reteaching the system.
+
+The packaged contract is always available with:
+
+```bash
+xt work guide
+```
+
+The rule is therefore:
+
+> **For substantial tracked work, the Bead is the prompt. For every mutating worker, the claimed work identity is its durable execution journal.**
+
 ## The model call is downstream
 
 The same failure mode shows up outside software.
@@ -220,10 +269,10 @@ The always-active skill surface is intentionally small:
 
 | Skill | Purpose |
 |---|---|
-| `using-xtrm` | system doctrine, contracts, evidence, multi-agent behavior |
-| `starting-and-resuming-work` | cold start, continuation, handoff, context-pressure recovery |
+| `using-xtrm` | system doctrine, durable work identity, contracts, evidence, multi-agent behavior |
+| `starting-and-resuming-work` | re-entry, takeover, context-pressure continuation, stalled-lane recovery |
 | `multiplexing` | native-first peer coordination and continuation |
-| `planning` | contracts, decomposition, board triage, tests, premortem |
+| `planning` | substantial contracts, decomposition, board triage, tests, premortem |
 | `engineering-quality` | causal debugging, review, testing, verification, reduction |
 | `using-specialists` | Specialists execution plus advanced Specialist references/assets |
 | `gitnexus` | code-graph exploration, impact, debugging, refactoring, review |
@@ -287,7 +336,21 @@ sp --version
 xt doctor
 ```
 
-Start work:
+Start tracked work:
+
+```bash
+# bounded local work: create + claim a lightweight execution identity
+xt work start "Fix README wording" --validation "README matches runtime source"
+
+# substantial work: plan first, then claim the resulting contract
+xt work start --bead <id>
+
+# journal meaningful transitions
+xt work note "implementation complete; running validation"
+xt work status
+```
+
+Launch isolated workers:
 
 ```bash
 xt pi feature-name
@@ -319,13 +382,14 @@ xt update --apply --repo .  # reconcile
 xt doctor
 ```
 
-Use live `xt <command> --help`, `sp help`, and `specialists list --full` for exact flags and runtime-specific capabilities.
+Use live `xt <command> --help`, `xt work guide`, `sp help`, and `specialists list --full` for exact flags and runtime-specific capabilities.
 
 ## Documentation
 
 | Document | Purpose |
 |---|---|
 | [XTRM-GUIDE.md](XTRM-GUIDE.md) | full architecture and workflow reference |
+| [.xtrm/config/work-lifecycle.md](.xtrm/config/work-lifecycle.md) | packaged durable work-identity and execution-journal contract (`xt work guide`) |
 | [docs/worktrees.md](docs/worktrees.md) | `xt` worktrees, attach/end/reap and isolation |
 | [docs/xt-pi-role.md](docs/xt-pi-role.md) | role launcher and Specialist behavior |
 | [docs/xtrm-ui.md](docs/xtrm-ui.md) | XTRM Pi UI/themes/tool rendering |
