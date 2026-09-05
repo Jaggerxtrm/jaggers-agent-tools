@@ -12,9 +12,7 @@ vi.mock("../../../packages/pi-extensions/src/core", async () => {
 	const actual = await vi.importActual<any>("../../../packages/pi-extensions/src/core");
 	return {
 		...actual,
-		SubprocessRunner: {
-			run: vi.fn(),
-		},
+		SubprocessRunner: { run: vi.fn() },
 		EventAdapter: {
 			isBeadsProject: vi.fn(() => true),
 			isMutatingFileTool: vi.fn((event: any) => event?.toolName === "write"),
@@ -32,7 +30,7 @@ describe("Pi beads claim lifecycle", () => {
 		harness.pi.sendUserMessage = vi.fn();
 	});
 
-	it("clears stale claim and blocks edits until a fresh claim is made", async () => {
+	it("clears stale claim and blocks edits until a fresh work identity is claimed", async () => {
 		const calls: string[][] = [];
 		(SubprocessRunner.run as any).mockImplementation(async (_cmd: string, args: string[]) => {
 			calls.push(args);
@@ -44,15 +42,12 @@ describe("Pi beads claim lifecycle", () => {
 		});
 
 		beadsExtension(harness.pi);
-
-		const result = await harness.emit("tool_call", {
-			toolName: "write",
-			input: { path: "src/main.ts" },
-		});
+		const result = await harness.emit("tool_call", { toolName: "write", input: { path: "src/main.ts" } });
 
 		expect(calls.some((a) => a[0] === "kv" && a[1] === "clear" && `${a[2]}`.startsWith("claimed:"))).toBe(true);
 		expect(result?.block).toBe(true);
-		expect(result?.reason).toContain("No active claim");
+		expect(result?.reason).toContain("No active work identity");
+		expect(result?.reason).toContain("xt work start");
 	});
 
 	it("does not block commit when claim is stale/closed", async () => {
@@ -62,38 +57,80 @@ describe("Pi beads claim lifecycle", () => {
 			if (args[0] === "kv" && args[1] === "clear") return { code: 0, stdout: "", stderr: "" };
 			return { code: 0, stdout: "", stderr: "" };
 		});
-
 		beadsExtension(harness.pi);
-
-		const result = await harness.emit("tool_call", {
-			toolName: "bash",
-			input: { command: "git commit -m 'test'" },
-		});
-
+		const result = await harness.emit("tool_call", { toolName: "bash", input: { command: "git commit -m 'test'" } });
 		expect(result).toBeUndefined();
 	});
 
-	it("blocks commit when active claimed issue is still in progress", async () => {
+	it("blocks commit when active claimed work is still in progress", async () => {
 		(SubprocessRunner.run as any).mockImplementation(async (_cmd: string, args: string[]) => {
 			if (args[0] === "kv" && args[1] === "get") return { code: 0, stdout: "xtrm-live\n", stderr: "" };
 			if (args[0] === "show") return { code: 0, stdout: JSON.stringify({ id: "xtrm-live", status: "in_progress" }), stderr: "" };
 			return { code: 0, stdout: "", stderr: "" };
 		});
+		beadsExtension(harness.pi);
+		const result = await harness.emit("tool_call", { toolName: "bash", input: { command: "git commit -m 'test'" } });
+		expect(result?.block).toBe(true);
+		expect(result?.reason).toContain("Active work [xtrm-live]");
+	});
 
+	it("binds a successful xt work start receipt to the current Pi session", async () => {
+		const calls: string[][] = [];
+		(SubprocessRunner.run as any).mockImplementation(async (_cmd: string, args: string[]) => {
+			calls.push(args);
+			return { code: 0, stdout: "", stderr: "" };
+		});
+		beadsExtension(harness.pi);
+
+		const result = await harness.emit("tool_result", {
+			toolName: "bash",
+			input: { command: 'xt work start "Fix README"' },
+			content: [{ type: "text", text: 'XTRM_WORK_RECEIPT {"schema":"xt.work.receipt.v1","action":"start","bead":"xtrm-checkin"}\n✓ work created + claimed: xtrm-checkin' }],
+			isError: false,
+		});
+
+		expect(calls).toContainEqual(["kv", "set", expect.stringMatching(/^claimed:/), "xtrm-checkin"]);
+		expect(result?.content.at(-1)?.text).toContain("File edits are now unblocked");
+	});
+
+	it("enforces memory acknowledgement before xt work done executes", async () => {
+		(SubprocessRunner.run as any).mockImplementation(async (_cmd: string, args: string[]) => {
+			if (args[0] === "kv" && args[1] === "get" && `${args[2]}`.startsWith("claimed:")) return { code: 0, stdout: "xtrm-live\n", stderr: "" };
+			if (args[0] === "show") return { code: 0, stdout: JSON.stringify({ id: "xtrm-live", status: "in_progress" }), stderr: "" };
+			if (args[0] === "kv" && args[1] === "get" && args[2] === "memory-acked:xtrm-live") return { code: 1, stdout: "", stderr: "" };
+			return { code: 0, stdout: "", stderr: "" };
+		});
 		beadsExtension(harness.pi);
 
 		const result = await harness.emit("tool_call", {
 			toolName: "bash",
-			input: { command: "git commit -m 'test'" },
+			input: { command: 'xt work done --reason "validated"' },
 		});
-
 		expect(result?.block).toBe(true);
-		expect(result?.reason).toContain("Active claim [xtrm-live]");
+		expect(result?.reason).toContain("MEMORY_GATE_BLOCK issue=xtrm-live");
 	});
 
-	// --- xtrm-64pl0: run-scoped claim cache + bd-list removal -----------------------
+	it("records xt work done receipt and clears the session claim", async () => {
+		const calls: string[][] = [];
+		(SubprocessRunner.run as any).mockImplementation(async (_cmd: string, args: string[]) => {
+			calls.push(args);
+			return { code: 0, stdout: "", stderr: "" };
+		});
+		beadsExtension(harness.pi);
 
-	it("caches the active claim across edit checks within a run (no repeated bd subprocess)", async () => {
+		const result = await harness.emit("tool_result", {
+			toolName: "bash",
+			input: { command: 'xt work done xtrm-live --reason "validated"' },
+			content: [{ type: "text", text: 'XTRM_WORK_RECEIPT {"schema":"xt.work.receipt.v1","action":"done","bead":"xtrm-live"}' }],
+			isError: false,
+		});
+
+		expect(calls).toContainEqual(["kv", "set", expect.stringMatching(/^closed-this-session:/), "xtrm-live"]);
+		expect(calls).toContainEqual(["kv", "clear", expect.stringMatching(/^claimed:/)]);
+		expect(result?.content.at(-1)?.text).toContain("closed");
+	});
+
+	it("caches the active claim across edit checks within a run", async () => {
 		const calls: string[][] = [];
 		(SubprocessRunner.run as any).mockImplementation(async (_cmd: string, args: string[]) => {
 			calls.push(args);
@@ -101,18 +138,15 @@ describe("Pi beads claim lifecycle", () => {
 			if (args[0] === "show") return { code: 0, stdout: JSON.stringify({ id: "xtrm-live", status: "in_progress" }), stderr: "" };
 			return { code: 0, stdout: "", stderr: "" };
 		});
-
 		beadsExtension(harness.pi);
-
 		await harness.emit("tool_call", { toolName: "write", input: { path: "a.ts" } });
 		await harness.emit("tool_call", { toolName: "write", input: { path: "b.ts" } });
 		await harness.emit("tool_call", { toolName: "write", input: { path: "c.ts" } });
-
 		const claimGets = calls.filter((a) => a[0] === "kv" && a[1] === "get" && `${a[2]}`.startsWith("claimed:"));
-		expect(claimGets).toHaveLength(1); // resolved once, reused for the rest of the run
+		expect(claimGets).toHaveLength(1);
 	});
 
-	it("keeps the claim cached past the old 3s TTL (run-scoped, not time-based)", async () => {
+	it("keeps the claim cached past the old 3s TTL", async () => {
 		vi.useFakeTimers();
 		try {
 			const calls: string[][] = [];
@@ -122,15 +156,12 @@ describe("Pi beads claim lifecycle", () => {
 				if (args[0] === "show") return { code: 0, stdout: JSON.stringify({ id: "xtrm-live", status: "in_progress" }), stderr: "" };
 				return { code: 0, stdout: "", stderr: "" };
 			});
-
 			beadsExtension(harness.pi);
-
 			await harness.emit("tool_call", { toolName: "write", input: { path: "a.ts" } });
-			await vi.advanceTimersByTimeAsync(10_000); // well past the removed 3s TTL
+			await vi.advanceTimersByTimeAsync(10_000);
 			await harness.emit("tool_call", { toolName: "write", input: { path: "b.ts" } });
-
 			const claimGets = calls.filter((a) => a[0] === "kv" && a[1] === "get" && `${a[2]}`.startsWith("claimed:"));
-			expect(claimGets).toHaveLength(1); // no time-based re-fetch
+			expect(claimGets).toHaveLength(1);
 		} finally {
 			vi.useRealTimers();
 		}
@@ -144,20 +175,12 @@ describe("Pi beads claim lifecycle", () => {
 			if (args[0] === "show") return { code: 0, stdout: JSON.stringify({ id: "xtrm-live", status: "in_progress" }), stderr: "" };
 			return { code: 0, stdout: "", stderr: "" };
 		});
-
 		beadsExtension(harness.pi);
-
 		await harness.emit("tool_call", { toolName: "write", input: { path: "a.ts" } });
-		await harness.emit("tool_result", {
-			toolName: "bash",
-			input: { command: "bd close xtrm-live --reason done" },
-			content: [{ type: "text", text: "closed" }],
-			isError: false,
-		});
+		await harness.emit("tool_result", { toolName: "bash", input: { command: "bd close xtrm-live --reason done" }, content: [{ type: "text", text: "closed" }], isError: false });
 		await harness.emit("tool_call", { toolName: "write", input: { path: "b.ts" } });
-
 		const claimGets = calls.filter((a) => a[0] === "kv" && a[1] === "get" && `${a[2]}`.startsWith("claimed:"));
-		expect(claimGets).toHaveLength(2); // close invalidated the cache -> re-resolved
+		expect(claimGets).toHaveLength(2);
 	});
 
 	it("invalidates the claim cache when a claimed: KV mutation is observed", async () => {
@@ -168,37 +191,26 @@ describe("Pi beads claim lifecycle", () => {
 			if (args[0] === "show") return { code: 0, stdout: JSON.stringify({ id: "xtrm-live", status: "in_progress" }), stderr: "" };
 			return { code: 0, stdout: "", stderr: "" };
 		});
-
 		beadsExtension(harness.pi);
-
 		await harness.emit("tool_call", { toolName: "write", input: { path: "a.ts" } });
-		await harness.emit("tool_result", {
-			toolName: "bash",
-			input: { command: "bd kv clear claimed:mock-session-123" },
-			content: [{ type: "text", text: "cleared" }],
-			isError: false,
-		});
+		await harness.emit("tool_result", { toolName: "bash", input: { command: "bd kv clear claimed:mock-session-123" }, content: [{ type: "text", text: "cleared" }], isError: false });
 		await harness.emit("tool_call", { toolName: "write", input: { path: "b.ts" } });
-
 		const claimGets = calls.filter((a) => a[0] === "kv" && a[1] === "get" && `${a[2]}`.startsWith("claimed:"));
-		expect(claimGets).toHaveLength(2); // observed KV mutation invalidated the cache
+		expect(claimGets).toHaveLength(2);
 	});
 
-	it("blocks an unclaimed edit without calling bd list (hasTrackableWork removed)", async () => {
+	it("blocks an unclaimed edit without calling bd list", async () => {
 		const calls: string[][] = [];
 		(SubprocessRunner.run as any).mockImplementation(async (_cmd: string, args: string[]) => {
 			calls.push(args);
-			if (args[0] === "kv" && args[1] === "get") return { code: 1, stdout: "", stderr: "" }; // no claim
+			if (args[0] === "kv" && args[1] === "get") return { code: 1, stdout: "", stderr: "" };
 			if (args[0] === "list") return { code: 0, stdout: "Total: 2 issues (2 open, 0 in progress)", stderr: "" };
 			return { code: 0, stdout: "", stderr: "" };
 		});
-
 		beadsExtension(harness.pi);
-
 		const result = await harness.emit("tool_call", { toolName: "write", input: { path: "a.ts" } });
-
 		expect(result?.block).toBe(true);
-		expect(result?.reason).toContain("No active claim");
-		expect(calls.some((a) => a[0] === "list")).toBe(false); // no bd list fallback
+		expect(result?.reason).toContain("No active work identity");
+		expect(calls.some((a) => a[0] === "list")).toBe(false);
 	});
 });
