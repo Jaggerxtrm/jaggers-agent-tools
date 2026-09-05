@@ -126,7 +126,22 @@ See `packages/pi-extensions/extensions/python-kernel/README.md`.
 
 #### `beads` and `session-flow`
 
-Pi-side durable-work lifecycle enforcement and session continuity. These are runtime mechanics around claim/edit/commit/stop/continuation behavior; the higher-level work doctrine lives in XTRM skills and contracts.
+Pi-side durable-work lifecycle enforcement and session continuity. These are runtime mechanics around claim/edit/commit/stop/continuation behavior; the higher-level work doctrine lives in `/using-xtrm` and the packaged `xt work guide` contract.
+
+The edit gate remains strict: a mutating tool call without active work identity is blocked. The remediation now points the agent at the high-level lifecycle instead of encouraging it to improvise around the hook:
+
+```text
+existing tracked work
+  -> xt work start --bead <id>
+
+bounded local work
+  -> xt work start "<short title>" --validation "<proof>"
+
+substantial / ambiguous / multi-worker work
+  -> /planning first
+```
+
+`xt work` is intentionally the worker-facing abstraction. Today it delegates to Beads; this lets XTRM migrate the backing execution identity to substrate later without changing what Pi agents are taught to do.
 
 #### `sp-terminal-overlay`
 
@@ -183,15 +198,16 @@ The same rule applies to local Core development: a recognized local `packages/pi
 
 ## Release and validation
 
-The Pi extension package has its own publish/runtime verification contract. Core additionally tests the unified package registry and install/update/doctor behavior.
+The Pi extension package has its own publish/runtime verification contract. Core additionally tests the unified package registry, `xt work` lifecycle helpers, and install/update/doctor behavior.
 
-Useful repository checks include the package/runtime verification scripts defined by the current `package.json` files and the Pi runtime safeguard tests under `cli/src/tests/`.
+Useful repository checks include the package/runtime verification scripts defined by the current `package.json` files and the Pi/runtime safeguard tests under `cli/src/tests/`.
 
 Do not copy command names from old docs: use the repository scripts and `xt --help` from the version under test.
 
 ## Related
 
 - [../README.md](../README.md) — XTRM product/runtime overview
+- [../.xtrm/config/work-lifecycle.md](../.xtrm/config/work-lifecycle.md) — packaged execution identity/journal contract
 - [xtrm-ui.md](xtrm-ui.md) — Pi UI and tool presentation
 - [skills.md](skills.md) — XTRM skills-v4 architecture
 - [hooks.md](hooks.md) — deterministic hook/event layer
