@@ -104,7 +104,7 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const closeMemoryBlockReason = (issueId: string): string =>
-		`MEMORY_GATE_BLOCK issue=${issueId} run="bd remember '<insight>' && bd kv set 'memory-acked:${issueId}' 'saved:<key>'" or="bd kv set 'memory-acked:${issueId}' 'nothing novel:<reason>'" then="bd close ${issueId} --reason='<reason>'"`;
+		`MEMORY_GATE_BLOCK issue=${issueId} run="bd remember '<insight>' && bd kv set 'memory-acked:${issueId}' 'saved:<key>'" or="bd kv set 'memory-acked:${issueId}' 'nothing novel:<reason>'" then="xt work done ${issueId} --reason='<reason>'"`;
 
 	pi.on("session_start", async (_event, ctx) => {
 		cachedSessionId = ctx?.sessionManager?.getSessionId?.() ?? ctx?.sessionId ?? ctx?.session_id ?? cachedSessionId;
@@ -125,11 +125,16 @@ export default function (pi: ExtensionAPI) {
 			const claim = await getActiveClaimCached(sessionId, cwd);
 			if (!claim) {
 				if (ctx.hasUI) {
-					ctx.ui.notify("Beads: Edit blocked. Claim an issue first.", "warning");
+					ctx.ui.notify("XTRM: Edit blocked. Check in to tracked work first.", "warning");
 				}
 				return {
 					block: true,
-					reason: `No active claim for session ${sessionId}.\n  bd update <id> --claim\n`,
+					reason:
+						`No active work identity for session ${sessionId}.\n` +
+						`  existing tracked work: xt work start --bead <id>\n` +
+						`  bounded local work:   xt work start "<short title>" --validation "<proof>"\n` +
+						`  substantial work:     /planning first\n` +
+						`  lifecycle help:       xt work guide\n`,
 				};
 			}
 		}
@@ -156,7 +161,7 @@ export default function (pi: ExtensionAPI) {
 				if (claim) {
 					return {
 						block: true,
-						reason: `Active claim [${claim}] — close it first.\n  bd close ${claim}\n  (Pi workflow) publish/merge are external steps; do not rely on xtrm finish.\n`,
+						reason: `Active work [${claim}] — close it first.\n  xt work done ${claim} --reason="<validated result>"\n  (Pi workflow) publish/merge are external steps; do not rely on xtrm finish.\n`,
 					};
 				}
 			}
@@ -186,7 +191,7 @@ export default function (pi: ExtensionAPI) {
 				await SubprocessRunner.run("bd", ["kv", "set", `claimed:${sessionId}`, issueId], { cwd });
 				memoryGateFired = false;
 				invalidateClaimCache();
-				const claimNotice = `\n\n✅ **Beads**: Session \`${sessionId}\` claimed issue \`${issueId}\`. File edits are now unblocked.`;
+				const claimNotice = `\n\n✅ **XTRM work**: Session \`${sessionId}\` claimed \`${issueId}\`. File edits are now unblocked.`;
 				return { content: [...event.content, { type: "text", text: claimNotice }] };
 			}
 		}
@@ -203,7 +208,7 @@ export default function (pi: ExtensionAPI) {
 
 			const memoryGateText = closedIssueId
 				? `\n\n**Beads Memory Gate**: close-time memory ack verified for \`${closedIssueId}\` (\`memory-acked:${closedIssueId}\`).`
-				: `\n\n**Beads**: Work completed. Consider if this session produced insights worth persisting via \`bd remember\`.`;
+				: `\n\n**XTRM work**: Work completed. Consider if this session produced insights worth persisting via \`bd remember\`.`;
 			return { content: [...event.content, { type: "text", text: memoryGateText }] };
 		}
 
