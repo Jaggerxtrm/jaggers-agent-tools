@@ -2,13 +2,20 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType, isBashToolResult } from "@earendil-works/pi-coding-agent";
 import { SubprocessRunner, EventAdapter } from "../../src/core";
 
+const WORK_RECEIPT_PREFIX = "XTRM_WORK_RECEIPT ";
+
+type WorkReceipt = {
+	schema: "xt.work.receipt.v1";
+	action: "start" | "resume" | "note" | "done";
+	bead: string;
+};
+
 export default function (pi: ExtensionAPI) {
 	const getCwd = (ctx: any) => ctx.cwd || process.cwd();
 
 	let cachedSessionId: string | null = null;
 	let memoryGateFired = false;
 
-	// Resolve a stable session ID across event types.
 	const getSessionId = (ctx: any): string => {
 		const fromManager = ctx?.sessionManager?.getSessionId?.();
 		const fromContext = ctx?.sessionId ?? ctx?.session_id;
@@ -22,6 +29,10 @@ export default function (pi: ExtensionAPI) {
 		if (result.code !== 0) return null;
 		const claim = result.stdout.trim();
 		return claim.length > 0 ? claim : null;
+	};
+
+	const setSessionClaim = async (sessionId: string, issueId: string, cwd: string) => {
+		await SubprocessRunner.run("bd", ["kv", "set", `claimed:${sessionId}`, issueId], { cwd });
 	};
 
 	const clearClaimMarker = async (sessionId: string, cwd: string) => {
@@ -66,12 +77,6 @@ export default function (pi: ExtensionAPI) {
 		await SubprocessRunner.run("bd", ["kv", "clear", `closed-this-session:${sessionId}`], { cwd });
 	};
 
-	// --- Claim-lookup cache (run-scoped) -----------------------------------------
-	// getActiveClaim spawns bd kv get (~850ms) + bd show (~300ms). Running these on EVERY
-	// mutating tool call added ~1s to each edit. Cache the resolved claim for the lifetime
-	// of the run and invalidate only when we OBSERVE a claim/close/KV mutation in the
-	// tool_result hook below. xtrm-64pl0: replaces the old 3s time-based TTL, which re-spawned
-	// bd every 3s even when claim state had not changed.
 	let activeClaimCache: { sessionId: string; cwd: string; value: string | null } | null = null;
 
 	const invalidateClaimCache = (): void => {
@@ -98,6 +103,44 @@ export default function (pi: ExtensionAPI) {
 		return issueId;
 	};
 
+	const getWorkDoneExplicitId = (commandUnquoted: string): string | null => {
+		const match = commandUnquoted.match(/\b(?:xt|xtrm)\s+work\s+done(?:\s+(\S+))?/);
+		const issueId = match?.[1]?.trim();
+		if (!issueId || issueId.startsWith("-")) return null;
+		return issueId;
+	};
+
+	const extractEventText = (content: unknown): string => {
+		if (typeof content === "string") return content;
+		if (!Array.isArray(content)) return "";
+		return content
+			.map((entry) => {
+				if (typeof entry === "string") return entry;
+				if (entry && typeof entry === "object" && "text" in entry && typeof (entry as any).text === "string") {
+					return (entry as any).text;
+				}
+				return "";
+			})
+			.filter(Boolean)
+			.join("\n");
+	};
+
+	const parseWorkReceipt = (content: unknown): WorkReceipt | null => {
+		const text = extractEventText(content);
+		for (const line of text.split(/\r?\n/)) {
+			if (!line.startsWith(WORK_RECEIPT_PREFIX)) continue;
+			try {
+				const receipt = JSON.parse(line.slice(WORK_RECEIPT_PREFIX.length));
+				if (
+					receipt?.schema === "xt.work.receipt.v1" &&
+					["start", "resume", "note", "done"].includes(receipt.action) &&
+					typeof receipt.bead === "string" && receipt.bead.length > 0
+				) return receipt as WorkReceipt;
+			} catch { /* malformed receipt: ignore */ }
+		}
+		return null;
+	};
+
 	const hasIssueMemoryAck = async (issueId: string, cwd: string): Promise<boolean> => {
 		const result = await SubprocessRunner.run("bd", ["kv", "get", `memory-acked:${issueId}`], { cwd });
 		return result.code === 0 && result.stdout.trim().length > 0;
@@ -116,11 +159,6 @@ export default function (pi: ExtensionAPI) {
 		if (!EventAdapter.isBeadsProject(cwd)) return undefined;
 		const sessionId = getSessionId(ctx);
 
-		// xtrm-64pl0: the edit gate no longer falls back to `bd list` (hasTrackableWork) to
-		// decide whether the board has work. Within a beads project (isBeadsProject guard above)
-		// an edit without an active claim is blocked directly — no bd list subprocess. Behavior
-		// change: empty-board edits in a beads project now require a claim too (documented in
-		// CHANGELOG.md and docs/pi-extensions.md).
 		if (EventAdapter.isMutatingFileTool(event)) {
 			const claim = await getActiveClaimCached(sessionId, cwd);
 			if (!claim) {
@@ -145,13 +183,17 @@ export default function (pi: ExtensionAPI) {
 
 			if (isSpecialistsSubprocessCommand(commandUnquoted)) return undefined;
 
-			const closedIssueId = getClosedIssueIdFromCommand(commandUnquoted);
-			if (closedIssueId) {
-				const acked = await hasIssueMemoryAck(closedIssueId, cwd);
+			let closingIssueId = getClosedIssueIdFromCommand(commandUnquoted);
+			if (/\b(?:xt|xtrm)\s+work\s+done\b/.test(commandUnquoted)) {
+				closingIssueId = getWorkDoneExplicitId(commandUnquoted) ?? await getActiveClaimCached(sessionId, cwd);
+			}
+
+			if (closingIssueId) {
+				const acked = await hasIssueMemoryAck(closingIssueId, cwd);
 				if (!acked) {
 					return {
 						block: true,
-						reason: closeMemoryBlockReason(closedIssueId),
+						reason: closeMemoryBlockReason(closingIssueId),
 					};
 				}
 			}
@@ -164,7 +206,6 @@ export default function (pi: ExtensionAPI) {
 						reason: `Active work [${claim}] — close it first.\n  xt work done ${claim} --reason="<validated result>"\n  (Pi workflow) publish/merge are external steps; do not rely on xtrm finish.\n`,
 					};
 				}
-			}
 		}
 
 		return undefined;
@@ -176,19 +217,35 @@ export default function (pi: ExtensionAPI) {
 		const command = event.input.command || "";
 		const sessionId = getSessionId(ctx);
 		const cwd = getCwd(ctx);
+		const receipt = !event.isError ? parseWorkReceipt(event.content) : null;
 
-		// xtrm-64pl0: invalidate the run-scoped claim cache when we observe a KV mutation that
-		// could change claim state. claim/close mutations are also invalidated further below.
 		if (/\bbd\s+kv\s+(set|clear)\s+["']?(claimed:|closed-this-session:)/.test(command)) {
 			invalidateClaimCache();
 		}
 
-		// Auto-claim on bd update --claim regardless of exit code.
+		if (receipt?.action === "start" || receipt?.action === "resume") {
+			await setSessionClaim(sessionId, receipt.bead, cwd);
+			memoryGateFired = false;
+			invalidateClaimCache();
+			const claimNotice = `\n\n✅ **XTRM work**: Session \`${sessionId}\` claimed \`${receipt.bead}\`. File edits are now unblocked.`;
+			return { content: [...event.content, { type: "text", text: claimNotice }] };
+		}
+
+		if (receipt?.action === "done") {
+			await SubprocessRunner.run("bd", ["kv", "set", `closed-this-session:${sessionId}`, receipt.bead], { cwd });
+			await clearClaimMarker(sessionId, cwd);
+			memoryGateFired = false;
+			invalidateClaimCache();
+			const memoryGateText = `\n\n**XTRM work**: \`${receipt.bead}\` closed; close-time memory acknowledgement was verified before execution.`;
+			return { content: [...event.content, { type: "text", text: memoryGateText }] };
+		}
+
+		// Raw bd compatibility path.
 		if (/\bbd\s+update\b/.test(command) && /--claim\b/.test(command)) {
 			const issueMatch = command.match(/\bbd\s+update\s+(\S+)/);
 			if (issueMatch) {
 				const issueId = issueMatch[1];
-				await SubprocessRunner.run("bd", ["kv", "set", `claimed:${sessionId}`, issueId], { cwd });
+				await setSessionClaim(sessionId, issueId, cwd);
 				memoryGateFired = false;
 				invalidateClaimCache();
 				const claimNotice = `\n\n✅ **XTRM work**: Session \`${sessionId}\` claimed \`${issueId}\`. File edits are now unblocked.`;
@@ -202,6 +259,7 @@ export default function (pi: ExtensionAPI) {
 
 			if (closedIssueId) {
 				await SubprocessRunner.run("bd", ["kv", "set", `closed-this-session:${sessionId}`, closedIssueId], { cwd });
+				await clearClaimMarker(sessionId, cwd);
 				memoryGateFired = false;
 				invalidateClaimCache();
 			}
@@ -215,9 +273,6 @@ export default function (pi: ExtensionAPI) {
 		return undefined;
 	});
 
-	// Memory gate: clean up session markers and check ack at session_shutdown.
-	// Memory gate prompt was already injected into bd close tool_result context (silent, agent-visible only).
-	// No UI notification — parity with Claude Stop hook {additionalContext} pattern.
 	const triggerMemoryGateIfNeeded = async (ctx: any) => {
 		const cwd = getCwd(ctx);
 		if (!EventAdapter.isBeadsProject(cwd)) return;
@@ -244,13 +299,8 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		memoryGateFired = true;
-		// No notify — memory gate was injected into bd close tool_result content (silent, agent-visible only).
 	};
 
-	// xtrm-64pl0: single lifecycle memory-gate check. Previously BOTH agent_end (every turn)
-	// and session_shutdown ran this, each spawning ~4 bd kv subprocesses. The authoritative
-	// memory safety is the bd-close block in tool_call above; this is end-of-session marker
-	// hygiene only, so it now runs once at session_shutdown.
 	pi.on("session_shutdown", async (_event, ctx) => {
 		await triggerMemoryGateIfNeeded(ctx);
 		return undefined;
