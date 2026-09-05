@@ -20,6 +20,8 @@ export interface WorkCommandDeps {
     packageRoot?: () => string;
 }
 
+const RECEIPT_PREFIX = 'XTRM_WORK_RECEIPT ';
+
 function defaultBdRunner(args: string[], cwd: string): BdResult {
     const result = spawnSync('bd', args, { cwd, encoding: 'utf8', stdio: 'pipe' });
     return {
@@ -93,6 +95,12 @@ function emitJson(value: unknown): void {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function emitReceipt(action: 'start' | 'resume' | 'note' | 'done', bead: string): void {
+    // Runtime hooks intentionally parse this terse line. Keep the prefix/schema stable even
+    // if the human-facing text changes; it is the bridge until substrate owns execution identity.
+    process.stdout.write(`${RECEIPT_PREFIX}${JSON.stringify({ schema: 'xt.work.receipt.v1', action, bead })}\n`);
+}
+
 export function createWorkCommand(deps: WorkCommandDeps = {}): Command {
     const runBd = deps.runBd ?? defaultBdRunner;
     const cwdProvider = deps.cwd ?? (() => process.cwd());
@@ -154,14 +162,17 @@ export function createWorkCommand(deps: WorkCommandDeps = {}): Command {
                     throw new Error(`create work failed: unable to parse Bead id from: ${create.stdout}`);
                 }
                 created = true;
-
-                for (const related of opts.relates ?? []) {
-                    runOrThrow(runBd, ['dep', 'relate', beadId, related], cwd, `relate ${beadId} to ${related}`);
-                }
             }
 
+            // Claim immediately after create so a later relationship failure cannot leave a
+            // newly-created anonymous check-in behind. Relationship edges are secondary metadata.
             runOrThrow(runBd, ['update', beadId, '--claim', '--json'], cwd, `claim ${beadId}`);
 
+            for (const related of opts.relates ?? []) {
+                runOrThrow(runBd, ['dep', 'relate', beadId, related], cwd, `relate ${beadId} to ${related}`);
+            }
+
+            emitReceipt('start', beadId);
             if (opts.json) {
                 emitJson({ schema: 'xt.work.start.v1', ok: true, bead: beadId, created, relates: opts.relates ?? [] });
             } else {
@@ -179,6 +190,7 @@ export function createWorkCommand(deps: WorkCommandDeps = {}): Command {
         .action((id: string, opts: { json: boolean }) => {
             const cwd = cwdProvider();
             runOrThrow(runBd, ['update', id, '--claim', '--json'], cwd, `resume ${id}`);
+            emitReceipt('resume', id);
             if (opts.json) emitJson({ schema: 'xt.work.resume.v1', ok: true, bead: id });
             else console.log(kleur.green(`✓ work resumed: ${id}`));
         });
@@ -209,6 +221,7 @@ export function createWorkCommand(deps: WorkCommandDeps = {}): Command {
             const message = messageParts.join(' ').trim();
             if (!message) throw new Error('Progress note cannot be empty.');
             runOrThrow(runBd, ['update', beadId, '--append-notes', message, '--json'], cwd, `note ${beadId}`);
+            emitReceipt('note', beadId);
             if (opts.json) emitJson({ schema: 'xt.work.note.v1', ok: true, bead: beadId, note: message });
             else console.log(kleur.green(`✓ progress recorded: ${beadId}`));
         });
@@ -223,6 +236,7 @@ export function createWorkCommand(deps: WorkCommandDeps = {}): Command {
             const cwd = cwdProvider();
             const beadId = id ?? resolveActiveBead(runBd, cwd);
             const result = runOrThrow(runBd, ['close', beadId, `--reason=${opts.reason}`], cwd, `close ${beadId}`);
+            emitReceipt('done', beadId);
             if (opts.json) emitJson({ schema: 'xt.work.done.v1', ok: true, bead: beadId, reason: opts.reason, output: result.stdout });
             else {
                 console.log(kleur.green(`✓ work closed: ${beadId}`));
