@@ -37,14 +37,18 @@ describe('xt work helpers', () => {
 });
 
 describe('xt work start', () => {
-  it('creates, relates, and claims lightweight work through bd', async () => {
+  it('creates, claims, relates, and emits a stable runtime receipt', async () => {
     const calls: string[][] = [];
+    const writes: string[] = [];
     const runBd: BdRunner = (args) => {
       calls.push(args);
       if (args[0] === 'create') return { ok: true, stdout: '{"id":"xtrm-checkin"}', stderr: '', status: 0 };
       return { ok: true, stdout: '{}', stderr: '', status: 0 };
     };
-    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write);
 
     const command = createWorkCommand({ runBd, cwd: () => '/repo', packageRoot: () => '/pkg' });
     await command.parseAsync([
@@ -58,17 +62,22 @@ describe('xt work start', () => {
       'create', '--type', 'task', '--priority', '2', '--title', 'Fix README wording', '--json',
     ]));
     expect(calls[0].join(' ')).toContain('Lightweight XTRM execution check-in');
-    expect(calls[1]).toEqual(['dep', 'relate', 'xtrm-checkin', 'xtrm-parent']);
-    expect(calls[2]).toEqual(['update', 'xtrm-checkin', '--claim', '--json']);
+    expect(calls[1]).toEqual(['update', 'xtrm-checkin', '--claim', '--json']);
+    expect(calls[2]).toEqual(['dep', 'relate', 'xtrm-checkin', 'xtrm-parent']);
+    expect(writes.join('')).toContain('XTRM_WORK_RECEIPT {"schema":"xt.work.receipt.v1","action":"start","bead":"xtrm-checkin"}');
   });
 
   it('claims existing substantial work without creating a second bead', async () => {
     const calls: string[][] = [];
+    const writes: string[] = [];
     const runBd: BdRunner = (args) => {
       calls.push(args);
       return { ok: true, stdout: '{}', stderr: '', status: 0 };
     };
-    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write);
 
     const command = createWorkCommand({ runBd, cwd: () => '/repo', packageRoot: () => '/pkg' });
     await command.parseAsync(['node', 'work', 'start', '--bead', 'xtrm-planned', '--json']);
@@ -76,5 +85,6 @@ describe('xt work start', () => {
     expect(calls).toEqual([
       ['update', 'xtrm-planned', '--claim', '--json'],
     ]);
+    expect(writes.join('')).toContain('XTRM_WORK_RECEIPT {"schema":"xt.work.receipt.v1","action":"start","bead":"xtrm-planned"}');
   });
 });
