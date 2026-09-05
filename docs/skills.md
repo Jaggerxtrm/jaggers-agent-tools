@@ -3,14 +3,14 @@ title: Skills Catalog
 scope: skills
 category: overview
 version: 4.0.0
-updated: 2026-09-05
+updated: 2026-09-04
 description: "Current XTRM managed-skill tiers, universal defaults, optional packs, user packs, and runtime composition"
 source_of_truth_for:
   - ".xtrm/skills/default/**"
   - ".xtrm/skills/optional/**"
   - "~/.xtrm/skills/**"
 domain: [skills, claude, pi, codex]
-updated_at: 2026-09-05
+updated_at: 2026-09-04
 ---
 
 # Skills
@@ -48,26 +48,15 @@ The v4 default set is intentionally nine skills:
 
 | Skill | Purpose |
 |---|---|
-| `using-xtrm` | system doctrine, durable execution identity, contract quality, evidence and multi-agent behavior |
-| `starting-and-resuming-work` | re-entry, takeover, context-pressure continuation and stalled-lane recovery |
+| `using-xtrm` | system-level work, evidence and operating doctrine |
+| `starting-and-resuming-work` | cold start, continuation, handoff and context-pressure recovery |
 | `multiplexing` | peer/subagent messaging, coordination and reply/continuation obligations |
-| `planning` | substantial durable work contracts, board decomposition, premortem and test strategy |
+| `planning` | durable work contracts, board decomposition, premortem and test strategy |
 | `engineering-quality` | causal debugging, review, testing, verification and reduction discipline |
 | `using-specialists` | Specialists execution backend and advanced Specialists references/assets |
 | `gitnexus` | code graph exploration, impact, debugging and review support |
 | `skill-creator` | skill authoring/evaluation discipline |
 | `find-skills` | discover/select additional skill capabilities when needed |
-
-`using-xtrm` owns the invariant that every mutating worker has a claimed durable work
-identity. The worker-facing lifecycle is the `xt work` CLI (`xt work guide` prints the
-packaged contract). `starting-and-resuming-work` is deliberately narrower: it explains
-how a later session/worker safely re-enters existing work rather than duplicating generic
-tracking/handoff doctrine.
-
-Planning is also narrower than "every edit needs seven sections": bounded local work may
-use a lightweight execution/check-in identity; anything another worker may consume, or
-work that becomes substantial/ambiguous/high-risk, must become contract-quality planned
-work.
 
 A specialized capability should not move into default merely because it is valuable. It
 belongs there only when ordinary XTRM work should pay its trigger/context cost by default.
@@ -173,7 +162,6 @@ Examples include:
 
 ## Related
 
-- `.xtrm/config/work-lifecycle.md` — packaged durable work identity/journal contract (`xt work guide`)
 - `docs/skills-ownership.md` — authoring/vendor ownership and placement
 - `docs/skills-v4-preservation-matrix.md` — migration preservation evidence
 - `docs/skills-tier-architecture.md` — deeper runtime/tier implementation detail

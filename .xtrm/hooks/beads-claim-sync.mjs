@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 // beads-claim-sync — PostToolUse hook
-// Synchronizes durable Beads lifecycle into the current Claude runtime session.
-// Supports both raw bd commands and the stable xt work facade.
+// bd update --claim → set kv claim
+// bd close         → set closed-this-session kv for memory gate
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { join, dirname, isAbsolute } from 'node:path';
 import { resolveSessionId } from './beads-gate-utils.mjs';
-
-const WORK_RECEIPT_PREFIX = 'XTRM_WORK_RECEIPT ';
 
 function readInput() {
   try {
@@ -22,6 +20,9 @@ function isBeadsProject(cwd) {
   return existsSync(join(cwd, '.beads'));
 }
 
+// In a git worktree, --git-common-dir returns an absolute path to the main .git dir.
+// In a regular repo it returns '.git' (relative). Use this to find the canonical main root
+// so claim files are always written/deleted from the same location across sessions.
 function resolveMainRoot(cwd) {
   const r = spawnSync('git', ['rev-parse', '--git-common-dir'], {
     cwd, encoding: 'utf8', stdio: 'pipe',
@@ -31,6 +32,9 @@ function resolveMainRoot(cwd) {
   return cwd;
 }
 
+// Returns a per-session claim filename: 'statusline-claim' for the main session,
+// 'statusline-claim-<worktreeName>' for worktree sessions.
+// Prevents cross-session contamination when multiple worktrees run simultaneously.
 function resolveClaimFileName(cwd) {
   const m = cwd.match(/\/\.xtrm\/worktrees\/([^/]+)/);
   return m ? `statusline-claim-${m[1]}` : 'statusline-claim';
@@ -43,92 +47,18 @@ function isShellTool(toolName) {
 function commandSucceeded(payload) {
   const tr = payload?.tool_response ?? payload?.tool_result ?? payload?.result;
   if (!tr || typeof tr !== 'object') return true;
+
   if (tr.success === false) return false;
   if (tr.error) return false;
+
   const numeric = [tr.exit_code, tr.exitCode, tr.status, tr.returncode].find((v) => Number.isInteger(v));
-  return !(typeof numeric === 'number' && numeric !== 0);
-}
+  if (typeof numeric === 'number' && numeric !== 0) return false;
 
-function toolResponseText(payload) {
-  const tr = payload?.tool_response ?? payload?.tool_result ?? payload?.result ?? '';
-  if (typeof tr === 'string') return tr;
-  if (!tr || typeof tr !== 'object') return String(tr ?? '');
-
-  const parts = [];
-  for (const key of ['stdout', 'output', 'content', 'text']) {
-    const value = tr[key];
-    if (typeof value === 'string') parts.push(value);
-    else if (Array.isArray(value)) {
-      for (const entry of value) {
-        if (typeof entry === 'string') parts.push(entry);
-        else if (entry && typeof entry === 'object' && typeof entry.text === 'string') parts.push(entry.text);
-      }
-    }
-  }
-  if (parts.length > 0) return parts.join('\n');
-  try { return JSON.stringify(tr); } catch { return ''; }
-}
-
-function parseWorkReceipt(payload) {
-  const text = toolResponseText(payload);
-  for (const line of text.split(/\r?\n/)) {
-    if (!line.startsWith(WORK_RECEIPT_PREFIX)) continue;
-    try {
-      const receipt = JSON.parse(line.slice(WORK_RECEIPT_PREFIX.length));
-      if (
-        receipt?.schema === 'xt.work.receipt.v1' &&
-        ['start', 'resume', 'note', 'done'].includes(receipt.action) &&
-        typeof receipt.bead === 'string' &&
-        receipt.bead.length > 0
-      ) return receipt;
-    } catch { /* malformed receipt: ignore */ }
-  }
-  return null;
-}
-
-function syncClaim(sessionId, cwd, issueId) {
-  const result = spawnSync('bd', ['kv', 'set', `claimed:${sessionId}`, issueId], {
-    cwd,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    timeout: 5000,
-  });
-  if (result.status !== 0) {
-    const err = (result.stderr || result.stdout || '').toString().trim();
-    if (err) process.stderr.write(`Beads claim sync warning: ${err}\n`);
-    return false;
-  }
-
-  try {
-    const xtrmDir = join(resolveMainRoot(cwd), '.xtrm');
-    mkdirSync(xtrmDir, { recursive: true });
-    writeFileSync(join(xtrmDir, resolveClaimFileName(cwd)), issueId);
-  } catch { /* non-fatal */ }
   return true;
 }
 
-function syncClose(sessionId, cwd, issueId) {
-  try { unlinkSync(join(resolveMainRoot(cwd), '.xtrm', resolveClaimFileName(cwd))); } catch { /* ok if missing */ }
-  if (!issueId) return;
-  spawnSync('bd', ['kv', 'set', `closed-this-session:${sessionId}`, issueId], {
-    cwd,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    timeout: 5000,
-  });
-}
 
-function emitClaimContext(sessionId, issueId) {
-  process.stdout.write(JSON.stringify({
-    additionalContext: `\n✅ **XTRM work**: Session \`${sessionId}\` claimed \`${issueId}\`.`,
-  }));
-  process.stdout.write('\n');
-}
 
-function emitCloseContext(issueId) {
-  process.stdout.write(JSON.stringify({
-    additionalContext: `\n🔓 **XTRM work**: \`${issueId}\` closed. Evaluate durable memory/evidence before commit.`,
-  }));
-  process.stdout.write('\n');
-}
 
 function main() {
   const input = readInput();
@@ -140,39 +70,60 @@ function main() {
 
   const command = input.tool_input?.command || '';
   const sessionId = resolveSessionId(input);
-  const succeeded = commandSucceeded(input);
-  const receipt = succeeded ? parseWorkReceipt(input) : null;
 
-  // Stable xt work bridge. The CLI shells to bd internally, so raw bd command detection cannot
-  // see those mutations; the receipt is the explicit runtime integration seam.
-  if (receipt?.action === 'start' || receipt?.action === 'resume') {
-    if (syncClaim(sessionId, cwd, receipt.bead)) emitClaimContext(sessionId, receipt.bead);
-    process.exit(0);
-  }
-  if (receipt?.action === 'done') {
-    syncClose(sessionId, cwd, receipt.bead);
-    emitCloseContext(receipt.bead);
-    process.exit(0);
-  }
-
-  // Raw bd compatibility path.
-  // Auto-claim fires regardless of exit code because bd can return 1 for "already in_progress".
+  // Auto-claim: bd update <id> --claim (fire regardless of exit code — bd returns 1 for "already in_progress")
   if (/\bbd\s+update\b/.test(command) && /--claim\b/.test(command)) {
     const match = command.match(/\bbd\s+update\s+(\S+)/);
     if (match) {
       const issueId = match[1];
-      if (syncClaim(sessionId, cwd, issueId)) emitClaimContext(sessionId, issueId);
+      const result = spawnSync('bd', ['kv', 'set', `claimed:${sessionId}`, issueId], {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 5000,
+      });
+
+      if (result.status !== 0) {
+        const err = (result.stderr || result.stdout || '').toString().trim();
+        if (err) process.stderr.write(`Beads claim sync warning: ${err}\n`);
+        process.exit(0);
+      }
+
+      // Write claim state for statusline — per-worktree file under main root.
+      try {
+        const xtrmDir = join(resolveMainRoot(cwd), '.xtrm');
+        mkdirSync(xtrmDir, { recursive: true });
+        writeFileSync(join(xtrmDir, resolveClaimFileName(cwd)), issueId);
+      } catch { /* non-fatal */ }
+
+      process.stdout.write(JSON.stringify({
+        additionalContext: `\n✅ **Beads**: Session \`${sessionId}\` claimed issue \`${issueId}\`.`,
+      }));
+      process.stdout.write('\n');
       process.exit(0);
     }
   }
 
-  if (/\bbd\s+close\b/.test(command) && succeeded) {
+  // On bd close: mark closed-this-session for memory gate
+  if (/\bbd\s+close\b/.test(command) && commandSucceeded(input)) {
     const match = command.match(/\bbd\s+close\s+(\S+)/);
     const closedIssueId = match?.[1];
+
+    // Clear claim state for statusline — per-worktree file under main root.
+    try { unlinkSync(join(resolveMainRoot(cwd), '.xtrm', resolveClaimFileName(cwd))); } catch { /* ok if missing */ }
+
+    // Mark this issue as closed this session (memory gate reads this)
     if (closedIssueId) {
-      syncClose(sessionId, cwd, closedIssueId);
-      emitCloseContext(closedIssueId);
+      spawnSync('bd', ['kv', 'set', `closed-this-session:${sessionId}`, closedIssueId], {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 5000,
+      });
     }
+
+    process.stdout.write(JSON.stringify({
+      additionalContext: `\n🔓 **Beads**: Issue closed. Evaluate insights, then acknowledge:\n  \`bd remember "<insight>"\` (or note "nothing to persist")`,
+    }));
+    process.stdout.write('\n');
     process.exit(0);
   }
 
