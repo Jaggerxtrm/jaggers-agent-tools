@@ -2,12 +2,12 @@
 name: using-xtrm
 description: >
   Core operating doctrine for an XTRM-equipped agent. Use at the start of substantial
-  work and whenever deciding how to work, create or hand off durable work, delegate to
-  another agent, recover current state, or choose between direct work, native subagents,
-  xt peers, Specialists, and deterministic workflows. XTRM agents work as participants
-  in a durable multi-agent system, not as isolated chat sessions. This skill defines the
-  shared contract, evidence, minimal-engineering, and routing rules; runtime hooks own
-  deterministic enforcement.
+  work and whenever deciding how to work, establish durable execution identity, create
+  or hand off tracked work, delegate to another agent, or choose between direct work,
+  native subagents, xt peers, Specialists, and deterministic workflows. XTRM agents are
+  participants in a durable multi-agent system, not isolated chats. This skill defines
+  work identity, contract quality, evidence, minimal-engineering, and routing rules;
+  runtime hooks own deterministic enforcement.
 priority: high
 ---
 
@@ -17,30 +17,83 @@ You are working inside XTRM, not alone.
 
 Your current model/session is one participant in a durable work system. Work may move
 between this session, native subagents, `xt pi` / `xt claude` / `xt codex` peers,
-Specialists, and later runtime stages. Design your work so another participant can pick
-it up without reconstructing your private context.
+Specialists, and later substrate/ChainRun stages. Design work so another participant can
+recover reality without reconstructing private chat context.
 
 ## The system contract
 
-1. **Live state wins.** Current code, CLI help, Beads state, runtime state, tests, and
-   external systems beat remembered commands, old reports, and model memory.
-2. **Beads owns durable work.** Use the board for work identity, contracts, dependencies,
-   progress, evidence, and handoff. Messages are coordination, not the source of truth.
-3. **A dispatchable work item is a contract.** Do not hand another agent a title and
+1. **Live state wins.** Current code, CLI help, Beads/work state, runtime state, tests,
+   and external systems beat remembered commands, old reports, and model memory.
+2. **No anonymous mutation.** Every repository mutation belongs to a claimed durable
+   work identity. Today that identity is Beads-backed; use `xt work` rather than teaching
+   every worker raw implementation mechanics.
+3. **Beads owns current durable work state.** Contracts, dependencies, claims, progress,
+   evidence, and execution journals live there today. Messages coordinate; they are not
+   durable authority.
+4. **A dispatchable work item is a contract.** Do not hand another worker a title and
    expect it to infer the job.
-4. **XTRM is multi-agent by default, not delegation-by-default.** Use another worker when
-   separation, parallelism, role independence, fresh context, or long-running ownership
-   adds value. Do obvious local work locally.
-5. **Evidence before completion.** A worker summary is a claim. Verify important claims
+5. **XTRM is multi-agent by default, not delegation-by-default.** Use another worker when
+   isolation, parallelism, role independence, fresh context, or long-running ownership
+   adds value. Do obvious coherent work locally.
+6. **Evidence before completion.** A worker summary is a claim. Verify important claims
    against the current tree, tests, runtime state, or external system.
-6. **Continuity is part of execution.** If the work can outlive this context, arm or
-   prepare continuation before the context becomes unreliable.
-7. **Debug causally.** For regressions, reconstruct symptom -> runtime/code path -> recent
+7. **Continuity is execution state, not ceremony.** Keep durable state current at
+   meaningful transitions; do not manufacture a second handoff artifact when the work
+   record + repository evidence already say what the next worker needs.
+8. **Debug causally.** For regressions, reconstruct symptom -> runtime/code path -> recent
    change -> commit/PR/Bead/worker intent -> causal mechanism before proposing a fix.
 
-## Contract quality applies to every worker
+## Establish work identity before editing
 
-The same quality floor applies whether a bead goes to a Specialist, an `xt` peer, a
+The edit gate is intentionally strict. The cheap path is creating legitimate tracked
+work, not bypassing the gate.
+
+```text
+existing Bead accurately represents this work?
+  -> xt work start --bead <id>
+
+no Bead + substantial / ambiguous / multi-worker work?
+  -> /planning
+  -> create or promote contract-quality work
+  -> xt work start --bead <id>
+
+no Bead + bounded / local work?
+  -> xt work start "<short title>" [--validation "<proof>"]
+```
+
+`xt work start "..."` creates a lightweight execution/check-in Bead and claims it. This
+is not an excuse to avoid planning: if scope grows, becomes ambiguous/high-risk, or will
+be consumed by another worker, stop and use `/planning`.
+
+Use `xt work guide` for the packaged lifecycle contract and current command semantics.
+The CLI is the worker-facing abstraction so the underlying execution entity can later
+move from Beads to substrate without reteaching every agent.
+
+## Progress is a journal, not a transcript
+
+Record meaningful state transitions, not every tool call:
+
+```bash
+xt work note "identified first bad boundary; implementation next"
+xt work note "validation passed: <command/evidence>" --bead <id>
+xt work status [id]
+```
+
+Useful updates include a completed coherent phase, changed scope, discovered blocker or
+dependency, consumed review/worker result, validation outcome, and final evidence.
+
+When a lightweight check-in serves existing planned work, link it non-blockingly:
+
+```bash
+xt work start "<bounded session work>" --relates <issue-id>
+```
+
+Do not use blocking dependency edges merely to mean “this worker is working on that.”
+Dependencies must retain scheduling semantics.
+
+## Contract quality applies to every consumed work item
+
+The same quality floor applies whether a Bead goes to a Specialist, an `xt` peer, a
 native subagent, a human, or a future ChainRun participant.
 
 A ready contract answers:
@@ -55,13 +108,14 @@ VALIDATION   commands/checks/evidence that prove success
 OUTPUT       durable result expected from the worker
 ```
 
-Add `REFERENCES`, `LIBRARIES`, `SCRUTINY`, rollout/rollback, or telemetry requirements
-when they matter.
+Add `SCRUTINY` for substantial, ambiguous, high-risk, or review-sensitive work. Add
+`REFERENCES`, `LIBRARIES`, rollout/rollback, or telemetry requirements when they matter.
 
-A backlog idea may be explicitly `contract:draft`, but a draft is not dispatchable. It
-must still state a real problem and rough scope instead of pretending unknown details are
-known. Before another worker consumes it, ground current state and promote it to a real
-contract. `/planning` owns the detailed authoring procedure.
+A backlog idea may be explicitly draft, but draft work is not dispatchable. `/planning`
+owns the detailed authoring, decomposition, and promotion procedure.
+
+**For substantial tracked work, the Bead is the prompt. For every mutating worker, the
+claimed work identity is its durable execution journal.**
 
 ## How to engineer: smallest correct system change
 
@@ -78,19 +132,14 @@ Before adding code or infrastructure:
 6. Prefer an already-installed dependency with the right semantics.
 7. Add the smallest custom implementation that remains clear and testable.
 
-Avoid abstractions with one speculative consumer, wrappers that only rename an API,
-parallel systems that duplicate an existing authority, and configuration for hypothetical
-future flexibility.
-
-**Do not optimize away load-bearing requirements.** Minimalism never justifies removing
-validation, safety checks, security boundaries, accessibility, observability, rollback,
-evidence, tests, durable state, or required failure handling.
+Do not optimize away validation, safety checks, security boundaries, accessibility,
+observability, rollback, evidence, tests, durable state, or required failure handling.
 
 ## Choose the work shape deliberately
 
 ```text
 one coherent task, current context is sufficient
-  -> work here
+  -> work here under a claimed work identity
 
 bounded independent question / fresh context helps
   -> native subagent when the harness provides it
@@ -108,10 +157,10 @@ deterministic mechanical transform or validation
 Do not choose a bigger topology before you understand the work-list and overlap surface.
 Parallelism is useful only when ownership boundaries are real.
 
-## Before handing work to another agent
+## Before handing work to another worker
 
-- Re-read the bead and current state.
-- Make the contract complete enough that the recipient does not need your hidden context.
+- Re-read current work state and repository evidence.
+- Make the contract complete enough that the recipient does not need hidden context.
 - State ownership and non-goals, especially for shared files/services.
 - Give exact validation/evidence expectations.
 - Choose a durable result location.
@@ -124,10 +173,9 @@ parallelize them.
 ## Memory and inherited context
 
 Use `bd memories <topic>` when prior project history is relevant. Memories are dated
-leads, never authority. Confirm anything actionable against live state. Do not search
-memory merely because a prompt contains a question mark.
+leads, never authority. Confirm anything actionable against live state.
 
-A handoff report, old bead note, worker result, or prior assistant summary is also a lead.
+A worker result, old Bead note, handoff, or prior assistant summary is also a lead.
 Re-derive expensive or irreversible facts before acting.
 
 ## Runtime enforcement
@@ -137,14 +185,17 @@ Depending on the installed runtime, XTRM may enforce or inject claim/edit/commit
 worktree boundaries, memory doctrine, compact restore, quality checks, GitNexus context,
 inbox reminders, logging, and other lifecycle behavior.
 
-Inspect the current runtime when exact behavior matters. Hooks/extensions are the
-enforcement plane; skills are the judgment/procedure plane.
+The claim gate means **establish work identity**, not “find a way around the hook.” When
+exact mechanics matter, use `xt work guide` and current CLI help.
+
+Hooks/extensions are the enforcement plane; skills are the judgment/procedure plane.
 
 ## Route to the focused skill
 
-| Need | Skill |
+| Need | Skill / surface |
 |---|---|
-| Cold start, takeover, context pressure, handoff, resume | `/starting-and-resuming-work` |
+| Establish/inspect/update execution identity | `xt work` / `xt work guide` |
+| Fresh-session re-entry, takeover, context pressure, stalled continuation | `/starting-and-resuming-work` |
 | Coordinate peers/subagents and replies/wakeups | `/multiplexing` |
 | Build/promote contracts, decompose work, triage/test-plan | `/planning` |
 | Debug regressions, review, test, verify, reduce complexity | `/engineering-quality` |
@@ -165,4 +216,6 @@ Before declaring work done, answer four questions with evidence:
 3. Is durable work state updated so the next participant sees reality?
 4. Are there unresolved workers, replies, risks, or follow-ups that change the claim?
 
-If any answer is unknown, report the unknown instead of converting it into success.
+Then close through the lifecycle (`xt work done ...`) rather than bypassing current Beads
+memory/commit/stop gates. If any answer is unknown, report the unknown instead of
+converting it into success.
