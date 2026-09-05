@@ -2,7 +2,7 @@
 // Keeps the universal XTRM skill roots small enough to remain routers/procedures.
 // The hard 500-line Agent Skills ceiling is enforced by check-managed-skills;
 // these tighter budgets protect the default cognition surface specifically.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -35,10 +35,27 @@ for (const [name, max] of Object.entries(BUDGETS)) {
   console.log(`${status}  ${name.padEnd(28)} ${String(lines).padStart(4)} / ${max}`);
 }
 
+// The budget table is also the exact universal-root allowlist. This prevents a new
+// default skill from silently bypassing the cognition-surface budget by simply not
+// being listed above.
+const expected = new Set(Object.keys(BUDGETS));
 const actual = new Set(
-  Object.keys(BUDGETS),
+  readdirSync(skillsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name),
 );
-for (const name of Object.keys(BUDGETS)) actual.delete(name);
+
+for (const name of [...actual].sort()) {
+  if (expected.has(name)) continue;
+  failed = true;
+  console.error(`FAIL  ${name.padEnd(28)} unbudgeted default skill root`);
+}
+
+for (const name of [...expected].sort()) {
+  if (actual.has(name)) continue;
+  failed = true;
+  console.error(`FAIL  ${name.padEnd(28)} budget entry has no default skill root`);
+}
 
 if (failed) {
   console.error('\nskill-root-budget: universal skill root budget failed. Move detail to one-level references/scripts rather than raising budgets casually.');
