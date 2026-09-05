@@ -59,6 +59,29 @@ describe('agent-contract parity (ISSUE-136)', () => {
     expect(body).not.toMatch(/1\. `bd prime` — load workflow context/);
   });
 
+  it('bd prime appears only as opt-in diagnostic — no auto-injected/SessionStart mandate (ISSUE-136 c.12937)', () => {
+    for (const file of [CONTRACT, AGENTS_TOP, CLAUDE_TOP]) {
+      const text = fs.readFileSync(file, 'utf8');
+      expect(text).not.toMatch(/bd ?prime.{0,60}auto-injected/i);
+      expect(text).not.toMatch(/auto-injected at session ?start/i);
+      expect(text).not.toMatch(/session ?start[^\n]{0,80}bd ?prime/i);
+      expect(text).not.toMatch(/^1\.\s*`bd prime`/m);
+      expect(text).not.toMatch(/run `bd ?prime` (at|before|during) session start/i);
+      expect(text).toMatch(/opt-in/i);
+    }
+  });
+
+  it('managed tops never point the whole fleet at a core-only file (ISSUE-136 c.12937)', () => {
+    for (const file of [AGENTS_TOP, CLAUDE_TOP]) {
+      const text = fs.readFileSync(file, 'utf8');
+      if (text.includes('XTRM-GUIDE.md')) {
+        // allowed only behind an explicit where-present conditional, never as the primary reference
+        expect(text).toMatch(/XTRM-GUIDE\.md` where present/);
+        expect(text).toMatch(/Full reference: `\/using-xtrm` skill/);
+      }
+    }
+  });
+
   it('contract body never defers to the other file', () => {
     const body = section(AGENTS_TOP);
     expect(body).not.toMatch(/see AGENTS\.md/i);
