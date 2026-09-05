@@ -1,157 +1,91 @@
 ---
 name: using-xtrm
 description: >
-  Behavioral operating manual for an xtrm-equipped Claude Code session.
-  Covers when to use which tool, how to handle questions and triggers,
-  workflow examples, and skill routing. Reference material (hook list,
-  gate rules, full bd commands, git workflow) lives in CLAUDE.md.
-  Injected automatically at session start via additionalSystemPrompt.
+  Compatibility/source-tree copy of XTRM's core operating doctrine. The managed runtime
+  skill is `.xtrm/skills/default/using-xtrm/SKILL.md`; exact work-lifecycle mechanics are
+  exposed by `xt work` and `xt work guide`.
 priority: high
 ---
 
-# XTRM — When to Use What
+# Using XTRM
 
-> Gates, commands, and git workflow are in CLAUDE.md.
-> This is the behavioral layer: triggers, patterns, examples.
+The managed v4 doctrine lives in `.xtrm/skills/default/using-xtrm/SKILL.md`.
 
-## Session Start
+This source-tree surface intentionally keeps only the invariants that must not drift into
+legacy behavior.
 
-```bash
-bd prime                          # load workflow context + active claims
-bd memories <today's topic>       # retrieve relevant past context
-bv --robot-triage                 # graph-ranked picks, quick wins, unblock targets
-bd update <id> --claim            # claim before any edit
+## Durable execution identity
+
+XTRM does not allow anonymous repository mutation.
+
+```text
+existing tracked work
+  -> xt work start --bead <id>
+
+substantial / ambiguous / multi-worker work
+  -> /planning
+  -> contract-quality Bead
+  -> xt work start --bead <id>
+
+bounded local edit
+  -> xt work start "<short title>" [--validation "<proof>"]
 ```
 
-> Use `bv --robot-next` for the single top pick. Use `bv --robot-triage --format toon` to save context tokens. **Never run bare `bv` — it launches an interactive TUI.**
+The lightweight path is an execution/check-in identity, not a fake planning exercise. If
+scope grows or another worker will consume the work, route to `/planning`.
 
-### Worktree dependency setup
+Use `xt work note` for meaningful progress transitions and `xt work status` to recover
+current work. `xt work guide` prints the packaged lifecycle contract.
 
-`xt claude` / `xt pi` sessions use clean git worktrees. Git does not copy ignored dependency artifacts such as `node_modules/`, `.venv/`, build caches, or generated outputs. If a repo's lint/tests need those files, run the repo's normal bootstrap inside the worktree (`make bootstrap`, `just setup`, `npm ci`, `uv sync`, etc.). Do not track dependency directories to make worktrees pass.
+`bd prime` is an opt-in diagnostic, not a mandatory session-start ritual.
 
-## Multi-pane coordination
+## Contract rule
 
-Route orchestrators to `/multiplexing` and delegated panes to `/multiplexing-team`. A beaded `xtmux message-send` requires a reply unless it explicitly says `--expects-reply=false`.
+Anything another worker may consume needs a real contract:
 
-For reply-required inbound work, preserve the SQLite `messageKey`, acknowledge receipt, then use `message-reply --in-reply-to <messageKey>`; ack or a target/bead-matched send does not fulfil it. If the reply must also wake a pane, use confirmed `safe-send-pointer --reply-to <messageKey>` so fulfilment happens only after injection succeeds.
-
-SQLite owns obligations and waits across restarts. Recover with `obligations list`, `monitor-list`, and `message-status`; never create or delete runtime marker files. Runtime identities and ownership come from the invoking live tmux session/pane, not message text or caller-supplied metadata.
-
----
-
-## Trigger Patterns
-
-| Situation | Action |
-|-----------|--------|
-| User prompt contains `?` | `bd memories <keywords>` before answering — check stored context first |
-| "What should I work on?" | `bv --robot-triage` — ranked picks with dependency context |
-| "What was I working on?" | `bd list --status=in_progress` |
-| Unfamiliar area of code | `gitnexus_query({query: "concept"})` before opening any file |
-| About to edit a symbol | `gitnexus_impact({target: "name", direction: "upstream"})` |
-| Before `git commit` | `gitnexus_detect_changes({scope: "staged"})` to verify scope |
-| Coordinating tmux panes or handling a reply-required xtmux message | `/multiplexing` (or `/multiplexing-team` when delegated); preserve and correlate the returned `messageKey` |
-| Reading code | `get_symbols_overview` → `find_symbol` — never read whole files |
-| Task is tests | use /test-planning
-| Task is docs updates | use /sync-docs
-| Session end (issue closed) | Memory gate fires — evaluate `bd remember` for each closed issue |
-
----
-
-## Handling `?` Prompts
-
-When the user's message contains a question, check stored context before answering:
-
-```bash
-bd memories <keywords from question>   # search project memory
-bd recall <key>                        # retrieve specific memory if key is known
+```text
+PROBLEM
+SUCCESS
+SCOPE
+NON_GOALS
+CONSTRAINTS
+VALIDATION
+OUTPUT
 ```
 
-Example — user asks *"why does the quality gate run twice?"*:
-```bash
-bd memories "quality gate"
-# → "quality-check.cjs and quality-check.py are separate hooks —
-#    JS/TS and Python each get their own PostToolUse pass"
-```
+Add `SCRUTINY` when risk, ambiguity, or review sensitivity warrants it.
 
-If it's a code question, also run:
-```bash
-gitnexus_query({query: "<topic>"})     # find relevant execution flows
-```
+> For substantial tracked work, the Bead is the prompt. For every mutating worker, the
+> claimed work identity is its durable execution journal.
 
----
+## Multi-agent rule
 
-## Workflow Examples
+Workers are participants in one durable system. Prefer the smallest execution shape that
+fits the job:
 
-**Fixing a bug:**
-```bash
-bd ready                                                        # find the issue
-bd update bd-xyz --claim                                        # claim it
-gitnexus_impact({target: "parseComposeServices", direction: "upstream"})
-# → 2 callers, LOW risk — safe to edit
-get_symbols_overview("hooks/init.ts")                           # map file
-find_symbol("parseComposeServices", include_body=True)          # read just this
-replace_symbol_body("parseComposeServices", newBody)            # Serena edit
-bd close bd-xyz --reason="Fix YAML parse edge case"            # close issue
-xt end                                                         # push, PR, merge, cleanup
-```
+- current session for coherent local work;
+- native subagent for bounded independent questions;
+- `xt pi|claude|codex` for isolated/long-lived peers;
+- `/using-specialists` for role-shaped governed work;
+- deterministic scripts/tools for mechanical transforms.
 
-**Exploring unfamiliar code:**
-```bash
-gitnexus_query({query: "session claim enforcement"})
-# → beads-gate-core.mjs, resolveClaimAndWorkState, decideCommitGate
-gitnexus_context({name: "resolveClaimAndWorkState"})            # callers + callees
-get_symbols_overview("hooks/beads-gate-core.mjs")               # map the file
-find_symbol("resolveClaimAndWorkState", include_body=True)      # read only this
-```
+Use `/multiplexing` for peer communication semantics. Native/extension transports are
+preferred; tmux messaging is compatibility/observability, not the primary coordination
+model.
 
-**Persisting an insight:**
-```bash
-bd remember "quality-check runs twice: separate .cjs (JS) and .py (Python) hooks"
-# retrievable next session:
-bd memories "quality check"
-bd recall "quality-check-runs-twice-..."
-```
+## Continuity
 
----
+`/starting-and-resuming-work` is for re-entry, takeover, context-pressure continuation,
+and stalled-lane recovery. It no longer owns the generic requirement to create tracked
+work or a ceremonial handoff artifact.
 
-## PR / branch / restart audit primitives
+The next worker should recover from durable work state + repository/runtime evidence, not
+from private transcript reconstruction.
 
-`xt worktree` exposes durable PR drift, branch GC, and restart audit primitives that downstream agents (Mercury devops collaborator, specialists orchestrators) compose instead of reimplementing inline `gh`/`git` bash.
+## Runtime enforcement
 
-| Command | Use when | Composes with |
-|---|---|---|
-| `xt worktree audit-prs [--json]` | You want a structured report of every xt worktree's PR merge-state (`clean` / `needs-rebase` / `conflicted` / `blocked` / `stale` / `unknown`) without modifying branches | Specialists `doctor --pr-drift` consumes the same `gh pr view` shape; `sp ps --needs-attention` filters jobs whose PR is non-clean |
-| `xt worktree branch-gc [--prefix xt/] [--apply --yes] [--json]` | Stale `feature/<bead>-executor\|debugger\|reviewer` or `xt/*` branches need cleanup after merge; default is dry-run, `--apply` deletes only merged/closed PR branches | Run after `/xt-end` / `/xt-merge` to drop the merged branch trail; pairs with specialists chain-cleanup after reviewer PASS |
-| `xt worktree restart-audit [--prefix xt/] [--json]` | Container/host restarted; you need a startup/cron-safe audit of orphaned worktree dirs, branch/worktree drift, and PR-attention candidates | Pairs with specialists `doctor --reap-dead-jobs` — worktree-side orphans (this) + job-side orphans (specialists) cover both axes of a restart-recovery sweep |
+Claim/edit/commit/stop hooks enforce deterministic lifecycle rules. Do not work around a
+claim gate. Establish legitimate tracked identity instead.
 
-Safety: all three are read-only by default. `branch-gc` requires explicit `--apply --yes` to delete. Auto-rebase / force-push is never performed — conflict states are reported, never hand-resolved.
-
-`--json` output on all three includes structured fields (repo, branch, pr_url/pr_number, merge_state, action, outcome, duration_ms, redacted error) so cron and Mercury infra can consume them without parsing human output.
-
----
-
-## Prompt Shaping (silent, before every non-trivial task)
-
-| Task type | Apply |
-|-----------|-------|
-| `analyze / investigate / why` | `<thinking>` block + structured `<outputs>` |
-| `implement / build / fix` | 1-2 `<example>` blocks + `<constraints>` |
-| `refactor / simplify` | `<constraints>` (preserve behavior, tests pass) + `<current_state>` |
-
-Vague prompt (under 8 words, no specifics)? Ask one clarifying question before proceeding.
-
----
-
-## Skill Routing
-
-| Need | Use |
-|------|-----|
-| Code read / edit | Serena — `get_symbols_overview` → `find_symbol` → `replace_symbol_body` |
-| Blast radius before edit | `gitnexus-impact-analysis` |
-| Navigate unfamiliar code | `gitnexus-exploring` |
-| Trace a bug | `gitnexus-debugging` |
-| Safe rename / refactor | `gitnexus-refactoring` |
-| Docs maintenance | `sync-docs` |
-| Docker service project | `using-service-skills` |
-| Build / improve a skill | `skill-creator` |
-| Orchestrate tmux panes / answer correlated requests | `multiplexing` / `multiplexing-team` |
+For exact current behavior, use live CLI help and the managed default skill rather than
+preserving old command recipes here.
