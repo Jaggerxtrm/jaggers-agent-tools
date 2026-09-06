@@ -59,8 +59,8 @@ jobs:
         SPECIALISTS_REPO_PATH="$RUNNER_TEMP/specialists-v4" npm run vendor:specialists
 
         npm run build
-        ./node_modules/.bin/esbuild cli/src/commands/init.ts --bundle --platform=node --format=cjs --outfile="$RUNNER_TEMP/xtrm-init.cjs"
-        INIT_BUNDLE="$RUNNER_TEMP/xtrm-init.cjs" node -e "const { injectProjectInstructionHeaders } = require(process.env.INIT_BUNDLE); Promise.resolve(injectProjectInstructionHeaders(process.cwd())).catch((error) => { console.error(error); process.exit(1); });"
+        ./node_modules/.bin/esbuild cli/src/commands/init.ts --bundle --platform=node --format=cjs --outfile="cli/dist/xtrm-init.cjs"
+        INIT_BUNDLE="$PWD/cli/dist/xtrm-init.cjs" node -e "const { injectProjectInstructionHeaders } = require(process.env.INIT_BUNDLE); Promise.resolve(injectProjectInstructionHeaders(process.cwd())).catch((error) => { console.error(error); process.exit(1); });"
         npm run gen-registry
         npm run build
 
