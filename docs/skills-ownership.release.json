@@ -8,8 +8,13 @@
         "using-specialists"
       ],
       "placements": {
-        "update-specialists": { "tier": "optional", "pack": "xtrm-maintenance" },
-        "using-specialists": { "tier": "default" }
+        "update-specialists": {
+          "tier": "optional",
+          "pack": "xtrm-maintenance"
+        },
+        "using-specialists": {
+          "tier": "default"
+        }
       }
     }
   }

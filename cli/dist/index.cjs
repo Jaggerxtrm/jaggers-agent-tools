@@ -39861,10 +39861,15 @@ function resolveHooksForRuntime(hooks, hooksDir) {
   const rewrittenHooks = {};
   for (const [eventName, wrappers] of Object.entries(hooks)) {
     const wrapperList = Array.isArray(wrappers) ? wrappers : [wrappers];
-    rewrittenHooks[eventName] = wrapperList.map((wrapper) => ({
-      ...wrapper,
-      hooks: wrapper.hooks.map((hook) => hook.type !== "command" ? hook : { ...hook, command: rewritePluginRootCommandToProjectHookPath(hook.command, hooksDir) })
-    }));
+    rewrittenHooks[eventName] = wrapperList.map((wrapper) => {
+      if (!Array.isArray(wrapper.hooks)) {
+        return wrapper;
+      }
+      return {
+        ...wrapper,
+        hooks: wrapper.hooks.map((hook) => hook.type !== "command" ? hook : { ...hook, command: rewritePluginRootCommandToProjectHookPath(hook.command, hooksDir) })
+      };
+    });
   }
   return rewrittenHooks;
 }
@@ -39922,7 +39927,10 @@ function countHookEntries(hooks) {
 function stableHookHash(wrapper) {
   const canonical = {
     matcher: wrapper.matcher ?? null,
-    hooks: wrapper.hooks.map((hook) => ({ type: hook.type, command: hook.command, timeout: hook.timeout ?? null }))
+    // settings.json is an external/runtime boundary. Unknown third-party
+    // wrapper shapes must remain hashable without being mistaken for a
+    // valid generated wrapper or crashing reconciliation.
+    hooks: Array.isArray(wrapper.hooks) ? wrapper.hooks.map((hook) => ({ type: hook.type, command: hook.command, timeout: hook.timeout ?? null })) : null
   };
   return import_node_crypto4.default.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
