@@ -88,7 +88,8 @@
     "check:payload-hygiene": "node scripts/check-payload-hygiene.mjs",
     "check:deprecations": "node scripts/check-command-deprecations.mjs",
     "check:pi-manifest": "node scripts/check-pi-extension-manifest.mjs",
-    "check:runtime-compat": "node scripts/check-runtime-compatibility.mjs"
+    "check:runtime-compat": "node scripts/check-runtime-compatibility.mjs",
+    "vendor:specialists": "node scripts/vendor-specialists-from-manifest.mjs"
   },
   "engines": {
     "node": ">=24.0.0"

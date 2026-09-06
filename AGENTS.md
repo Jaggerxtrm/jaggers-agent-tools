@@ -27,157 +27,154 @@ Example native task list mirroring beads:
 <!-- xtrm:start -->
 # XTRM Agent Workflow
 
-> Full reference: [XTRM-GUIDE.md](XTRM-GUIDE.md)
-> Run `bd prime` at session start (or after context reset) for live beads workflow context.
+> Full reference: `/using-xtrm` skill (or `XTRM-GUIDE.md` where present).
+> This is a compact managed block. Use CLI `--help` and focused skills for details.
+> Shared canonical contract: `.xtrm/config/instructions/agent-contract.md`.
 
-## Session Start
+<!-- contract:start -->
 
-1. `bd prime` — load workflow context and active claims
-2. `bd memories <keyword>` — retrieve memories relevant to today's task
-3. `bd recall <key>` — retrieve a specific memory by key if needed
-4. `bv --robot-triage` — graph-aware triage: ranked picks, unblock targets, project health
-5. `bd update <id> --claim` — claim before any file edit
+## XTRM operating model
 
-## Execution Interaction Policy
+You are participating in XTRM, a durable multi-agent engineering system. Work may stay in
+this session or move through native subagents, `xt pi` / `xt claude` / `xt codex` peers,
+Specialists, and deterministic runtime stages. Do not rely on private chat context as the
+only place another worker could recover important state.
 
-- Proceed by default on standard implementation tasks once scope is clear.
-- Do **not** ask repetitive “Proceed? Yes/No” confirmations.
-- Ask for confirmation only when actions are destructive, irreversible, or high-risk (e.g. `rm`, history rewrite, mass deletes, credential rotation, prod-impacting ops).
-- Prefer concise clarifying questions only when requirements are genuinely ambiguous.
+The central rule is: **give every worker a great contract.**
 
-## Active Gates (hooks enforce these — not optional)
+- Beads owns durable work identity, dependencies, progress/evidence, and closure.
+- Runtime-local task lists are ephemeral execution tracking only; they do not replace Beads.
+- For tracked work consumed by another worker, the Bead is the prompt. Important requirements
+  must live in the durable contract, not only in an orchestrator message or hidden context.
+- A draft may exist, but a `contract:draft` item is not dispatchable.
+- Worker summaries/results are claims. Verify important claims against live code, tests,
+  runtime state, or the relevant external system.
 
-| Gate | Trigger | Required action |
-|------|---------|-----------------|
-| **Edit** | Write/Edit without active claim | `bd update <id> --claim` |
-| **Commit** | `git commit` while claim is open | `bd close <id>` first, then commit |
-| **Stop** | Session end with unclosed claim | `bd close <id>` |
-| **Memory** | `bd close <id>` without issue ack | First run `bd remember "<insight>"` (or decide nothing novel), then `bd kv set "memory-acked:<id>" "saved:<key>"` or `"nothing novel:<reason>"`, then retry `bd close <id> --reason="..."` |
+## Session start: targeted, not reconstructive
 
-## bd Command Reference
+1. Read the repository identity and non-negotiable project rules.
+2. Locate the relevant current work with targeted Beads commands such as
+   `bd list --status=in_progress`, `bd ready`, `bd search "<terms>"`, and `bd show <id>`.
+3. Claim the work before mutation: `bd update <id> --claim`.
+4. Retrieve `bd memories <topic>` only when prior history is materially relevant.
+5. Use Service Knowledge where a service registry exists; query targeted service/project
+   evidence instead of bulk-loading a repository manual.
+6. Inspect recent commits/PRs only when they can materially change the task's current state.
 
-```bash
-# Work discovery
-bd ready                               # Unblocked open issues
-bd show <id>                           # Full detail + deps + blockers
-bd list --status=in_progress           # Your active claims
-bd query "status=in_progress AND assignee=me"  # Complex filter
-bd search <text>                       # Full-text search across issues
+If a `bd prime` full-context run is useful for diagnosis, invoke it explicitly. If that
+opt-in diagnostic reports a prohibition against runtime-native task planning, XTRM's rule
+is: Beads remains durable authority while runtime-native task plans may coexist as ephemeral
+execution tracking scoped to the active work. The prohibition against ad-hoc `MEMORY.md`
+files remains unchanged.
 
-# Claiming & updating
-bd update <id> --claim                 # Claim (sets you as owner, status→in_progress)
-bd update <id> --notes "..."           # REPLACES notes (destructive — overwrites prior)
-bd update <id> --append-notes "..."    # Append to existing notes (newline-separated)
-bd update <id> --status=blocked        # Mark blocked
-bd update                              # Update last-touched issue (no ID needed)
+## Contract quality
 
-# Creating
-bd create --title="..." --description="..." --type=task --priority=2
-# --deps "discovered-from:<parent-id>"  link follow-ups to source
-# priority: 0=critical  1=high  2=medium  3=low  4=backlog
-# types: task | bug | feature | epic | chore | decision
+Anything another worker may consume needs a usable durable contract. Baseline fields:
 
-# Closing
-# Memory gate: ack per issue before close
-#   bd kv set "memory-acked:<id>" "saved:<key>"  OR  "nothing novel:<reason>"
-bd close <id>                          # Close issue (blocked until memory-acked:<id> exists)
-bd close <id> --reason="Done: ..."     # Close with context
-bd close <id1> <id2> <id3>            # Batch close (each id needs its own memory ack)
-
-# Dependencies
-bd dep add <issue> <depends-on>        # issue depends on depends-on (depends-on blocks issue)
-bd dep <blocker> --blocks <blocked>    # shorthand: blocker blocks blocked
-bd dep relate <a> <b>                  # non-blocking "relates to" link
-bd dep tree <id>                       # visualise dependency tree
-bd blocked                             # show all currently blocked issues
-
-# Persistent memory
-bd remember "<insight>"                # Store across sessions (project-scoped)
-bd memories <keyword>                  # Search stored memories
-bd recall <key>                        # Retrieve full memory by key
-bd forget <key>                        # Remove a memory
-
-# Health & pre-flight
-bd stats                               # Open/closed/blocked counts
-bd preflight --check                   # Pre-PR readiness (lint, tests, beads)
-bd doctor                              # Diagnose installation issues
+```text
+PROBLEM
+SUCCESS
+SCOPE
+NON_GOALS
+CONSTRAINTS
+VALIDATION
+OUTPUT
 ```
 
-## Git Workflow (strict: one branch per issue)
+Add `SCRUTINY`, references, rollout/rollback, telemetry, libraries, or other requirements
+when they materially affect correctness. `/planning` owns contract authoring, decomposition,
+and promotion from draft to ready.
 
-```bash
-git checkout -b feature/<issue-id>-<slug>   # or fix/... chore/...
-bd update <id> --claim                       # claim before any edit
-# ... write code ...
-bd close <id> --reason="..."                 # closes issue
-xt end                                       # push, PR, merge, worktree cleanup
+## Choose the smallest execution shape that fits
+
+```text
+coherent work; current context already sufficient
+  -> work here
+
+bounded independent question; fresh context helps
+  -> native subagent when available
+
+long-lived peer / isolated worktree / parallel ownership
+  -> xt pi|claude|codex + /multiplexing
+
+role-shaped governed execution/review lifecycle
+  -> /using-specialists
+
+deterministic mechanical transform or validation
+  -> script/tool/runtime primitive
 ```
 
-**Never** continue new work on a previously used branch.
+XTRM is multi-agent by default, not delegation-by-default. Parallelize only when ownership
+boundaries are real.
 
-## Quality Gates (automatic)
+## Coordination
 
-Run on every file edit via PostToolUse extension:
-- **TypeScript/JS**: ESLint + tsc
-- **Python**: ruff + mypy
+Prefer native/runtime communication surfaces over tmux scraping. `/multiplexing` owns
+send/ask/reply, ownership, continuation, wakeup, and handoff semantics; transports may be
+Pi intercom, Pi↔Claude link, Claude native peer/team tools, native subagents, or other
+runtime-supported channels.
 
-Gate output appears as extension context. Fix failures before proceeding — do not commit with lint errors.
+Messages coordinate work. They do not replace the durable contract, repository state, or
+recorded evidence.
 
-## bv — Graph-Aware Triage
+## Engineering discipline
 
-bv is a graph-aware triage engine for the beads issue board. Use it instead of `bd ready` when you need ranked picks, dependency-aware scheduling, or project health signals.
+- Use the smallest correct system change: reuse existing primitives before adding machinery.
+- Do not simplify away validation, safety, security boundaries, accessibility,
+  observability, rollback, durable state, tests, or required failure handling.
+- For regressions, reconstruct causality before patching: symptom → first bad observation →
+  code/data/control path → relevant change → commit/PR/Bead/worker intent → mechanism →
+  smallest correction → regression proof.
+- Treat recent changes as candidates, not proof. Search for counterevidence and red herrings.
+- Use GitNexus when code-graph context materially reduces uncertainty; use live CLI/help and
+  targeted repository search when those are the better primitives.
 
-> **CRITICAL: Use ONLY `--robot-*` flags. Bare `bv` launches an interactive TUI that blocks your session.**
+## Canonical discovery surfaces
 
-```bash
-bv --robot-triage             # THE entry point — ranked picks, quick wins, blockers, health
-bv --robot-next               # Single top pick + claim command (minimal output)
-bv --robot-triage --format toon  # Token-optimized output for lower context usage
-```
+- `xt --help`, `xt <command> --help`
+- `bd --help`, `bd <command> --help`
+- `sp help`, `specialists list --full`
+- `xt skills list --global --json`, `xt skills list --local --json`
 
-**Scope boundary:** bv = *what to work on*. `bd` = creating, claiming, closing issues.
+Do not preserve stale flag tables in prompts when live help is available.
 
-### Planning & Analysis
+## Skill routing
 
-| Command | Returns |
-|---------|---------|
-| `--robot-plan` | Parallel execution tracks with unblocks lists |
-| `--robot-priority` | Priority misalignment detection |
-| `--robot-insights` | Full graph metrics: PageRank, betweenness, HITS, eigenvector, critical path, cycles |
-| `--robot-forecast <id\|all>` | ETA predictions with dependency-aware scheduling |
-| `--robot-alerts` | Stale issues, blocking cascades, priority mismatches |
-| `--robot-diff --diff-since <ref>` | Changes since ref: new/closed/modified, cycles introduced/resolved |
+| Need | Skill |
+|---|---|
+| XTRM system doctrine, contracts, evidence, work shape | `/using-xtrm` |
+| Resume/takeover/context-pressure continuation | `/starting-and-resuming-work` |
+| Peer/subagent coordination, replies, continuation | `/multiplexing` |
+| Contracts, decomposition, board triage, validation planning | `/planning` |
+| Debug/review/test/verify/reduce | `/engineering-quality` |
+| Specialists runtime and role/job lifecycle | `/using-specialists` |
+| Code graph / impact / debugging / refactoring | `/gitnexus` |
+| Create or improve skills | `/skill-creator` |
+| Discover/import governed skills | `/find-skills` |
 
-### Scoping & Filtering
+Domain and maintainer capabilities are optional packs. Inspect `xt skills` rather than
+assuming they are active. Examples include `sre-ops`, `security-ops`, `research-methods`,
+`xtrm-development`, and `xtrm-maintenance`.
 
-```bash
-bv --robot-plan --label backend        # Scope to label's subgraph
-bv --recipe actionable --robot-plan    # Pre-filter: ready to work (no blockers)
-bv --recipe high-impact --robot-triage # Pre-filter: top PageRank scores
-bv --robot-triage --robot-triage-by-track  # Group by parallel work streams
-```
+## Completion
 
-### Understanding Output
+Before declaring work complete, establish with evidence:
 
-- `data_hash` — fingerprint of beads state (verify consistency across calls)
-- Phase 1 (instant): degree, topo sort, density
-- Phase 2 (async, 500ms): PageRank, betweenness, HITS, cycles — check `status` flags
+1. the intended state exists now;
+2. required validation ran and its result is known;
+3. durable work state reflects reality;
+4. unresolved workers/replies/risks/follow-ups do not invalidate the completion claim.
 
-```bash
-bv --robot-triage | jq '.quick_ref'              # At-a-glance summary
-bv --robot-triage | jq '.recommendations[0]'     # Top recommendation
-bv --robot-plan | jq '.plan.summary.highest_impact'
-bv --robot-insights | jq '.Cycles'               # Circular deps — must fix
-```
+Close/acknowledge Beads according to the installed runtime gates before commit or session
+completion. Do not clear valid gate state merely to continue.
 
-## Worktree Sessions
+<!-- contract:end -->
 
-- `xt claude` — launch Claude Code in a sandboxed worktree
-- `xt pi` — launch Pi in a sandboxed worktree
-- `xt end` — close session: commit / push / PR / cleanup
-- `xt worktree audit-prs --json` — read-only PR drift / needs-rebase audit before merge queues
-- `xt worktree branch-gc --prefix xt/ --json` — dry-run merged/closed branch cleanup; add `--apply --yes` only when deletion is intended
-- `xt worktree restart-audit --json` — read-only restart/handoff hygiene audit for orphaned dirs, branch/worktree drift, and PR attention
+## Runtime notes
+
+- Use the runtime's native task/subagent surfaces when they are actually available; do not invent them.
+- Pi is the preferred XTRM harness, but the contract is runtime-neutral.
+- Use `/multiplexing` for live peer coordination and `/using-specialists` for Specialist jobs.
 <!-- xtrm:end -->
 
 <!-- gitnexus:start -->
