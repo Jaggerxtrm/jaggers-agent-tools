@@ -89,6 +89,12 @@ describe('agent-contract parity (ISSUE-136)', () => {
     expect(body).not.toMatch(/read AGENTS\.md/i);
   });
 
+  it('common contract body stays compact (ISSUE-136 c.12969 — compact routing, not manuals)', () => {
+    const body = section(CONTRACT).trim().split('\n');
+    expect(body.length).toBeGreaterThanOrEqual(15);
+    expect(body.length).toBeLessThanOrEqual(55);
+  });
+
   it('per-runtime suffixes stay small and additive', () => {
     for (const file of [AGENTS_TOP, CLAUDE_TOP]) {
       const n = suffixLines(file);
