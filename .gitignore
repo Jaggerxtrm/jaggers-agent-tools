@@ -186,3 +186,6 @@ cli/.gemini/
 .xtrm/cache/
 .xtrm/statusline-claim
 .pi/skills/
+
+# Beads / Dolt files (added by bd init)
+*.gate.lock*
