@@ -49,6 +49,21 @@ jobs:
     - name: Build TypeScript
       run: cd cli && npm run build
 
+    - name: Generate registry reconciliation artifact
+      run: npm run gen-registry
+
+    - name: Upload generated CLI dist
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: skills-v4-generated-cli-dist
+        path: cli/dist
+
+    - name: Upload generated registry
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: skills-v4-generated-registry
+        path: .xtrm/registry.json
+
     - name: Verify dist is up to date
       run: git diff --exit-code cli/dist/ || (echo "dist/ is out of sync — run 'cd cli && npm run build' and commit the result" && exit 1)
 
