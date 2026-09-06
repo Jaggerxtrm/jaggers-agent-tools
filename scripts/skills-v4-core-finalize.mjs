@@ -21,6 +21,14 @@ for (const path of PROVENANCE_FILES) {
   writeFileSync(path, current.replace(OLD_SHA, FROZEN_SHA));
 }
 
+// `repo_path` is operator/developer metadata, not the checkout used by CI.
+// Keep it stable even when SPECIALISTS_REPO_PATH points at a runner temp dir.
+const sourceManifestPath = '.xtrm/specialists-source.json';
+const sourceManifest = JSON.parse(readFileSync(sourceManifestPath, 'utf8'));
+sourceManifest.source ??= {};
+sourceManifest.source.repo_path = '../specialists';
+writeFileSync(sourceManifestPath, `${JSON.stringify(sourceManifest, null, 2)}\n`);
+
 // Keep the canonical vendor entry point explicit for CI, releases, and local
 // maintenance rather than requiring callers to know the underlying script path.
 const packagePath = 'package.json';
