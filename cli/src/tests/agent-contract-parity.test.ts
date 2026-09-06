@@ -12,17 +12,23 @@ const START = '<!-- contract:start -->';
 const END = '<!-- contract:end -->';
 const MAX_SUFFIX_LINES = 12;
 
+function markerLineIndex(lines: string[], marker: string, from = 0): number {
+  return lines.findIndex((line, index) => index >= from && line.trim() === marker);
+}
+
 function section(file: string): string {
-  const text = fs.readFileSync(file, 'utf8');
-  const i = text.indexOf(START);
-  const j = text.indexOf(END);
+  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+  const i = markerLineIndex(lines, START);
+  const j = markerLineIndex(lines, END, i + 1);
   if (i === -1 || j === -1 || j <= i) throw new Error(`${file}: contract markers missing or unordered`);
-  return text.slice(i + START.length, j).trim();
+  return lines.slice(i + 1, j).join('\n').trim();
 }
 
 function suffixLines(file: string): number {
-  const text = fs.readFileSync(file, 'utf8');
-  const tail = text.slice(text.indexOf(END) + END.length).trim();
+  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+  const i = markerLineIndex(lines, END);
+  if (i === -1) throw new Error(`${file}: contract end marker missing`);
+  const tail = lines.slice(i + 1).join('\n').trim();
   return tail ? tail.split('\n').length : 0;
 }
 
