@@ -63,7 +63,7 @@ jobs:
       - name: Rebuild canonical project instruction headers
         run: |
           cd cli
-          npx tsx -e "import { injectProjectInstructionHeaders } from './src/commands/init.ts'; await injectProjectInstructionHeaders(process.env.GITHUB_WORKSPACE);"
+          npx tsx -e "import { injectProjectInstructionHeaders } from './src/commands/init.ts'; (async () => { await injectProjectInstructionHeaders(process.env.GITHUB_WORKSPACE); })().catch((error) => { console.error(error); process.exit(1); });"
 
       - name: Regenerate registry and built payload
         run: |
