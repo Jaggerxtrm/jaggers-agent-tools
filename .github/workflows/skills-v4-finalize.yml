@@ -5,6 +5,7 @@ on:
     branches: [ feat/skills-v4-system-consolidation ]
     paths:
       - '.github/workflows/skills-v4-finalize.yml'
+      - 'cli/src/tests/agent-contract-parity.test.ts'
 
 permissions:
   contents: write
