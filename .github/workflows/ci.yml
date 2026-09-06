@@ -7,7 +7,7 @@ on:
     branches: [ main, master ]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -52,17 +52,18 @@ jobs:
     - name: Generate registry reconciliation artifact
       run: npm run gen-registry
 
-    - name: Upload generated CLI dist
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-      with:
-        name: skills-v4-generated-cli-dist
-        path: cli/dist
-
-    - name: Upload generated registry
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-      with:
-        name: skills-v4-generated-registry
-        path: .xtrm/registry.json
+    - name: Commit deterministic generated outputs
+      if: github.event_name == 'pull_request' && github.head_ref == 'feat/skills-v4-system-consolidation'
+      run: |
+        if git diff --quiet -- cli/dist .xtrm/registry.json; then
+          echo "Generated outputs already current"
+          exit 0
+        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add cli/dist .xtrm/registry.json
+        git commit -m "chore: reconcile generated dist and registry"
+        git push origin HEAD:${{ github.head_ref }}
 
     - name: Verify dist is up to date
       run: git diff --exit-code cli/dist/ || (echo "dist/ is out of sync — run 'cd cli && npm run build' and commit the result" && exit 1)
