@@ -15,6 +15,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const manifestPath = path.join(repoRoot, '.xtrm', 'specialists-source.json');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 const originalRef = manifest.source?.ref;
+const originalRepoPath = manifest.source?.repo_path;
 const ref = manifest.source?.resolved_sha || originalRef;
 if (!ref) {
   console.error(`${manifestPath}: missing both source.resolved_sha and source.ref`);
@@ -31,14 +32,21 @@ const args = [
 const result = spawnSync('node', args, { stdio: 'inherit', cwd: repoRoot });
 if (result.status !== 0) process.exit(result.status ?? 1);
 
-// vendor-specialists-skills.mjs rewrites manifest.source.ref to whatever it
-// was called with (here: the sha). Restore the original human-readable ref
-// (e.g. "v3.21.0") — operators and CHANGELOG readers rely on it, and
-// resolved_sha already carries the immutable identity.
-if (originalRef && originalRef !== ref) {
-  const rewritten = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  if (rewritten.source?.ref === ref) {
-    rewritten.source.ref = originalRef;
-    writeFileSync(manifestPath, JSON.stringify(rewritten, null, 2) + '\n');
-  }
+// vendor-specialists-skills.mjs records the concrete checkout used for the
+// operation. Preserve operator-facing source metadata from the reviewed
+// manifest: ref stays human-readable and repo_path stays stable even when CI
+// supplies SPECIALISTS_REPO_PATH pointing at a temporary checkout. The
+// immutable resolved_sha and per-file Git blob identities remain authoritative.
+const rewritten = JSON.parse(readFileSync(manifestPath, 'utf8'));
+let changed = false;
+if (originalRef && originalRef !== ref && rewritten.source?.ref === ref) {
+  rewritten.source.ref = originalRef;
+  changed = true;
+}
+if (originalRepoPath && rewritten.source?.repo_path !== originalRepoPath) {
+  rewritten.source.repo_path = originalRepoPath;
+  changed = true;
+}
+if (changed) {
+  writeFileSync(manifestPath, JSON.stringify(rewritten, null, 2) + '\n');
 }
