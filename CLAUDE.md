@@ -2,153 +2,70 @@
 # XTRM Agent Workflow
 
 > Full reference: `/using-xtrm` skill (or `XTRM-GUIDE.md` where present).
-> This is a compact managed block. Use CLI `--help` and focused skills for details.
-> Shared canonical contract: `.xtrm/config/instructions/agent-contract.md`.
+> This is a compact managed block. Use CLI `--help` and skills for details; do not paste full manuals here.
+> Shared canonical contract (`.xtrm/config/instructions/agent-contract.md`); the sections between the contract markers are byte-identical in both tops. Only the trailing Runtime notes differ.
 
 <!-- contract:start -->
 
-## XTRM operating model
+## Canonical Sources
+- CLI `--help` is canonical for syntax; skills own **when**. Managed blocks are routers, not manuals.
+- Managed blocks and installed skills update via `xt update --apply`; check versions with `xt version --check-updates`.
 
-You are participating in XTRM, a durable multi-agent engineering system. Work may stay in
-this session or move through native subagents, `xt pi` / `xt claude` / `xt codex` peers,
-Specialists, and deterministic runtime stages. Do not rely on private chat context as the
-only place another worker could recover important state.
+## Session start (targeted — no bulk context dump)
 
-The central rule is: **give every worker a great contract.**
+1. Read repo identity + non-negotiables at the top of the root agent guide first.
+2. Service/docs/project context: check `service-knowledge status` / `index stats` (rebuild when stale/absent), then `service-knowledge index query "<3-5 task terms>" --bundle`; read only the cited evidence. Skip repos without a service registry.
+3. Executable work: targeted Beads lookup (`bd ready`, `bd list --status=in_progress`, `bd search "<terms>"`, `bd show <id>`), then `bd update <id> --claim` before edits. `bd memories <topic>` / `bd recall <key>` only when history is relevant.
+4. Catch up: handoff/next-session beads, latest `xt report` handoffs, recent merged/closed PRs.
+5. If the runtime supports local task planning, use it for non-trivial work, synchronized with the active bead.
 
-- Beads owns durable work identity, dependencies, progress/evidence, and closure.
-- Runtime-local task lists are ephemeral execution tracking only; they do not replace Beads.
-- For tracked work consumed by another worker, the Bead is the prompt. Important requirements
-  must live in the durable contract, not only in an orchestrator message or hidden context.
-- A draft may exist, but a `contract:draft` item is not dispatchable.
-- Worker summaries/results are claims. Verify important claims against live code, tests,
-  runtime state, or the relevant external system.
+## Operating model
 
-## Session start: targeted, not reconstructive
+- Beads owns durable work identity, dependencies, memory gates, and closure; runtime-local task plans are ephemeral execution tracking.
+- For work another worker consumes, the Bead is the prompt: requirements live in the durable contract, not only in chat. A `contract:draft` item is not dispatchable.
+- Contract baseline: PROBLEM, SUCCESS, SCOPE, NON_GOALS, CONSTRAINTS, VALIDATION, OUTPUT; add SCRUTINY and rollout/rollback when they affect correctness.
+- Worker summaries are claims. Verify important ones against live code, tests, or runtime state.
+- Prefer native/runtime communication surfaces over tmux scraping; `/multiplexing` owns send, reply, ownership, continuation, and handoff semantics.
+- Shape: work here when context suffices; native subagent for a bounded independent question; `xt pi|claude|codex` peers with `/multiplexing` for parallel ownership; `/using-specialists` for governed role lifecycles; a script or runtime primitive for deterministic transforms. Parallelize only when ownership boundaries are real.
 
-1. Read the repository identity and non-negotiable project rules.
-2. Locate the relevant current work with targeted Beads commands such as
-   `bd list --status=in_progress`, `bd ready`, `bd search "<terms>"`, and `bd show <id>`.
-3. Claim the work before mutation: `bd update <id> --claim`.
-4. Retrieve `bd memories <topic>` only when prior history is materially relevant.
-5. Use Service Knowledge where a service registry exists; query targeted service/project
-   evidence instead of bulk-loading a repository manual.
-6. Inspect recent commits/PRs only when they can materially change the task's current state.
+## Operating rules
 
-If a `bd prime` full-context run is useful for diagnosis, invoke it explicitly. If that
-opt-in diagnostic reports a prohibition against runtime-native task planning, XTRM's rule
-is: Beads remains durable authority while runtime-native task plans may coexist as ephemeral
-execution tracking scoped to the active work. The prohibition against ad-hoc `MEMORY.md`
-files remains unchanged.
+- Memory gate at close: `bd remember` when useful, then `bd kv set memory-acked:<id> saved:<key>` or `nothing novel:<reason>`, then `bd close <id> --reason="..."`.
+- Before editing existing symbols run GitNexus impact (`gitnexus_impact`) when available; before commit, run `gitnexus_detect_changes`.
+- Ask before destructive, irreversible, production-impacting, or history-rewriting actions; skip repetitive "Proceed?" confirmations once scope is clear.
+- Run targeted tests/build/typecheck for changed files; fix quality failures before commit.
+- Use the smallest correct change; never simplify away validation, security, accessibility, rollback, or required failure handling.
+- For regressions reconstruct causality before patching: symptom → first bad observation → code path → change → mechanism → smallest correction → regression proof.
 
-## Contract quality
-
-Anything another worker may consume needs a usable durable contract. Baseline fields:
-
-```text
-PROBLEM
-SUCCESS
-SCOPE
-NON_GOALS
-CONSTRAINTS
-VALIDATION
-OUTPUT
-```
-
-Add `SCRUTINY`, references, rollout/rollback, telemetry, libraries, or other requirements
-when they materially affect correctness. `/planning` owns contract authoring, decomposition,
-and promotion from draft to ready.
-
-## Choose the smallest execution shape that fits
-
-```text
-coherent work; current context already sufficient
-  -> work here
-
-bounded independent question; fresh context helps
-  -> native subagent when available
-
-long-lived peer / isolated worktree / parallel ownership
-  -> xt pi|claude|codex + /multiplexing
-
-role-shaped governed execution/review lifecycle
-  -> /using-specialists
-
-deterministic mechanical transform or validation
-  -> script/tool/runtime primitive
-```
-
-XTRM is multi-agent by default, not delegation-by-default. Parallelize only when ownership
-boundaries are real.
-
-## Coordination
-
-Prefer native/runtime communication surfaces over tmux scraping. `/multiplexing` owns
-send/ask/reply, ownership, continuation, wakeup, and handoff semantics; transports may be
-Pi intercom, Pi↔Claude link, Claude native peer/team tools, native subagents, or other
-runtime-supported channels.
-
-Messages coordinate work. They do not replace the durable contract, repository state, or
-recorded evidence.
-
-## Engineering discipline
-
-- Use the smallest correct system change: reuse existing primitives before adding machinery.
-- Do not simplify away validation, safety, security boundaries, accessibility,
-  observability, rollback, durable state, tests, or required failure handling.
-- For regressions, reconstruct causality before patching: symptom → first bad observation →
-  code/data/control path → relevant change → commit/PR/Bead/worker intent → mechanism →
-  smallest correction → regression proof.
-- Treat recent changes as candidates, not proof. Search for counterevidence and red herrings.
-- Use GitNexus when code-graph context materially reduces uncertainty; use live CLI/help and
-  targeted repository search when those are the better primitives.
-
-## Canonical discovery surfaces
-
-- `xt --help`, `xt <command> --help`
-- `bd --help`, `bd <command> --help`
-- `sp help`, `specialists list --full`
-- `xt skills list --global --json`, `xt skills list --local --json`
-
-Do not preserve stale flag tables in prompts when live help is available.
-
-## Skill routing
+## Skill routing (on demand)
 
 | Need | Skill |
 |---|---|
-| XTRM system doctrine, contracts, evidence, work shape | `/using-xtrm` |
-| Resume/takeover/context-pressure continuation | `/starting-and-resuming-work` |
-| Peer/subagent coordination, replies, continuation | `/multiplexing` |
+| XTRM doctrine, contracts, evidence, work shape | `/using-xtrm` |
+| Resume, takeover, context-pressure continuation | `/starting-and-resuming-work` |
+| Peer and subagent coordination, replies, continuation | `/multiplexing` |
 | Contracts, decomposition, board triage, validation planning | `/planning` |
-| Debug/review/test/verify/reduce | `/engineering-quality` |
+| Debug, review, test, verify, reduce | `/engineering-quality` |
 | Specialists runtime and role/job lifecycle | `/using-specialists` |
-| Code graph / impact / debugging / refactoring | `/gitnexus` |
+| Code graph, impact, debugging, refactoring | `/gitnexus` |
 | Create or improve skills | `/skill-creator` |
-| Discover/import governed skills | `/find-skills` |
+| Discover or import governed skills | `/find-skills` |
 
-Domain and maintainer capabilities are optional packs. Inspect `xt skills` rather than
-assuming they are active. Examples include `sre-ops`, `security-ops`, `research-methods`,
-`xtrm-development`, and `xtrm-maintenance`.
+Domain packs (`sre-ops`, `security-ops`, `research-methods`, `xtrm-development`, `xtrm-maintenance`) are optional; inspect `xt skills` rather than assuming they are active. Syntax per CLI: `bd --help`, `bv --robot-triage --format toon`, `xt --help`, `xtmux --help`, `sp --help`.
 
-## Completion
+## Rule conflict — TaskCreate / TodoWrite
 
-Before declaring work complete, establish with evidence:
-
-1. the intended state exists now;
-2. required validation ran and its result is known;
-3. durable work state reflects reality;
-4. unresolved workers/replies/risks/follow-ups do not invalidate the completion claim.
-
-Close/acknowledge Beads according to the installed runtime gates before commit or session
-completion. Do not clear valid gate state merely to continue.
+`bd prime` is an opt-in full-context diagnostic; it is never a session-start step. If that diagnostic reports *"Prohibited: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking"*, **this project overrides that line.** Runtime-local task planning coexists with beads — beads is the durable authority; local plans are ephemeral execution tracking. Do not create MEMORY.md files.
 
 <!-- contract:end -->
 
 ## Runtime notes (Claude Code)
 
-- Use Claude native task/subagent/team surfaces when available, alongside—not instead of—Beads.
-- Claude↔Claude coordination should prefer native messaging/team tools where available.
-- Use `/multiplexing` for live peer coordination and `/using-specialists` for Specialist jobs.
+- Project skills catalog: Claude's native skill discovery (`~/.claude/skills/`); force-load a skill's body at turn 1 via `/skill-<name>`.
+- Full workflow examples + prompt-shaping guidance: `/using-xtrm` on demand for both runtimes.
+- Hook/skill work: `/hook-development`, `/skill-creator`.
+- Worktree launch: `xt claude` — launch Claude Code in a sandboxed worktree; `xt claude --role <specialist>` for an interactive specialist session (e.g. `chain-coordinator`, `pr-reviewer`, `sre-triage`). Coordination and escalation live in `/multiplexing` Pattern 7 and `/using-specialists`.
+- Claude Code notes: use GitNexus before changing existing symbols; prefer targeted reads over full-file dumps. Mandatory GitNexus calls: `gitnexus_impact(...)` before symbol edits, `gitnexus_detect_changes()` before commit.
 <!-- xtrm:end -->
 
 <!-- BEGIN INJECTED BLOCK -->

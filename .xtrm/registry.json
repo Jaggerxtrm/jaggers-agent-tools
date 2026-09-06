@@ -924,15 +924,15 @@
           "version": "0.12.0"
         },
         "instructions/agent-contract.md": {
-          "hash": "9e4f0aa770ba6fe8da79c98dd71022bb2f0be501eb6e66174cba03f77fd425b5",
+          "hash": "f6e792452582f4c41435b311fdb9bd4af423e0f4a3902afe1b17e1d34126791b",
           "version": "0.12.0"
         },
         "instructions/agents-top.md": {
-          "hash": "efc45cddf4399dd21934f2008173c2ac4c90d7b2f6da081476d881a02dbb8958",
+          "hash": "3d4b900cea9711860d11ede79dffaa07766be952bc80b1e9ff9a49cb33b260f4",
           "version": "0.12.0"
         },
         "instructions/claude-top.md": {
-          "hash": "e7afb3613561f46ef623b982f865042337da1a897ab3a948dcb742fba2ac0f30",
+          "hash": "5b1b64ff5e173e2e64e37317411091a87318cc03084245ef7287c67cef18b312",
           "version": "0.12.0"
         },
         "instructions/global-system-prompt.md": {
