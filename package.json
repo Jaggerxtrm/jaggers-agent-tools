@@ -1,7 +1,7 @@
 {
   "name": "xtrm-tools",
   "version": "0.12.0",
-  "description": "Claude Code tools installer (skills, hooks, MCP servers)",
+  "description": "Durable multi-agent coding runtime for Pi, Claude Code, Codex, and Specialists",
   "license": "MIT",
   "type": "module",
   "workspaces": [
