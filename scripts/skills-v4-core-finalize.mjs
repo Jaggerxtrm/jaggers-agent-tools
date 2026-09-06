@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 
 const OLD_SHA = 'e7a8dadd9adfb4115ddade8713a4eb1cd4378a77';
 const FROZEN_SHA = 'f8cac893159959655d7787806704ce89d834d381';
+const SELF = 'scripts/skills-v4-core-finalize.mjs';
 const PROVENANCE_FILES = [
   '.xtrm/specialists-source.json',
   'docs/skills-ownership.json',
@@ -20,10 +21,13 @@ for (const path of PROVENANCE_FILES) {
   writeFileSync(path, current.replace(OLD_SHA, FROZEN_SHA));
 }
 
-// Fail if a fourth tracked provenance surface still points at the superseded pin.
+// Fail if a fourth durable tracked provenance surface still points at the
+// superseded pin. This one-shot finalizer necessarily contains OLD_SHA and is
+// removed before the durable commit, so exclude only this exact path.
 try {
-  const stale = execFileSync('git', ['grep', '-n', OLD_SHA], { encoding: 'utf8' }).trim();
-  if (stale) throw new Error(`stale Specialists SHA remains in tracked tree:\n${stale}`);
+  const raw = execFileSync('git', ['grep', '-n', OLD_SHA], { encoding: 'utf8' }).trim();
+  const stale = raw.split('\n').filter((line) => line && !line.startsWith(`${SELF}:`));
+  if (stale.length) throw new Error(`stale Specialists SHA remains in tracked tree:\n${stale.join('\n')}`);
 } catch (error) {
   if (error?.status !== 1) throw error; // git grep returns 1 when no matches exist.
 }
