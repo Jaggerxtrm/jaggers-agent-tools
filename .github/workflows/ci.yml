@@ -22,7 +22,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        persist-credentials: false
+        persist-credentials: true
 
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
@@ -41,8 +41,8 @@ jobs:
     - name: Finalize skills-v4 Core distribution
       if: github.event_name == 'pull_request' && github.head_ref == 'feat/skills-v4-system-consolidation'
       env:
-        GITHUB_TOKEN: ${{ github.token }}
         FROZEN_SPECIALISTS_SHA: f8cac893159959655d7787806704ce89d834d381
+        ORIGINAL_CI_COMMIT: a4f3e4026e2be12cec65e25e66db948ac999e868
       run: |
         set -euo pipefail
         git fetch origin "$GITHUB_HEAD_REF" --depth=3
@@ -58,9 +58,9 @@ jobs:
         node scripts/skills-v4-core-finalize.mjs
         SPECIALISTS_REPO_PATH="$RUNNER_TEMP/specialists-v4" npm run vendor:specialists
 
-        # Build once so the canonical instruction-header injector is importable.
         npm run build
-        node --input-type=module -e "const { injectProjectInstructionHeaders } = await import('./cli/dist/commands/init.js'); await injectProjectInstructionHeaders(process.cwd());"
+        ./node_modules/.bin/esbuild cli/src/commands/init.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/xtrm-init.mjs"
+        INIT_BUNDLE="$RUNNER_TEMP/xtrm-init.mjs" node --input-type=module -e "const { pathToFileURL } = await import('node:url'); const { injectProjectInstructionHeaders } = await import(pathToFileURL(process.env.INIT_BUNDLE)); await injectProjectInstructionHeaders(process.cwd());"
         npm run gen-registry
         npm run build
 
@@ -72,8 +72,9 @@ jobs:
         npm run check:layout-guards
         npm run check:skill-root-budget
 
-        # Restore the ordinary read-only workflow and remove one-shot machinery.
-        git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
+        # Restore the exact pre-finalizer workflow, remove one-shot machinery,
+        # then commit only durable generated/provenance/runtime output.
+        git show "$ORIGINAL_CI_COMMIT:.github/workflows/ci.yml" > .github/workflows/ci.yml
         rm scripts/skills-v4-core-finalize.mjs
 
         git config user.name "github-actions[bot]"
@@ -81,9 +82,7 @@ jobs:
         git add -A
         if ! git diff --cached --quiet; then
           git commit -m "fix(skills): finalize Core v4 distribution"
-          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push origin "HEAD:${GITHUB_HEAD_REF}"
-          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
         fi
 
     - name: Check package metadata
