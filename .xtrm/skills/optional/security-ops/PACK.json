@@ -1,9 +1,10 @@
 {
   "schemaVersion": "1",
   "name": "security-ops",
-  "version": "1.0.0",
-  "description": "Security auditing and DevSecOps skills",
+  "version": "3.0.0",
+  "description": "Security review, security baseline bootstrap, dependency/secrets scanning, and operational security evidence",
   "skills": [
-    "security-auditor"
+    "security-ops",
+    "security-bootstrap"
   ]
 }

@@ -97,7 +97,7 @@ function loadPiExtensionManifest(pkgRoot: string): PiExtensionManifest {
     });
     const disabled = Object.fromEntries(Object.entries(parsed.disabled).map(([id, reason]) => {
         if (typeof reason !== 'string' || reason.length === 0) {
-            throw new Error(`Invalid disabled managed Pi extension reason for '${id}' in ${manifestPath}`);
+            throw new Error(`Invalid managed Pi extension reason for '${id}' in ${manifestPath}`);
         }
         return [id, reason];
     }));
@@ -147,7 +147,7 @@ export async function syncManagedPiThemes(
         // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- name is a closed package-owned allowlist.
         const target = path.join(themeDir, name);
         // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
-            const expected = path.relative(themeDir, path.join(sourceDir, name));
+        const expected = path.relative(themeDir, path.join(sourceDir, name));
         const current = await fs.readlink(target).catch(() => null);
         return current !== expected;
     })).then(results => results.some(Boolean));
@@ -245,21 +245,31 @@ const MANAGED_PI_EXTENSION_OWNED_IDS = new Set([
 // ── Package Registry ─────────────────────────────────────────────────────────
 
 export interface ManagedPackage {
-    /** Package ID as used by pi (e.g., 'npm:pi-gitnexus') */
+    /** Package ID as used by Pi: npm:<spec> or git:<repo>. */
     id: string;
     /** Human-readable name */
     displayName: string;
-    /** Required for XTRM workflow */
+    /** Required for the core XTRM workflow; optional packages are still managed. */
     required: boolean;
 }
 
 const MANAGED_PACKAGES: ManagedPackage[] = [
     { id: 'npm:pi-gitnexus', displayName: 'pi-gitnexus', required: true },
-    { id: 'npm:@zenobius/pi-worktrees', displayName: 'pi-worktrees', required: true },
     { id: 'npm:@robhowley/pi-structured-return', displayName: 'pi-structured-return', required: true },
     { id: 'npm:@aliou/pi-guardrails', displayName: 'pi-guardrails', required: false },
-    { id: 'npm:@aliou/pi-processes', displayName: 'pi-processes', required: true },
+    { id: 'npm:@narumitw/pi-goal', displayName: 'pi-goal', required: false },
+    { id: 'git:github.com/DietrichGebert/ponytail', displayName: 'ponytail', required: false },
+    { id: 'npm:@tintinweb/pi-tasks', displayName: 'pi-tasks', required: false },
+    { id: 'npm:pi-background-tasks@latest', displayName: 'pi-background-tasks', required: false },
+    { id: 'npm:@gotgenes/pi-subagents', displayName: 'pi-subagents', required: true },
     { id: 'npm:pi-mcp-adapter', displayName: 'pi-mcp-adapter', required: true },
+    { id: 'npm:pi-mermaid-viewer', displayName: 'pi-mermaid-viewer', required: false },
+    { id: 'npm:@jaggerxtrm/pi-service-knowledge', displayName: 'pi-service-knowledge', required: true },
+    { id: 'npm:pi-intercom', displayName: 'pi-intercom', required: true },
+    { id: 'git:github.com/alonw0/pi-claude-link', displayName: 'pi-claude-link', required: true },
+    { id: 'npm:pi-ast-grep', displayName: 'pi-ast-grep', required: true },
+    { id: 'npm:@zenobius/pi-worktrees', displayName: 'pi-worktrees', required: true },
+    { id: 'npm:@aliou/pi-processes', displayName: 'pi-processes', required: true },
 ];
 
 const PROJECT_REQUIRED_PACKAGE_IDS = [
@@ -345,35 +355,62 @@ export interface PiRuntimePlan {
     packages: PackageStatus[];
     missingExtensions: ExtensionStatus[];
     staleExtensions: ExtensionStatus[];
-    orphanedExtensions: string[];  // Extensions in target not in source (xtrm-920d)
+    orphanedExtensions: string[];
     missingPackages: PackageStatus[];
     allRequiredPresent: boolean;
     allPresent: boolean;
 }
 
 /**
- * Parse `pi list` output to get installed package names.
+ * npm package name without Pi's `npm:` prefix or an install selector.
+ * Examples:
+ *   npm:foo@latest       -> foo
+ *   npm:@scope/pkg@next -> @scope/pkg
  */
+export function parseNpmPackageName(piPackageId: string): string | null {
+    if (!piPackageId.startsWith('npm:')) return null;
+    const spec = piPackageId.slice('npm:'.length).trim();
+    if (!spec) return null;
+
+    if (spec.startsWith('@')) {
+        const slashIndex = spec.indexOf('/');
+        if (slashIndex === -1) return spec;
+        const selectorIndex = spec.indexOf('@', slashIndex + 1);
+        return selectorIndex === -1 ? spec : spec.slice(0, selectorIndex);
+    }
+
+    const selectorIndex = spec.lastIndexOf('@');
+    return selectorIndex > 0 ? spec.slice(0, selectorIndex) : spec;
+}
+
+export function normalizePiPackageIdentity(piPackageId: string): string {
+    const npmPackageName = parseNpmPackageName(piPackageId);
+    if (npmPackageName) return `npm:${npmPackageName}`;
+    if (piPackageId.startsWith('git:')) {
+        return piPackageId.split('#', 1)[0].replace(/\.git$/, '');
+    }
+    return piPackageId;
+}
+
+function isPiPackageInstalled(piPackageId: string, installedPackageIds: readonly string[]): boolean {
+    const expected = normalizePiPackageIdentity(piPackageId);
+    return installedPackageIds.some((installed) => normalizePiPackageIdentity(installed) === expected);
+}
+
+/** Parse `pi list` output to get installed npm/git package IDs. */
 function getInstalledPiPackages(): string[] {
     const result = spawnSync('pi', ['list'], { encoding: 'utf8', stdio: 'pipe' });
     if (result.status !== 0) return [];
 
-    const output = result.stdout;
     const packages: string[] = [];
-
-    // Collect npm: packages from both User and Project sections
-    // Project-scoped installs go to .pi/npm/node_modules/
-    for (const line of output.split('\n')) {
-        const match = line.match(/^\s+(npm:[\w\-/@]+)/);
-        if (match) packages.push(match[1]);
+    for (const line of (result.stdout ?? '').split('\n')) {
+        const match = line.match(/^\s+((?:npm|git):\S+)/);
+        if (match) packages.push(match[1].replace(/[),;]+$/, ''));
     }
 
-    return packages.sort();
+    return [...new Set(packages)].sort();
 }
 
-/**
- * List extension directories in a target directory.
- */
 async function listInstalledExtensions(targetDir: string): Promise<string[]> {
     if (!await fs.pathExists(targetDir)) return [];
     const entries = await fs.readdir(targetDir, { withFileTypes: true });
@@ -383,14 +420,10 @@ async function listInstalledExtensions(targetDir: string): Promise<string[]> {
         .sort();
 }
 
-/**
- * Full inventory of Pi runtime state.
- */
 export async function inventoryPiRuntime(
     sourceDir: string,
     targetDir: string,
 ): Promise<PiRuntimePlan> {
-    // Extension inventory
     const installedExtNames = await listInstalledExtensions(targetDir);
     const extensionStatuses: ExtensionStatus[] = [];
     const missingExtensions: ExtensionStatus[] = [];
@@ -403,11 +436,7 @@ export async function inventoryPiRuntime(
 
         const srcExists = await fs.pathExists(srcPath);
         const dstExists = await fs.pathExists(dstPath);
-
-        if (!srcExists) {
-            // Extension not bundled in source — skip
-            continue;
-        }
+        if (!srcExists) continue;
 
         if (!dstExists) {
             const status: ExtensionStatus = { ext, installed: false };
@@ -416,10 +445,6 @@ export async function inventoryPiRuntime(
             continue;
         }
 
-        // Stale detection: if dstPath is a symlink, verify it resolves to srcPath.
-        // If it's a real copy (legacy), treat as stale so it gets replaced with a symlink.
-        // Skip stale check when srcPath === dstPath (verification mode: Pi reads extensions
-        // directly from source dir, no copy/symlink needed).
         let isStale = false;
         if (srcPath !== dstPath) {
             const dstStat = await fs.lstat(dstPath);
@@ -428,42 +453,29 @@ export async function inventoryPiRuntime(
                 const resolvedTarget = path.resolve(path.dirname(dstPath), linkTarget);
                 isStale = resolvedTarget !== path.resolve(srcPath);
             } else {
-                // Real copy — replace with symlink
                 isStale = true;
             }
         }
-        const status: ExtensionStatus = {
-            ext,
-            installed: true,
-            stale: isStale,
-        };
+        const status: ExtensionStatus = { ext, installed: true, stale: isStale };
         extensionStatuses.push(status);
-
-        if (isStale) {
-            staleExtensions.push(status);
-        }
+        if (isStale) staleExtensions.push(status);
     }
 
-    // Only remove known XTRM-owned retired IDs; user extensions are not orphans.
     for (const name of installedExtNames) {
         if (!MANAGED_PI_EXTENSION_IDS.has(name) && MANAGED_PI_EXTENSION_OWNED_IDS.has(name)) {
             orphanedExtensions.push(name);
         }
     }
 
-    // Package inventory
     const installedPkgIds = getInstalledPiPackages();
     const packageStatuses: PackageStatus[] = [];
     const missingPackages: PackageStatus[] = [];
 
     for (const pkg of MANAGED_PACKAGES) {
-        const isInstalled = installedPkgIds.includes(pkg.id);
+        const isInstalled = isPiPackageInstalled(pkg.id, installedPkgIds);
         const status: PackageStatus = { pkg, installed: isInstalled };
         packageStatuses.push(status);
-
-        if (!isInstalled) {
-            missingPackages.push(status);
-        }
+        if (!isInstalled) missingPackages.push(status);
     }
 
     const allRequiredPresent =
@@ -489,46 +501,32 @@ export async function inventoryPiRuntime(
     };
 }
 
-// ── Plan Rendering ───────────────────────────────────────────────────────────
-
 export function renderPiRuntimePlan(plan: PiRuntimePlan): void {
     console.log(kleur.bold('\n  Pi Runtime'));
     console.log(kleur.dim('  ' + '-'.repeat(50)));
 
-    // Extensions
     const extTotal = plan.extensions.length;
     const extOk = plan.extensions.filter(s => s.installed && !s.stale).length;
-
     console.log(kleur.dim(`  Extensions: ${extOk}/${extTotal} up-to-date`));
 
     if (plan.missingExtensions.length > 0) {
-        const names = plan.missingExtensions.map(s => s.ext.displayName).join(', ');
-        console.log(kleur.yellow(`  Missing:    ${names}`));
+        console.log(kleur.yellow(`  Missing:    ${plan.missingExtensions.map(s => s.ext.displayName).join(', ')}`));
     }
-
     if (plan.staleExtensions.length > 0) {
-        const names = plan.staleExtensions.map(s => s.ext.displayName).join(', ');
-        console.log(kleur.yellow(`  Stale:      ${names}`));
+        console.log(kleur.yellow(`  Stale:      ${plan.staleExtensions.map(s => s.ext.displayName).join(', ')}`));
     }
-
     if (plan.orphanedExtensions.length > 0) {
-        const names = plan.orphanedExtensions.join(', ');
-        console.log(kleur.red(`  Orphaned:   ${names} (will remove)`));
+        console.log(kleur.red(`  Orphaned:   ${plan.orphanedExtensions.join(', ')} (will remove)`));
     }
 
-    // Packages
     const pkgTotal = plan.packages.length;
     const pkgOk = plan.packages.filter(s => s.installed).length;
-
     console.log(kleur.dim(`  Packages:   ${pkgOk}/${pkgTotal} installed`));
-
     if (plan.missingPackages.length > 0) {
-        const names = plan.missingPackages.map(s => s.pkg.displayName).join(', ');
-        console.log(kleur.yellow(`  Missing:    ${names}`));
+        console.log(kleur.yellow(`  Missing:    ${plan.missingPackages.map(s => s.pkg.displayName).join(', ')}`));
     }
 
     console.log(kleur.dim('  ' + '-'.repeat(50)));
-
     if (plan.allPresent) {
         console.log(t.success('  ✓ All extensions and packages present.\n'));
     } else if (plan.allRequiredPresent) {
@@ -538,10 +536,8 @@ export function renderPiRuntimePlan(plan: PiRuntimePlan): void {
             ...plan.missingPackages.filter(s => !s.pkg.required),
         ];
         if (optionalMissing.length > 0) {
-            const names = optionalMissing.map(s =>
-                'ext' in s ? s.ext.displayName : s.pkg.displayName
-            ).join(', ');
-            console.log(kleur.dim(`  ○ Optional not installed: ${names}\n`));
+            const names = optionalMissing.map(s => 'ext' in s ? s.ext.displayName : s.pkg.displayName).join(', ');
+            console.log(kleur.dim(`  ○ Managed optional items not installed: ${names}\n`));
         } else {
             console.log('');
         }
@@ -550,18 +546,11 @@ export function renderPiRuntimePlan(plan: PiRuntimePlan): void {
     }
 }
 
-// ── Sync Execution ───────────────────────────────────────────────────────────
-
 export interface PiSyncOptions {
-    /** Dry run — print what would happen but don't write */
     dryRun?: boolean;
-    /** Install to global ~/.pi/agent/ (default: project-scoped) */
     isGlobal?: boolean;
-    /** Project root for project-scoped installs */
     projectRoot?: string;
-    /** Remove orphaned extensions (xtrm-920d mirror behavior) */
     removeOrphaned?: boolean;
-    /** Log function for progress messages */
     log?: (message: string) => void;
 }
 
@@ -578,11 +567,7 @@ function getProjectRequiredPackageStatuses(installedPkgIds: readonly string[]): 
     return PROJECT_REQUIRED_PACKAGE_IDS.map((packageId) => {
         const managed = getXtManagedPiPackages().find((pkg) => pkg.id === packageId);
         const pkg: ManagedPackage = managed ?? PROJECT_EXTENSION_PACKAGE;
-
-        return {
-            pkg,
-            installed: installedPkgIds.includes(packageId),
-        };
+        return { pkg, installed: isPiPackageInstalled(packageId, installedPkgIds) };
     });
 }
 
@@ -597,12 +582,6 @@ function mergePiSyncResults(base: PiSyncResult, incoming: PiSyncResult): PiSyncR
     };
 }
 
-function parseNpmPackageName(piPackageId: string): string | null {
-    if (!piPackageId.startsWith('npm:')) return null;
-    const npmPackageName = piPackageId.slice(4).trim();
-    return npmPackageName.length > 0 ? npmPackageName : null;
-}
-
 function classifyPiPackageFreshness(info: PiPackageVersionInfo): PiPackageFreshnessState {
     if (!info.installedVersion) return 'missing';
     if (!info.expectedVersion) return 'version-unknown';
@@ -614,12 +593,8 @@ function resolveInstalledPiPackageJsonPath(
     npmPackageName: string,
     npmRootDir?: string,
 ): string {
-    // xt-managed allowlist
-    // nosemgrep
     const agentPackageJsonPath = path.join(agentDir, 'npm', 'node_modules', npmPackageName, 'package.json');
     if (fs.existsSync(agentPackageJsonPath) || !npmRootDir) return agentPackageJsonPath;
-    // xt-managed allowlist
-    // nosemgrep
     return path.join(npmRootDir, npmPackageName, 'package.json');
 }
 
@@ -640,6 +615,7 @@ export async function getInstalledPiPackageVersion(
 }
 
 const PI_PACKAGE_VERSION_LOOKUP_TIMEOUT_MS = 5000;
+const NPMJS_REGISTRY_URL = 'https://registry.npmjs.org';
 
 async function getExpectedPiPackageVersion(npmPackageName: string): Promise<string | null> {
     const result = spawnSync('npm', ['view', npmPackageName, 'version', '--registry', NPMJS_REGISTRY_URL], {
@@ -647,9 +623,7 @@ async function getExpectedPiPackageVersion(npmPackageName: string): Promise<stri
         stdio: 'pipe',
         timeout: PI_PACKAGE_VERSION_LOOKUP_TIMEOUT_MS,
     });
-
     if (result.status !== 0) return null;
-
     const version = (result.stdout ?? '').trim();
     return version.length > 0 ? version : null;
 }
@@ -657,6 +631,7 @@ async function getExpectedPiPackageVersion(npmPackageName: string): Promise<stri
 export async function getManagedPiPackageFreshness(
     versionProvider: PiPackageVersionProvider,
     packages: readonly ManagedPackage[] = getXtManagedPiPackages(),
+    installedPackageIds: readonly string[] = getInstalledPiPackages(),
 ): Promise<PiPackageFreshnessStatus[]> {
     const statuses: PiPackageFreshnessStatus[] = [];
 
@@ -668,7 +643,7 @@ export async function getManagedPiPackageFreshness(
                 npmPackageName: '',
                 installedVersion: null,
                 expectedVersion: null,
-                state: 'version-unknown',
+                state: isPiPackageInstalled(pkg.id, installedPackageIds) ? 'current' : 'missing',
             });
             continue;
         }
@@ -676,7 +651,6 @@ export async function getManagedPiPackageFreshness(
         const info = await versionProvider(pkg.id, npmPackageName, pkg);
         const installedVersion = info.installedVersion ?? null;
         const expectedVersion = info.expectedVersion ?? null;
-
         statuses.push({
             pkg,
             npmPackageName,
@@ -693,21 +667,18 @@ export async function isPackagePresentInPiAgent(
     agentDir: string,
     piPackageId: string,
     npmRootDir?: string,
+    installedPackageIds?: readonly string[],
 ): Promise<boolean> {
     const npmPackageName = parseNpmPackageName(piPackageId);
-    if (!npmPackageName) return false;
+    if (!npmPackageName) {
+        return isPiPackageInstalled(piPackageId, installedPackageIds ?? getInstalledPiPackages());
+    }
 
-    // xt-managed allowlist
-    // nosemgrep
     const agentPackageDir = path.join(agentDir, 'npm', 'node_modules', npmPackageName);
     if (await fs.pathExists(agentPackageDir)) return true;
     if (!npmRootDir) return false;
-    // xt-managed allowlist
-    // nosemgrep
     return fs.pathExists(path.join(npmRootDir, npmPackageName));
 }
-
-const NPMJS_REGISTRY_URL = 'https://registry.npmjs.org';
 
 interface PiPackageInstallResult {
     status: number | null;
@@ -751,16 +722,12 @@ function buildNpmjsRegistryEnv(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS
 
 export function shouldRetryPiInstallViaNpmjs(piPackageId: string, output: string): boolean {
     if (piPackageId !== PROJECT_EXTENSION_PACKAGE_ID) return false;
-
     const normalizedOutput = output.toLowerCase();
     return normalizedOutput.includes('npmmirror') && normalizedOutput.includes('404');
 }
 
 export function getPiPackageInstallFailureHint(piPackageId: string, output: string): string[] {
-    if (!shouldRetryPiInstallViaNpmjs(piPackageId, output)) {
-        return [];
-    }
-
+    if (!shouldRetryPiInstallViaNpmjs(piPackageId, output)) return [];
     return [
         `detected registry mirror 404 for ${piPackageId}`,
         `best fix: npm config set @jaggerxtrm:registry ${NPMJS_REGISTRY_URL}`,
@@ -778,7 +745,6 @@ function installPiPackageWithFallback(
     if ((initialResult.status ?? 1) === 0) {
         return { status: initialResult.status, output: initialOutput, retriedWithNpmjs: false };
     }
-
     if (!shouldRetryPiInstallViaNpmjs(piPackageId, initialOutput)) {
         return { status: initialResult.status, output: initialOutput, retriedWithNpmjs: false };
     }
@@ -786,7 +752,6 @@ function installPiPackageWithFallback(
     log?.(kleur.dim(`Detected npmmirror 404 for ${piPackageId}; retrying via ${NPMJS_REGISTRY_URL}`));
     const retriedResult = installRunner(piPackageId, buildNpmjsRegistryEnv());
     const retriedOutput = getPiPackageInstallOutput(retriedResult);
-
     return {
         status: retriedResult.status,
         output: [initialOutput, retriedOutput].filter(Boolean).join('\n'),
@@ -800,16 +765,15 @@ export async function ensureAlwaysGlobalPiPackages(
     agentDir: string = PI_AGENT_DIR,
     installRunner: PiPackageInstallRunner = runPiPackageInstall,
     npmRootDir?: string | null,
+    installedPackageIds?: readonly string[],
 ): Promise<{ installed: string[]; failed: string[] }> {
     const installed: string[] = [];
     const failed: string[] = [];
-
     const resolvedNpmRootDir = npmRootDir === undefined ? await resolveGlobalNpmRootDir() : npmRootDir;
+    const resolvedInstalledPackageIds = installedPackageIds ?? getInstalledPiPackages();
 
     for (const pkg of getXtManagedPiPackages()) {
-        if (await isPackagePresentInPiAgent(agentDir, pkg.id, resolvedNpmRootDir ?? undefined)) {
-            continue;
-        }
+        if (await isPackagePresentInPiAgent(agentDir, pkg.id, resolvedNpmRootDir ?? undefined, resolvedInstalledPackageIds)) continue;
 
         if (dryRun) {
             log?.(`[DRY RUN] pi install ${pkg.id}`);
@@ -902,52 +866,32 @@ export async function getXtManagedPiPackageDoctorReport(
 
     const missing = issues.filter((issue) => issue.state === 'missing');
     const outdated = issues.filter((issue) => issue.state === 'outdated');
-    const ok = statuses.filter((status) => status.state === 'current').map((status) => ({
-        ...status,
-        remediation: '',
-    }));
+    const ok = statuses.filter((status) => status.state === 'current').map((status) => ({ ...status, remediation: '' }));
 
-    return {
-        issues,
-        missing,
-        outdated,
-        ok,
-        hasIssues: issues.length > 0,
-    };
+    return { issues, missing, outdated, ok, hasIssues: issues.length > 0 };
 }
 
-/**
- * Ensure @xtrm/pi-core is resolvable from .xtrm/extensions/node_modules/@xtrm/pi-core.
- * Creates a symlink pointing to the actual core source (not a mirror).
- */
 export type CoreSymlinkStatus = 'missing-source' | 'ok' | 'created' | 'repaired' | 'would-create' | 'would-repair';
 
 export async function ensureCorePackageSymlink(
-    coreSrcDir: string,    // path to .xtrm/extensions/core (the actual source)
+    coreSrcDir: string,
     projectRoot: string,
     dryRun: boolean,
     log?: (message: string) => void,
 ): Promise<CoreSymlinkStatus> {
     if (!await fs.pathExists(coreSrcDir)) return 'missing-source';
 
-    // Place symlink in .xtrm/extensions/node_modules/@xtrm/pi-core so that
-    // Node.js module resolution from any extension under .xtrm/extensions/
-    // can find @xtrm/pi-core by traversing up to .xtrm/extensions/node_modules/.
-    // (.pi/node_modules/ is NOT on the resolution path from .xtrm/extensions/.)
     const extensionsDir = path.join(projectRoot, '.xtrm', 'extensions');
     const nodeModulesDir = path.join(extensionsDir, 'node_modules', '@xtrm');
     const symlinkPath = path.join(nodeModulesDir, 'pi-core');
     const expectedTarget = path.resolve(coreSrcDir);
 
-    // Use lstat (not pathExists) so we detect broken symlinks too
     const existing = await fs.lstat(symlinkPath).catch(() => null);
     if (existing) {
         if (existing.isSymbolicLink()) {
             const currentLinkTarget = await fs.readlink(symlinkPath);
             const resolvedTarget = path.resolve(path.dirname(symlinkPath), currentLinkTarget);
-            if (resolvedTarget === expectedTarget) {
-                return 'ok';
-            }
+            if (resolvedTarget === expectedTarget) return 'ok';
         }
 
         if (dryRun) {
@@ -995,57 +939,27 @@ export async function remediateStalePiMcpAdapterOverride(
 ): Promise<PiMcpAdapterOverrideCheck> {
     const stat = await fs.lstat(PI_MCP_ADAPTER_OVERRIDE_DIR).catch(() => null);
     if (!stat) {
-        return {
-            path: PI_MCP_ADAPTER_OVERRIDE_DIR,
-            found: false,
-            stale: false,
-            remediated: false,
-        };
+        return { path: PI_MCP_ADAPTER_OVERRIDE_DIR, found: false, stale: false, remediated: false };
     }
 
     if (stat.isSymbolicLink()) {
-        return {
-            path: PI_MCP_ADAPTER_OVERRIDE_DIR,
-            found: true,
-            stale: false,
-            remediated: false,
-        };
+        return { path: PI_MCP_ADAPTER_OVERRIDE_DIR, found: true, stale: false, remediated: false };
     }
 
     const hasRequiredEntry = await fs.pathExists(path.join(PI_MCP_ADAPTER_OVERRIDE_DIR, PI_MCP_ADAPTER_REQUIRED_ENTRY));
     if (stat.isDirectory() && hasRequiredEntry) {
-        return {
-            path: PI_MCP_ADAPTER_OVERRIDE_DIR,
-            found: true,
-            stale: false,
-            remediated: false,
-        };
+        return { path: PI_MCP_ADAPTER_OVERRIDE_DIR, found: true, stale: false, remediated: false };
     }
 
-    const reason = stat.isDirectory()
-        ? `missing ${PI_MCP_ADAPTER_REQUIRED_ENTRY}`
-        : 'not a directory/symlink';
-
+    const reason = stat.isDirectory() ? `missing ${PI_MCP_ADAPTER_REQUIRED_ENTRY}` : 'not a directory/symlink';
     if (dryRun) {
         log?.(kleur.dim(`[DRY RUN] would remove stale pi-mcp-adapter override (${reason})`));
-        return {
-            path: PI_MCP_ADAPTER_OVERRIDE_DIR,
-            found: true,
-            stale: true,
-            remediated: false,
-            reason,
-        };
+        return { path: PI_MCP_ADAPTER_OVERRIDE_DIR, found: true, stale: true, remediated: false, reason };
     }
 
     await fs.remove(PI_MCP_ADAPTER_OVERRIDE_DIR);
     log?.(kleur.dim(`Removed stale pi-mcp-adapter override (${reason})`));
-    return {
-        path: PI_MCP_ADAPTER_OVERRIDE_DIR,
-        found: true,
-        stale: true,
-        remediated: true,
-        reason,
-    };
+    return { path: PI_MCP_ADAPTER_OVERRIDE_DIR, found: true, stale: true, remediated: true, reason };
 }
 
 export async function runPiLaunchPreflight(
@@ -1062,17 +976,9 @@ export async function runPiLaunchPreflight(
         log,
     );
 
-    return {
-        coreSymlinkStatus,
-        staleOverride,
-        themesChanged,
-    };
+    return { coreSymlinkStatus, staleOverride, themesChanged };
 }
 
-/**
- * Update .pi/settings.json with extension package paths.
- * Pi only auto-discovers global extensions — project-scoped needs settings.json.
- */
 function isXtrmExtensionsSetting(entry: string): boolean {
     const normalizedEntry = entry.replaceAll('\\', '/').replace(/\/$/, '');
     return normalizedEntry === PROJECT_EXTENSIONS_ENTRY || normalizedEntry === '.xtrm/extensions';
@@ -1084,7 +990,6 @@ async function cleanupLegacyProjectExtensionCopies(
     log?: (message: string) => void,
 ): Promise<{ removed: string[]; failed: string[]; pending: string[] }> {
     const piSettingsPath = path.join(projectRoot, '.pi', 'settings.json');
-
     let existingSettings: { extensions?: string[] } = {};
     try {
         existingSettings = await fs.readJson(piSettingsPath);
@@ -1105,9 +1010,7 @@ async function cleanupLegacyProjectExtensionCopies(
     for (const ext of MANAGED_EXTENSIONS) {
         const legacyExtPath = path.join(legacyExtensionsDir, ext.id);
         const legacyStat = await fs.lstat(legacyExtPath).catch(() => null);
-        if (!legacyStat || legacyStat.isSymbolicLink() || !legacyStat.isDirectory()) {
-            continue;
-        }
+        if (!legacyStat || legacyStat.isSymbolicLink() || !legacyStat.isDirectory()) continue;
 
         if (dryRun) {
             pending.push(ext.id);
@@ -1151,12 +1054,6 @@ function normalizeStringArray(value: unknown): string[] {
     return value.filter((entry): entry is string => typeof entry === 'string');
 }
 
-function normalizeRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object' && !Array.isArray(value)
-        ? { ...(value as Record<string, unknown>) }
-        : {};
-}
-
 function normalizePiSkillsEntries(existingSkills: readonly string[]): string[] {
     return existingSkills.filter((entry, index) => existingSkills.indexOf(entry) === index && !LEGACY_XTRM_SKILLS_ENTRIES.has(entry));
 }
@@ -1185,15 +1082,10 @@ async function appendSkillsPointerLog(event: {
 export function pruneConflictingPiPackageEntries(entries: readonly string[]): { kept: string[]; removed: string[] } {
     const kept: string[] = [];
     const removed: string[] = [];
-
     for (const entry of entries) {
-        if (CONFLICTING_PI_PACKAGE_IDS.has(entry)) {
-            removed.push(entry);
-            continue;
-        }
-        kept.push(entry);
+        if (CONFLICTING_PI_PACKAGE_IDS.has(entry)) removed.push(entry);
+        else kept.push(entry);
     }
-
     return { kept, removed };
 }
 
@@ -1204,9 +1096,7 @@ async function pruneConflictingPiPackagesFromSettings(
     migrateXtrmPreferences = false,
     log?: (message: string) => void,
 ): Promise<string[]> {
-    if (!await fs.pathExists(settingsPath)) {
-        return [];
-    }
+    if (!await fs.pathExists(settingsPath)) return [];
 
     let existingSettings: PiSettingsShape = {};
     try {
@@ -1220,20 +1110,12 @@ async function pruneConflictingPiPackagesFromSettings(
     const theme = migrateXtrmPreferences ? normalizeXtrmTheme(existingSettings.theme) : existingSettings.theme;
     const themeChanged = theme !== existingSettings.theme;
     const hasObsoleteCompactSetting = migrateXtrmPreferences && 'xtrmExternalCompact' in existingSettings;
-    if (removed.length === 0 && !themeChanged && !hasObsoleteCompactSetting) {
-        return [];
-    }
+    if (removed.length === 0 && !themeChanged && !hasObsoleteCompactSetting) return [];
 
     if (dryRun) {
-        if (removed.length > 0) {
-            log?.(kleur.dim(`[DRY RUN] would remove conflicting Pi package(s) from ${scopeLabel}: ${removed.join(', ')}`));
-        }
-        if (themeChanged) {
-            log?.(kleur.dim(`[DRY RUN] would migrate Pi theme in ${scopeLabel}: ${String(existingSettings.theme)} → ${String(theme)}`));
-        }
-        if (hasObsoleteCompactSetting) {
-            log?.(kleur.dim(`[DRY RUN] would remove obsolete xtrmExternalCompact from ${scopeLabel}`));
-        }
+        if (removed.length > 0) log?.(kleur.dim(`[DRY RUN] would remove conflicting Pi package(s) from ${scopeLabel}: ${removed.join(', ')}`));
+        if (themeChanged) log?.(kleur.dim(`[DRY RUN] would migrate Pi theme in ${scopeLabel}: ${String(existingSettings.theme)} → ${String(theme)}`));
+        if (hasObsoleteCompactSetting) log?.(kleur.dim(`[DRY RUN] would remove obsolete xtrmExternalCompact from ${scopeLabel}`));
         return removed;
     }
 
@@ -1242,12 +1124,8 @@ async function pruneConflictingPiPackagesFromSettings(
     if (themeChanged) nextSettings.theme = theme;
     if (hasObsoleteCompactSetting) delete nextSettings.xtrmExternalCompact;
     await fs.writeJson(settingsPath, nextSettings, { spaces: 2 });
-    if (removed.length > 0) {
-        log?.(kleur.dim(`Removed conflicting Pi package(s) from ${scopeLabel}: ${removed.join(', ')}`));
-    }
-    if (themeChanged) {
-        log?.(kleur.dim(`Migrated Pi theme in ${scopeLabel}: ${String(existingSettings.theme)} → ${String(theme)}`));
-    }
+    if (removed.length > 0) log?.(kleur.dim(`Removed conflicting Pi package(s) from ${scopeLabel}: ${removed.join(', ')}`));
+    if (themeChanged) log?.(kleur.dim(`Migrated Pi theme in ${scopeLabel}: ${String(existingSettings.theme)} → ${String(theme)}`));
     return removed;
 }
 
@@ -1259,7 +1137,6 @@ export async function cleanupConflictingPiPackageSettings(
     agentDir = PI_AGENT_DIR,
 ): Promise<string[]> {
     const globalRemoved = await pruneConflictingPiPackagesFromSettings(
-        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- agentDir is an internal runtime path and filename is fixed.
         path.join(agentDir, 'settings.json'),
         '~/.pi/agent/settings.json',
         dryRun,
@@ -1276,31 +1153,6 @@ export async function cleanupConflictingPiPackageSettings(
     return [...globalRemoved, ...projectRemoved];
 }
 
-/**
- * Enforce the operator's `npm:@jaggerxtrm/pi-extensions` invariant
- * (bead xtrm-xnymw): after any sync the package is registered EXACTLY ONCE,
- * and that once is global. Both "registered twice" and "registered nowhere"
- * are failures.
- *
- * ENSURE-THEN-REMOVE:
- *   1. make sure `~/.pi/agent/settings.json` declares the package;
- *   2. THEN strip it from the per-repo `packages` array.
- *
- * Never the reverse, and never remove without step 1 having succeeded.
- * The earlier variants of this function fell open on any global read error
- * (re-adding the entry) OR removed unconditionally (leaving nothing to load
- * the package when the global settings had no entry yet). Both were wrong.
- *
- * If step 1 fails — global settings unreadable, disk error, write failure —
- * the per-repo entry is left in place and a diagnostic is emitted to stderr
- * and to the caller's log channel. A working per-repo entry is strictly
- * better than no registration at all.
- *
- * Pi resolves npm packages by scope-free identity, so a coexisting global
- * and per-repo entry collide in `dedupePackages` with the PROJECT entry
- * winning — which pins the repo to whatever copy sits in
- * `<project>/.pi/npm/node_modules`. That is the "registered twice" failure.
- */
 async function reconcileProjectExtensionPackageEntry(
     packages: readonly string[],
     dryRun: boolean,
@@ -1311,15 +1163,6 @@ async function reconcileProjectExtensionPackageEntry(
     return packages.filter((entry) => entry !== PROJECT_EXTENSION_PACKAGE_ID);
 }
 
-/**
- * True when a packages[] entry IS the managed pi-extensions package.
- *
- * Recognizes the npm id and local source checkouts (e.g.
- * "../../dev/core/packages/pi-extensions" — the operator's dev checkout) so
- * the exactly-one-package invariant treats a local registration as already
- * satisfying the global declaration instead of appending the npm copy beside
- * it (xtrm-3ljgz.1). Remote refs (npm:/git:/file:) never match by path.
- */
 export function isManagedPiExtensionsPackageEntry(entry: string): boolean {
     if (entry === PROJECT_EXTENSION_PACKAGE_ID) return true;
     if (entry.startsWith('npm:') || entry.startsWith('git:') || entry.startsWith('file:')) return false;
@@ -1327,13 +1170,6 @@ export function isManagedPiExtensionsPackageEntry(entry: string): boolean {
     const segments = normalized.split('/').filter(Boolean);
     const base = segments[segments.length - 1];
     if (base !== 'pi-extensions') return false;
-    // Review tightening (xtrm-3ljgz): the managed local source lives at
-    // <repo>/packages/pi-extensions, so for path forms the IMMEDIATE parent
-    // segment must be 'packages' (any checkout of this repo) — not merely a
-    // 'packages' segment somewhere up the path. Pure string test: no fs I/O,
-    // works for relative, absolute, and Windows-style paths.
-    // A bare "pi-extensions" entry (scope-free identity form) still counts:
-    // it cannot be distinguished from a foreign package by string alone.
     return segments.length === 1 || segments[segments.length - 2] === 'packages';
 }
 
@@ -1341,7 +1177,6 @@ async function ensureGlobalDeclaresExtensionPackage(
     dryRun: boolean,
     log?: (message: string) => void,
 ): Promise<boolean> {
-    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- PI_AGENT_DIR is an internal runtime path and filename is fixed.
     const settingsPath = path.join(PI_AGENT_DIR, 'settings.json');
     let settings: PiSettingsShape;
     try {
@@ -1363,11 +1198,7 @@ async function ensureGlobalDeclaresExtensionPackage(
 
     try {
         await fs.ensureDir(PI_AGENT_DIR);
-        await fs.writeJson(
-            settingsPath,
-            { ...settings, packages: [...globalPackages, PROJECT_EXTENSION_PACKAGE_ID] },
-            { spaces: 2 },
-        );
+        await fs.writeJson(settingsPath, { ...settings, packages: [...globalPackages, PROJECT_EXTENSION_PACKAGE_ID] }, { spaces: 2 });
         return true;
     } catch (error) {
         const msg = `⚠ cannot ensure global registration of ${PROJECT_EXTENSION_PACKAGE_ID}: write to ${settingsPath} failed (${(error as Error).message}). Leaving per-repo entry in place.`;
@@ -1409,18 +1240,15 @@ export async function updatePiSettings(
         packages: existingPackages,
         theme: normalizeXtrmTheme(existingSettings.theme),
     };
-    if (normalizedSkills.length > 0) {
-        nextSettings.skills = normalizedSkills;
-    } else {
-        delete nextSettings.skills;
-    }
+    if (normalizedSkills.length > 0) nextSettings.skills = normalizedSkills;
+    else delete nextSettings.skills;
     delete nextSettings.xtrmExternalCompact;
 
     const changed = JSON.stringify(existingSettings) !== JSON.stringify(nextSettings);
     if (!changed) return false;
 
     if (dryRun) {
-        log?.(kleur.dim(`[DRY RUN] would repair .pi/settings.json`));
+        log?.(kleur.dim('[DRY RUN] would repair .pi/settings.json'));
         return true;
     }
 
@@ -1440,9 +1268,6 @@ export async function updatePiSettings(
     return true;
 }
 
-/**
- * Execute Pi runtime sync.
- */
 export async function executePiSync(
     plan: PiRuntimePlan,
     sourceDir: string,
@@ -1466,14 +1291,9 @@ export async function executePiSync(
         changed: false,
     };
 
-    // Ensure target directory exists
-    if (!dryRun) {
-        await fs.ensureDir(targetDir);
-    }
+    if (!dryRun) await fs.ensureDir(targetDir);
 
-    // Sync missing + stale extensions
     const toSync = [...plan.missingExtensions, ...plan.staleExtensions];
-
     for (const status of toSync) {
         const { ext } = status;
         const srcPath = path.join(sourceDir, ext.id);
@@ -1485,7 +1305,6 @@ export async function executePiSync(
         }
 
         try {
-            // Remove stale copy/symlink, then create a relative symlink into .xtrm/extensions
             await fs.remove(dstPath);
             const relTarget = path.relative(targetDir, srcPath);
             await fs.symlink(relTarget, dstPath);
@@ -1502,16 +1321,13 @@ export async function executePiSync(
         }
     }
 
-    // Remove orphaned extensions (xtrm-920d)
     if (removeOrphaned && plan.orphanedExtensions.length > 0) {
         for (const orphanId of plan.orphanedExtensions) {
             const orphanPath = path.join(targetDir, orphanId);
-
             if (dryRun) {
                 log(kleur.red(`[DRY RUN] - ${orphanId} (orphaned)`));
                 continue;
             }
-
             try {
                 await fs.remove(orphanPath);
                 result.extensionsRemoved.push(orphanId);
@@ -1523,13 +1339,10 @@ export async function executePiSync(
         }
     }
 
-    // Install missing packages (always global at ~/.pi/agent/npm/)
     for (const status of plan.missingPackages) {
         const { pkg } = status;
-        const installArgs = ['install', pkg.id];
-
         if (dryRun) {
-            log(`[DRY RUN] pi ${installArgs.join(' ')}`);
+            log(`[DRY RUN] pi install ${pkg.id}`);
             continue;
         }
 
@@ -1541,9 +1354,7 @@ export async function executePiSync(
             } else {
                 result.failed.push(pkg.id);
                 log(kleur.yellow(`⚠ ${pkg.displayName} — install failed`));
-                for (const hint of getPiPackageInstallFailureHint(pkg.id, installAttempt.output)) {
-                    log(kleur.yellow(`  → ${hint}`));
-                }
+                for (const hint of getPiPackageInstallFailureHint(pkg.id, installAttempt.output)) log(kleur.yellow(`  → ${hint}`));
             }
         } catch (err) {
             result.failed.push(pkg.id);
@@ -1554,24 +1365,14 @@ export async function executePiSync(
     return result;
 }
 
-// ── Full Sync Flow ───────────────────────────────────────────────────────────
-
 export interface PiRuntimeOptions {
     dryRun?: boolean;
     isGlobal?: boolean;
     projectRoot?: string;
-    /** Update invokes global package assurance once after all repo reconciliations. */
     skipGlobalPackageAssurance?: boolean;
-    /** Update invokes the external patch once after all repo reconciliations. */
     skipExternalToolPatch?: boolean;
 }
 
-/**
- * Run full Pi runtime sync flow: inventory -> plan -> sync.
- *
- * Global installs mirror extension directories into ~/.pi/agent/extensions/.
- * Project installs use package-based extension registration via `pi install npm:@jaggerxtrm/pi-extensions`.
- */
 export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiSyncResult> {
     const {
         dryRun = false,
@@ -1604,9 +1405,7 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
     result.changed = preflight.themesChanged
         || (preflight.coreSymlinkStatus !== 'ok' && preflight.coreSymlinkStatus !== 'missing-source')
         || preflight.staleOverride.stale;
-    if (preflight.staleOverride.remediated) {
-        result.extensionsRemoved.push('pi-mcp-adapter');
-    }
+    if (preflight.staleOverride.remediated) result.extensionsRemoved.push('pi-mcp-adapter');
 
     const conflictingPackages = await cleanupConflictingPiPackageSettings(resolvedProjectRoot, dryRun, isGlobal, log);
     result.changed ||= conflictingPackages.length > 0;
@@ -1623,11 +1422,7 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
                 isGlobal: true,
                 removeOrphaned: true,
             });
-            result.extensionsAdded.push(...synced.extensionsAdded);
-            result.extensionsUpdated.push(...synced.extensionsUpdated);
-            result.extensionsRemoved.push(...synced.extensionsRemoved);
-            result.packagesInstalled.push(...synced.packagesInstalled);
-            result.failed.push(...synced.failed);
+            Object.assign(result, mergePiSyncResults(result, synced));
         }
 
         if (!skipGlobalPackageAssurance) {
@@ -1655,8 +1450,7 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
     const pkgOk = packageStatuses.filter((status) => status.installed).length;
     console.log(kleur.dim(`  Packages:   ${pkgOk}/${packageStatuses.length} installed`));
     if (missingPackages.length > 0) {
-        const names = missingPackages.map((status) => status.pkg.displayName).join(', ');
-        console.log(kleur.yellow(`  Missing:    ${names}`));
+        console.log(kleur.yellow(`  Missing:    ${missingPackages.map((status) => status.pkg.displayName).join(', ')}`));
     }
     console.log(kleur.dim('  ' + '-'.repeat(50)));
 
@@ -1665,25 +1459,19 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
     result.failed.push(...legacyCleanup.failed);
     result.changed ||= legacyCleanup.removed.length > 0 || legacyCleanup.pending.length > 0;
 
-    // Clean stale global extension symlinks from pre-package-mode installs
     const globalExtDir = path.join(PI_AGENT_DIR, 'extensions');
     if (await fs.pathExists(globalExtDir)) {
-        const STALE_SYMLINKS = MANAGED_PI_EXTENSION_OWNED_IDS;
         const globalEntries = await fs.readdir(globalExtDir, { withFileTypes: true });
         for (const entry of globalEntries) {
-            if (entry.isSymbolicLink() && STALE_SYMLINKS.has(entry.name)) {
-                if (!dryRun) {
-                    await fs.remove(path.join(globalExtDir, entry.name));
-                }
+            if (entry.isSymbolicLink() && MANAGED_PI_EXTENSION_OWNED_IDS.has(entry.name)) {
+                if (!dryRun) await fs.remove(path.join(globalExtDir, entry.name));
                 result.extensionsRemoved.push(entry.name);
                 log(`Removed stale global symlink: ${entry.name}`);
             }
         }
         const staleNodeModules = path.join(globalExtDir, 'node_modules');
         if (await fs.pathExists(staleNodeModules)) {
-            if (!dryRun) {
-                await fs.remove(staleNodeModules);
-            }
+            if (!dryRun) await fs.remove(staleNodeModules);
             log('Removed stale global extensions/node_modules');
         }
     }
@@ -1708,9 +1496,7 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
 
                 result.failed.push(pkg.id);
                 log(kleur.yellow(`⚠ ${pkg.displayName} — install failed`));
-                for (const hint of getPiPackageInstallFailureHint(pkg.id, installAttempt.output)) {
-                    log(kleur.yellow(`  → ${hint}`));
-                }
+                for (const hint of getPiPackageInstallFailureHint(pkg.id, installAttempt.output)) log(kleur.yellow(`  → ${hint}`));
             } catch (err) {
                 result.failed.push(pkg.id);
                 log(kleur.red(`✗ ${pkg.displayName}: ${err}`));
@@ -1732,20 +1518,14 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
             throw new Error(`Skills invariants failed. ${summary}`);
         }
 
-        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         const activeSkillsPath = path.join(skillsRoot, 'active');
         if (await fs.pathExists(activeSkillsPath)) {
             result.changed = true;
-            if (!dryRun) {
-                // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- skillsRoot is resolved from the trusted project root.
-                await fs.remove(activeSkillsPath);
-            }
+            if (!dryRun) await fs.remove(activeSkillsPath);
         }
     }
 
-    if (!skipExternalToolPatch) {
-        runExternalPiToolPatch(pkgRoot, dryRun, log);
-    }
+    if (!skipExternalToolPatch) runExternalPiToolPatch(pkgRoot, dryRun, log);
 
     result.changed ||= await updatePiSettings(resolvedProjectRoot, dryRun, log);
     result.changed ||= result.extensionsAdded.length > 0
@@ -1754,11 +1534,8 @@ export async function runPiRuntimeSync(opts: PiRuntimeOptions = {}): Promise<PiS
         || result.packagesInstalled.length > 0;
 
     const requiredFailed = missingPackages.filter((status) => status.pkg.required && result.failed.includes(status.pkg.id));
-    if (requiredFailed.length === 0) {
-        console.log(t.success('  ✓ All required items present.\n'));
-    } else {
-        console.log(kleur.yellow('  ⚠ Missing required items.\n'));
-    }
+    if (requiredFailed.length === 0) console.log(t.success('  ✓ All required items present.\n'));
+    else console.log(kleur.yellow('  ⚠ Missing required items.\n'));
 
     return result;
 }

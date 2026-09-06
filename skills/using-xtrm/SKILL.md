@@ -17,13 +17,11 @@ priority: high
 ## Session Start
 
 ```bash
-bd list --status=in_progress        # active claims (targeted — no bulk dump)
-bd ready                            # unblocked open issues
-bd search "<task terms>"              # targeted lookup; bv --robot-triage only when graph-aware ranking is needed
+bd prime                          # load workflow context + active claims
+bd memories <today's topic>       # retrieve relevant past context
+bv --robot-triage                 # graph-ranked picks, quick wins, unblock targets
 bd update <id> --claim            # claim before any edit
 ```
-
-For service/docs/project context in service-hosting repos: check `service-knowledge status` / `index stats` (rebuild when stale/absent), then `service-knowledge index query "<3-5 task terms>" --bundle`; read only cited evidence. `bd prime` is an explicit opt-in diagnostic/full-context command — never mandatory at session start.
 
 > Use `bv --robot-next` for the single top pick. Use `bv --robot-triage --format toon` to save context tokens. **Never run bare `bv` — it launches an interactive TUI.**
 
@@ -154,6 +152,6 @@ Vague prompt (under 8 words, no specifics)? Ask one clarifying question before p
 | Trace a bug | `gitnexus-debugging` |
 | Safe rename / refactor | `gitnexus-refactoring` |
 | Docs maintenance | `sync-docs` |
-| Service/docs/project context | Service Knowledge: `service-knowledge status` + `index query "<terms>" --bundle` (`/scope`, `/using-service-knowledge`) |
+| Docker service project | `using-service-skills` |
 | Build / improve a skill | `skill-creator` |
 | Orchestrate tmux panes / answer correlated requests | `multiplexing` / `multiplexing-team` |

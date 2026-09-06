@@ -1,165 +1,79 @@
 ---
 name: bd-workflow
 version: 1.1.0
-description: bd issue tracking + bv triage + git/worktree workflow + active gates
+description: targeted Beads workflow + XTRM lifecycle gates
 ---
 # XTRM Agent Workflow
 
-> Full reference: [XTRM-GUIDE.md](XTRM-GUIDE.md) | Session manual: `/using-xtrm` skill
-> Session start is targeted, not a bulk dump: repo identity first, then Service
-> Knowledge retrieval for service context, then targeted Beads lookup for
-> executable work. `bd prime` is opt-in diagnostic only — never automatic.
+> Full reference: `/using-xtrm` skill (or `XTRM-GUIDE.md` where present).
+> `bd prime` is an opt-in full-context diagnostic only; it is not a required SessionStart step.
 
-## Session Start (targeted)
+## Session start
 
-1. Read repo identity + non-negotiable rules first (`AGENTS.md` / `CLAUDE.md` top).
-2. Service context (service-hosting repos): check `service-knowledge status` /
-   `service-knowledge index stats` (rebuild when stale/absent), then
-   `service-knowledge index query "<3-5 task terms>" --bundle` (or `--paths`,
-   `--service-id`). Read only cited service SKILL/evidence.
-3. Executable work: targeted Beads lookup — `bd list --status=in_progress`,
-   `bd ready`, `bd search "<task terms>"`, `bd show <id>` (`bv --robot-triage`
-   only when graph-aware prioritization is needed) — then
-   `bd update <id> --claim` before edits. `bd memories <topic>` / `bd recall`
-   only when history is relevant.
+Use targeted retrieval instead of a bulk context dump:
 
-## Execution Interaction Policy
+```bash
+bd list --status=in_progress
+bd ready
+bd search "<task terms>"
+bd show <id>
+bd update <id> --claim
+```
 
-- Proceed by default on standard implementation tasks once scope is clear.
-- Do **not** ask repetitive “Proceed? Yes/No” confirmations.
-- Ask for confirmation only when actions are destructive, irreversible, or high-risk (e.g. `rm`, history rewrite, mass deletes, credential rotation, prod-impacting ops).
-- Prefer concise clarifying questions only when requirements are genuinely ambiguous.
+Use `bd memories <topic>` / `bd recall <key>` only when prior history is materially relevant.
+Use `bv --robot-triage --format toon` only when graph-aware prioritization is needed. Never run bare `bv` in an agent session.
 
-## Active Gates (hooks enforce these — not optional)
+## Active gates
 
 | Gate | Trigger | Required action |
-|------|---------|-----------------|
-| **Edit** | Write/Edit without active claim | `bd update <id> --claim` |
-| **Commit** | `git commit` while claim is open | `bd close <id>` first, then commit |
-| **Stop** | Session end with unclosed claim | `bd close <id>` |
-| **Memory** | `bd close <id>` without issue ack | First run `bd remember "<insight>"` (or decide nothing novel), then `bd kv set "memory-acked:<id>" "saved:<key>"` or `"nothing novel:<reason>"`, then retry `bd close <id> --reason="..."` (Stop hook remains fallback reminder) |
-| **Dispatch** *(bridge — discipline only, not yet hook-enforced)* | Specialist run against a `contract:draft` bead | Promote first: explore + rewrite full 7-section contract + `bd set-state <id> contract=ready --reason "..."`. Check with `bd state <id> contract` before dispatch. |
+|---|---|---|
+| Edit | repository mutation without claimed work | claim an existing Bead before editing |
+| Commit | commit while claimed work is unresolved | close/acknowledge work first |
+| Stop | session attempts to end with unresolved claimed work | reconcile/close according to current runtime gate |
+| Memory | relevant closed work requires memory acknowledgement | `bd remember` when useful, or record a truthful nothing-novel acknowledgement |
+| Dispatch | another worker will consume `contract:draft` work | `/planning` → promote to a contract-quality ready Bead first |
 
-## bd Command Reference
+Hooks/extensions own deterministic enforcement. `/using-xtrm` owns judgment and routing.
 
-```bash
-# Work discovery
-bd ready                               # Unblocked open issues
-bd show <id>                           # Full detail + deps + blockers
-bd list --status=in_progress           # Your active claims
-bd query "status=in_progress AND assignee=me"  # Complex filter
-bd search <text>                       # Full-text search across issues
+## Durable work contract
 
-# Claiming & updating
-bd update <id> --claim                 # Claim (sets you as owner, status→in_progress)
-bd update <id> --notes "..."           # REPLACES notes (destructive — overwrites prior)
-bd update <id> --append-notes "..."    # Append to existing notes (newline-separated)
-bd update <id> --status=blocked        # Mark blocked
-bd update                              # Update last-touched issue (no ID needed)
+For work another worker may consume, the Bead is the prompt. Baseline contract fields:
 
-# Creating
-bd create --title="..." --description="..." --type=task --priority=2
-# --parent <bead-id>                    nest as <id>.1, .2, … (recursive: .1.1) — default whenever this bead
-#                                        services another bead's work, not only epics
-# --labels contract:draft               capture-for-later: real PROBLEM + rough SCOPE, rest TBD — never dispatchable
-#                                        until promoted (`bd set-state <id> contract=ready`); see using-specialists
-# --deps "discovered-from:<parent-id>"  link follow-ups to source
-# priority: 0=critical  1=high  2=medium  3=low  4=backlog
-# types: task | bug | feature | epic | chore | decision
-
-# Closing
-# Memory gate: ack per issue before close
-#   bd kv set "memory-acked:<id>" "saved:<key>"  OR  "nothing novel:<reason>"
-bd close <id>                          # Close issue (blocked until memory-acked:<id> exists)
-bd close <id> --reason="Done: ..."     # Close with context
-bd close <id1> <id2> <id3>            # Batch close (each id needs its own memory ack)
-
-# Dependencies
-bd dep add <issue> <depends-on>        # issue depends on depends-on (depends-on blocks issue)
-bd dep <blocker> --blocks <blocked>    # shorthand: blocker blocks blocked
-bd dep relate <a> <b>                  # non-blocking "relates to" link
-bd dep tree <id>                       # visualise dependency tree
-bd blocked                             # show all currently blocked issues
-
-# Persistent memory
-bd remember "<insight>"                # Store across sessions (project-scoped)
-bd memories <keyword>                  # Search stored memories
-bd recall <key>                        # Retrieve full memory by key
-bd forget <key>                        # Remove a memory
-
-# Health & pre-flight
-bd stats                               # Open/closed/blocked counts
-bd preflight --check                   # Pre-PR readiness (lint, tests, beads)
-bd doctor                              # Diagnose installation issues
+```text
+PROBLEM
+SUCCESS
+SCOPE
+NON_GOALS
+CONSTRAINTS
+VALIDATION
+OUTPUT
 ```
 
-## Git Workflow (strict: one branch per issue)
+Add `SCRUTINY` or other requirements when they materially affect correctness. Draft capture is allowed, but drafts are not dispatchable.
+
+## Dependencies and relationships
 
 ```bash
-git checkout -b feature/<issue-id>-<slug>   # or fix/... chore/...
-bd update <id> --claim                       # claim before any edit
-# ... write code ...
-bd close <id> --reason="..."                 # closes issue
-xt end                                       # push, PR, merge, worktree cleanup
+bd dep add <issue> <depends-on>     # real blocking/sequencing dependency
+bd dep relate <a> <b>               # non-blocking related-work edge
+bd dep tree <id>
+bd blocked
 ```
 
-**Never** continue new work on a previously used branch.
+Do not use blocking edges merely to mean "related to".
 
-## bv — Graph-Aware Triage
+## Current execution routing
 
-bv is a graph-aware triage engine for the beads issue board. Use it instead of `bd ready` when you need ranked picks, dependency-aware scheduling, or project health signals.
+- coherent local work → current session;
+- bounded fresh-context question → native subagent when available;
+- long-lived isolated peer → `xt pi|claude|codex` + `/multiplexing`;
+- governed role-shaped work → `/using-specialists`;
+- deterministic mechanics → script/tool/runtime primitive.
 
-> **CRITICAL: Use ONLY `--robot-*` flags. Bare `bv` launches an interactive TUI that blocks your session.**
+Prefer native/runtime messaging over tmux scraping. Exact CLI syntax belongs to current `--help`, not this fragment.
 
-```bash
-bv --robot-triage             # THE entry point — ranked picks, quick wins, blockers, health
-bv --robot-next               # Single top pick + claim command (minimal output)
-bv --robot-triage --format toon  # Token-optimized output for lower context usage
-```
+## Code intelligence and validation
 
-**Scope boundary:** bv = *what to work on*. `bd` = creating, claiming, closing issues.
+Use `/gitnexus` when code-graph context materially reduces uncertainty. For debugging/review/testing/verification, route through `/engineering-quality`.
 
-| Command | Returns |
-|---------|---------|
-| `--robot-plan` | Parallel execution tracks with unblocks lists |
-| `--robot-insights` | PageRank, betweenness, HITS, cycles, critical path |
-| `--robot-forecast <id\|all>` | ETA predictions with dependency-aware scheduling |
-| `--robot-alerts` | Stale issues, blocking cascades, priority mismatches |
-| `--robot-diff --diff-since <ref>` | Changes since ref: new/closed/modified |
-
-```bash
-bv --recipe actionable --robot-plan    # Pre-filter: ready to work
-bv --robot-triage --robot-triage-by-track  # Group by parallel work streams
-bv --robot-triage | jq '.quick_ref'   # At-a-glance summary
-bv --robot-insights | jq '.Cycles'    # Circular deps — must fix
-```
-
-## Code Intelligence (mandatory before edits)
-
-Use **Serena** (`using-serena-lsp` skill) for all code reads and edits:
-- `find_symbol` → `get_symbols_overview` → `replace_symbol_body`
-- Never grep-read-sed when symbolic tools are available
-
-Use **GitNexus** MCP tools before touching any symbol:
-- `gitnexus_impact({target: "symbolName", direction: "upstream"})` — blast radius
-- `gitnexus_context({name: "symbolName"})` — callers, callees, execution flows
-- `gitnexus_detect_changes()` — verify scope before every commit
-- `gitnexus_query({query: "concept"})` — explore unfamiliar areas
-
-Stop and warn the user if impact returns HIGH or CRITICAL risk.
-
-## Quality Gates (automatic)
-
-Run on every file edit via PostToolUse hooks:
-- **TypeScript/JS**: ESLint + tsc
-- **Python**: ruff + mypy
-
-Gate output appears as hook context. Fix failures before proceeding — do not commit with lint errors.
-
-## Worktree Sessions
-
-- `xt claude` — launch Claude Code in a sandboxed worktree
-- `xt end` — close session: commit / push / PR / cleanup
-- `xt worktree audit-prs --json` — read-only PR drift / needs-rebase audit before merge queues
-- `xt worktree branch-gc --prefix xt/ --json` — dry-run merged/closed branch cleanup; add `--apply --yes` only when deletion is intended
-- `xt worktree restart-audit --json` — read-only restart/handoff hygiene audit for orphaned dirs, branch/worktree drift, and PR attention
+Before completion, verify the intended state, required validation, durable work state, and unresolved workers/replies/risks. Do not bypass a valid runtime gate merely to continue.
