@@ -42,7 +42,6 @@ jobs:
       if: github.event_name == 'pull_request' && github.head_ref == 'feat/skills-v4-system-consolidation'
       env:
         FROZEN_SPECIALISTS_SHA: f8cac893159959655d7787806704ce89d834d381
-        ORIGINAL_CI_COMMIT: a4f3e4026e2be12cec65e25e66db948ac999e868
       run: |
         set -euo pipefail
         git fetch origin "$GITHUB_HEAD_REF" --depth=3
@@ -72,11 +71,9 @@ jobs:
         npm run check:layout-guards
         npm run check:skill-root-budget
 
-        # Restore the exact pre-finalizer workflow, remove one-shot machinery,
-        # then commit only durable generated/provenance/runtime output.
-        git show "$ORIGINAL_CI_COMMIT:.github/workflows/ci.yml" > .github/workflows/ci.yml
-        rm scripts/skills-v4-core-finalize.mjs
-
+        # Commit only durable generated/provenance/build output. The temporary
+        # workflow and one-shot script are intentionally left unchanged here;
+        # the GitHub connector removes them in a separate cleanup commit.
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add -A
