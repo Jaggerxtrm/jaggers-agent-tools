@@ -1,0 +1,104 @@
+name: skills-v4 deterministic finalizer
+
+on:
+  push:
+    branches: [ feat/skills-v4-system-consolidation ]
+    paths:
+      - '.github/workflows/skills-v4-finalize.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: skills-v4-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix cli
+
+      - name: Pin frozen Specialists source
+        env:
+          SPECIALISTS_SHA: f8cac893159959655d7787806704ce89d834d381
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const sha = process.env.SPECIALISTS_SHA;
+          const updates = [
+            ['.xtrm/specialists-source.json', (j) => { j.source.resolved_sha = sha; }],
+            ['docs/skills-ownership.json', (j) => { j.mirrors.specialists.release.sha = sha; }],
+            ['docs/skills-ownership.release.json', (j) => { j.mirrors.specialists.sha = sha; }],
+          ];
+          for (const [path, mutate] of updates) {
+            const json = JSON.parse(fs.readFileSync(path, 'utf8'));
+            mutate(json);
+            fs.writeFileSync(path, JSON.stringify(json, null, 2) + '\n');
+          }
+          NODE
+
+      - name: Materialize frozen Specialists payload
+        env:
+          SPECIALISTS_SHA: f8cac893159959655d7787806704ce89d834d381
+        run: |
+          rm -rf ../specialists
+          git clone --depth 1 --branch feat/skills-v4-runtime-doctrine https://github.com/xtrm-dev/specialists.git ../specialists
+          test "$(git -C ../specialists rev-parse HEAD)" = "$SPECIALISTS_SHA"
+          SPECIALISTS_REPO_PATH=../specialists node scripts/vendor-specialists-from-manifest.mjs
+          test "$(node -p "require('./.xtrm/specialists-source.json').source.resolved_sha")" = "$SPECIALISTS_SHA"
+
+      - name: Rebuild canonical project instruction headers
+        run: |
+          cd cli
+          npx tsx -e "import { injectProjectInstructionHeaders } from './src/commands/init.ts'; await injectProjectInstructionHeaders(process.env.GITHUB_WORKSPACE);"
+
+      - name: Regenerate registry and built payload
+        run: |
+          npm run gen-registry
+          npm run build
+
+      - name: Deterministic v4 guards
+        run: |
+          npm run check:skills-ownership
+          npm run check:managed-skills
+          npm run check:registry-pack-parity
+          npm run check:specialists-vendor
+          npm run check:layout-guards
+          npm run check:gitnexus-no-counter
+          npm run check:skills-symlinks
+          npm run check:skill-root-budget
+          npm run check:forbidden-phrases
+          npm run check:vendored-specialists-parity
+          npm run check:asset-contract
+          npm run typecheck
+          npm test --prefix cli
+          npm run test:scripts
+
+      - name: Commit durable generated state and remove finalizer
+        env:
+          BRANCH: feat/skills-v4-system-consolidation
+        run: |
+          rm -f .github/workflows/skills-v4-finalize.yml
+          git config user.name 'xtrm-skills-v4-finalizer[bot]'
+          git config user.email 'xtrm-skills-v4-finalizer[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No durable changes after regeneration.'
+            exit 0
+          fi
+          git commit -m 'chore(skills-v4): finalize generated payload'
+          git push origin "HEAD:$BRANCH"
