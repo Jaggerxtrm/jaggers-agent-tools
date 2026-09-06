@@ -8,6 +8,8 @@ const repoRoot = path.resolve(here, '..', '..', '..');
 const CONTRACT = path.join(repoRoot, '.xtrm', 'config', 'instructions', 'agent-contract.md');
 const AGENTS_TOP = path.join(repoRoot, '.xtrm', 'config', 'instructions', 'agents-top.md');
 const CLAUDE_TOP = path.join(repoRoot, '.xtrm', 'config', 'instructions', 'claude-top.md');
+const ROOT_AGENTS = path.join(repoRoot, 'AGENTS.md');
+const ROOT_CLAUDE = path.join(repoRoot, 'CLAUDE.md');
 const START = '<!-- contract:start -->';
 const END = '<!-- contract:end -->';
 const MAX_SUFFIX_LINES = 12;
@@ -50,6 +52,14 @@ describe('agent-contract parity (ISSUE-136 + skills-v4)', () => {
       expect(text).not.toMatch(/session ?start[^\n]{0,80}bd ?prime/i);
       expect(text).not.toMatch(/^1\.\s*`bd prime`/m);
       expect(text).not.toMatch(/run `bd ?prime` (at|before|during) session start/i);
+    }
+  });
+
+  it('root generated guides do not reintroduce mandatory bd prime outside the managed block', () => {
+    for (const file of [ROOT_AGENTS, ROOT_CLAUDE]) {
+      const text = fs.readFileSync(file, 'utf8');
+      expect(text).not.toMatch(/run `bd ?prime`[^\n]{0,100}(?:before starting work|at session start)/i);
+      expect(text).not.toMatch(/`bd ?prime`[^\n]{0,100}(?:required|mandatory|automatic at session start)/i);
     }
   });
 
