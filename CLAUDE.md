@@ -164,7 +164,7 @@ Clearly distinguish verified facts, observations, assumptions, inferences, recom
 
 Two task systems coexist in this repo. Use both; do not substitute one for the other.
 
-- **Beads (`bd`)** — top-level durable tracking. Authoritative for ownership, dependencies, cross-session memory, and closure. Read the rest of this file and run `bd prime` for beads context before starting work. File, claim, and close work here.
+- **Beads (`bd`)** — top-level durable tracking. Authoritative for ownership, dependencies, cross-session memory, and closure. Read the rest of this file and use targeted lookup (`bd ready`, `bd search "<terms>"`, `bd show <id>`) before starting work; `bd prime` is opt-in diagnostic only. File, claim, and close work here.
 - **Native integrated task system** (`TaskCreate` / `TaskList` / `TaskGet` / `TaskUpdate` / `TaskExecute`) — this-session execution tracking. Use it to mirror the active bead and break it into smaller intermediate steps. Ephemeral; does not replace beads.
 
 Rule: when you pick up a bead, create native tasks that track it — reference the bead ID in each task title (e.g. `N.N summary — status (worker %NNNN)`) — and add any smaller intermediate steps as native sub-tasks. Beads own the durable record; native tasks own the in-flight breakdown.
@@ -200,12 +200,14 @@ This file is a compact routing guide for Claude Code sessions in `xtrm-tools`. I
 - `cli/dist` is tracked; rebuild with `npm run build` when CLI source changes.
 - Ask before destructive, irreversible, production-impacting, or history-rewriting actions.
 
-## Session start
+## Session start: targeted, not reconstructive
 
-1. `bd prime` — load workflow context.
-2. `bd memories <topic>` — retrieve relevant memory before answering questions or changing workflow-sensitive code.
+1. `bd list --status=in_progress`, `bd ready`, `bd search "<terms>"`, `bd show <id>` — locate the relevant current work.
+2. `bd memories <topic>` — retrieve relevant memory only when prior history is materially relevant.
 3. `bv --robot-triage` or `bv --robot-next` — choose work when needed. Never run bare `bv`.
 4. `bd update <id> --claim` — claim before edits.
+
+`bd prime` is opt-in diagnostic only; invoke it explicitly when a full-context run helps.
 
 For full xtrm/beads workflow details, load `/using-xtrm` and use `bd --help`, `bd <cmd> --help`, `xt --help`.
 
@@ -249,7 +251,7 @@ Keep only the commands an agent needs without another manual. Use `--help` for f
 
 ### Beads / xtrm workflow
 
-- `bd prime` — load workflow context and active claims.
+- `bd prime` — opt-in diagnostic full-context load. Not a session-start step.
 - `bd ready` — list unblocked open issues.
 - `bd list --status=in_progress` — see active claims.
 - `bd show <id>` — inspect detail, deps, blockers, notes.
