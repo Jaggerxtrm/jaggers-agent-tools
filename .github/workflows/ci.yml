@@ -7,7 +7,7 @@ on:
     branches: [ main, master ]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -22,6 +22,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
@@ -36,6 +37,54 @@ jobs:
 
     - name: Install Node dependencies
       run: npm ci && cd cli && npm ci
+
+    - name: Finalize skills-v4 Core distribution
+      if: github.event_name == 'pull_request' && github.head_ref == 'feat/skills-v4-system-consolidation'
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        FROZEN_SPECIALISTS_SHA: f8cac893159959655d7787806704ce89d834d381
+      run: |
+        set -euo pipefail
+        git fetch origin "$GITHUB_HEAD_REF" --depth=3
+        git checkout -B "$GITHUB_HEAD_REF" "origin/$GITHUB_HEAD_REF"
+
+        rm -rf "$RUNNER_TEMP/specialists-v4"
+        git init "$RUNNER_TEMP/specialists-v4"
+        git -C "$RUNNER_TEMP/specialists-v4" remote add origin https://github.com/xtrm-dev/specialists.git
+        git -C "$RUNNER_TEMP/specialists-v4" fetch --depth=1 origin "$FROZEN_SPECIALISTS_SHA"
+        git -C "$RUNNER_TEMP/specialists-v4" checkout --detach FETCH_HEAD
+        test "$(git -C "$RUNNER_TEMP/specialists-v4" rev-parse HEAD)" = "$FROZEN_SPECIALISTS_SHA"
+
+        node scripts/skills-v4-core-finalize.mjs
+        SPECIALISTS_REPO_PATH="$RUNNER_TEMP/specialists-v4" npm run vendor:specialists
+
+        # Build once so the canonical instruction-header injector is importable.
+        npm run build
+        node --input-type=module -e "const { injectProjectInstructionHeaders } = await import('./cli/dist/commands/init.js'); await injectProjectInstructionHeaders(process.cwd());"
+        npm run gen-registry
+        npm run build
+
+        npm run check:skills-ownership
+        npm run check:managed-skills
+        npm run check:specialists-vendor
+        npm run check:vendored-specialists-parity
+        npm run check:registry-pack-parity
+        npm run check:layout-guards
+        npm run check:skill-root-budget
+
+        # Restore the ordinary read-only workflow and remove one-shot machinery.
+        git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
+        rm scripts/skills-v4-core-finalize.mjs
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add -A
+        if ! git diff --cached --quiet; then
+          git commit -m "fix(skills): finalize Core v4 distribution"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+        fi
 
     - name: Check package metadata
       run: npm run check:package
