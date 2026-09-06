@@ -21,6 +21,14 @@ for (const path of PROVENANCE_FILES) {
   writeFileSync(path, current.replace(OLD_SHA, FROZEN_SHA));
 }
 
+// Keep the canonical vendor entry point explicit for CI, releases, and local
+// maintenance rather than requiring callers to know the underlying script path.
+const packagePath = 'package.json';
+const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+packageJson.scripts ??= {};
+packageJson.scripts['vendor:specialists'] = 'node scripts/vendor-specialists-from-manifest.mjs';
+writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
 // Fail if a fourth durable tracked provenance surface still points at the
 // superseded pin. This one-shot finalizer necessarily contains OLD_SHA and is
 // removed before the durable commit, so exclude only this exact path.
