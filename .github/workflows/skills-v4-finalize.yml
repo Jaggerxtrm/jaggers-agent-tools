@@ -31,104 +31,8 @@ jobs:
           npm ci
           cd cli && npm ci
 
-      - name: Harden foreign hook-wrapper reconciliation
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-
-          const sourcePath = 'cli/src/core/claude-runtime-sync.ts';
-          let source = fs.readFileSync(sourcePath, 'utf8');
-          const oldStable = `function stableHookHash(wrapper: HookWrapper): string {
-              const canonical = {
-                  matcher: wrapper.matcher ?? null,
-                  hooks: wrapper.hooks.map((hook) => ({ type: hook.type, command: hook.command, timeout: hook.timeout ?? null })),
-              };
-              return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
-          }`;
-          const newStable = `function stableHookHash(wrapper: HookWrapper): string {
-              const canonical = {
-                  matcher: wrapper.matcher ?? null,
-                  // Settings.json is an external/runtime boundary. Unknown third-party
-                  // wrapper shapes must remain hashable without being mistaken for a
-                  // valid generated wrapper or crashing reconciliation.
-                  hooks: Array.isArray(wrapper.hooks)
-                      ? wrapper.hooks.map((hook) => ({ type: hook.type, command: hook.command, timeout: hook.timeout ?? null }))
-                      : null,
-              };
-              return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
-          }`;
-          if (!source.includes(oldStable)) throw new Error('stableHookHash anchor not found');
-          source = source.replace(oldStable, newStable);
-
-          const oldResolve = `function resolveHooksForRuntime(hooks: Record<string, HookWrapper[]>, hooksDir: string): Record<string, HookWrapper[]> {
-              const rewrittenHooks: Record<string, HookWrapper[]> = {};
-              for (const [eventName, wrappers] of Object.entries(hooks)) {
-                  const wrapperList = Array.isArray(wrappers) ? wrappers : [wrappers as HookWrapper];
-                  rewrittenHooks[eventName] = wrapperList.map((wrapper) => ({
-                      ...wrapper,
-                      hooks: wrapper.hooks.map((hook) => hook.type !== 'command'
-                          ? hook
-                          : { ...hook, command: rewritePluginRootCommandToProjectHookPath(hook.command, hooksDir) }),
-                  }));
-              }
-              return rewrittenHooks;
-          }`;
-          const newResolve = `function resolveHooksForRuntime(hooks: Record<string, HookWrapper[]>, hooksDir: string): Record<string, HookWrapper[]> {
-              const rewrittenHooks: Record<string, HookWrapper[]> = {};
-              for (const [eventName, wrappers] of Object.entries(hooks)) {
-                  const wrapperList = Array.isArray(wrappers) ? wrappers : [wrappers as HookWrapper];
-                  rewrittenHooks[eventName] = wrapperList.map((wrapper) => {
-                      // Preserve unrecognized third-party wrapper shapes verbatim. Only
-                      // canonical command-hook arrays are ours to rewrite.
-                      if (!Array.isArray(wrapper.hooks)) {
-                          return wrapper;
-                      }
-                      return {
-                          ...wrapper,
-                          hooks: wrapper.hooks.map((hook) => hook.type !== 'command'
-                              ? hook
-                              : { ...hook, command: rewritePluginRootCommandToProjectHookPath(hook.command, hooksDir) }),
-                      };
-                  });
-              }
-              return rewrittenHooks;
-          }`;
-          if (!source.includes(oldResolve)) throw new Error('resolveHooksForRuntime anchor not found');
-          source = source.replace(oldResolve, newResolve);
-          fs.writeFileSync(sourcePath, source);
-
-          const testPath = 'cli/src/tests/claude-runtime-sync-reconcile.test.ts';
-          let test = fs.readFileSync(testPath, 'utf8');
-          const oldImport = `import { mergeProjectOwnedHooks, reconcileProjectClaudeHooks } from '../core/claude-runtime-sync.js';`;
-          const newImport = `import { mergeProjectOwnedHooks, reconcileProjectClaudeHooks, resolveHooksForGlobalRuntime } from '../core/claude-runtime-sync.js';`;
-          if (!test.includes(oldImport)) throw new Error('reconcile test import anchor not found');
-          test = test.replace(oldImport, newImport);
-
-          const anchor = `  it('tolerates malformed hooks entries without crashing', () => {`;
-          const regression = `  it('preserves third-party wrapper objects without hooks across resolution and merge', () => {
-              const foreign = {
-                matcher: 'Bash',
-                provider: 'third-party',
-              };
-              const resolved = resolveHooksForGlobalRuntime(
-                { PreToolUse: [foreign as never] },
-                '/home/test/.xtrm/hooks',
-              );
-              expect(resolved.PreToolUse[0]).toEqual(foreign);
-
-              const merged = mergeProjectOwnedHooks(
-                { PreToolUse: [foreign as never] },
-                canonical,
-                '/repo/.xtrm/hooks',
-              );
-              expect(merged.PreToolUse).toContainEqual(foreign);
-            });
-
-`;
-          if (!test.includes(anchor)) throw new Error('reconcile regression anchor not found');
-          test = test.replace(anchor, regression + anchor);
-          fs.writeFileSync(testPath, test);
-          NODE
+      - name: Apply bounded runtime regression fix
+        run: node scripts/skills-v4-finalize-fix.mjs
 
       - name: Pin frozen Specialists source
         env:
@@ -137,16 +41,15 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const sha = process.env.SPECIALISTS_SHA;
-          const updates = [
-            ['.xtrm/specialists-source.json', (j) => { j.source.resolved_sha = sha; }],
-            ['docs/skills-ownership.json', (j) => { j.mirrors.specialists.release.sha = sha; }],
-            ['docs/skills-ownership.release.json', (j) => { j.mirrors.specialists.sha = sha; }],
-          ];
-          for (const [path, mutate] of updates) {
-            const json = JSON.parse(fs.readFileSync(path, 'utf8'));
-            mutate(json);
-            fs.writeFileSync(path, JSON.stringify(json, null, 2) + '\n');
-          }
+          const source = JSON.parse(fs.readFileSync('.xtrm/specialists-source.json', 'utf8'));
+          source.source.resolved_sha = sha;
+          fs.writeFileSync('.xtrm/specialists-source.json', JSON.stringify(source, null, 2) + '\n');
+          const ownership = JSON.parse(fs.readFileSync('docs/skills-ownership.json', 'utf8'));
+          ownership.mirrors.specialists.release.sha = sha;
+          fs.writeFileSync('docs/skills-ownership.json', JSON.stringify(ownership, null, 2) + '\n');
+          const release = JSON.parse(fs.readFileSync('docs/skills-ownership.release.json', 'utf8'));
+          release.mirrors.specialists.sha = sha;
+          fs.writeFileSync('docs/skills-ownership.release.json', JSON.stringify(release, null, 2) + '\n');
           NODE
 
       - name: Materialize frozen Specialists payload
@@ -190,7 +93,7 @@ jobs:
         env:
           BRANCH: feat/skills-v4-system-consolidation
         run: |
-          rm -f .github/workflows/skills-v4-finalize.yml
+          rm -f .github/workflows/skills-v4-finalize.yml scripts/skills-v4-finalize-fix.mjs
           git config user.name 'xtrm-skills-v4-finalizer[bot]'
           git config user.email 'xtrm-skills-v4-finalizer[bot]@users.noreply.github.com'
           git add -A
