@@ -82,7 +82,7 @@ jobs:
           npm run check:skill-root-budget
           npm run check:forbidden-phrases
           npm run check:vendored-specialists-parity
-          npm run check:asset-contract
+          node scripts/verify-asset-contract.mjs --contract ../specialists/dist/asset-contract.json
           npm run typecheck
           npm test --prefix cli
           npm run test:scripts
