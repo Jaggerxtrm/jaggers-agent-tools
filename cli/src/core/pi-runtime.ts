@@ -667,10 +667,11 @@ export async function isPackagePresentInPiAgent(
     agentDir: string,
     piPackageId: string,
     npmRootDir?: string,
+    installedPackageIds?: readonly string[],
 ): Promise<boolean> {
     const npmPackageName = parseNpmPackageName(piPackageId);
     if (!npmPackageName) {
-        return isPiPackageInstalled(piPackageId, getInstalledPiPackages());
+        return isPiPackageInstalled(piPackageId, installedPackageIds ?? getInstalledPiPackages());
     }
 
     const agentPackageDir = path.join(agentDir, 'npm', 'node_modules', npmPackageName);
@@ -764,13 +765,15 @@ export async function ensureAlwaysGlobalPiPackages(
     agentDir: string = PI_AGENT_DIR,
     installRunner: PiPackageInstallRunner = runPiPackageInstall,
     npmRootDir?: string | null,
+    installedPackageIds?: readonly string[],
 ): Promise<{ installed: string[]; failed: string[] }> {
     const installed: string[] = [];
     const failed: string[] = [];
     const resolvedNpmRootDir = npmRootDir === undefined ? await resolveGlobalNpmRootDir() : npmRootDir;
+    const resolvedInstalledPackageIds = installedPackageIds ?? getInstalledPiPackages();
 
     for (const pkg of getXtManagedPiPackages()) {
-        if (await isPackagePresentInPiAgent(agentDir, pkg.id, resolvedNpmRootDir ?? undefined)) continue;
+        if (await isPackagePresentInPiAgent(agentDir, pkg.id, resolvedNpmRootDir ?? undefined, resolvedInstalledPackageIds)) continue;
 
         if (dryRun) {
             log?.(`[DRY RUN] pi install ${pkg.id}`);

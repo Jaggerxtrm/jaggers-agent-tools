@@ -55708,10 +55708,10 @@ async function getManagedPiPackageFreshness(versionProvider, packages = getXtMan
   }
   return statuses;
 }
-async function isPackagePresentInPiAgent(agentDir, piPackageId, npmRootDir) {
+async function isPackagePresentInPiAgent(agentDir, piPackageId, npmRootDir, installedPackageIds) {
   const npmPackageName = parseNpmPackageName(piPackageId);
   if (!npmPackageName) {
-    return isPiPackageInstalled(piPackageId, getInstalledPiPackages());
+    return isPiPackageInstalled(piPackageId, installedPackageIds ?? getInstalledPiPackages());
   }
   const agentPackageDir = import_path3.default.join(agentDir, "npm", "node_modules", npmPackageName);
   if (await import_fs_extra13.default.pathExists(agentPackageDir)) return true;
@@ -55771,12 +55771,13 @@ function installPiPackageWithFallback(piPackageId, log, installRunner = runPiPac
     retriedWithNpmjs: true
   };
 }
-async function ensureAlwaysGlobalPiPackages(dryRun, log, agentDir = PI_AGENT_DIR, installRunner = runPiPackageInstall, npmRootDir) {
+async function ensureAlwaysGlobalPiPackages(dryRun, log, agentDir = PI_AGENT_DIR, installRunner = runPiPackageInstall, npmRootDir, installedPackageIds) {
   const installed = [];
   const failed = [];
   const resolvedNpmRootDir = npmRootDir === void 0 ? await resolveGlobalNpmRootDir() : npmRootDir;
+  const resolvedInstalledPackageIds = installedPackageIds ?? getInstalledPiPackages();
   for (const pkg of getXtManagedPiPackages()) {
-    if (await isPackagePresentInPiAgent(agentDir, pkg.id, resolvedNpmRootDir ?? void 0)) continue;
+    if (await isPackagePresentInPiAgent(agentDir, pkg.id, resolvedNpmRootDir ?? void 0, resolvedInstalledPackageIds)) continue;
     if (dryRun) {
       log?.(`[DRY RUN] pi install ${pkg.id}`);
       continue;

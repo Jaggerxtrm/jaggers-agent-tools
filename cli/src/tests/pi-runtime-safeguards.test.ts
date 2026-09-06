@@ -170,6 +170,7 @@ describe('pi runtime safeguards', () => {
         return { status: 0, stdout: '', stderr: '' };
       },
       null,
+      [],
     );
 
     const expected = getXtManagedPiPackages().map(pkg => pkg.id);
