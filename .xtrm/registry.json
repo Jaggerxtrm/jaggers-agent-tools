@@ -185,8 +185,32 @@
           "hash": "03953d8d199be148c0b005784d8a419630a7cc8bc2d825e54e6dffc44f595ade",
           "version": "0.12.0"
         },
+        "multiplexing-native-test/references/end-of-session-hygiene.md": {
+          "hash": "6553f1d541453e1fb4213f7e977efc21c57b04e121487c919c2dd0eaf565f9b3",
+          "version": "0.12.0"
+        },
+        "multiplexing-native-test/references/failure-and-escalation.md": {
+          "hash": "2627a0f025b00ab01fdc408e574664569674a918fa1e247b62a835be99ddc4aa",
+          "version": "0.12.0"
+        },
+        "multiplexing-native-test/references/fleet-window-dispatch.md": {
+          "hash": "7d1577bdffeecbfd08b42eb7c4e4e9ce764015cd79acbde8a861c7cc41544f94",
+          "version": "0.12.0"
+        },
+        "multiplexing-native-test/references/messy-run-recovery.md": {
+          "hash": "4d9f480345e4d453bdde2002a7440189b44d66a1cf92aa7b8c399272fe623889",
+          "version": "0.12.0"
+        },
+        "multiplexing-native-test/references/operator-help-patterns.md": {
+          "hash": "2d73010c369ad7ea5264005a48fef92b007bdc467a5e6f2c816e75ac4ee1a7c3",
+          "version": "0.12.0"
+        },
+        "multiplexing-native-test/references/terminal-fallback.md": {
+          "hash": "b283fa74a5fd92fb0f7220fcdb8f1ef524d9554b28249850b68122d3525e2953",
+          "version": "0.12.0"
+        },
         "multiplexing-native-test/SKILL.md": {
-          "hash": "9b928d4421d746bee7ad3f376713161967746018cfa580de5bcb1a93ce604f1f",
+          "hash": "b03ae7be7bd1eda20bdc7358ff4eab7644dfc29b85eaa14f91f83bf16da3a829",
           "version": "0.12.0"
         },
         "multiplexing/references/harnesses.md": {

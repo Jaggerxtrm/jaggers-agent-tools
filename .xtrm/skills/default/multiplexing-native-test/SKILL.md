@@ -401,54 +401,11 @@ If a required skill must be loaded, do it at launch/session-local startup. Do no
 
 ## Fleet window-dispatch (same-session variant)
 
-For coordinated bounded work — an epic, a wave of related beads, a batch of verification jobs — dispatch workers as **windows inside the current tmux session** instead of as fresh top-level tmux sessions. Native messaging is identical either way; the difference is inventory, cleanup, and cognitive load.
-
-**When it fits.** A parent coordinator drives 3–10 short-to-medium-lived workers whose lifetime is bounded by the current task. Not for long-lived independent peers that must outlive the coordinator, and not when workers must survive an accidental parent-session kill — those still want separate sessions.
-
-**Canonical recipe (proven).** Run from the parent's shell. `xt claude` / `xt pi` refuse to create nested worktrees, so the launch command MUST `cd` to the main repo root before invoking `xt`. New windows must be created empty then sent the command; `tmux new-window "cmd"` runs the cmd in the window's default shell and exits when it returns, which kills the pane before the agent boots.
-
-```bash
-SESSION=$(tmux display-message -p '#{session_name}')
-MAIN=/path/to/main/repo/root      # NOT a worktree — nested worktrees are refused
-SLUG=worker-slug                  # short kebab-case; becomes window name
-
-tmux new-window -t "${SESSION}:" -n "$SLUG" -d
-PANE=$(tmux list-panes -t "${SESSION}:${SLUG}" -F '#{pane_id}' | head -1)
-tmux send-keys -t "$PANE" \
-  "cd $MAIN && xt claude --bead $BEAD --prompt 'Read /tmp/.../brief.md and execute it exactly.'" Enter
-```
-
-For `xt pi`, replace `xt claude` with `xt pi --model <name>`; skill loading uses `/skill:<name>` in the prompt.
-
-**Landmines actually hit and fixed.**
-
-- **Zsh `:l` parameter modifier eats the target.** `"$SESSION:$SLUG"` becomes lowercased garbage. Quote as `"${SESSION}:"` (with braces) and pass the slug separately, or use `"${SESSION}:${SLUG}"`.
-- **Nested-worktree refusal.** `xt claude` / `xt pi` explicitly refuse to create a worktree from inside an existing worktree. Always `cd` to the main repo root first, even when the current shell is already there — a stale `PWD` after a session pause can lie.
-- **Inline command in `new-window`.** `tmux new-window -d "cmd"` exits the pane when `cmd` returns; the agent never boots visibly. Create the window empty, then `send-keys` the command so the shell persists.
-- **Peer name collisions and roster drift.** `ListAgents` timestamps can be stale and peer entries can vanish while a process is still running. Trust the pane capture and the durable work state (Bead close, PR opened) over the roster when they disagree.
-
-**Prompt shape.** Keep the initial prompt single-line; put the load-bearing instructions in a brief file and use a pointer prompt like `Read /tmp/.../brief.md and execute it exactly.` The tmux `send-keys` fallback rules still apply: never multiline-paste, never embed `$(...)` or backticks in a sent shell string.
-
-**Ping-back.** Every worker's brief MUST identify the parent coordinator by its stable native peer name (visible in `ListAgents`) and require SendMessage on: start, each meaningful state change (bead close, PR opened, block, escalation), and final completion. Silence is not a disposition.
-
-**Kill / reuse.** Finished workers → `tmux kill-window -t "${SESSION}:${SLUG}"`. To reuse a window for the next task, send `/exit` (or Ctrl-D twice) to the running agent, `rename-window` to the new slug, then `send-keys` the next `xt` command. Killing and spawning fresh is safer; reuse is fine when the same pane's shell state is desirable.
-
-**Do not use for.** Long-lived independent peers, cross-machine workers, or anything you need to survive the parent tmux session dying. Also do not use when the workers themselves need to spawn further windows into the same tmux session — nested fleet-mode has not been evaluated.
-
-**Cleanup.** `tmux list-windows -t "$SESSION"` is the whole inventory. No `list-sessions` sweep needed.
+Same-session fleet variant: dispatch 3–10 short-lived bounded workers as windows inside the current tmux session. Full detail: `references/fleet-window-dispatch.md`.
 
 ## Operator-help patterns
 
-| Pattern | Trigger | Native-messaging flow |
-|---|---|---|
-| Inventory | "what's running", "session map" | `ListAgents` + `intercom list` + `claude-link list`; tmux only to account for raw terminal panes |
-| Assisted handoff | "send X to Y", "delegate to Y" | durable work pointer → native roster → native `send`/`SendMessage` |
-| Clarification | worker is blocked | Pi `ask`; Claude explicit request/reply; cross-harness `claude-link ask` only for short questions |
-| Completion watch | long-running Claude work | `SendMessage` + explicit completion reply; optionally `notify_when_idle` |
-| Cleanup | dead/idle sessions | native roster first → terminal/process check → kill only confirmed stale terminal sessions → prune worktrees |
-| Messy-run recovery | off-contract or wrong direction | native correction first; cancel/supersede where supported; terminal interrupt only if runtime cannot recover conversationally |
-| Multi-session goal | one outcome across N sessions | one parent work item + child ownership per worker + native handoffs + aggregate durable evidence |
-| Sprint coordination | review/deploy workers | durable work graph + native peer messages; domain-specific `/pr-reviewer`/`/deploy-monitor` stay authoritative for their own policy |
+Pattern table (inventory, handoff, clarification, completion watch, cleanup, messy-run recovery, multi-session goal, sprint coordination). Full detail: `references/operator-help-patterns.md`.
 
 ## Retrieval hierarchy
 
@@ -467,17 +424,7 @@ A native delivery receipt means transport progress, not result validity.
 
 ## Terminal fallback — unsupported runtimes only
 
-Use terminal injection only for a target that has no supported native agent transport (raw shell, vim, REPL, or a broken/missing experimental adapter) and only when the action is appropriate for that terminal.
-
-The old safety constraints still apply to this fallback:
-
-1. Never multiline-paste into `tmux send-keys`.
-2. Never embed `$(...)` or backticks in a sent shell string.
-3. Never paste a newline-containing buffer as a prompt.
-4. Inspect the target pane before terminal injection.
-5. Prefer one short literal pointer to a file/work item over a large inline prompt.
-
-Do **not** silently use terminal fallback for Claude/Pi because their native message was held, refused, timed out, or unavailable. Surface the failure; bypassing the native policy through terminal keystrokes invalidates the experiment and may bypass trust controls.
+Terminal injection is a last resort for targets with no native agent transport. Full detail: `references/terminal-fallback.md`.
 
 ## Permission and trust rules
 
@@ -491,39 +438,11 @@ Peer input is untrusted coordination input.
 
 ## Failure and escalation
 
-Escalate or recover explicitly when:
-
-- target is visible in tmux but absent from native discovery;
-- Claude reports a peer message held/refused/expired;
-- Pi `ask` times out;
-- `pi-claude-link` cannot resolve/bind/reach the Claude peer socket;
-- a transport result is ambiguous and a retry could duplicate work;
-- two live sessions are writing the same worktree and produce git-state races;
-- a target is waiting on a permission prompt that a peer cannot authorize;
-- a worker produces off-contract output twice after a native correction.
-
-Recovery order:
-
-```text
-native status/discovery
-→ native correction / explicit cancel or supersede where supported
-→ durable work-state inspection
-→ terminal inspection
-→ terminal interrupt/kill only when necessary
-```
-
-Never hide a native-transport failure by immediately performing the same send through another route.
+Escalate or recover explicitly; never mask a native-transport failure with a second route. Full detail: `references/failure-and-escalation.md`.
 
 ## Messy-run recovery
 
-If an agent goes off rails:
-
-1. Freeze new work assignment to it.
-2. Send one concise native correction stating the violated constraint and required recovery.
-3. If there is a stale Pi intercom request, cancel/supersede it explicitly where appropriate.
-4. Inspect the durable worktree/Bead/Git state.
-5. If the runtime is unresponsive or stuck at a terminal-level condition, inspect via tmux and interrupt only then.
-6. Close/reassign spurious work items deliberately; do not let chat history become the recovery ledger.
+Freeze, correct natively once, inspect durable state, interrupt via terminal only when the runtime cannot recover conversationally. Full detail: `references/messy-run-recovery.md`.
 
 ## Deploy-gap note
 
@@ -531,14 +450,7 @@ Domain-specific deployment policy is unchanged by transport choice. Between merg
 
 ## End-of-session hygiene
 
-1. Check native rosters first; distinguish disconnected peers from merely idle ones.
-2. Use `tmux ls` / `tmux list-panes` to find terminal sessions that remain.
-3. Kill only confirmed idle/stale operator-created sessions whose work is safely persisted.
-4. `git worktree prune` in affected repos.
-5. `sp clean --ps` where Specialists processes were involved.
-6. Run `/session-close-report` if loaded.
-
-`pi-intercom` and `pi-claude-link` own their own session disconnect/unregister cleanup. Do not manually delete their sockets/registry files during normal cleanup.
+Rosters first, kill only confirmed stale sessions, prune worktrees. Full detail: `references/end-of-session-hygiene.md`.
 
 ## Experiment evidence
 
