@@ -141,6 +141,71 @@ function pruneHooks<W extends HookWrapperLike>(
  * ~/.xtrm/hooks/ is missing, the input map is returned untouched with `skipped`
  * set. It never throws.
  */
+export interface GloballyCoveredSkip extends HookRegistration {
+    /** Set when the project hook file is missing or differs from the global copy. */
+    drift?: string;
+}
+
+/**
+ * Prevention side of the global-only hooks direction: drop generated wrappers
+ * the global install already covers (same event/matcher/command after path
+ * normalisation) so the project reconcile never (re-)writes a registration
+ * that would fire twice. Fail-open: without a readable global baseline the
+ * input map is returned untouched. Drifted/missing project files are still
+ * skipped — the global copy fires either way, and a project copy would only
+ * double-fire (or dangle). The drift reason is reported for migration
+ * visibility; the cure side (pruning pre-existing residue) stays in
+ * planLegacyHookDedupe.
+ */
+export async function filterGloballyCoveredHooks<W extends HookWrapperLike>(
+    projectRoot: string,
+    hooks: Record<string, W[]>,
+    opts: { home?: string } = {},
+): Promise<{ hooks: Record<string, W[]>; skipped: GloballyCoveredSkip[] }> {
+    const home = opts.home ?? os.homedir();
+    const globalSettings = await readJsonOrNull(path.join(home, '.claude', 'settings.json'));
+    if (!globalSettings) return { hooks, skipped: [] };
+    const globalHooksDir = path.join(home, '.xtrm', 'hooks');
+    const projectHooksDir = path.join(projectRoot, '.xtrm', 'hooks');
+    const index = indexGlobalRegistrations(globalSettings);
+    const kept: Record<string, W[]> = {};
+    const skipped: GloballyCoveredSkip[] = [];
+    for (const [event, wrappers] of Object.entries(hooks)) {
+        if (!Array.isArray(wrappers)) {
+            kept[event] = wrappers;
+            continue;
+        }
+        const keptWrappers: W[] = [];
+        for (const wrapper of wrappers) {
+            const matcher = wrapper?.matcher ?? '';
+            const isCovered = (command: string): boolean => index.has(
+                registrationKey(event, matcher, normaliseCommand(command, projectHooksDir, globalHooksDir)),
+            );
+            const uncovered = (wrapper?.hooks ?? []).filter((hook) => !isCovered(hook?.command ?? ''));
+            for (const hook of (wrapper?.hooks ?? []).filter((h) => isCovered(h?.command ?? ''))) {
+                const command = hook?.command ?? '';
+                const entry: GloballyCoveredSkip = { event, matcher, command };
+                const hookFile = referencedHookFile(command, projectHooksDir);
+                if (hookFile) {
+                    const [projectHash, globalHash] = await Promise.all([
+                        sha256(path.join(projectHooksDir, hookFile)),
+                        sha256(path.join(globalHooksDir, hookFile)),
+                    ]);
+                    if (projectHash === null) {
+                        entry.drift = `project hook ${hookFile} is missing — global copy fires; skipped dangling project registration`;
+                    } else if (globalHash === null || projectHash !== globalHash) {
+                        entry.drift = `project hook ${hookFile} differs from the global copy — global copy fires; migrate the drift instead of double-firing`;
+                    }
+                }
+                skipped.push(entry);
+            }
+            if (uncovered.length > 0) keptWrappers.push({ ...wrapper, hooks: uncovered } as W);
+        }
+        if (keptWrappers.length > 0) kept[event] = keptWrappers;
+    }
+    return { hooks: kept, skipped };
+}
+
 export async function planLegacyHookDedupe<W extends HookWrapperLike>(
     projectRoot: string,
     hooks: Record<string, W[]> | undefined,

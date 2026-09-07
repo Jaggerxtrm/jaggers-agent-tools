@@ -39903,6 +39903,50 @@ function pruneHooks(hooks, remove) {
   }
   return pruned;
 }
+async function filterGloballyCoveredHooks(projectRoot, hooks, opts = {}) {
+  const home = opts.home ?? import_node_os2.default.homedir();
+  const globalSettings = await readJsonOrNull(import_node_path4.default.join(home, ".claude", "settings.json"));
+  if (!globalSettings) return { hooks, skipped: [] };
+  const globalHooksDir = import_node_path4.default.join(home, ".xtrm", "hooks");
+  const projectHooksDir = import_node_path4.default.join(projectRoot, ".xtrm", "hooks");
+  const index = indexGlobalRegistrations(globalSettings);
+  const kept = {};
+  const skipped = [];
+  for (const [event, wrappers] of Object.entries(hooks)) {
+    if (!Array.isArray(wrappers)) {
+      kept[event] = wrappers;
+      continue;
+    }
+    const keptWrappers = [];
+    for (const wrapper of wrappers) {
+      const matcher = wrapper?.matcher ?? "";
+      const isCovered = (command) => index.has(
+        registrationKey(event, matcher, normaliseCommand(command, projectHooksDir, globalHooksDir))
+      );
+      const uncovered = (wrapper?.hooks ?? []).filter((hook) => !isCovered(hook?.command ?? ""));
+      for (const hook of (wrapper?.hooks ?? []).filter((h) => isCovered(h?.command ?? ""))) {
+        const command = hook?.command ?? "";
+        const entry = { event, matcher, command };
+        const hookFile = referencedHookFile(command, projectHooksDir);
+        if (hookFile) {
+          const [projectHash, globalHash] = await Promise.all([
+            sha256(import_node_path4.default.join(projectHooksDir, hookFile)),
+            sha256(import_node_path4.default.join(globalHooksDir, hookFile))
+          ]);
+          if (projectHash === null) {
+            entry.drift = `project hook ${hookFile} is missing \u2014 global copy fires; skipped dangling project registration`;
+          } else if (globalHash === null || projectHash !== globalHash) {
+            entry.drift = `project hook ${hookFile} differs from the global copy \u2014 global copy fires; migrate the drift instead of double-firing`;
+          }
+        }
+        skipped.push(entry);
+      }
+      if (uncovered.length > 0) keptWrappers.push({ ...wrapper, hooks: uncovered });
+    }
+    if (keptWrappers.length > 0) kept[event] = keptWrappers;
+  }
+  return { hooks: kept, skipped };
+}
 async function planLegacyHookDedupe(projectRoot, hooks, opts = {}) {
   const unchanged = { hooks: hooks ?? {}, planned: [], preserved: [] };
   if (!hooks || Object.keys(hooks).length === 0) return unchanged;
@@ -40043,7 +40087,13 @@ async function reconcileProjectClaudeHooks(repoRoot, opts = {}) {
   const projectHooksDir = import_path2.default.join(repoRoot, ".xtrm", "hooks");
   const generatedHooks = resolveHooksForProjectRuntime(hooksConfig.hooks ?? {}, projectHooksDir);
   const generatedStatusLine = resolveStatusLineForProjectRuntime(hooksConfig.statusLine, projectHooksDir);
-  const mergedHooks = mergeProjectOwnedHooks(await readExistingHooks(settingsPath), generatedHooks, projectHooksDir);
+  const coverage = await filterGloballyCoveredHooks(repoRoot, generatedHooks);
+  for (const skip of coverage.skipped) {
+    console.log(t.muted(`  \u21BB hook covered globally, skipped at project scope: ${skip.event} ${skip.command.slice(0, 80)}`));
+    if (skip.drift) console.log(t.muted(`    \u21B3 ${skip.drift}`));
+  }
+  const generatedHooksToWrite = coverage.hooks;
+  const mergedHooks = mergeProjectOwnedHooks(await readExistingHooks(settingsPath), generatedHooksToWrite, projectHooksDir);
   const dedupe = await planLegacyHookDedupe(repoRoot, mergedHooks);
   if (dedupe.skipped) {
     console.log(t.muted(`  \u21BB hook dedupe skipped: ${dedupe.skipped}`));
@@ -40052,6 +40102,7 @@ async function reconcileProjectClaudeHooks(repoRoot, opts = {}) {
   }
   const hooksToWrite = dedupe.hooks;
   const hooksEntries = countHookEntries(hooksToWrite);
+  const skippedGloballyCovered = coverage.skipped.length;
   const hasExistingSettings = await import_fs_extra6.default.pathExists(settingsPath);
   const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
   const baseSettings = hasExistingSettings ? existingSettings : await readBaseSettings(settingsTemplatePath);
@@ -40060,13 +40111,13 @@ async function reconcileProjectClaudeHooks(repoRoot, opts = {}) {
     nextSettings.statusLine = generatedStatusLine;
   }
   if (JSON.stringify(existingSettings) === JSON.stringify(nextSettings)) {
-    return { settingsPath, changed: false, hooksEntries };
+    return { settingsPath, changed: false, hooksEntries, skippedGloballyCovered };
   }
   if (dryRun) {
-    return { settingsPath, changed: true, hooksEntries };
+    return { settingsPath, changed: true, hooksEntries, skippedGloballyCovered };
   }
   await writeJsonAtomic(settingsPath, nextSettings);
-  return { settingsPath, changed: true, hooksEntries };
+  return { settingsPath, changed: true, hooksEntries, skippedGloballyCovered };
 }
 async function reconcileGlobalClaudeHooks(opts = {}) {
   const { dryRun = false } = opts;
