@@ -4,11 +4,14 @@ name: Semgrep
 # Advanced Security is unavailable. Free, runs entirely in CI.
 #
 # Diff-aware: on PRs, semgrep ci auto-compares HEAD against the base branch
-# and only flags NEW findings. We do NOT trigger on push to main because
-# `semgrep ci` has no baseline there and would re-flag pre-existing debt
-# every commit. The weekly schedule covers the full-scan use case.
+# and only flags NEW findings. Push-to-main uses --baseline-commit against
+# the pre-push SHA, so squash-merge commits get the same new-findings-only
+# gate without re-flagging pre-existing debt. The weekly schedule covers
+# the full-scan use case.
 
 on:
+  push:
+    branches: [main, master]
   pull_request:
     branches: [main, master]
   schedule:
@@ -40,15 +43,18 @@ jobs:
 
       - name: Scan
         run: |
-          # Diff-baseline behaviour: only fail on NEW findings vs main.
-          # On push-to-main or schedule (no baseline ref available), full
-          # scan runs and pre-existing debt will surface as INFO; --error
-          # still gates new issues only because semgrep-baseline excludes
-          # historical findings.
+          # Diff-baseline behaviour: only fail on NEW findings vs the baseline
+          # (PR base ref, or pre-push SHA on push-to-main). Schedule runs carry
+          # no baseline and remain a full-scan audit.
           BASELINE_ARGS=()
           if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
             BASELINE_ARGS=(--baseline-commit "origin/${GITHUB_BASE_REF}")
             git fetch --no-tags --depth=200 origin "${GITHUB_BASE_REF}" || true
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            BEFORE="${{ github.event.before }}"
+            if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              BASELINE_ARGS=(--baseline-commit "$BEFORE")
+            fi
           fi
           /tmp/semgrep-venv/bin/semgrep scan \
             --config=p/default \
