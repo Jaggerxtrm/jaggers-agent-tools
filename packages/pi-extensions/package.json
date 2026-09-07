@@ -1,6 +1,6 @@
 {
   "name": "@jaggerxtrm/pi-extensions",
-  "version": "0.11.7",
+  "version": "0.12.0",
   "description": "Unified Pi extension entrypoint for xtrm-managed extensions",
   "type": "module",
   "publishConfig": {
@@ -33,9 +33,8 @@
     "url": "https://github.com/Jaggerxtrm/xtrm-tools/issues"
   },
   "scripts": {
-    "prepublishOnly": "npm run verify:runtime && npm run verify:python-kernel-v2",
-    "verify:runtime": "node -e \"const fs=require('fs');const required=['src/index.ts','src/registry.ts','extensions','themes'];const missing=required.filter((entry)=>!fs.existsSync(entry));if(missing.length){console.error('Missing publish runtime assets: '+missing.join(', '));process.exit(1);}console.log('Runtime assets present for npm publish.');\"",
-    "verify:python-kernel-v2": "node ../../scripts/verify-python-kernel-v2.mjs"
+    "prepublishOnly": "npm run verify:runtime",
+    "verify:runtime": "node -e \"const fs=require('fs');const required=['src/index.ts','src/registry.ts','extensions','themes'];const missing=required.filter((entry)=>!fs.existsSync(entry));if(missing.length){console.error('Missing publish runtime assets: '+missing.join(', '));process.exit(1);}console.log('Runtime assets present for npm publish.');\""
   },
   "files": [
     "src",

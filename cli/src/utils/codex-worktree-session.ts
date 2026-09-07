@@ -2,7 +2,7 @@ import kleur from 'kleur';
 import os from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { existsSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 import {
@@ -27,7 +27,9 @@ import {
 import {
     buildAgentEnv,
     chooseAttachCommand,
+    isProjectPackSkillPath,
     parseSpecialistJson,
+    projectPackSkillName,
     resolveRequestedSkills,
 } from './worktree-session.js';
 import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
@@ -207,9 +209,13 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
     let roleName: string | undefined;
     let developerInstructions: string | undefined;
     let selectedModel = opts.model;
-    let requestedSkills = resolveRequestedSkills(mainRoot, opts.skills ?? []);
+    let requestedSkills: string[] = [];
+    let roleSkillPaths: string[] = [];
     let prompt = opts.prompt;
     try {
+        // SEC-03: initial --skill resolution lives inside the normalized
+        // catch so ambiguity/not-found never escapes with a stack.
+        requestedSkills = resolveRequestedSkills(mainRoot, opts.skills ?? [], 'codex');
         if (opts.role) {
             roleName = opts.role;
             const view = spawnSync('sp', ['view', opts.role, '--raw', '--surface', 'codex'], {
@@ -219,13 +225,33 @@ export async function launchCodexWorktreeSession(opts: CodexWorktreeSessionOptio
             const role = parseSpecialistJson(opts.role, view.stdout ?? '', mainRoot);
             developerInstructions = role.systemPrompt;
             selectedModel ??= role.model;
+            roleSkillPaths = role.skillPaths;
             if (opts.bead) {
                 prompt = renderCodexTask(opts.role, opts.bead, mainRoot);
             } else {
-                requestedSkills = [...role.skillPaths, ...requestedSkills];
+                requestedSkills = [...roleSkillPaths, ...requestedSkills];
             }
         }
-        requestedSkills = [...new Set(requestedSkills.map((value) => realpathSync(value)))];
+        // Role skillPaths are declared verbatim by parseSpecialistJson; resolve
+        // the merged set once here (bare pack names, relatives, absolutes).
+        // ResolveRequestedSkills dedupes by realpath internally.
+        requestedSkills = resolveRequestedSkills(mainRoot, requestedSkills, 'codex');
+        // SEC-03: the validation set covers role skill paths in EVERY role
+        // launch — including --bead, where the compose set deliberately leaves
+        // them out — so a project-pack reference can never slip through with a
+        // dead/wrong skill. Project-pack skills are outside this bead's codex
+        // scope and codex does not materialize them; fail closed before any
+        // worktree state exists. A path into the same project pack is still
+        // unsupported, so only a global enablement/global path is remediated.
+        const validationSet = resolveRequestedSkills(mainRoot, [...roleSkillPaths, ...requestedSkills], 'codex');
+        const unsupported = validationSet.find((p) => isProjectPackSkillPath(mainRoot, p));
+        if (unsupported) {
+            const name = projectPackSkillName(mainRoot, unsupported) ?? path.basename(unsupported);
+            fail(
+                `skill '${name}' resolves to a project pack under .xtrm/skills, which codex launches do not support. `
+                + 'Enable it as a global skill or pass a global skill path.',
+            );
+        }
     } catch (error) {
         fail(error instanceof Error ? error.message : String(error));
     }

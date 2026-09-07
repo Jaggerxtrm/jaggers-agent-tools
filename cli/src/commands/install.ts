@@ -64,20 +64,23 @@ function printNextSteps(): void {
     console.log(b('  Next steps\n'));
 
     console.log(d('  In your project:'));
-    console.log(`  xtrm init                     ${d('initialize beads + gitnexus for this repo')}`);
-    console.log(`  bd prime                      ${d('load session context and available work')}`);
-    console.log(`  bv --robot-triage             ${d('graph-aware triage — find highest-impact work')}`);
-    console.log(`  bd update <id> --claim        ${d('claim an issue before editing any file')}`);
-    console.log(`  bd close <id>                 ${d('close when done')}`);
+    console.log(`  xtrm init                     ${d('initialize Beads + code intelligence for this repo')}`);
+    console.log(`  bd ready                      ${d('show unblocked work; use bd search/show for targeted lookup')}`);
+    console.log(`  bd update <id> --claim        ${d('claim tracked work before editing')}`);
+    console.log(`  xt skills list --global --json ${d('inspect the active XTRM skill surface')}`);
+    console.log(`  bd close <id>                 ${d('close according to the installed memory/commit gates')}`);
 
     console.log('');
     console.log(d('  Worktree workflow:'));
+    console.log(`  xt pi                         ${d('launch Pi in a sandboxed worktree')}`);
     console.log(`  xt claude                     ${d('launch Claude Code in a sandboxed worktree')}`);
+    console.log(`  xt codex                      ${d('launch Codex in a sandboxed worktree')}`);
     console.log(`  xt end --dry-run              ${d('preview PR title, body, and linked issues')}`);
     console.log(`  xt end                        ${d('push branch, open PR, clean up worktree')}`);
 
     console.log('');
     console.log(d('  Reference:'));
+    console.log(`  bd prime                      ${d('optional full-context diagnostic; not a SessionStart requirement')}`);
     console.log(`  xtrm status                   ${d('check installed vs repo')}`);
     console.log(`  xtrm docs show                ${d('browse all documentation')}`);
     console.log('');

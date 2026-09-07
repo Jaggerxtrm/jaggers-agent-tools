@@ -28,6 +28,67 @@ afterEach(() => {
 });
 
 describe('Codex worktree launcher', () => {
+    it('rejects a role-declared project-pack skill even with --bead (SEC-03)', async () => {
+        const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'xtrm-codex-bead-pack-'));
+        roots.push(repoRoot);
+        process.chdir(repoRoot);
+        fs.ensureDirSync(path.join(repoRoot, '.xtrm', 'skills', 'infra', 'service-knowledge'));
+        fs.writeFileSync(path.join(repoRoot, '.xtrm', 'skills', 'infra', 'service-knowledge', 'SKILL.md'), '# pack');
+
+        mocked.spawnSync.mockImplementation((command: string, args: string[] = []) => {
+            const joined = args.join(' ');
+            if (command === 'sh') return { status: 0, stdout: 'bin/codex\n', stderr: '' };
+            if (command === 'git' && joined === 'rev-parse --show-toplevel') {
+                return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+            }
+            if (command === 'git' && joined === 'rev-parse --git-common-dir') {
+                return { status: 0, stdout: '.git\n', stderr: '' };
+            }
+            if (command === 'git' && joined.startsWith('show-ref --verify')) {
+                return { status: 1, stdout: '', stderr: '' };
+            }
+            if (command === 'sp' && args[0] === 'view') {
+                return {
+                    status: 0,
+                    stdout: JSON.stringify({
+                        specialist: {
+                            metadata: { name: 'roller', version: '1.0.0', category: 'testing', description: 'd' },
+                            execution: {
+                                mode: 'tool', model: 'openai-codex/gpt-5.6-codex', timeout_ms: 0, stall_timeout_ms: 600000,
+                                max_retries: 0, interactive: false, response_format: 'markdown', output_type: 'workflow',
+                                permission_required: 'LOW', requires_worktree: true, bare: false, auto_commit: 'never',
+                            },
+                            prompt: { system: 'sys', task_template: 'task' },
+                            skills: { paths: ['service-knowledge'] },
+                        },
+                    }),
+                    stderr: '',
+                };
+            }
+            if (command === 'sp' && args[0] === 'render-task') {
+                return { status: 0, stdout: JSON.stringify({ ok: true, initial_prompt: 'body', prompt_hash: 'h', components: [] }), stderr: '' };
+            }
+            return { status: 0, stdout: '', stderr: '' };
+        });
+
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const exitSpy = exitByThrow();
+        const { launchCodexWorktreeSession } = await import('../utils/codex-worktree-session.js');
+        await expect(launchCodexWorktreeSession({
+            name: 'bead-pack',
+            role: 'roller',
+            attach: false,
+            json: true,
+            yolo: false,
+            bead: 'xtrm-lk07w.14',
+        })).rejects.toThrow('exit:1');
+
+        expect(errorSpy.mock.calls.flat().join(' ')).toContain('do not support');
+        // Rejection happens before any worktree state exists.
+        expect(mocked.spawnSync).not.toHaveBeenCalledWith('bd', expect.anything(), expect.anything());
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
     it('rejects hook-trust bypass before any worktree mutation', async () => {
         const exitSpy = exitByThrow();
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);

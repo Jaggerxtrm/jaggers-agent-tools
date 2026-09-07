@@ -1,77 +1,102 @@
 ---
-updated_at: 2026-08-22
+updated_at: 2026-09-04
 ---
 
-# Skills ownership
+# Skills ownership and placement
 
 Machine-readable source: `docs/skills-ownership.json`.
+Release mirror metadata: `docs/skills-ownership.release.json`.
 
-- `releasing` authored and owned by `xtrm-tools`.
-- `update-specialists`, `using-kpi`, `using-nodes`, `specialists-creator`, `using-specialists`, `using-specialists-auto`, `using-script-specialists` are authored in `specialists` and vendored into `xtrm-tools` at publish time.
-- Core-owned skills such as `planning` and `test-planning` are authored from this repository and must flow through the package/global/runtime materialization path; installed copies are not an independent authoring authority.
-- `xtrm-tools` ships vendor/package copies into `~/.xtrm/skills/default/` (global SSOT) and publish/update tooling refreshes managed payloads; hand-editing managed installed copies is not an authoring workflow.
-- Publish vendor paths and source metadata must remain reproducible; package/asset-contract verification is the release guardrail.
-- Release metadata lives in `docs/skills-ownership.release.json`.
+## Authority
 
-**Note:** After the global skills migration (epic `xtrm-bq7yd`), managed skills are materialized into the global SSOT at `~/.xtrm/skills/default/` rather than maintained as per-repo runtime copies. Consumer runtimes receive them through the composed active view.
+Core-owned skills are authored in `xtrm-dev/core` and shipped through the package/global
+materialization path. Installed copies under `~/.xtrm/skills/**`, `.claude/skills`, or
+runtime views are generated/managed state, not an independent authoring source.
 
-## 2026-08-22 planning/test-planning vendor-drift finding
+Specialists-owned skills are authored in `xtrm-dev/specialists/config/skills` and vendored
+into Core from an immutable `source.resolved_sha`. The vendor operation reads runtime
+material from that exact Git commit; it must not copy the current checkout working tree
+and then merely label the result with a pin.
 
-The XTRM runtime canonicalization audit found a concrete upstream/materialized-copy inversion:
+`releasing` remains Core-owned.
+
+## Specialists-owned distributed surface
+
+The v4 distribution intentionally exposes only two Specialists-owned skill roots:
+
+| Skill | Placement | Reason |
+|---|---|---|
+| `using-specialists` | `default` | Universal Specialists execution-backend doctrine used by ordinary XTRM agents. |
+| `update-specialists` | `optional/xtrm-maintenance` | Explicit distribution/runtime maintenance workflow. |
+
+KPI analysis, NodeSupervisor, script-class execution, and Specialist-definition authoring
+are advanced surfaces of the same execution backend and therefore live under
+`using-specialists/references/*` with deterministic authoring helpers under
+`using-specialists/scripts/specialist-definitions/*`. They are not separate active skill
+triggers or an extra `specialists-advanced` pack.
+
+`using-specialists-auto` is intentionally retired. Automatic routing is handled by normal
+XTRM contract/execution selection rather than a duplicate Specialist skill.
+
+The placement contract is declared in `docs/skills-ownership.json`.
+`scripts/vendor-specialists-skills.mjs` materializes declared runtime files and writes
+`.xtrm/specialists-source.json` v2 with the immutable upstream commit, placement, and Git
+blob identities. Evaluation fixtures/workspaces remain upstream in Specialists and are not
+part of the Core runtime payload.
+
+## Managed skill tiers
 
 ```text
-repo source
-  skills/planning/SKILL.md          451 lines at audited HEAD
-  skills/test-planning/SKILL.md     465 lines at audited HEAD
-
-managed global/runtime copies
-  ~/.xtrm/skills/default/planning/SKILL.md       670 lines
-  ~/.xtrm/skills/default/test-planning/SKILL.md  542 lines
-  ~/.pi/agent/skills/...                        byte-equal to global copies
+~/.xtrm/skills/
+├── default/       package-managed universal skills
+├── optional/      package-managed opt-in packs
+├── <user-pack>/   user-managed global packs
+└── active/        composed runtime view
 ```
 
-The installed/global copies contained later planning mechanics (including draft-capture/telemetry and Specialist-chain test-planning behavior) that were not present in the repository source. That violates the ownership/materialization direction even when the installed behavior itself is desirable.
+Project user packs live under `.xtrm/skills/<pack>/`. Package-managed `default/` and
+`optional/` are reconstructed from the package registry; do not put user-authored content
+there.
 
-This document records the rule and the remediation boundary; it does **not** choose a copy merely because it is newer:
+Enable optional packs through the current `xt skills` CLI, for example:
 
-1. repository/package source remains the upstream authoring authority for Core-owned skills;
-2. determine the provenance of the installed-only delta (unpushed work vs hand-edit vs old package payload) before copying text back;
-3. reconcile useful delta deliberately into repository source with normal review/tests;
-4. regenerate global/runtime managed copies through the supported package/update flow;
-5. verify byte/hash parity after materialization;
-6. never treat `~/.pi/agent/skills/**` or `~/.xtrm/skills/default/**` as a new source repository.
+```bash
+xt skills enable sre-ops --global
+xt skills enable xtrm-maintenance --global
+xt skills enable xtrm-development --local
+```
 
-This is a documentation residual from `xtrm-cn8.6`; actual skill-content reconciliation requires the local filesystem/provenance evidence and is therefore not performed by this docs-only PR.
+Use live `xt skills --help` for exact syntax.
 
-## What survives `xt update --apply`
+## Update/materialization safety
 
-Survival is decided by **location**, not by a marker file. There is no way to mark a skill as user-owned; put it in a location the update path never repairs.
-Contract derived in `xtrm-kvsrd.4`, asserted by Suite A step 20b (`test/integration-suite/suite-a-installed-artifact.mjs`).
+Registry-owned paths may be repaired or pruned on update:
 
-### Registry-owned — delete-on-update, never put user content here
+- `~/.xtrm/skills/default/**`
+- `~/.xtrm/skills/optional/**`
+- managed runtime-view symlinks resolving into those roots
 
-| Location | Why |
-|---|---|
-| `~/.xtrm/skills/default/**` | Repaired from the package payload; pruning removes managed entries the registry manifest no longer declares. |
-| `~/.xtrm/skills/optional/**` | Package-managed too; `optional/` is the shipped optional-packs tier, not a user-content tier. |
-| `~/.claude/skills` | A symlink to `~/.xtrm/skills/default`, so it shares that tree's fate. |
-| Runtime-view symlinks recorded as managed, resolving inside a managed root, and no longer desired | All conditions are required before managed removal. |
+User-owned global/project packs are preserved. A user-owned collision with a managed skill
+name must fail loudly rather than being overwritten.
 
-### Preserved — safe for user content
+Do not hand-edit a managed installed copy as a durable repair. Change the owning source,
+regenerate/vendor the package payload, regenerate `.xtrm/registry.json`, and verify
+materialized parity.
 
-| Location | Why |
-|---|---|
-| Global user packs `~/.xtrm/skills/<pack>/` | Supported user tier; never package-repaired as `default/` or `optional/`. |
-| Project packs `.xtrm/skills/<pack>/` | Project user tier; discovered, not payload-repaired. |
-| A real directory at `.claude/skills/<name>` or `.pi/skills/<name>` | An untracked user directory is not part of the managed-removal set. |
-| A runtime-view symlink pointing outside managed roots | Managed cleanup additionally requires the target to resolve inside a managed root. |
-| The runtime directory itself when it is a symlink | Reconciliation refuses loudly rather than replacing a user-owned runtime directory. |
-| A non-symlink managed entry | Reconciliation refuses loudly rather than replacing it silently. |
+## Release invariants
 
-If a user-owned name collides with a managed skill name, reconciliation fails loudly rather than overwriting it.
+A Core release is not skill-clean unless:
 
-### Do not put user content in `optional/`
+1. every Specialists-owned distributed skill appears exactly once at its declared placement;
+2. retired duplicate roots (`using-specialists-auto`, `specialists-advanced`) are absent;
+3. vendored runtime files match the pinned Specialists Git commit/blob identities;
+4. vendor, ownership, and release manifests agree on source SHA and placements;
+5. optional `PACK.json` files declare every placed optional skill;
+6. generated registry and npm package payload agree;
+7. no nested runtime roots (`.claude`, `.agents`, `.pi`) exist inside a managed skill root;
+8. default roots remain the small universal XTRM operating surface;
+9. removed v3 capabilities have a recorded disposition in `docs/skills-v4-preservation-matrix.md`.
 
-`xtrm-kvsrd.4` once described `~/.xtrm/skills/optional/**` as a supported home for user-authored skills. That is wrong: both managed tiers are reconstructed from package payload on version changes.
-
-Use `xt skills create-pack --global <name>` (→ `~/.xtrm/skills/<name>/`) or `xt skills create-pack --local <name>` (→ `.xtrm/skills/<name>/`) instead. Pack names are validated against `RESERVED_PACK_NAMES`, so `default`, `optional`, `user`, `active` and `local-legacy` cannot be claimed as user packs.
+Relevant release guards include `check:skills-ownership`, `check:managed-skills`,
+`check:specialists-vendor`, `check:vendored-specialists-parity`,
+`check:registry-pack-parity`, layout/root-budget guards, and package/build/tests.

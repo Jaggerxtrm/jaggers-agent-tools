@@ -186,6 +186,9 @@ describe('xtrm clean — ownership safety', () => {
     mkdirSync(activeRoot, { recursive: true });
     mkdirSync(userActiveDir, { recursive: true });
     writeFileSync(path.join(retiredSkill, 'SKILL.md'), '# retired\n');
+    writeFileSync(path.join(tmpHome, '.xtrm', 'skills', '.installer-manifest.json'), JSON.stringify({
+      default: ['retired-skill/SKILL.md'],
+    }, null, 2));
     symlinkSync(path.join('..', 'default', 'retired-skill'), path.join(activeRoot, 'retired-skill'));
     writeFileSync(path.join(userActiveDir, 'SKILL.md'), '# user\n');
 

@@ -130,18 +130,18 @@ try {
   const globalSkills = path.join(env.HOME, '.xtrm', 'skills');
   const globalUserPack = path.join(globalSkills, 'p201-user-pack');
   const globalUserPackSkill = path.join(globalUserPack, 'p201-user-skill');
-  const managedDefaultIntruder = path.join(globalSkills, 'default', 'p201-not-in-manifest');
+  const unmanagedDefaultSentinel = path.join(globalSkills, 'default', 'p201-unmanaged-default');
   const projectClaudeSkills = path.join(project, '.claude', 'skills');
   const projectForeignSkill = path.join(projectClaudeSkills, 'p201-project-owned');
   const outsideRoot = path.join(box.root, 'outside-managed-roots', 'p201-external-skill');
   const foreignRuntimeLink = path.join(projectClaudeSkills, 'p201-external-link');
 
-  for (const dir of [globalUserPackSkill, managedDefaultIntruder, projectForeignSkill, outsideRoot]) {
+  for (const dir of [globalUserPackSkill, unmanagedDefaultSentinel, projectForeignSkill, outsideRoot]) {
     mkdirSync(dir, { recursive: true });
   }
   writeFileSync(path.join(globalUserPack, 'PACK.json'), JSON.stringify({ name: 'p201-user-pack' }, null, 2));
   writeFileSync(path.join(globalUserPackSkill, 'SKILL.md'), '# global user-pack skill\n');
-  writeFileSync(path.join(managedDefaultIntruder, 'SKILL.md'), '# dropped into the registry-owned default tree\n');
+  writeFileSync(path.join(unmanagedDefaultSentinel, 'SKILL.md'), '# unmanaged default sentinel\n');
   writeFileSync(path.join(projectForeignSkill, 'SKILL.md'), '# project runtime entry, never in managedLinks\n');
   writeFileSync(path.join(outsideRoot, 'SKILL.md'), '# lives outside every managed root\n');
   symlinkSync(outsideRoot, foreignRuntimeLink);
@@ -178,10 +178,15 @@ try {
   // ASSERTED, both halves. Enforcement lives in registry-scaffold.ts:188
   // (pruneRetiredManagedSkills) and skills-runtime-reconcile.ts:157-167/:176.
 
-  // PRESERVED — locations the update path only ever discovers.
+  // PRESERVED — locations the update path only ever discovers or cannot prove
+  // it owns.
   assert.ok(
     existsSync(path.join(globalUserPackSkill, 'SKILL.md')),
     'global user pack removed by update (~/.xtrm/skills/<pack> is the supported user-pack home)',
+  );
+  assert.ok(
+    existsSync(path.join(unmanagedDefaultSentinel, 'SKILL.md')),
+    'unmanaged default-root sentinel removed by update without ownership proof',
   );
   assert.ok(
     existsSync(path.join(projectForeignSkill, 'SKILL.md')),
@@ -192,16 +197,9 @@ try {
     existsSync(path.join(foreignRuntimeLink, 'SKILL.md')),
     'foreign runtime symlink no longer resolves after update (target outside managed roots must be left alone)',
   );
-
-  // PRUNED — the registry owns default/ outright, so anything the manifest does
-  // not declare is delete-on-update. This is the half step 20 only observed.
-  assert.ok(
-    !existsSync(managedDefaultIntruder),
-    'non-manifest skill survived in the registry-owned ~/.xtrm/skills/default tree',
-  );
   r.ok(
     'step 20b: user-owned skill location contract',
-    'global user pack + project runtime entry + outside-root symlink preserved; non-manifest default/ entry pruned',
+    'global user pack + unmanaged default sentinel + project runtime entry + outside-root symlink preserved',
   );
 
   // ~/.claude/skills is the GLOBAL runtime projection of that same registry-owned

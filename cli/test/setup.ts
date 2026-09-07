@@ -5,10 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach } from 'vitest';
 
+import { needsTmpGitGuard } from '../src/tests/tmp-git-guard.js';
+
 const tempRoot = path.resolve(os.tmpdir());
 const runnerCwd = path.resolve(process.cwd());
 const tmpGitPath = path.join(tempRoot, '.git');
-const runnerStartsOutsideTmp = runnerCwd !== tempRoot && !runnerCwd.startsWith(`${tempRoot}${path.sep}`);
+
 
 // xtrm-on2mk: TREE-HASH LEAK GUARD.
 // The prior mtime-only detector could not catch a wipe that leaves
@@ -72,13 +74,21 @@ async function assertRealHomeUntouched(): Promise<void> {
   }
 }
 
-// A stale /tmp/.git makes git treat /tmp as a project root. Guard only runners
-// started outside /tmp; never alter a suite whose real project root is /tmp.
-async function removeTmpGitPollution(): Promise<void> {
-  if (runnerStartsOutsideTmp) await fs.rm(tmpGitPath, { recursive: true, force: true });
+// A stale /tmp/.git makes git treat /tmp as a project root. FAIL-CLOSED guard
+// (exact-06ca security): the test setup must never MUTATE the host — it
+// asserts /tmp/.git is absent (a stale one fails the suite loudly, telling the
+// operator to remove it manually). Only a runner rooted at the exact host temp
+// directory is exempt; projects below that directory remain guarded.
+async function assertNoTmpGitPollution(): Promise<void> {
+  if (needsTmpGitGuard(runnerCwd, tempRoot) && fsSync.existsSync(tmpGitPath)) {
+    throw new Error(
+      `test setup: stale host-global ${tmpGitPath} exists. This test suite never `
+      + 'mutates the host: remove the stale directory manually, then rerun.',
+    );
+  }
 }
 
-await removeTmpGitPollution();
+await assertNoTmpGitPollution();
 
 // xtrm-on2mk: operators using the global migration export
 // XTRM_GLOBAL_HOOKS=1 and XTRM_GLOBAL_SKILLS=1 in their shell. Vitest
@@ -93,9 +103,9 @@ delete process.env.XTRM_GLOBAL_SKILLS;
 beforeEach(() => {
   delete process.env.XTRM_GLOBAL_HOOKS;
   delete process.env.XTRM_GLOBAL_SKILLS;
-  return removeTmpGitPollution();
+  return assertNoTmpGitPollution();
 });
 afterEach(async () => {
-  await removeTmpGitPollution();
+  await assertNoTmpGitPollution();
   await assertRealHomeUntouched();
 });

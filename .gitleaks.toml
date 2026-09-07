@@ -9,6 +9,11 @@ description = "xtrm-tools allowlist"
 # Historical Qwen OAuth credentials were revoked; keep this commit out of full-history scans.
 commits = [
     '''dc019b8848a03ceedc3d388c9316110acb2c4b1d''',
+    # 79ed7e61 mirrored Specialists KPI prose whose "token cost" wording trips the
+    # generic-api-key rule on prose (no secret). Rewritten in 0477306b within the same
+    # PR; gitleaks v8.30.1 still scans the intermediate commit in base..head and
+    # full-history ranges, so the commit must be allowlisted explicitly.
+    '''79ed7e61a503a656dba860f3c5f9801f29f9ca22''',
 ]
 stopwords = []
 regexes = [
@@ -37,6 +42,10 @@ paths = [
     '''^\.dolt/.*''',
     '''^\.gitnexus/.*''',
     '''^\.serena/cache/.*''',
+
+    # Board-audit gen-2 exports commit raw-beads.jsonl (structured beads data:
+    # memory keys, issue titles, timestamps). Same finding class as .beads/.
+    '''^\.xtrm/board-audit/exports/.*''',
 
     # Specialist runtime state and local DB caches.
     '''^\.specialists/db/.*''',

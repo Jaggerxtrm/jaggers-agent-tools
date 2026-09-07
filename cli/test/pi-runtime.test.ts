@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { cleanupConflictingPiPackageSettings, inventoryPiRuntime, executePiSync, ensureAlwaysGlobalPiPackages, getXtManagedPiPackages, syncManagedPiThemes, updatePiSettings } from '../src/core/pi-runtime.js';
+import { cleanupConflictingPiPackageSettings, inventoryPiRuntime, executePiSync, ensureAlwaysGlobalPiPackages, getXtManagedPiPackages, parseNpmPackageName, syncManagedPiThemes, updatePiSettings } from '../src/core/pi-runtime.js';
 
 async function makeExtension(baseDir: string, name: string, extraFiles: Record<string, string> = {}): Promise<void> {
     const extDir = path.join(baseDir, name);
@@ -269,15 +269,20 @@ describe('ensureAlwaysGlobalPiPackages', () => {
     });
 
     it('does not invoke pi install when global package directories already exist', async () => {
+        const installedGitPackages: string[] = [];
         for (const pkg of getXtManagedPiPackages()) {
-            await fs.ensureDir(path.join(agentDir, 'npm', 'node_modules', pkg.id.slice(4)));
+            const npmName = parseNpmPackageName(pkg.id);
+            if (npmName) {
+                await fs.ensureDir(path.join(agentDir, 'npm', 'node_modules', npmName));
+            } else {
+                installedGitPackages.push(pkg.id);
+            }
         }
-
         let installCalls = 0;
         const result = await ensureAlwaysGlobalPiPackages(false, undefined, agentDir, () => {
             installCalls += 1;
             return { status: 0, stdout: '', stderr: '' };
-        });
+        }, null, installedGitPackages);
 
         expect(installCalls).toBe(0);
         expect(result.installed).toEqual([]);
@@ -289,7 +294,7 @@ describe('ensureAlwaysGlobalPiPackages', () => {
         const result = await ensureAlwaysGlobalPiPackages(false, undefined, agentDir, (piPackageId) => {
             installOrder.push(piPackageId);
             return { status: 0, stdout: '', stderr: '' };
-        }, null);
+        }, null, []);
 
         const expectedPackageIds = getXtManagedPiPackages().map(pkg => pkg.id);
         expect(installOrder).toEqual(expectedPackageIds);

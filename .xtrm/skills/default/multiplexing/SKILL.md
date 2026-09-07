@@ -1,106 +1,140 @@
 ---
 name: multiplexing
-description: Help the operator coordinate work across N concurrent tmux sessions (Claude Code, pi, raw shells, vim, REPLs). Inventory state, hand off tasks cleanly, prevent messy-run failure modes, keep hygiene. Not an agent harness; not a /using-specialists replacement; tool-agnostic. Invoked explicitly via /multiplexing — do not rely on auto-activation.
-disable-model-invocation: true
+description: >
+  Canonical XTRM multi-agent coordination doctrine. Use whenever two or more live agents,
+  native subagents, or xt pi/claude/codex sessions collaborate, delegate, exchange
+  decisions, wait on each other, or need continuation. Prefer each harness/runtime's
+  native SDK, agent, messaging, reply, and wakeup facilities; use XTRM/Beads for durable
+  contracts and identity, and xtmux/tmux as observability or compatibility transport only
+  where the active runtime still needs it. Replaces the older tmux-centric multiplexing
+  protocol and the experimental multiplexing-native-test direction.
 ---
 
 # Multiplexing
 
-You are an orchestration assistant for an operator working in N concurrent tmux sessions (Claude Code, pi, raw shell, vim, REPL). Inventory, hand off, monitor, clean up, recover. You do not run a new harness. You do not replace specialists. The operator may switch agents at any time.
+XTRM is a multi-agent system. `multiplexing` is how participants coordinate without
+turning terminal panes or chat transcripts into the source of truth.
 
-Invoked explicitly via `/multiplexing`. Auto-activation is unreliable across harnesses — do not assume it fires.
+## Native first
 
-> **Before starting, run `xtmux --help` and `xt --help` (also `xtmux <subcommand> --help`, `xt <subcommand> --help`).** This skill carries policy and the shapes that matter for correctness. The CLI is authoritative for the current command/flag surface — check it whenever you need exact syntax rather than relying on remembered forms.
+Use the strongest coordination primitive provided by the active harness/runtime.
 
-## Slash-syntax gotcha — pi and claude differ
+```text
+same harness, native subagent/session API available
+  -> use native agent lifecycle + native messaging/reply/wakeup
 
-The most common mistake in this skill: sending `/skill:multiplexing` to a Claude worker. Claude treats it as literal user text and the skill never loads.
+separate long-lived XTRM peer required
+  -> launch through xt pi|claude|codex and use its XTRM/native communication adapter
 
-| Runtime | Slash form | Example |
-|---|---|---|
-| Claude Code | `/<name>` | `/multiplexing`, `/using-specialists` |
-| Pi          | `/skill:<name>` | `/skill:multiplexing`, `/skill:using-specialists` |
+Specialist role/job required
+  -> /using-specialists
 
-This applies wherever a skill is loaded turn-1 via `--prompt` or is sent as a pointer via `send-keys` / `safe-send-pointer`. `--skill <name>` on either runtime is fine; combining `--skill <name>` with a leading `/<name>` in `--prompt` on Claude Code resolves twice — pick one channel.
-
-## Authority boundary
-
-- **Own**: inventory, assisted handoffs, cleanup hygiene, messy-run recovery, session naming convention.
-- **Do not own**: specialist chain orchestration (→ `/using-specialists`), delegated-pane self-protocol (→ `/multiplexing-team`), spawn primitives (Docker/VM/subprocess), custom IPC schemas (beads already serve comms), tool-specific harness bindings.
-
-## When it applies vs when it doesn't
-
-Applies: inventory across sessions, delegation to another session, cleanup (dead sessions, orphan processes, leaked worktrees), recovery from a messy delegated agent, coordinated multi-session goal, sprint orchestration.
-
-Does NOT apply: specialist chain orchestration → `/using-specialists`. Delegated pane's self-protocol → the pane loads `/multiplexing-team`. Designing a new agent runtime → out of scope. In-process subagent spawn (Claude Agent SDK, Cline, Cursor) → out of scope; stays tool-agnostic. Single-session deep work → no multiplexing needed.
-
-## Cardinal rules — non-negotiable
-
-1. **Never multi-line paste via `send-keys`.** Each `\n` is an Enter — the target receives N fragmented prompts.
-2. **Never use `$(...)` or backticks** inside `send-keys` — shell expansion injects into the pane.
-3. **Never `tmux paste-buffer`** with a file that contains newlines. Same fragmentation as rule 1.
-4. **Never send a prompt while the target pane is in Working state.** It queues, fragments, or races in-flight output.
-5. **Never invent ad-hoc session names.** Follow the naming convention below.
-
-## Communication primitives — beads first, /tmp second, send-keys third
-
-- **Beads (`bd`)**: canonical durable comms. Task content + status + findings survive session death, harness restart, agent switch. Default to beads for anything worth surviving a crash. Beads are already the operator's message bus; do not invent a fourth channel.
-- **`/tmp/<session>-<topic>.txt`**: ephemeral meta-protocol (negative constraints, output shape, one-off scope clarifications). Write via Bash heredoc, NOT the Write tool (Write is blocked by the bd claim gate in beads-managed repos).
-- **`send-keys`**: single-line pointer only. Three allowed forms — (a) read pointer `'leggi /tmp/<file>.txt e seguilo. <constraint>. report finale.'`, (b) slash command `/using-specialists`, (c) brief correction ≤3 sentences.
-
-Prefer `xtmux safe-send-pointer` when available — it dry-runs first, rejects working targets, multiline payloads, shell substitution, and auto-appends the double-Enter that Claude Code panes require (Claude Code consumes the first Enter as paste-detection).
-
-## Pre-flight checklist — before every first send-keys
-
-```bash
-tmux list-panes -t <session> -F '#{pane_id} #{pane_current_command}'
-tmux show-options -p -t <pane_id> -qv @agent_state 2>/dev/null || true   # any working|running|busy|thinking = STOP
-tmux capture-pane -t <session> -p | tail -15                              # live UI check
-tmux display-message -t <session> -p '#{pane_current_path}'               # real cwd (name ≠ cwd)
+native communication unavailable for a tmux-hosted compatibility lane
+  -> xtmux/tmux compatibility path
 ```
 
-Any check fails → STOP. Do not improvise; wait, switch session, or recreate. The pane's `@agent_state` and its visible UI are both authoritative; trust neither one alone.
+Do not route native-capable agents through simulated terminal typing merely because old
+multiplexing versions did so.
 
-## Session naming convention
+## Durable work is separate from transport
 
-`<orchestrator-session-name>-<topic-slug>` (e.g. `infra-audit-sweep`, `design-spec-rewrite`). Persistent main sessions (`design`, `infra`, `svc`) keep bare names. Specialist-spawned `sp-<role>-<hash>` follow the specialists CLI convention — leave alone. Collisions append `-2`, `-3`. Forbidden: `svc-s24f-tests`, `test-orch-xyz`, `tmp-investigation` — the convention is what makes `tmux ls` parseable.
+Every delegated lane gets a durable XTRM contract. The communication mechanism carries
+coordination around that contract; it does not replace it.
 
-## Operator-help patterns — quick routing
+```text
+bead/contract  = what the worker owns and how success is proven
+message        = status, pointer, decision, question, correction
+worker result  = evidence/claim to consume
+runtime state  = whether the worker is alive/waiting/done
+```
 
-| Pattern | Trigger | Steps in brief |
-|---|---|---|
-| 1 Inventory | "what's running", "session map" | `xtmux dashboard sessions-only` → per-session `pane_current_path` + `@agent_state` + bead |
-| 2 Assisted hand-off | "send task X to Y", "delegate to Y" | pre-flight Y → create bead → `xtmux handoff --target Y --bead <id>` (or /tmp file + `safe-send-pointer --yes`) → confirm → send |
-| 2b Bare launch (no role) | general-purpose worker | `xt claude|pi <name> --no-attach --prompt '/<skill> leggi /tmp/<file>.txt e seguilo'` (mind the runtime's slash form — see gotcha above) |
-| 3 Cleanup | "kill dead sessions", "clean orphans" | `xtmux audit` cleanup rows → `tmux kill-session` idle sessions with clean tree → `git worktree prune` → `sp clean --ps` |
-| 4 Messy-run recovery | "went off-rails", "N spurious beads" | `tmux send-keys C-c` ×2-3 → close spurious beads → `bd remember` the trigger |
-| 5 Multi-session goal | one outcome across N sessions | one epic bead → per-session child via `--parent` → hand off each via Pattern 2 → aggregate on close |
-| 6 Sprint orchestration | full sprint w/ judge + DM + ordered merges | epic + per-worker children + `/pr-reviewer` judge pane + `/deploy-monitor` pane; DM mandatory on ANY infra-surface PR (prometheus.yml, alertmanager.yml, traefik/**, docker-compose, `.env`) regardless of size |
-| 7 Coordinator sub-orchestrator | epic with many tracked tasks | `xt pi --role chain-coordinator --bead <epic> --no-attach` — coordinator absorbs monitoring; you see only its final report |
+Long payloads belong in the bead, a durable artifact, or the worker result. Messages
+should point to them.
 
-## Deploy-gap chain (Pattern 6 essential)
+## Coordinator responsibilities
 
-Between `gh pr merge` and DM opening a window: build → `docker compose up -d --force-recreate <svc>` → verify `docker inspect StartedAt > mergedAt` (or `scripts/verify-deploy-applied.sh` if bundled). DM refuses the window on stale artifact. Full doctrine in `/deploy-monitor`.
+Before dispatch:
 
-## Retrieval hierarchy
+- understand the work-list and overlap surface;
+- make every worker contract ready;
+- choose boundaries that can actually be owned independently;
+- state merge/integration ownership;
+- state whether a reply/decision is required;
+- avoid parallel writers on the same mutable surface unless ordering is explicit.
 
-Before retrieving, gate on the target's live transition: `xtmux wait-agent <target> --wait-for-transition --consume --timeout <dur>` blocks until the pane/job state changes instead of a manual `capture-pane` live-state poll loop. It waits on **live pane state** and is **not durable retrieval** — after the wait returns, read the results from the durable sources below. `multiplexing-team` teaches the same primitive to delegated panes; this is the orchestrator-side equivalent.
+After dispatch:
 
-Prefer durable sources over live scraping:
+- remain reachable;
+- consume incoming decision requests;
+- observe by event/transition where supported instead of busy-polling;
+- verify terminal results before advancing dependent work;
+- stop obsolete lanes when the plan changes;
+- hand off coordinator state before context pressure becomes unsafe.
 
-- `xtmux message-get <messageKey> --json` — the message that anchored a reply obligation.
-- `xtmux agent-last <pane_id> --json` — last completed turn on a pane.
-- `sp result <job-id> --json` — final specialist output.
-- `tmux capture-pane` — **live-state only** (pre-flight `@agent_state` disagreement, wizards, transient UI). Never as final-result protocol.
+Read `references/worker.md` when this agent is a delegated worker rather than the
+coordinator.
 
-## SQLite coordination — the short version
+## Messaging semantics
 
-`${XDG_STATE_HOME:-$HOME/.local/state}/xtmux/observability.db` is the sole source of truth for reply obligations and outbound waits. Beaded `message-send` defaults `--expects-reply=true`; FYI opts out with `--expects-reply=false`. Recipient preserves `messageKey`, `message-ack` = receipt, `message-reply --in-reply-to "$KEY"` = fulfilment (or `safe-send-pointer --reply-to "$KEY"` when pane injection is also required). Do not create/inspect/delete runtime marker files; restart recovery comes from SQL. Manual triage: `xtmux message-status "$KEY" --json`, `xtmux obligations list --pane "$MY_PANE" --json`, `xtmux monitor-list --json`.
+Prefer typed/native messages with explicit sender, recipient, correlation/reply identity,
+and delivery state when the runtime supports them.
 
-## Failure / escalation trigger
+A required reply is an obligation, not an FYI. Preserve the correlation identity through
+the reply path. Receipt/acknowledgement does not automatically mean the requested answer
+or decision was delivered.
 
-Escalate to operator when: pre-flight can't be satisfied and the send is time-sensitive; a delegated agent produces off-contract output twice in a row after correction; two live sessions on the same worktree cause visible git-state races (recommend dedicated `xt claude`/`xt pi` worktree per session); `xtmux audit` warning rows require judgment calls the operator asked to keep in their hands.
+If the active compatibility transport uses xtmux, inspect current `xtmux ... --help` and
+its durable message/obligation surfaces rather than copying old flag recipes. The same
+semantic rules apply regardless of transport.
 
-## End-of-session hygiene
+See `references/messaging-and-continuation.md`.
 
-`tmux ls` → kill idle `<orchestrator>-*` with clean tree → `git worktree prune` on each repo → `sp clean --ps` → run `/session-close-report` if loaded.
+## Wakeup and continuation
+
+A worker that asks a question and then loses its wakeup path is effectively dead.
+Whenever progress depends on a future event:
+
+1. identify the event/condition;
+2. register the runtime-supported continuation/wakeup/monitor;
+3. verify registration succeeded;
+4. preserve enough durable state that a restart can recover;
+5. stop the mechanism when the dependency is resolved.
+
+Do not treat periodic polling as the default if the harness offers event-driven
+completion or messages.
+
+## Native subagents vs xt peers
+
+Use a native subagent when the work is bounded and the parent harness can own its
+lifecycle/result directly. Use an `xt` peer when the worker needs a durable independent
+session, worktree, long lifetime, different harness/model, or direct operator access.
+
+Both still receive XTRM-quality contracts.
+
+## Results
+
+Prefer durable/native result APIs over scraping terminal output. A result tells you what
+the worker claims; re-check load-bearing conclusions against live state before merging,
+deleting, deploying, or declaring completion.
+
+`tmux capture-pane` is a live UI diagnostic, not a final-result protocol.
+
+## Cross-runtime details
+
+Read `references/harnesses.md` only for the runtimes participating in the current task.
+The root skill intentionally avoids hardcoding SDK method names that change independently
+of XTRM's semantic contract.
+
+## Failure rules
+
+Stop and reconcile when:
+
+- two workers unexpectedly own the same mutable surface;
+- a required reply has no viable route back to the requester;
+- a worker is terminal but its result cannot be recovered;
+- a dependent lane was dispatched from stale base state;
+- native and compatibility transports disagree about identity/ownership;
+- the coordinator is near context failure without a durable handoff.
+
+The fix is to restore one durable ownership/evidence model, not to add another ad-hoc
+message channel.

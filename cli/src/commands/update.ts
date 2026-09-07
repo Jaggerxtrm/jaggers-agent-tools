@@ -145,8 +145,8 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
                 skipClaudeRuntimeSync: true,
                 skipGlobalPiPackageAssurance: true,
                 skipExternalPiToolPatch: true,
-                // Global system-prompt sync runs exactly once per update
-                // command, after the fleet loop — never once per repo (xtrm-3ljgz.2).
+                // Global system-prompt preflight runs exactly once per update command,
+                // before repo resolution and reconciliation — never once per repo (xtrm-3ljgz.2).
                 skipGlobalPromptSync: true,
                 strictRegistry: isStrictRegistryMode(opts),
             });
@@ -323,6 +323,7 @@ export function createUpdateCommand(): Command {
         .option('--json', 'Print JSON output', false)
         .action(async (opts) => {
             const typedOpts = opts as UpdateOpts;
+            const promptSync = await syncGlobalPrompts({ dryRun: !typedOpts.apply });
             const { targets, incomplete } = await resolveTargetRepos(typedOpts);
             const rows: RepoUpdateResult[] = [];
             for (const repo of targets) {
@@ -348,9 +349,6 @@ export function createUpdateCommand(): Command {
             }
 
             const packageAssurance = await assureXtManagedPiPackages(!Boolean(typedOpts.apply));
-            // Global system-prompt sync: exactly once per top-level update
-            // command, outside the repo loop, consistent with package assurance.
-            const promptSync = await syncGlobalPrompts({ dryRun: !typedOpts.apply });
             if (typedOpts.apply) runExternalPiToolPatch(resolvePackageRoot(), false);
 
             if (opts.json) {

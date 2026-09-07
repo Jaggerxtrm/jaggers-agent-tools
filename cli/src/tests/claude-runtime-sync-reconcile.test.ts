@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { mergeProjectOwnedHooks, reconcileProjectClaudeHooks } from '../core/claude-runtime-sync.js';
+import { mergeProjectOwnedHooks, reconcileProjectClaudeHooks, resolveHooksForGlobalRuntime } from '../core/claude-runtime-sync.js';
 
 // reconcileProjectClaudeHooks resolves the canonical hooks.json from the package root
 // (the xtrm-tools repo root in tests, via __dirname walk), then rewrites the project's
@@ -211,6 +211,25 @@ describe('mergeProjectOwnedHooks', () => {
     const merged = mergeProjectOwnedHooks(existing, canonical, '/repo/.xtrm/hooks');
     expect(merged.Stop).toHaveLength(1);
     expect(merged.Stop[0].hooks[0].command).toBe('node /home/dawid/scripts/my-shutdown-hook.mjs');
+  });
+
+  it('preserves third-party wrapper objects without hooks across resolution and merge', () => {
+    const foreign = {
+      matcher: 'Bash',
+      provider: 'third-party',
+    };
+    const resolved = resolveHooksForGlobalRuntime(
+      { PreToolUse: [foreign as never] },
+      '/home/test/.xtrm/hooks',
+    );
+    expect(resolved.PreToolUse[0]).toEqual(foreign);
+
+    const merged = mergeProjectOwnedHooks(
+      { PreToolUse: [foreign as never] },
+      canonical,
+      '/repo/.xtrm/hooks',
+    );
+    expect(merged.PreToolUse).toContainEqual(foreign);
   });
 
   it('tolerates malformed hooks entries without crashing', () => {

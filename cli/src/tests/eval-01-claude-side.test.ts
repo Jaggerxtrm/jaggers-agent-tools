@@ -763,7 +763,7 @@ esac
 describe('EVAL-01 Claude column vendoring', () => {
   // Local-only drift guard: CI has no xtmux install, but any developer machine
   // that does must not let the vendored copies rot.
-  it.skipIf(!fs.existsSync(INSTALLED_HOOKS_DIR))(
+  it.skipIf(Boolean(process.env.CI) || !fs.existsSync(INSTALLED_HOOKS_DIR))(
     'vendored hook fixtures match the installed xtmux Claude hooks',
     () => {
       for (const name of VENDORED_HOOKS) {
