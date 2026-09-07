@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native-style external tool rows + #9a8bff model accent ([1fd5889](https://github.com/xtrm-dev/core/commit/1fd58895c737147449659d41898662ac608ad70f))
 - Launcher-owned --name from worktree slug + drop auto-session-name (xtrm-rhmm1) ([7f5874c](https://github.com/xtrm-dev/core/commit/7f5874c17608a5d1e61036afeac14951e3c48cac))
 - Resolve bare skill names from v2 project packs + claude loadability (xtrm-lk07w.14) ([ef14bf4](https://github.com/xtrm-dev/core/commit/ef14bf44030ee6cd02d4dd21f0856f067baf54f3))
+- Skillbridge — mount python-backed skills as importable kernel modules (xtrm-h7uwi.1) ([48cd3ae](https://github.com/xtrm-dev/core/commit/48cd3ae3961f9116618edbd894628736cd7ac7ae))
+- Python-kernel QoL — stdlib prelude + output truncation with shape hint (xtrm-h7uwi.2) ([8aa5b17](https://github.com/xtrm-dev/core/commit/8aa5b1751e51b9881bce3716c4b2011c3b51e268))
+- Python-kernel audit seam — kernel mutation events visible to host (xtrm-h7uwi.3) ([cf7da84](https://github.com/xtrm-dev/core/commit/cf7da847ca9a2b84883501d6ce89ce14e35aee78))
 
 ### Fixed
 - Retry external tool frame patch on session_start ([18bc72f](https://github.com/xtrm-dev/core/commit/18bc72f6c69aff19f556f7efe8e327f7c9c45616))
