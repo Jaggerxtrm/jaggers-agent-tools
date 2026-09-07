@@ -983,8 +983,8 @@
     "digest": "git-blob-sha1",
     "source": {
       "kind": "ref",
-      "ref": "feat/skills-v4-runtime-doctrine",
-      "resolved_sha": "f8cac893159959655d7787806704ce89d834d381",
+      "ref": "master",
+      "resolved_sha": "5d2f2907f49877f6c4dcf32de95e8cb945c067c7",
       "repo_path": "../specialists",
       "source_path": "config/skills"
     },
