@@ -23,6 +23,7 @@ preserved when they remain useful even if the old prompt/manual is rewritten.
 | `issue-triage/resources/board-audit` | moved | `xtrm/packages/board-audit` | Old one-shot bundle exporter retired. Gen-2 publication uses permanent orphan `board-audit-export-do-not-cancel`; Beads/Dolt remains authority. |
 | `delegating` | absorbed | `multiplexing`, `using-specialists`, `planning` | Delegation is selected by execution shape and contract, not a separate generic router. |
 | `multiplexing-team` | absorbed | `multiplexing/references/*` | Team/worker/message/continuation doctrine unified under one coordination skill. |
+| `multiplexing-native-test` | absorbed | `multiplexing/references/*` | Proven native-transport doctrine promoted to first-class; experiment duplicate retired. |
 | `spec-dispatch` | absorbed | `planning` + `multiplexing`/`using-specialists` | Spec becomes durable contracts first; execution backend is then selected. |
 | `init-session` | absorbed/runtime-owned | `starting-and-resuming-work` + runtime hooks/CLI | Cold-start/claim/continuity mechanics are no longer a separate prompt. |
 | `session-close-report` | absorbed/runtime-owned | `starting-and-resuming-work`, `xtrm-maintenance` | Durable handoff/finalization replaces a separate report trigger. |

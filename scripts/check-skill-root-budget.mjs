@@ -13,7 +13,6 @@ const BUDGETS = {
   'using-xtrm':                 220,
   'starting-and-resuming-work': 180,
   multiplexing:                 180,
-  'multiplexing-native-test':  440,
   planning:                     180,
   'engineering-quality':        180,
   'using-specialists':          180,
