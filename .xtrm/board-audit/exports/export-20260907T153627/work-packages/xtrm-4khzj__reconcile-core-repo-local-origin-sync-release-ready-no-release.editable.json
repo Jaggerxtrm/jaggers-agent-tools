@@ -1,0 +1,76 @@
+{
+  "content_sha256": "cb334046a6211c7126130383dc324fbdb8517e4e23ad5e9be8d3c6db23c81d47",
+  "desired_issues": {
+    "xtrm-4khzj": {
+      "_type": "issue",
+      "assignee": "jaggerxtrm",
+      "comment_count": 0,
+      "created_at": "2026-09-07T11:36:49Z",
+      "created_by": "jaggerxtrm",
+      "dependency_count": 0,
+      "dependent_count": 0,
+      "description": "## PROBLEM\nLocal checkout (/home/dawid/dev/core) and origin (xtrm-dev/core) must be verified in sync; open PRs, stale branches, and working-tree state triaged so main is clean and ready for a future release.\n## SUCCESS\n- Local main == origin/main, working tree clean, remote-tracking refs pruned.\n- Every open non-dependabot PR dispositioned (merge candidate / needs rebase / close) with evidence; no action taken without operator approval except safe sync.\n- Release-readiness checklist verified (HEAD CI, version/CHANGELOG state, required checks).\n- No release or publish performed.\n## SCOPE\ngit state, open PRs, local branches/worktrees/stash/tags, HEAD CI, release workflow presence.\n## NON_GOALS\nNo merges, no closes, no release/publish, no code changes unless trivially safe and approved.\n## CONSTRAINTS\nAsk before destructive or origin-mutating actions. Read-only investigation first.\n## VALIDATION\n- [ ] git status clean, main == origin/main (hashes shown)\n- [ ] PR disposition table with mergeable/checks/evidence\n- [ ] Release-readiness checklist with pass/fail + evidence\n## OUTPUT\nSituation report + ordered reconcile actions awaiting approval.",
+      "heartbeat_at": "2026-09-07T11:36:52Z",
+      "id": "xtrm-4khzj",
+      "issue_type": "task",
+      "lease_expires_at": "2026-09-07T11:41:52Z",
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "started_at": "2026-09-07T11:36:52Z",
+      "status": "in_progress",
+      "title": "Reconcile core repo: local/origin sync + release-ready (no release)",
+      "updated_at": "2026-09-07T11:36:52Z"
+    }
+  },
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-4khzj"
+  },
+  "issues": {
+    "xtrm-4khzj": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "comment_count": 0,
+        "created_at": "2026-09-07T11:36:49Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nLocal checkout (/home/dawid/dev/core) and origin (xtrm-dev/core) must be verified in sync; open PRs, stale branches, and working-tree state triaged so main is clean and ready for a future release.\n## SUCCESS\n- Local main == origin/main, working tree clean, remote-tracking refs pruned.\n- Every open non-dependabot PR dispositioned (merge candidate / needs rebase / close) with evidence; no action taken without operator approval except safe sync.\n- Release-readiness checklist verified (HEAD CI, version/CHANGELOG state, required checks).\n- No release or publish performed.\n## SCOPE\ngit state, open PRs, local branches/worktrees/stash/tags, HEAD CI, release workflow presence.\n## NON_GOALS\nNo merges, no closes, no release/publish, no code changes unless trivially safe and approved.\n## CONSTRAINTS\nAsk before destructive or origin-mutating actions. Read-only investigation first.\n## VALIDATION\n- [ ] git status clean, main == origin/main (hashes shown)\n- [ ] PR disposition table with mergeable/checks/evidence\n- [ ] Release-readiness checklist with pass/fail + evidence\n## OUTPUT\nSituation report + ordered reconcile actions awaiting approval.",
+        "heartbeat_at": "2026-09-07T11:36:52Z",
+        "id": "xtrm-4khzj",
+        "issue_type": "task",
+        "lease_expires_at": "2026-09-07T11:41:52Z",
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "started_at": "2026-09-07T11:36:52Z",
+        "status": "in_progress",
+        "title": "Reconcile core repo: local/origin sync + release-ready (no release)",
+        "updated_at": "2026-09-07T11:36:52Z"
+      }
+    }
+  },
+  "new_comments": {},
+  "relations": [],
+  "repository": "xtrm-dev/core",
+  "root_id": "xtrm-4khzj",
+  "root_title": "Reconcile core repo: local/origin sync + release-ready (no release)",
+  "roundtrip": {
+    "base_package_sha256": "cb334046a6211c7126130383dc324fbdb8517e4e23ad5e9be8d3c6db23c81d47",
+    "base_record_sha256": {
+      "xtrm-4khzj": "74c7317a4dc32162fa938824cfd00b511a404f3c95211a6064fee3895ef18f8a"
+    },
+    "edit_contract": "modify desired_issues and new_comments only; issues.*.source is immutable base state",
+    "prepared_at": "2026-09-07T13:36:29Z",
+    "schema_version": "xtrm.board-audit.roundtrip.v1"
+  },
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}
