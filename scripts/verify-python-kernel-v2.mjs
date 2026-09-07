@@ -84,6 +84,8 @@ const preflightMarkers = [
   ["preflight digest defined", /def preflight\(repo, path/],
   ["preflight bound into _ns", /_ns\["preflight"\] = preflight/],
   ["preflight survives reset (durable prelude)", /try:\n        _ns\["preflight"\] = preflight/],
+  ["preflight memory topic walks up out of generic names", /_GENERIC_NAMES = \("index", "mod", "main"/],
+  ["preflight surfaces the memory topic it queried", /memory topic: %s/],
   ["full-body record format", /--format=%x1e%x1f%h%x1f%ad%x1f%s%x1f%b/],
 ];
 for (const [label, re] of preflightMarkers) {

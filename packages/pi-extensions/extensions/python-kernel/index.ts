@@ -146,11 +146,16 @@ def sk_rebuild():
 # Bind the in-kernel helper into _ns (cells eval in _ns, not module scope).
 _ns["sk_rebuild"] = sk_rebuild
 
+_GENERIC_NAMES = ("index", "mod", "main", "__init__", "lib", "app", "core", "types")
+
+
 def preflight(repo, path, n=4):
     """File-scoped memory-retrieval digest (memory doctrine: progressive
     retrieval, never bulk). For ONE file: full commit messages with bodies
     (git log --follow), pending diff --stat, and bd memories hits for the
-    basename. Read-only (no _AUDIT entries); prints a bounded digest and
+    filename stem — or, when that stem is a generic module name (index, mod,
+    main, ...), the nearest meaningful parent directory, since "index" keys
+    nothing. Read-only (no _AUDIT entries); prints a bounded digest and
     returns the commit records (hash, date, subject, body). 0 commits
     usually means a wrong path — treat it as a failed preflight."""
     import subprocess as _sp
@@ -166,25 +171,30 @@ def preflight(repo, path, n=4):
         _p = [_f.strip("\\n") for _f in _x.strip(_fs).split(_fs)]
         if len(_p) >= 4:
             _cs.append((_p[0], _p[1], _p[2], _fs.join(_p[3:])))
+    _parts = [_q for _q in path.split("/") if _q not in (".", "")]
+    _topic = _parts[-1].split(".")[0] if _parts else ""
+    while _topic.lower() in _GENERIC_NAMES and len(_parts) > 1:
+        _parts.pop()
+        _topic = _parts[-1].split(".")[0]
     if not _cs:
-        print("== %s: 0 commits — wrong path? ==" % path)
+        print("== %s: 0 commits — wrong path? (memory topic: %s) ==" % (path, _topic))
         return []
     _diff = _git("diff", "HEAD", "--stat", "--", path).strip()
     try:
-        _mem = _sp.run(["bd", "memories", path.rsplit("/", 1)[-1]],
+        _mem = _sp.run(["bd", "memories", _topic],
                        capture_output=True, text=True, cwd=repo).stdout or ""
     except Exception:
         _mem = ""
     _keys = [_l.strip() for _l in _mem.splitlines()
              if _l.strip() and not _l.startswith("Memories")][::2][:6]
-    print("== %s: %d commits ==" % (path, len(_cs)))
+    print("== %s: %d commits (memory topic: %s) ==" % (path, len(_cs), _topic))
     for _h, _d, _s, _b in _cs[:n]:
         _body = " / ".join(_l.strip() for _l in _b.splitlines() if _l.strip())[:110]
         print("  %s %s %s%s" % (_d, _h, _s[:72], "\\n         " + _body if _body else ""))
     if _diff:
         print("== pending diff ==\\n" + _diff)
     if _keys:
-        print("== bd memory keys: %s ==" % _keys)
+        print("== bd memory keys (%s): %s ==" % (_topic, _keys))
     return _cs
 
 
