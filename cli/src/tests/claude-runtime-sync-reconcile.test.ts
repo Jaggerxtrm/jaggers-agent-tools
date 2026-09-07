@@ -109,6 +109,55 @@ describe('reconcileProjectClaudeHooks', () => {
     expect(allCommands).not.toContain('skill_activator');
   });
 
+  it('skips generated hooks already covered by the global install (global-only direction)', async () => {
+    const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
+    fs.ensureDirSync(path.dirname(settingsPath));
+    fs.writeJsonSync(settingsPath, { hooks: {} });
+
+    // First run with an empty global baseline wires the full canonical set.
+    const first = await reconcileProjectClaudeHooks(repoRoot, { dryRun: false });
+    expect(first.changed).toBe(true);
+    expect(first.skippedGloballyCovered ?? 0).toBe(0);
+    const canonicalWritten = fs.readJsonSync(settingsPath).hooks;
+    expect(Object.keys(canonicalWritten).length).toBeGreaterThan(0);
+
+    // Promote the written project hooks to a fake global install by rewriting
+    // the project hooks dir to the fake global one, with byte-identical files.
+    const projectHooksDir = path.join(repoRoot, '.xtrm', 'hooks');
+    const globalHooksDir = path.join(fakeHome, '.xtrm', 'hooks');
+    const toGlobal = (s: string): string => s.split(projectHooksDir).join(globalHooksDir);
+    type Wrapper = { matcher?: string; hooks: Array<{ command: string }> };
+    const canonicalEntries = Object.entries(canonicalWritten) as Array<[string, Wrapper[]]>;
+    const globalHooks: Record<string, unknown[]> = {};
+    for (const [event, wrappers] of canonicalEntries) {
+      globalHooks[event] = wrappers.map((w) => ({
+        matcher: w.matcher,
+        hooks: w.hooks.map((h) => ({ type: 'command', command: toGlobal(h.command) })),
+      }));
+    }
+    fs.ensureDirSync(path.join(fakeHome, '.claude'));
+    fs.writeJsonSync(path.join(fakeHome, '.claude', 'settings.json'), { hooks: globalHooks });
+    for (const [, wrappers] of canonicalEntries) {
+      for (const w of wrappers) {
+        for (const h of w.hooks) {
+          const rel = path.relative(projectHooksDir, h.command.replace(/^node "|"$/g, '').replace(/^python3 "/, ''));
+          if (!rel || rel.startsWith('..')) continue;
+          fs.ensureDirSync(path.dirname(path.join(globalHooksDir, rel)));
+          fs.writeFileSync(path.join(globalHooksDir, rel), 'global-copy');
+          fs.ensureDirSync(path.dirname(path.join(projectHooksDir, rel)));
+          fs.writeFileSync(path.join(projectHooksDir, rel), 'global-copy');
+        }
+      }
+    }
+
+    // Second run with full global coverage writes nothing project-scoped.
+    fs.writeJsonSync(settingsPath, { hooks: {} });
+    const second = await reconcileProjectClaudeHooks(repoRoot, { dryRun: false });
+    expect((second.skippedGloballyCovered ?? 0)).toBeGreaterThan(0);
+    const rewritten = fs.readJsonSync(settingsPath).hooks;
+    expect(Object.keys(rewritten).length).toBe(0);
+  });
+
   it('drops a stale xtrm-managed wrapper whose hash no longer matches canonical (xtrm-61cdl)', async () => {
     const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
     fs.ensureDirSync(path.dirname(settingsPath));

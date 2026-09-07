@@ -8,7 +8,7 @@ import { spawnSync } from 'child_process';
 import { t } from '../utils/theme.js';
 import { appendHookLog, hashValue, resolveGlobalHooksConfigPath, resolveGlobalHooksRoot } from './global-hooks-bootstrap.js';
 import { shouldUseGlobalHooks } from './global-hooks-flag.js';
-import { planLegacyHookDedupe } from './legacy-hook-dedupe.js';
+import { filterGloballyCoveredHooks, planLegacyHookDedupe } from './legacy-hook-dedupe.js';
 import { writeJsonAtomic } from '../utils/atomic-write.js';
 
 declare const __dirname: string;
@@ -78,6 +78,8 @@ export interface ReconcileProjectHooksResult {
     settingsPath: string;
     changed: boolean;
     hooksEntries: number;
+    /** Generated registrations skipped at project scope (already covered globally). */
+    skippedGloballyCovered?: number;
 }
 
 export interface ReconcileGlobalClaudeHooksResult {
@@ -201,8 +203,18 @@ export async function reconcileProjectClaudeHooks(
     const projectHooksDir = path.join(repoRoot, '.xtrm', 'hooks');
     const generatedHooks = resolveHooksForProjectRuntime(hooksConfig.hooks ?? {}, projectHooksDir);
     const generatedStatusLine = resolveStatusLineForProjectRuntime(hooksConfig.statusLine, projectHooksDir);
+    // Global-only hooks direction: never (re-)write a registration the global
+    // install already covers — a project copy would fire twice (fatal for the
+    // stateful beads gates). Fail-open without a readable global baseline.
+    // Pre-existing residue is still cured by planLegacyHookDedupe below.
+    const coverage = await filterGloballyCoveredHooks(repoRoot, generatedHooks);
+    for (const skip of coverage.skipped) {
+        console.log(t.muted(`  ↻ hook covered globally, skipped at project scope: ${skip.event} ${skip.command.slice(0, 80)}`));
+        if (skip.drift) console.log(t.muted(`    ↳ ${skip.drift}`));
+    }
+    const generatedHooksToWrite = coverage.hooks;
     // xtrm-61cdl: preserve third-party (unmanaged) wrappers on reconcile.
-    const mergedHooks = mergeProjectOwnedHooks(await readExistingHooks(settingsPath), generatedHooks, projectHooksDir);
+    const mergedHooks = mergeProjectOwnedHooks(await readExistingHooks(settingsPath), generatedHooksToWrite, projectHooksDir);
     // xtrm-v1yck: drop registrations the global install already covers byte-for-byte.
     // Fail-open — without a readable global baseline nothing is provably redundant.
     const dedupe = await planLegacyHookDedupe(repoRoot, mergedHooks);
@@ -213,6 +225,7 @@ export async function reconcileProjectClaudeHooks(
     }
     const hooksToWrite = dedupe.hooks;
     const hooksEntries = countHookEntries(hooksToWrite);
+    const skippedGloballyCovered = coverage.skipped.length;
 
     const hasExistingSettings = await fs.pathExists(settingsPath);
     const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
@@ -223,15 +236,15 @@ export async function reconcileProjectClaudeHooks(
     }
 
     if (JSON.stringify(existingSettings) === JSON.stringify(nextSettings)) {
-        return { settingsPath, changed: false, hooksEntries };
+        return { settingsPath, changed: false, hooksEntries, skippedGloballyCovered };
     }
 
     if (dryRun) {
-        return { settingsPath, changed: true, hooksEntries };
+        return { settingsPath, changed: true, hooksEntries, skippedGloballyCovered };
     }
 
     await writeJsonAtomic(settingsPath, nextSettings);
-    return { settingsPath, changed: true, hooksEntries };
+    return { settingsPath, changed: true, hooksEntries, skippedGloballyCovered };
 }
 
 export async function reconcileGlobalClaudeHooks(opts: { dryRun?: boolean } = {}): Promise<ReconcileGlobalClaudeHooksResult> {
