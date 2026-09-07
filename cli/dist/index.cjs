@@ -65817,7 +65817,6 @@ var SAFE_BD_BASH_ALLOWLIST = [
   "Bash(bd ready:*)",
   "Bash(bd stats:*)",
   "Bash(bd search:*)",
-  "Bash(bd prime:*)",
   "Bash(bd memories:*)",
   "Bash(bd recall:*)"
 ];
