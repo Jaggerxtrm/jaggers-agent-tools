@@ -1,6 +1,28 @@
 # XTRM
 
+> [!WARNING]
+> **Documentation freshness**
+>
+> XTRM is evolving quickly. Long-form documentation can lag behind the current runtime.
+> For the exact revision or installed version you are using, treat these as the operational authorities:
+>
+> 1. the source and generated contracts at that revision;
+> 2. `xt --help` and `xt <command> --help`;
+> 3. the canonical workflow skills, especially `/using-xtrm`, `/multiplexing`, and `/using-specialists`;
+> 4. `CHANGELOG.md`, release notes, and merged pull requests.
+>
+> The README is an orientation surface, not a substitute for the live command contract.
+
+
 **XTRM (`xt`) is a durable multi-agent coding runtime for Pi, Claude Code, Codex, and Specialists.**
+
+> [!NOTE]
+> **Naming**
+>
+> **XTRM** is the whole stack. **Core** is its control-plane component and this repository’s name.
+> Core is currently distributed on npm as `xtrm-tools`; that package name is transitional
+> and is planned for retirement as the repositories converge.
+
 
 It gives coding workers an isolated place to work, a durable contract to work from, the tools and skills they need, and a way to coordinate with other workers without rebuilding the whole system from chat history every time.
 
@@ -321,10 +343,6 @@ xt doctor
 
 Use live `xt <command> --help`, `sp help`, and `specialists list --full` for exact flags and runtime-specific capabilities.
 
-## Documentation
-
-| Document | Purpose |
-|---|---|
 | [XTRM-GUIDE.md](XTRM-GUIDE.md) | full architecture and workflow reference |
 | [docs/worktrees.md](docs/worktrees.md) | `xt` worktrees, attach/end/reap and isolation |
 | [docs/xt-pi-role.md](docs/xt-pi-role.md) | role launcher and Specialist behavior |
