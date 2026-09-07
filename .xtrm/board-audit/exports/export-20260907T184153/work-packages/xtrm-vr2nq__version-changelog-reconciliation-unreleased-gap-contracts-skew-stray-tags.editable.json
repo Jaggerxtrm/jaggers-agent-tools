@@ -1,0 +1,68 @@
+{
+  "content_sha256": "a420d1ab3f98dcec850d84c4415163c45a214639a21d3343b646f604adfedbc2",
+  "desired_issues": {
+    "xtrm-vr2nq": {
+      "_type": "issue",
+      "comment_count": 0,
+      "created_at": "2026-09-07T16:24:14Z",
+      "created_by": "jaggerxtrm",
+      "dependency_count": 0,
+      "dependent_count": 0,
+      "description": "## PROBLEM\nEmpty [Unreleased] over 200+ post-v0.12.0 commits; packages/contracts 0.11.1 skews from root 0.12.0; stray v5.1.0/v2.x tags.\n## SUCCESS\nConcrete plan: git-cliff feasibility for CHANGELOG generation, skew fix, tag disposition. No release itself.\n## SCOPE\nRead-only investigation + proposal. No writes, no tag moves, no publishes.\n## VALIDATION\n- [ ] git-cliff availability/config assessment\n- [ ] per-item disposition (fix/defer/drop) with rationale\n## OUTPUT\nProposal + follow-up beads as needed.",
+      "id": "xtrm-vr2nq",
+      "issue_type": "task",
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "status": "open",
+      "title": "Version/changelog reconciliation: Unreleased gap, contracts skew, stray tags",
+      "updated_at": "2026-09-07T16:24:14Z"
+    }
+  },
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-vr2nq"
+  },
+  "issues": {
+    "xtrm-vr2nq": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-09-07T16:24:14Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nEmpty [Unreleased] over 200+ post-v0.12.0 commits; packages/contracts 0.11.1 skews from root 0.12.0; stray v5.1.0/v2.x tags.\n## SUCCESS\nConcrete plan: git-cliff feasibility for CHANGELOG generation, skew fix, tag disposition. No release itself.\n## SCOPE\nRead-only investigation + proposal. No writes, no tag moves, no publishes.\n## VALIDATION\n- [ ] git-cliff availability/config assessment\n- [ ] per-item disposition (fix/defer/drop) with rationale\n## OUTPUT\nProposal + follow-up beads as needed.",
+        "id": "xtrm-vr2nq",
+        "issue_type": "task",
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "Version/changelog reconciliation: Unreleased gap, contracts skew, stray tags",
+        "updated_at": "2026-09-07T16:24:14Z"
+      }
+    }
+  },
+  "new_comments": {},
+  "relations": [],
+  "repository": "xtrm-dev/core",
+  "root_id": "xtrm-vr2nq",
+  "root_title": "Version/changelog reconciliation: Unreleased gap, contracts skew, stray tags",
+  "roundtrip": {
+    "base_package_sha256": "a420d1ab3f98dcec850d84c4415163c45a214639a21d3343b646f604adfedbc2",
+    "base_record_sha256": {
+      "xtrm-vr2nq": "29c1c0bee24393f5f144a655de0aa9eb654753866f4ccc712b7b7b64124ce931"
+    },
+    "edit_contract": "modify desired_issues and new_comments only; issues.*.source is immutable base state",
+    "prepared_at": "2026-09-07T16:42:01Z",
+    "schema_version": "xtrm.board-audit.roundtrip.v1"
+  },
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}
