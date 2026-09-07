@@ -185,40 +185,24 @@
           "hash": "03953d8d199be148c0b005784d8a419630a7cc8bc2d825e54e6dffc44f595ade",
           "version": "0.12.0"
         },
-        "multiplexing-native-test/references/discovery-and-preflight.md": {
-          "hash": "0e7a9199fb73aebbdde93f2da00afde1b1b762dce4d4bf69ac2ce5f07ae09323",
+        "multiplexing/references/discovery-and-preflight.md": {
+          "hash": "ef7bf358add52dd07def8737cd69cf9dac9913e479008f70ecc9dddbd6f681e5",
           "version": "0.12.0"
         },
-        "multiplexing-native-test/references/end-of-session-hygiene.md": {
+        "multiplexing/references/end-of-session-hygiene.md": {
           "hash": "6553f1d541453e1fb4213f7e977efc21c57b04e121487c919c2dd0eaf565f9b3",
           "version": "0.12.0"
         },
-        "multiplexing-native-test/references/experiment-evidence.md": {
-          "hash": "ea929532fbdddce1c079474f39fe73d2fc076f59396808c82d6f781e54331665",
-          "version": "0.12.0"
-        },
-        "multiplexing-native-test/references/failure-and-escalation.md": {
+        "multiplexing/references/failure-and-escalation.md": {
           "hash": "2627a0f025b00ab01fdc408e574664569674a918fa1e247b62a835be99ddc4aa",
           "version": "0.12.0"
         },
-        "multiplexing-native-test/references/fleet-window-dispatch.md": {
+        "multiplexing/references/fleet-window-dispatch.md": {
           "hash": "7d1577bdffeecbfd08b42eb7c4e4e9ce764015cd79acbde8a861c7cc41544f94",
           "version": "0.12.0"
         },
-        "multiplexing-native-test/references/messy-run-recovery.md": {
-          "hash": "4d9f480345e4d453bdde2002a7440189b44d66a1cf92aa7b8c399272fe623889",
-          "version": "0.12.0"
-        },
-        "multiplexing-native-test/references/operator-help-patterns.md": {
-          "hash": "2d73010c369ad7ea5264005a48fef92b007bdc467a5e6f2c816e75ac4ee1a7c3",
-          "version": "0.12.0"
-        },
-        "multiplexing-native-test/references/terminal-fallback.md": {
-          "hash": "b283fa74a5fd92fb0f7220fcdb8f1ef524d9554b28249850b68122d3525e2953",
-          "version": "0.12.0"
-        },
-        "multiplexing-native-test/SKILL.md": {
-          "hash": "ddc52ba8f283814e343e54dbfa291e880dddf95b79423901d3f4c632090ecda0",
+        "multiplexing/references/handoff.md": {
+          "hash": "9f7cc3b64bb588480642e5a5c7a4508696a29581ccf07306deca4d3fd0a71b8e",
           "version": "0.12.0"
         },
         "multiplexing/references/harnesses.md": {
@@ -227,6 +211,38 @@
         },
         "multiplexing/references/messaging-and-continuation.md": {
           "hash": "516d39ce6a9c00abf780e0c56b19bdff9bfd5aa0e0cbc9c99c6eac1a09a7c541",
+          "version": "0.12.0"
+        },
+        "multiplexing/references/messy-run-recovery.md": {
+          "hash": "4d9f480345e4d453bdde2002a7440189b44d66a1cf92aa7b8c399272fe623889",
+          "version": "0.12.0"
+        },
+        "multiplexing/references/native-transports.md": {
+          "hash": "c3fbc2ebbfec2c5575dd1d54c93a75ba8f7c38527d1bd7294bf238aa3cd5002e",
+          "version": "0.12.0"
+        },
+        "multiplexing/references/native-waiting.md": {
+          "hash": "b60d317ba5020ef62758aaa69315befd2a734fcfa0c09cf003828672f674070f",
+          "version": "0.12.0"
+        },
+        "multiplexing/references/operator-help-patterns.md": {
+          "hash": "2d73010c369ad7ea5264005a48fef92b007bdc467a5e6f2c816e75ac4ee1a7c3",
+          "version": "0.12.0"
+        },
+        "multiplexing/references/reply-discipline.md": {
+          "hash": "a5f3735f5d82a9ba22449de9ee6962ff2514fad669db201afd3496e4833e1ca0",
+          "version": "0.12.0"
+        },
+        "multiplexing/references/scope.md": {
+          "hash": "b0b6bf374f38edbe823caadc6ebffd9dccd42dd45602300d0900034de2176463",
+          "version": "0.12.0"
+        },
+        "multiplexing/references/terminal-fallback.md": {
+          "hash": "1ebcd27b5b25fd3bda9bf63c3f723535afe1b8ba6066542fa17941287fa3027e",
+          "version": "0.12.0"
+        },
+        "multiplexing/references/trust-boundaries.md": {
+          "hash": "1553ed324563963fca212f85545250a2cf339f1d5c88ca5762b79ae5757d6388",
           "version": "0.12.0"
         },
         "multiplexing/references/worker.md": {
@@ -238,7 +254,7 @@
           "version": "0.12.0"
         },
         "multiplexing/SKILL.md": {
-          "hash": "5ad88aa78920a7327b4f57566bbe6ef05f8fa52a400bf83cd14f7c6938e89a2d",
+          "hash": "46d1604c6c4b00c064c73d0bba6fb5f47277a7f428bd925ac1db6d0a09f68388",
           "version": "0.12.0"
         },
         "planning/references/board-triage.md": {
