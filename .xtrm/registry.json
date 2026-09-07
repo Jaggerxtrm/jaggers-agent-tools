@@ -185,8 +185,16 @@
           "hash": "03953d8d199be148c0b005784d8a419630a7cc8bc2d825e54e6dffc44f595ade",
           "version": "0.12.0"
         },
+        "multiplexing-native-test/references/discovery-and-preflight.md": {
+          "hash": "0e7a9199fb73aebbdde93f2da00afde1b1b762dce4d4bf69ac2ce5f07ae09323",
+          "version": "0.12.0"
+        },
         "multiplexing-native-test/references/end-of-session-hygiene.md": {
           "hash": "6553f1d541453e1fb4213f7e977efc21c57b04e121487c919c2dd0eaf565f9b3",
+          "version": "0.12.0"
+        },
+        "multiplexing-native-test/references/experiment-evidence.md": {
+          "hash": "ea929532fbdddce1c079474f39fe73d2fc076f59396808c82d6f781e54331665",
           "version": "0.12.0"
         },
         "multiplexing-native-test/references/failure-and-escalation.md": {
@@ -210,7 +218,7 @@
           "version": "0.12.0"
         },
         "multiplexing-native-test/SKILL.md": {
-          "hash": "b03ae7be7bd1eda20bdc7358ff4eab7644dfc29b85eaa14f91f83bf16da3a829",
+          "hash": "ddc52ba8f283814e343e54dbfa291e880dddf95b79423901d3f4c632090ecda0",
           "version": "0.12.0"
         },
         "multiplexing/references/harnesses.md": {

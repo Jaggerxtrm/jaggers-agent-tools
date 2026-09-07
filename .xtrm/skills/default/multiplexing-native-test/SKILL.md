@@ -151,38 +151,7 @@ Native messaging does **not** require the old "target must be idle before sendin
 
 Use the native roster first.
 
-### From Pi
-
-For Pi peers:
-
-```typescript
-intercom({ action: "list" })
-```
-
-For Claude peers:
-
-```typescript
-claude-link({ action: "list" })
-```
-
-Verify target name/id and cwd before a consequential handoff.
-
-### From Claude Code
-
-Use `ListAgents` or `/list-agents` to see addressable peers. A Pi session running `pi-claude-link` should appear in the same peer list.
-
-Verify the target name and working directory. If native discovery says the target is absent, do not guess a tmux pane and inject the message anyway.
-
-### tmux inventory
-
-Use plain tmux only when you need terminal topology or to account for non-agent panes:
-
-```bash
-tmux list-sessions
-tmux list-panes -a -F '#{session_name} #{window_id} #{pane_id} #{pane_current_command} #{pane_current_path}'
-```
-
-A pane being present does not prove its agent transport is reachable; the native roster decides that.
+Per-harness roster commands (Pi `intercom list`, `claude-link list`, Claude `ListAgents`) and tmux inventory rules. Full detail: `references/discovery-and-preflight.md`.
 
 ## Message shape — pointer first
 
@@ -454,25 +423,4 @@ Rosters first, kill only confirmed stale sessions, prune worktrees. Full detail:
 
 ## Experiment evidence
 
-This skill is a transport evaluation. When native coordination misbehaves, preserve a short durable note on the owning work item or operator log:
-
-```text
-transport: pi-intercom | claude-native | pi-claude-link
-sender/target: <stable names/ids>
-operation: send | ask | reply | idle-notice
-observed: delivered | held | refused | timeout | disconnected | ambiguous | duplicate | wrong-correlation
-recovery: <what was required>
-terminal fallback used: yes/no + why
-```
-
-The experiment succeeds only if native messaging materially reduces:
-
-- forgotten replies;
-- lost wakeups;
-- unsafe sends into working agents;
-- manual polling;
-- pane-identity coupling;
-- duplicate sends after uncertain outcomes;
-- operator intervention required just to continue a conversation.
-
-If the experiment exposes correlation/durability gaps, fix or replace the adapter rather than recreating xtmux's semantic message store inside this skill.
+Evaluation protocol for the transport experiment (evidence format, success criteria). Full detail: `references/experiment-evidence.md`.
