@@ -1,7 +1,7 @@
 {
   "name": "xtrm-tools",
-  "version": "0.11.3",
-  "description": "Claude Code tools installer (skills, hooks, MCP servers)",
+  "version": "0.12.0",
+  "description": "Durable multi-agent coding runtime for Pi, Claude Code, Codex, and Specialists",
   "license": "MIT",
   "type": "module",
   "workspaces": [
@@ -21,7 +21,6 @@
     "cli/package.json",
     "docs/runtime-compatibility.json",
     "scripts/ghgrep.mjs",
-    "scripts/patch-external-pi-tools.mjs",
     ".xtrm/config",
     ".xtrm/hooks",
     "packages/pi-extensions",
@@ -71,6 +70,7 @@
     "changelog:preview": "node scripts/changelog-update.mjs --preview",
     "version": "npm run changelog:update -- --tag v$npm_package_version && npm run sync:cli-version && git add CHANGELOG.md cli/package.json packages/pi-extensions/package.json",
     "check:skills-ownership": "node scripts/check-skills-ownership.mjs",
+    "check:managed-skills": "node scripts/check-managed-skills.mjs",
     "check:specialists-vendor": "node scripts/verify-specialists-vendor.mjs",
     "check:asset-contract": "node scripts/verify-asset-contract.mjs",
     "check:layout-guards": "node scripts/check-layout-guards.mjs",
@@ -79,7 +79,7 @@
     "check:skill-root-budget": "node scripts/check-skill-root-budget.mjs",
     "check:forbidden-phrases": "node scripts/check-forbidden-phrases.mjs",
     "check:vendored-specialists-parity": "node scripts/check-vendored-specialists-skill-parity.mjs",
-    "prepublishOnly": "npm run sync:cli-version && npm run check:package && npm run check:skills-ownership && npm run check:deprecations && npm run check:pi-manifest && npm run check:runtime-compat && node scripts/vendor-specialists-from-manifest.mjs && npm run gen-registry && npm run check:registry-pack-parity && npm run check:payload-hygiene && npm run check:specialists-vendor && npm run check:layout-guards && npm run check:gitnexus-no-counter && npm run check:skills-symlinks && npm run check:skill-root-budget && npm run check:forbidden-phrases && npm run check:vendored-specialists-parity && npm run build",
+    "prepublishOnly": "npm run sync:cli-version && npm run check:package && npm run check:skills-ownership && npm run check:managed-skills && npm run check:deprecations && npm run check:pi-manifest && npm run check:runtime-compat && node scripts/vendor-specialists-from-manifest.mjs && npm run gen-registry && npm run check:registry-pack-parity && npm run check:payload-hygiene && npm run check:specialists-vendor && npm run check:managed-skills && npm run check:layout-guards && npm run check:gitnexus-no-counter && npm run check:skills-symlinks && npm run check:skill-root-budget && npm run check:forbidden-phrases && npm run check:vendored-specialists-parity && npm run build",
     "release": "npm publish --tag latest",
     "release:pi-extensions": "npm publish --workspace @jaggerxtrm/pi-extensions --tag latest --access public",
     "release:all": "npm run release && npm run release:pi-extensions",
@@ -88,7 +88,8 @@
     "check:payload-hygiene": "node scripts/check-payload-hygiene.mjs",
     "check:deprecations": "node scripts/check-command-deprecations.mjs",
     "check:pi-manifest": "node scripts/check-pi-extension-manifest.mjs",
-    "check:runtime-compat": "node scripts/check-runtime-compatibility.mjs"
+    "check:runtime-compat": "node scripts/check-runtime-compatibility.mjs",
+    "vendor:specialists": "node scripts/vendor-specialists-from-manifest.mjs"
   },
   "engines": {
     "node": ">=24.0.0"
@@ -102,7 +103,9 @@
     "prompts": "^2.4.2"
   },
   "overrides": {
-    "fast-uri": "^3.1.4",
+    "fast-uri": "^3.1.7",
+    "nanoid": "^3.3.18",
+    "postcss": "^8.5.23",
     "@aws-sdk/xml-builder": "3.972.22",
     "vite": "8.0.16",
     "esbuild": "0.28.1"
@@ -113,15 +116,28 @@
     ],
     "packages": [
       "npm:pi-gitnexus",
-      "npm:pi-serena-tools",
-      "npm:@zenobius/pi-worktrees",
       "npm:@robhowley/pi-structured-return",
       "npm:@aliou/pi-guardrails",
+      "npm:@narumitw/pi-goal",
+      "git:github.com/DietrichGebert/ponytail",
+      "npm:@tintinweb/pi-tasks",
+      "npm:pi-background-tasks@latest",
+      "npm:@gotgenes/pi-subagents",
+      "npm:pi-mcp-adapter",
+      "npm:pi-mermaid-viewer",
+      "npm:@jaggerxtrm/pi-service-knowledge",
+      "npm:pi-intercom",
+      "git:github.com/alonw0/pi-claude-link",
+      "npm:pi-ast-grep",
+      "npm:@zenobius/pi-worktrees",
       "npm:@aliou/pi-processes"
     ]
   },
   "pnpm": {
     "overrides": {
+      "fast-uri": "^3.1.7",
+      "nanoid": "^3.3.18",
+      "postcss": "^8.5.23",
       "vite": "8.0.16",
       "esbuild": "0.28.1"
     }

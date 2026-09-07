@@ -52,6 +52,13 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     process.chdir(repoRoot);
 
     mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
       if (command === 'sp' && args[0] === 'view') {
         return {
           status: 0,
@@ -93,6 +100,13 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     process.chdir(repoRoot);
 
     mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
       if (command === 'sp' && args[0] === 'view') {
         return {
           status: 0,
@@ -250,7 +264,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     // no consumer wrapper, no wait-for sync-points. xtrm-3xgs5.
     expect(usedBufferedTransport).toBe(false);
     expect(newSessionArgs[newSessionArgs.length - 1]).toBe(
-      "'pi' '--model' 'openai-codex/gpt-5.6-luna' '--thinking' 'high' 'echo hi'",
+      "'pi' '--name' 'repo-xt-pi-general' '--model' 'openai-codex/gpt-5.6-luna' '--thinking' 'high' 'echo hi'",
     );
     expect(mocked.spawnSync).not.toHaveBeenCalledWith('sp', expect.anything(), expect.anything());
     expect(mocked.spawnSync).toHaveBeenCalledWith(
@@ -266,10 +280,236 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
+  it('reports metadata failure and sanitizes an unsafe runtime version in the structured outcome', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-pi-json');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'sh' && args[0] === '-c') {
+        return { status: 0, stdout: 'bin/pi\n', stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        fs.ensureDirSync(worktreePath);
+        fs.ensureDirSync(path.join(worktreePath, '.xtrm', 'session-meta.json'));
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'has-session') {
+        return { status: 1, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'list-panes') {
+        return { status: 0, stdout: '%42\n', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'list-sessions') {
+        return { status: 0, stdout: 'pi-json\t$7\n', stderr: '' };
+      }
+      if (command === path.join(repoRoot, 'bin', 'pi') && args[0] === '--version') {
+        return { status: 0, stdout: 'pi 0.74.2\u001b[31m\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const exitSpy = mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      name: 'json',
+      prompt: 'echo hi',
+      attach: false,
+      json: true,
+    })).rejects.toThrow('exit:0');
+
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(stdoutSpy).toHaveBeenCalledTimes(1);
+    const outcome = JSON.parse(String(stdoutSpy.mock.calls[0][0]));
+    expect(outcome).toMatchObject({
+      schema_version: 'xtrm.command-outcome.v1',
+      runtime: { name: 'pi', version: null },
+      identity: { session_name: 'pi-json', tmux_session_id: '$7', pane_id: '%42' },
+      worktree: { path: worktreePath, branch: 'xt/json', owner: 'core' },
+      readiness: { status: 'unverified', source: 'tmux-pane' },
+      persistence: { completed: false, kind: 'worktree.session-metadata' },
+    });
+    expect(outcome.next_actions.some((next: { kind: string }) => next.kind === 'resume')).toBe(false);
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      path.join(repoRoot, 'bin', 'pi'),
+      ['--version'],
+      expect.objectContaining({ cwd: worktreePath, stdio: 'pipe' }),
+    );
+    expect(mocked.spawnSync.mock.calls.some(([command, args]) =>
+      command === 'tmux'
+      && args[0] === 'new-session'
+      && args.at(-1) === `'${path.join(repoRoot, 'bin', 'pi')}' '--name' 'repo-xt-pi-json' 'echo hi'`
+    )).toBe(true);
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      'bd',
+      ['worktree', 'create', worktreePath, '--branch', 'xt/json'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('rejects an oversized structured slug before creating a worktree or tmux session', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      name: `group/${'a'.repeat(251)}`,
+      prompt: 'echo hi',
+      attach: false,
+      json: true,
+    })).rejects.toThrow('exit:1');
+
+    expect(errorSpy.mock.calls.flat().join(' ')).toContain('invalid sessionSlug');
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'bd',
+      expect.arrayContaining(['worktree', 'create']),
+      expect.anything(),
+    );
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'tmux',
+      expect.arrayContaining(['new-session']),
+      expect.anything(),
+    );
+  });
+
+  it('rejects a detached structured role in the current tmux pane before creating a worktree', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+    const previousTmux = process.env.TMUX;
+    process.env.TMUX = '/tmp/tmux-1000/default,1,0';
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    try {
+      await expect(launchWorktreeSession({
+        runtime: 'pi',
+        name: 'role-detached',
+        role: 'reviewer',
+        attach: false,
+        json: true,
+      })).rejects.toThrow('exit:1');
+    } finally {
+      if (previousTmux === undefined) delete process.env.TMUX;
+      else process.env.TMUX = previousTmux;
+    }
+
+    expect(errorSpy.mock.calls.flat().join(' ')).toContain('--no-attach requires --new-session');
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'bd',
+      expect.arrayContaining(['worktree', 'create']),
+      expect.anything(),
+    );
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'tmux',
+      expect.arrayContaining(['new-session']),
+      expect.anything(),
+    );
+  });
+
+  it('rejects a structured worktree path with control characters before launch mutations', async () => {
+    const repoRoot = path.join(tempRoot, 'repo\nhostile');
+    await fs.ensureDir(path.join(repoRoot, '.beads'));
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+      if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
+        return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };
+      }
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+      if (command === 'bd' && args[0] === 'worktree' && args[1] === 'create') {
+        fs.ensureDirSync(args[2]);
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'has-session') {
+        return { status: 1, stdout: '', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'list-panes') {
+        return { status: 0, stdout: '%42\n', stderr: '' };
+      }
+      if (command === 'tmux' && args[0] === 'list-sessions') {
+        return { status: 0, stdout: 'pi-missingmeta\t$7\n', stderr: '' };
+      }
+      if (command === 'pi' && args[0] === '--version') {
+        return { status: 0, stdout: 'pi 0.74.2\n', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockProcessExit();
+    const { launchWorktreeSession } = await import('../utils/worktree-session.js');
+
+    await expect(launchWorktreeSession({
+      runtime: 'pi',
+      name: 'control-path',
+      prompt: 'echo hi',
+      attach: false,
+      json: true,
+    })).rejects.toThrow('exit:1');
+
+    expect(errorSpy.mock.calls.flat().join(' ')).toContain('invalid worktreePath');
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'bd',
+      expect.arrayContaining(['worktree', 'create']),
+      expect.anything(),
+    );
+    expect(mocked.spawnSync).not.toHaveBeenCalledWith(
+      'tmux',
+      expect.arrayContaining(['new-session']),
+      expect.anything(),
+    );
+  });
+
   it('transports a 100KB rendered bead through a tmux buffer without putting it in the new-session command', async () => {
     const repoRoot = path.join(tempRoot, 'repo');
     const worktreePath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-claude-large');
-    const body = `/reviewer\n\n${'B'.repeat(100 * 1024)}`;
+    const body = `Rendered reviewer task\n\n${'B'.repeat(100 * 1024)}`;
     await fs.ensureDir(path.join(repoRoot, '.beads'));
     process.chdir(repoRoot);
 
@@ -300,7 +540,7 @@ describe('worktree session .beads handling (no symlink; skip-worktree only)', ()
       if (command === 'sp' && args[0] === 'render-skill-prefix') {
         return args[1] === '--help'
           ? { status: 0, stdout: 'usage', stderr: '' }
-          : { status: 0, stdout: JSON.stringify({ ok: true, skill_prefix: '/reviewer\n\n' }), stderr: '' };
+          : { status: 0, stdout: JSON.stringify({ ok: true, skill_prefix: '' }), stderr: '' };
       }
       if (command === 'git' && joinedArgs === 'rev-parse --show-toplevel') {
         return { status: 0, stdout: `${repoRoot}\n`, stderr: '' };

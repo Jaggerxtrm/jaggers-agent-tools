@@ -1,0 +1,34 @@
+name: Gitleaks
+
+# Backstop scan for committed secrets. Secret findings are blocking on PR,
+# push, and scheduled runs. Keep this workflow independent from dependency
+# advisory policy: exposed credentials are always actionable risk.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: "0 6 * * 1"  # Monday 06:00 UTC weekly
+
+permissions:
+  contents: read
+  pull-requests: write  # required by gitleaks-action to post PR summaries
+
+jobs:
+  gitleaks:
+    name: Gitleaks scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE is required by upstream for organization accounts;
+          # personal-account repositories can run without it.

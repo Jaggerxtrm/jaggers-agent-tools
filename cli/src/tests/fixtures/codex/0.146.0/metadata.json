@@ -1,0 +1,38 @@
+{
+  "schema_version": "xtrm.codex.fixture-metadata.v1",
+  "runtime": {
+    "product": "codex-cli",
+    "version": "0.146.0",
+    "executable_source": "<CODEX_HOME>/packages/standalone/releases/0.146.0-x86_64-unknown-linux-musl/bin/codex"
+  },
+  "capture": {
+    "captured_at": "2026-08-02",
+    "surface": "exec-jsonl",
+    "command": [
+      "codex",
+      "--sandbox",
+      "read-only",
+      "--ask-for-approval",
+      "never",
+      "exec",
+      "--json",
+      "--ephemeral",
+      "--ignore-user-config",
+      "--skip-git-repo-check",
+      "Return exactly CODEX_K1_OK and do not use tools."
+    ],
+    "config_root": "ignored with --ignore-user-config",
+    "redactions": [
+      "thread_id",
+      "executable_source_home"
+    ]
+  },
+  "stderr": [
+    "Reading additional input from stdin..."
+  ],
+  "notes": [
+    "The skill-budget item is an observed non-fatal item from the installed runtime.",
+    "Token counts are retained because they are not credentials and demonstrate the terminal usage payload shape.",
+    "The fixture records event shape, not a stable promise that every successful run emits the same advisory items."
+  ]
+}

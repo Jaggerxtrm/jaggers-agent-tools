@@ -2,16 +2,20 @@
   "mirrors": {
     "specialists": {
       "package": "specialists",
-      "sha": "unknown",
+      "sha": "5d2f2907f49877f6c4dcf32de95e8cb945c067c7",
       "assets": [
         "update-specialists",
-        "using-kpi",
-        "using-nodes",
-        "specialists-creator",
-        "using-specialists",
-        "using-script-specialists",
-        "using-specialists-auto"
-      ]
+        "using-specialists"
+      ],
+      "placements": {
+        "update-specialists": {
+          "tier": "optional",
+          "pack": "xtrm-maintenance"
+        },
+        "using-specialists": {
+          "tier": "default"
+        }
+      }
     }
   }
 }

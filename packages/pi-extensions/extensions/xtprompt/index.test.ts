@@ -26,6 +26,7 @@ mock.module("@earendil-works/pi-coding-agent", () => ({
   createReadTool: () => ({}),
   createWriteTool: () => ({}),
   isBashToolResult: () => false,
+  isReadToolResult: (event: { toolName: string }) => event.toolName === "read",
   isToolCallEventType: () => false,
 }));
 
@@ -37,16 +38,26 @@ mock.module("@earendil-works/pi-tui", () => ({
   visibleWidth: (value: string) => value.length,
 }));
 
+// The registry smoke test below loads src/registry.ts, which now registers
+// the managed python-kernel extension (xtrm-3ljgz.1). That extension imports
+// the Pi-hosted typebox for its parameter schema; bun cannot resolve it from
+// the repo tree, so substitute a structural stand-in exactly like
+// tests/python-kernel.test.ts does.
+mock.module("typebox", () => ({
+  Type: {
+    Object: (shape: unknown) => ({ kind: "object", shape }),
+    String: (opts: unknown) => ({ kind: "string", opts }),
+    Boolean: (opts: unknown) => ({ kind: "boolean", opts }),
+    Optional: (t: unknown) => ({ kind: "optional", t }),
+  },
+}));
+
 for (const modulePath of [
-  "../../src/extensions/auto-session-name.ts",
   "../../src/extensions/beads.ts",
   "../../src/extensions/compact-header.ts",
   "../../src/extensions/custom-footer.ts",
-  "../../src/extensions/custom-provider-qwen-cli.ts",
   "../../src/extensions/git-checkpoint.ts",
-  "../../src/extensions/lsp-bootstrap.ts",
   "../../src/extensions/quality-gates.ts",
-  "../../src/extensions/serena-pool.ts",
   "../../src/extensions/service-skills.ts",
   "../../src/extensions/session-flow.ts",
   "../../src/extensions/sp-terminal-overlay.ts",
@@ -156,7 +167,8 @@ describe("xtprompt", () => {
     });
     expect(request.systemPrompt).toContain("<output_format>");
     expect(request.systemPrompt).toContain("## PROBLEM");
-    expect(request.systemPrompt).toContain("GitNexus or Serena");
+    expect(request.systemPrompt).toContain("GitNexus");
+    expect(request.systemPrompt).not.toContain("Serena");
     expect(request.systemPrompt).toContain("phases, dependencies, parallel work, risks, and blast radius");
     expect(request.systemPrompt).toContain("telemetry, smoke coverage, E2E checks");
   });

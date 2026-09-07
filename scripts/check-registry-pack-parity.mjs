@@ -23,26 +23,6 @@ const managedRoots = [
 ];
 const allowlist = new Map([
   [
-    '.xtrm/skills/default/documenting/tests/integration_test.sh',
-    'Documenting test fixture intentionally excluded from npm pack.',
-  ],
-  [
-    '.xtrm/skills/default/documenting/tests/test_changelog.py',
-    'Documenting test fixture intentionally excluded from npm pack.',
-  ],
-  [
-    '.xtrm/skills/default/documenting/tests/test_drift_detector.py',
-    'Documenting test fixture intentionally excluded from npm pack.',
-  ],
-  [
-    '.xtrm/skills/default/documenting/tests/test_orchestrator.py',
-    'Documenting test fixture intentionally excluded from npm pack.',
-  ],
-  [
-    '.xtrm/skills/default/documenting/tests/test_validate_metadata.py',
-    'Documenting test fixture intentionally excluded from npm pack.',
-  ],
-  [
     '.xtrm/skills/default/using-service-skills/scripts/test_skill_activator.py',
     'Using-service-skills test fixture intentionally excluded from npm pack.',
   ],

@@ -35,6 +35,7 @@ import { selectRuntimeSkills } from '../core/skills-materializer.js';
 import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
 
 type Scope = 'global' | 'local';
+type RuntimeOptions = { claude?: boolean; pi?: boolean; codex?: boolean };
 
 type RuntimeStatus = {
   readonly runtime: SkillsRuntime;
@@ -71,16 +72,9 @@ async function resolveScopeRoot(scope: Scope): Promise<string> {
   return findProjectRoot();
 }
 
-function resolveTargetRuntimes(opts: { claude?: boolean; pi?: boolean }): SkillsRuntime[] {
-  if (opts.claude && !opts.pi) {
-    return ['claude'];
-  }
-
-  if (opts.pi && !opts.claude) {
-    return ['pi'];
-  }
-
-  return [...SKILLS_RUNTIMES];
+function resolveTargetRuntimes(opts: RuntimeOptions): SkillsRuntime[] {
+  const selected = SKILLS_RUNTIMES.filter((runtime) => opts[runtime]);
+  return selected.length > 0 ? selected : [...SKILLS_RUNTIMES];
 }
 
 async function readStateOrDefault(skillsRoot: string) {
@@ -222,11 +216,15 @@ async function collectListState(
   };
 }
 
-function composeState(globalState: { enabledPacks: { claude: string[]; pi: string[] } }, localState: { enabledPacks: { claude: string[]; pi: string[] } }): { enabledPacks: { claude: string[]; pi: string[] } } {
+function composeState(
+  globalState: { enabledPacks: Record<SkillsRuntime, string[]> },
+  localState: { enabledPacks: Record<SkillsRuntime, string[]> },
+): { enabledPacks: Record<SkillsRuntime, string[]> } {
   return {
     enabledPacks: {
       claude: [...new Set([...globalState.enabledPacks.claude, ...localState.enabledPacks.claude])].sort((a, b) => a.localeCompare(b)),
       pi: [...new Set([...globalState.enabledPacks.pi, ...localState.enabledPacks.pi])].sort((a, b) => a.localeCompare(b)),
+      codex: [...new Set([...globalState.enabledPacks.codex, ...localState.enabledPacks.codex])].sort((a, b) => a.localeCompare(b)),
     },
   };
 }
@@ -336,7 +334,8 @@ async function mutatePacks(opts: {
     const globalSkillsRoot = resolveSkillsRoot(os.homedir());
     const globalState = await readStateOrDefault(globalSkillsRoot);
     const isGloballyEnabled = globalState.enabledPacks.claude.includes(packArg)
-      || globalState.enabledPacks.pi.includes(packArg);
+      || globalState.enabledPacks.pi.includes(packArg)
+      || globalState.enabledPacks.codex.includes(packArg);
 
     if (isGloballyEnabled) {
       throw new Error(
@@ -415,8 +414,9 @@ export function createSkillsCommand(): Command {
     .option('--local', 'Use project-local scope (./.xtrm/skills) with global composition', false)
     .option('--claude', 'Show Claude runtime view', false)
     .option('--pi', 'Show Pi runtime view', false)
+    .option('--codex', 'Show Codex runtime view', false)
     .option('--json', 'Output JSON', false)
-    .action(async (opts: { global?: boolean; local?: boolean; claude?: boolean; pi?: boolean; json?: boolean }) => {
+    .action(async (opts: RuntimeOptions & { global?: boolean; local?: boolean; json?: boolean }) => {
       try {
         const scope = resolveScope(opts, 'global');
         const scopeRoot = await resolveScopeRoot(scope);
@@ -482,8 +482,9 @@ export function createSkillsCommand(): Command {
     .option('--local', 'Use project-local scope (./.xtrm/skills)', false)
     .option('--claude', 'Target Claude runtime', false)
     .option('--pi', 'Target Pi runtime', false)
+    .option('--codex', 'Target Codex runtime', false)
     .option('--json', 'Output JSON', false)
-    .action(async (pack: string, opts: { global?: boolean; local?: boolean; claude?: boolean; pi?: boolean; json?: boolean }) => {
+    .action(async (pack: string, opts: RuntimeOptions & { global?: boolean; local?: boolean; json?: boolean }) => {
       try {
         const scope = resolveScope(opts, 'global');
         const scopeRoot = await resolveScopeRoot(scope);
@@ -524,8 +525,9 @@ export function createSkillsCommand(): Command {
     .option('--local', 'Use project-local scope (./.xtrm/skills)', false)
     .option('--claude', 'Target Claude runtime', false)
     .option('--pi', 'Target Pi runtime', false)
+    .option('--codex', 'Target Codex runtime', false)
     .option('--json', 'Output JSON', false)
-    .action(async (pack: string, opts: { global?: boolean; local?: boolean; claude?: boolean; pi?: boolean; json?: boolean }) => {
+    .action(async (pack: string, opts: RuntimeOptions & { global?: boolean; local?: boolean; json?: boolean }) => {
       try {
         const scope = resolveScope(opts, 'global');
         const scopeRoot = await resolveScopeRoot(scope);

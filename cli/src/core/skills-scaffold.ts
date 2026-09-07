@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'fs-extra';
-import { resolveGlobalSkillsRoot, resolveSkillsRoot, resolveDefaultTierRoot } from './skills-layout.js';
+import { SKILLS_RUNTIMES, resolveGlobalSkillsRoot, resolveSkillsRoot, resolveDefaultTierRoot } from './skills-layout.js';
 import { discoverTierPacks, validateSkillsInvariants } from './skill-discovery.js';
 import { readSkillsState } from './skills-state.js';
 import { reconcileRuntimeLinks } from './skills-runtime-reconcile.js';
@@ -9,6 +9,7 @@ import { reconcileRuntimeLinks } from './skills-runtime-reconcile.js';
 export interface SkillsActivationResult {
   readonly activatedClaudeSkills: number;
   readonly activatedPiSkills: number;
+  readonly activatedCodexSkills: number;
 }
 interface EnsureSkillsSymlinkOptions { readonly force?: boolean }
 type PointerScope = 'global' | 'project';
@@ -55,7 +56,7 @@ export async function ensureAgentsSkillsSymlink(projectRoot: string, _options: E
   ];
   const state = await readSkillsState(skillsRoot);
   const results = [];
-  for (const runtime of ['claude', 'pi'] as const) {
+  for (const runtime of SKILLS_RUNTIMES) {
     results.push(await reconcileRuntimeLinks({
       projectRoot,
       state,
@@ -68,5 +69,6 @@ export async function ensureAgentsSkillsSymlink(projectRoot: string, _options: E
   return {
     activatedClaudeSkills: Object.keys(results[0].desiredLinks).length,
     activatedPiSkills: Object.keys(results[1].desiredLinks).length,
+    activatedCodexSkills: Object.keys(results[2].desiredLinks).length,
   };
 }

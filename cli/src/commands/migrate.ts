@@ -17,6 +17,12 @@ import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { stageMigrationChanges } from '../utils/git-staging.js';
 import { planLegacyHookDedupe, type HookWrapperLike } from '../core/legacy-hook-dedupe.js';
+import { resolvePackageRoot } from '../core/registry-scaffold.js';
+import {
+  assertStagedTreeSafe,
+  extractValidatedBackup,
+  inspectBackupArchive,
+} from '../core/backup-archive.js';
 
 interface MigrateOptions {
   dryRun?: boolean;
@@ -51,6 +57,16 @@ async function restoreBackup(
     throw new Error(`Backup not found: ${resolvedBackup}`);
   }
 
+  const base = path.basename(resolvedBackup);
+  if (base.startsWith('adopt-runtime-')) {
+    // xtrm-2d6fw: runtime-adoption backups are snapshots of the untouched
+    // source target, not restore payloads. The prefix deliberately avoids
+    // skills-*/hooks-* so generic restore can never classify or extract them.
+    throw new Error(
+      `Cannot restore runtime-adoption backup '${base}': adoption never mutates the source target. ` +
+      `To undo, move/remove the adopted runtime dir and recreate the original symlink; .migrate-old-* is recovery after an interrupted swap.`,
+    );
+  }
   const component = detectRestoreComponent(resolvedBackup);
   if (!component) {
     throw new Error(
@@ -76,29 +92,33 @@ async function restoreBackup(
     return { component, targetDir };
   }
 
-  if (await fs.pathExists(targetDir)) {
-    await fs.remove(targetDir);
-  }
+  // xtrm-zc1rs: pre-scan every archive entry and reject unsafe or malformed
+  // backups BEFORE any destination byte is written. The archive is extracted
+  // into a private temp dir first, the staged tree is lstat-verified, and only
+  // then is the existing target removed and the staged tree swapped in.
+  inspectBackupArchive(resolvedBackup, component);
 
-  const extractInto = path.join(repoPath, '.xtrm');
-  await fs.ensureDir(extractInto);
+  const staging = await fs.mkdtemp(path.join(os.tmpdir(), 'xtrm-restore-'));
+  try {
+    extractValidatedBackup(resolvedBackup, component, staging);
+    await assertStagedTreeSafe(staging, component);
 
-  const result = spawnSync('tar', ['-xzf', resolvedBackup, '-C', extractInto], {
-    stdio: 'pipe',
-  });
-  if (result.status !== 0) {
-    throw new Error(
-      `Failed to extract backup: ${result.stderr.toString() || 'unknown error'}`,
-    );
-  }
-
-  const realExtractInto = await fs.realpath(extractInto);
-  const realTarget = await fs.realpath(targetDir);
-  const rel = path.relative(realExtractInto, realTarget);
-  if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    throw new Error(
-      `Restore path traversal detected: ${realTarget} escaped ${realExtractInto}`,
-    );
+    if (await fs.pathExists(targetDir)) {
+      await fs.remove(targetDir);
+    }
+    await fs.ensureDir(path.join(repoPath, '.xtrm'));
+    try {
+      // The staged tree's top level is the component root dir (the archive's
+      // top-level 'skills'/'hooks' entry); move that root into place.
+      const stagedRoot = path.join(staging, component);
+      await fs.move(stagedRoot, targetDir);
+    } catch (error) {
+      // Never leave a partially moved destination behind.
+      await fs.remove(targetDir).catch(() => undefined);
+      throw error;
+    }
+  } finally {
+    await fs.remove(staging).catch(() => undefined);
   }
 
   return { component, targetDir };
@@ -278,6 +298,169 @@ async function walkDir(dir: string): Promise<string[]> {
   return files;
 }
 
+type RuntimeRootPlan =
+  | { kind: 'leave' }
+  | { kind: 'remove'; runtimeDir: string }
+  | { kind: 'convert'; runtimeDir: string; targetDir: string };
+
+const RUNTIME_SKILL_ROOTS = ['.claude/skills', '.pi/skills'] as const;
+
+// xtrm-2d6fw: classify every runtime root before any mutation. Only provable
+// legacy managed roots inside the project are adopted: symlinks whose immediate
+// target is `<repo>/.xtrm/skills/active` (retired — removed, as before) or
+// `<repo>/.xtrm/skills/default` (converted to a real runtime dir). Every other
+// shape — arbitrary, chained, dangling, non-directory, special-file, nested
+// symlink — fails closed so a later root can never be partially adopted.
+async function planRuntimeRootAdoption(
+  repoPath: string,
+  activeRoot: string,
+  defaultTierRoot: string,
+): Promise<RuntimeRootPlan[]> {
+  const plans: RuntimeRootPlan[] = [];
+  for (const runtimeRel of RUNTIME_SKILL_ROOTS) {
+    const runtimeDir = path.join(repoPath, runtimeRel);
+    const stat = await fs.lstat(runtimeDir).catch(() => null);
+    if (!stat) {
+      plans.push({ kind: 'leave' });
+      continue;
+    }
+    if (stat.isSymbolicLink()) {
+      const linkTarget = await fs.readlink(runtimeDir);
+      const resolvedTarget = path.resolve(path.dirname(runtimeDir), linkTarget);
+      if (resolvedTarget === activeRoot) {
+        plans.push({ kind: 'remove', runtimeDir });
+        continue;
+      }
+      if (resolvedTarget === defaultTierRoot) {
+        await assertLegacyManagedRootProof(repoPath, runtimeDir, defaultTierRoot);
+        plans.push({ kind: 'convert', runtimeDir, targetDir: defaultTierRoot });
+        continue;
+      }
+      throw new Error(
+        `Refusing skills-layout migration: ${path.relative(repoPath, runtimeDir)} is a user symlink to '${linkTarget}'. Only legacy project roots (.xtrm/skills/active, .xtrm/skills/default) are adopted.`,
+      );
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(
+        `Refusing skills-layout migration: ${path.relative(repoPath, runtimeDir)} is not a directory or symlink.`,
+      );
+    }
+    plans.push({ kind: 'leave' });
+  }
+  return plans;
+}
+
+async function assertLegacyManagedRootProof(repoPath: string, runtimeDir: string, defaultTierRoot: string): Promise<void> {
+  // Every path component from the project root down to the legacy target must
+  // be a real directory. lstat rejects chained/nested symlinks, dangling
+  // targets, regular files, and special files in one pass.
+  const relativeTarget = path.relative(repoPath, defaultTierRoot);
+  let current = repoPath;
+  for (const part of relativeTarget.split(path.sep)) {
+    current = path.join(current, part);
+    const stat = await fs.lstat(current).catch(() => null);
+    if (!stat || !stat.isDirectory()) {
+      throw new Error(
+        `Refusing skills-layout migration: ${path.relative(repoPath, runtimeDir)} target is not a real directory (hazard at ${path.relative(repoPath, current) || '.'}).`,
+      );
+    }
+  }
+  const parentStat = await fs.lstat(path.dirname(runtimeDir)).catch(() => null);
+  if (!parentStat || !parentStat.isDirectory()) {
+    throw new Error(
+      `Refusing skills-layout migration: ${path.relative(repoPath, path.dirname(runtimeDir))} is not a real directory.`,
+    );
+  }
+}
+
+async function readRegistryManagedSkillNames(): Promise<Set<string>> {
+  const packageRoot = resolvePackageRoot();
+  const registry = await fs.readJson(path.join(packageRoot, '.xtrm', 'registry.json'));
+  const names = new Set<string>();
+  const assets = (registry as { assets?: Record<string, { files?: Record<string, unknown> }> })?.assets ?? {};
+  for (const assetName of ['skills', 'skills_optional'] as const) {
+    const files = assets[assetName]?.files;
+    if (!files || typeof files !== 'object') continue;
+    for (const key of Object.keys(files)) {
+      const firstSegment = key.split('/')[0];
+      if (firstSegment.length > 0) names.add(firstSegment);
+    }
+  }
+  return names;
+}
+
+async function buildConvertedRuntimeDir(
+  runtimeDir: string,
+  targetDir: string,
+  managedNames: ReadonlySet<string>,
+): Promise<{ tempDir: string; preserved: string[]; omitted: string[] }> {
+  const tempDir = `${runtimeDir}.migrate-${crypto.randomUUID()}`;
+  await fs.ensureDir(tempDir);
+  const preserved: string[] = [];
+  const omitted: string[] = [];
+  const entries = await fs.readdir(targetDir, { withFileTypes: true });
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    if (managedNames.has(entry.name)) {
+      omitted.push(entry.name);
+      continue;
+    }
+    await copyForeignEntry(path.join(targetDir, entry.name), path.join(tempDir, entry.name));
+    preserved.push(entry.name);
+  }
+  return { tempDir, preserved, omitted };
+}
+
+async function copyForeignEntry(source: string, dest: string): Promise<void> {
+  // fs-extra copy preserves bytes and copies nested symlinks as links. Special
+  // files are refused: a blocking FIFO would hang the copy, and a socket/device
+  // is not skill content we should ever replicate.
+  const special: string[] = [];
+  await fs.copy(source, dest, {
+    filter: (src) => {
+      const stat = fs.lstatSync(src);
+      if (stat.isDirectory() || stat.isFile() || stat.isSymbolicLink()) return true;
+      special.push(path.basename(src));
+      return false;
+    },
+  });
+  if (special.length > 0) {
+    throw new Error(
+      `Refusing skills-layout migration: special file(s) inside legacy target: ${special.join(', ')}.`,
+    );
+  }
+}
+
+async function swapRuntimeRoot(runtimeDir: string, tempDir: string, targetDir: string): Promise<void> {
+  // Defend concurrent changes: the root must still be the same legacy symlink
+  // we planned; otherwise abort with the original untouched.
+  const stat = await fs.lstat(runtimeDir).catch(() => null);
+  if (!stat?.isSymbolicLink() || path.resolve(path.dirname(runtimeDir), await fs.readlink(runtimeDir)) !== targetDir) {
+    throw new Error(`Runtime directory ${runtimeDir} changed during migration; aborting.`);
+  }
+  const oldDir = `${runtimeDir}.migrate-old-${crypto.randomUUID()}`;
+  await fs.rename(runtimeDir, oldDir);
+  try {
+    await fs.rename(tempDir, runtimeDir);
+  } catch (error) {
+    // Roll the original symlink back; a failed rollback leaves .migrate-old-*
+    // next to the runtime dir for manual recovery (documented operator path).
+    await fs.rename(oldDir, runtimeDir).catch(() => undefined);
+    throw error;
+  }
+  await fs.remove(oldDir).catch(() => undefined);
+}
+
+async function createRuntimeAdoptionBackup(repoPath: string, targetDir: string): Promise<string> {
+  // xtrm-2d6fw: 'adopt-runtime-*' deliberately avoids the skills-*/hooks-*
+  // prefixes generic --restore recognizes. Adoption never mutates the source
+  // target, so these snapshots must never be extractable as a normal restore
+  // (whose 'default/...' layout would land in .xtrm/ instead of .xtrm/skills/).
+  const backupPath = await createTarballBackup(targetDir, `adopt-runtime-${path.basename(repoPath)}`);
+  await fs.chmod(backupPath, 0o600);
+  return backupPath;
+}
+
 export async function migrateSkillsLayout(
   repoPath: string,
   opts: { dryRun: boolean; apply?: boolean },
@@ -310,16 +493,18 @@ export async function migrateSkillsLayout(
   }
 
   const activeRoot = path.join(skillsRoot, 'active');
-  const danglingRuntimeSymlinks: string[] = [];
-  for (const runtimeRel of ['.claude/skills', '.pi/skills']) {
-    const runtimeDir = path.join(repoPath, runtimeRel);
-    const stat = await fs.lstat(runtimeDir).catch(() => null);
-    if (!stat?.isSymbolicLink()) continue;
-    const linkTarget = await fs.readlink(runtimeDir);
-    const resolvedTarget = path.resolve(path.dirname(runtimeDir), linkTarget);
-    if (resolvedTarget === activeRoot) danglingRuntimeSymlinks.push(runtimeDir);
-  }
-  if (moves.length === 0 && !await fs.pathExists(activeRoot) && danglingRuntimeSymlinks.length === 0) {
+  const defaultTierRoot = path.join(skillsRoot, 'default');
+  // xtrm-2d6fw: preflight every runtime root before any mutation so a later
+  // hazard can never partially adopt the earlier roots.
+  const runtimePlans = await planRuntimeRootAdoption(repoPath, activeRoot, defaultTierRoot);
+  const adoptPlans = runtimePlans.filter(
+    (plan): plan is { kind: 'convert'; runtimeDir: string; targetDir: string } => plan.kind === 'convert',
+  );
+  const removePlans = runtimePlans.filter(
+    (plan): plan is { kind: 'remove'; runtimeDir: string } => plan.kind === 'remove',
+  );
+
+  if (moves.length === 0 && !await fs.pathExists(activeRoot) && runtimePlans.every((plan) => plan.kind === 'leave')) {
     console.log(kleur.dim('  skills-layout: already flat'));
     return;
   }
@@ -336,10 +521,46 @@ export async function migrateSkillsLayout(
 
   if (dryRun) {
     if (await fs.pathExists(activeRoot)) console.log(kleur.cyan(`  skills-layout: would remove ${activeRoot}`));
-    for (const runtimeDir of danglingRuntimeSymlinks) {
-      console.log(kleur.cyan(`  skills-layout: would remove dangling ${path.relative(repoPath, runtimeDir)} symlink`));
+    for (const plan of adoptPlans) {
+      console.log(kleur.cyan(`  skills-layout: would convert ${path.relative(repoPath, plan.runtimeDir)} legacy symlink to a real runtime dir (registry-managed names omitted, foreign entries preserved)`));
+    }
+    for (const plan of removePlans) {
+      console.log(kleur.cyan(`  skills-layout: would remove dangling ${path.relative(repoPath, plan.runtimeDir)} symlink`));
     }
     return;
+  }
+
+  if (adoptPlans.length > 0) {
+    const managedNames = await readRegistryManagedSkillNames();
+    // Build every converted temp dir first: a content hazard (special file in
+    // the target) refuses before any backup or swap, so no earlier root is
+    // partially adopted and no backup artifact is left behind.
+    const built: Awaited<ReturnType<typeof buildConvertedRuntimeDir>>[] = [];
+    try {
+      for (const plan of adoptPlans) {
+        built.push(await buildConvertedRuntimeDir(plan.runtimeDir, plan.targetDir, managedNames));
+      }
+      for (const targetDir of new Set(adoptPlans.map((plan) => plan.targetDir))) {
+        const backupPath = await createRuntimeAdoptionBackup(repoPath, targetDir);
+        console.log(kleur.green(`  skills-layout: backup created at ${backupPath}`));
+      }
+      for (let i = 0; i < adoptPlans.length; i++) {
+        const plan = adoptPlans[i];
+        await swapRuntimeRoot(plan.runtimeDir, built[i].tempDir, plan.targetDir);
+        const entry = built[i].preserved.length === 1 ? 'entry' : 'entries';
+        const name = built[i].omitted.length === 1 ? 'name' : 'names';
+        console.log(kleur.green(
+          `  skills-layout: converted ${path.relative(repoPath, plan.runtimeDir)} symlink to real runtime dir (preserved ${built[i].preserved.length} foreign ${entry}, omitted ${built[i].omitted.length} registry-managed ${name})`,
+        ));
+      }
+    } finally {
+      for (const entry of built) await fs.remove(entry.tempDir).catch(() => undefined);
+    }
+    // xtrm-2d6fw: concise operator rollback path. The source target is never
+    // mutated, so undoing is local to each adopted runtime dir.
+    console.log(kleur.dim(
+      '  skills-layout: rollback — source target .xtrm/skills/default untouched; to undo, move/remove the adopted runtime dir and recreate the original symlink; .migrate-old-* is recovery after an interrupted swap.',
+    ));
   }
 
   if (await fs.pathExists(activeRoot)) {
@@ -349,9 +570,9 @@ export async function migrateSkillsLayout(
   await fs.remove(legacyRoot);
   await fs.remove(path.join(skillsRoot, 'user'));
 
-  for (const runtimeDir of danglingRuntimeSymlinks) {
-    await fs.remove(runtimeDir);
-    console.log(kleur.green(`  skills-layout: removed dangling ${path.relative(repoPath, runtimeDir)} symlink`));
+  for (const plan of removePlans) {
+    await fs.remove(plan.runtimeDir);
+    console.log(kleur.green(`  skills-layout: removed dangling ${path.relative(repoPath, plan.runtimeDir)} symlink`));
   }
 }
 

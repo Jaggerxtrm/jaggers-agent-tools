@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import {
   runFast, resolveMainRoot, readCache as readBeadsCache, isFresh, writeCache as writeBeadsCache,
   takeLease as takeBeadsLease, releaseLease as releaseBeadsLease,
-  fetchCompact, formatCompact, cacheAge, TTL_COMPACT_MS,
+  fetchCompact, cacheAge, TTL_COMPACT_MS,
 } from './beads-status-cache.mjs';
 
 const CACHE_DIR = process.env.XTRM_STATUSLINE_CACHE_DIR ?? tmpdir();
@@ -24,6 +24,8 @@ const MAX_CACHE_BYTES = 16 * 1024;
 const REFRESH_LOCK = join(CACHE_DIR, 'xtrm-sl-refresh.lock');
 
 const R = '\x1b[0m', B = '\x1b[1m', B_ = '\x1b[22m', D = '\x1b[2m';
+// XTRM accent for the model name (#9a8bff) — mirrors the pi custom-footer.
+const EXT = '\x1b[38;2;154;139;255m';
 
 function cacheFile(cwd) {
   const key = createHash('md5').update(cwd).digest('hex').slice(0, 8);
@@ -105,9 +107,14 @@ function fallbackGit(cwd) {
 
 function computeGit(cwd, mainRoot) {
   const repoRoot = runFast(cwd, 'git rev-parse --show-toplevel');
-  const displayDir = repoRoot
-    ? (() => { const rel = relative(repoRoot, cwd) || '.'; return rel === '.' ? basename(repoRoot) : `${basename(repoRoot)}/${rel}`; })()
-    : cwd.replace(process.env.HOME ?? '', '~');
+  // Linked worktrees (.xtrm/worktrees/*): full paths are unreadably long —
+  // collapse to <mainrepo>@<worktree-basename>.
+  const wtRel = repoRoot && mainRoot ? relative(mainRoot, repoRoot) : '';
+  const displayDir = wtRel && !wtRel.startsWith('..') && wtRel.includes('.xtrm/worktrees')
+    ? `${basename(mainRoot)}@${basename(repoRoot)}`
+    : repoRoot
+      ? (() => { const rel = relative(repoRoot, cwd) || '.'; return rel === '.' ? basename(repoRoot) : `${basename(repoRoot)}/${rel}`; })()
+      : cwd.replace(process.env.HOME ?? '', '~');
 
   let branch = null, gitFlags = '';
   if (repoRoot) {
@@ -149,6 +156,14 @@ function refresh(cwd) {
   }
 }
 
+function readEffortSetting() {
+  try {
+    return JSON.parse(readFileSync(join(process.env.HOME ?? '', '.claude', 'settings.json'), 'utf8'))?.effortLevel ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function render(ctx, git, beadsCache, cwd) {
   const pct = ctx?.context_window?.used_percentage;
   const windowSize = ctx?.context_window?.context_window_size ?? 200000;
@@ -156,17 +171,20 @@ function render(ctx, git, beadsCache, cwd) {
   const provider = getProvider(modelId);
   const modelName = ctx?.model?.display_name ?? getModelName(modelId) ?? 'no-model';
   const { displayDir, branch, gitFlags } = git;
-  const cols = process.stdout.columns || 80;
 
-  let line1 = B + displayDir + B_;
-  if (branch) line1 += ` ${D}(${gitFlags ? `${branch} ${gitFlags}` : branch})${R}`;
+  // Bold + default fg (not dim) so the path/branch reads first.
+  let head = B + displayDir + B_;
+  if (branch) head += B + `(${gitFlags ? `${branch} ${gitFlags}` : branch})` + B_;
   const pctStr = pct != null ? `${pct.toFixed(1)}%` : '?';
   let modelStr = modelName;
   if (provider) modelStr = `(${provider}) ${modelStr}`;
-  const line2 = `${D}${pctStr}/${formatTokens(windowSize)}${R} ${D}${modelStr}${R}`;
+  const effort = ctx?.effort_level ?? ctx?.thinking_level ?? readEffortSetting();
+  if (effort) modelStr += ` ${B}${effort}${B_}`;
 
-  const line3 = formatCompact(beadsCache, { cols });
-  process.stdout.write(`${line1}\n${line2}\n${line3}\n`);
+  const counts = beadsCache?.counts;
+  let beadsStr = '';
+  if (counts) beadsStr = ` o:${counts.open ?? 0} p:${counts.in_progress ?? 0}${counts.blocked ? ` b:${counts.blocked}` : ''}`;
+  process.stdout.write(`${head} ${D}${pctStr}/${formatTokens(windowSize)}${R} ${EXT}${modelStr}${R}${D}${beadsStr}${R}\n`);
 }
 
 if (process.argv[2] === '--refresh') {

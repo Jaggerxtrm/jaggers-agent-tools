@@ -40,7 +40,6 @@ import {
   lineCount,
   previewLines,
   renderRichDiffPreview,
-  renderToolSummary,
   TOOL_ROW_MARKER,
   shortenCommand,
   shortenPath,
@@ -124,88 +123,324 @@ function persistPrefs(pi: ExtensionAPI, prefs: XtrmUiPrefs): void {
 // ============================================================================
 
 type AssistantMessageComponentCtor = {
-  prototype: {
-    updateContent?: (message: AssistantMessageLike) => void;
-    setExpanded?: (expanded: boolean) => void;
-  };
+	prototype: {
+		updateContent?: (message: AssistantMessageLike) => void;
+	};
 };
 
 type AssistantContentBlock = { type?: string; thinking?: string };
 type AssistantMessageLike = { content?: AssistantContentBlock[] };
 type PatchableAssistantMessage = {
-  hideThinkingBlock?: boolean;
-  hiddenThinkingLabel?: string;
-  lastMessage?: AssistantMessageLike;
-  __xtrmThinkingExpanded?: boolean;
-  updateContent?: (message: AssistantMessageLike) => void;
+	hideThinkingBlock?: boolean;
+	hiddenThinkingLabel?: string;
+	lastMessage?: AssistantMessageLike;
+	updateContent?: (message: AssistantMessageLike) => void;
 };
 
-const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiSilentHiddenThinking";
+const PATCHED_ASSISTANT_MESSAGE = "__xtrmUiThinkingPreview5";
+const ORIGINAL_ASSISTANT_UPDATE = "__xtrmUiThinkingPreviewOriginalUpdate";
+const THINKING_PREVIEW_PATCH_VERSION = 6;
+
+const THINKING_RECAP_MAX = 120;
+
+/** Minimal theme surface used to style the thinking rows. */
+export interface ThinkingRowStyle {
+	/** Bold label (SGR bold + thinkingText color; theme.bold is a no-op in pi). */
+	label: (text: string) => string;
+	/** Dimmed trace/recap, e.g. `theme.fg("thinkingText", text)`. */
+	recap: (text: string) => string;
+	/** Dimmed hint, e.g. `theme.fg("dim", text)`. */
+	hint: (text: string) => string;
+	/** Dimmed label separator, e.g. `theme.fg("dim", " · ")`. */
+	sep: string;
+}
+
+/**
+ * One-line recap of a thinking block: the first substantive line, stripped of
+ * markdown emphasis and list markers, whitespace-collapsed and truncated.
+ * Fragments (a stray `**The**` or a one-word line) are skipped in favor of the
+ * first line with real content.
+ */
+export function buildThinkingRecap(thinking: string, fallback = "Thinking..."): string {
+	const cleaned = thinking
+		.split("\n")
+		.map((line) =>
+			stripAnsi(line)
+				.replace(/^#{1,6}\s+/, "")
+				.replace(/\*\*([^*]+)\*\*/g, "$1")
+				.replace(/\*([^*]+)\*/g, "$1")
+				.replace(/`([^`]+)`/g, "$1")
+				.replace(/^[-*+:]\s*/, "")
+				.replace(/\s+/g, " ")
+				.replace(/:$/, "")
+				.trim(),
+		)
+		.filter((line) => line.length > 0);
+	const source = cleaned.find((line) => line.length >= 20) ?? cleaned[0] ?? fallback;
+	if (!source) return fallback;
+	return source.length > THINKING_RECAP_MAX ? source.slice(0, THINKING_RECAP_MAX - 3) + "..." : source;
+}
+
+/** Collapsed row: bold label, dim separator, dimmed recap, raw char count, expand hint. */
+export function buildCollapsedThinkingRow(recap: string, charCount: number, style: ThinkingRowStyle): string {
+	return ` ${style.label("Thinking...")}${style.sep}${style.recap(recap)}${style.sep}${style.recap(String(charCount))} ${style.hint("(Ctrl+T to expand)")}`;
+}
+
+/** Expanded block: bold label row with collapse hint, then the full dimmed trace. */
+export function buildExpandedThinkingBlock(thinking: string, style: ThinkingRowStyle): string {
+	return `${style.label("Thinking...")} ${style.hint("(Ctrl+T to collapse)")}\n\n${style.recap(thinking.trim())}`;
+}
+
+const THINKING_ROW_LABEL = "Thinking...";
+const THINKING_ROW_EXPAND_HINT = "(Ctrl+T to expand)";
+// Pi's renderer reserves ~9-12 visible columns for the terminal-integration
+// (OSC133) zone markers on the final content line; subtract so the row fits.
+const THINKING_ROW_WIDTH_MARGIN = 12;
+
+/** Raw row offset for a given visible-character index (skips ANSI escapes). */
+function rawOffsetForVisibleIndex(row: string, visibleIndex: number): number {
+	let visible = 0;
+	for (let i = 0; i < row.length; i++) {
+		if (row[i] === "\x1b") {
+			const m = row.slice(i).match(/^\x1b\[[0-9;?]*[ -/]*[@-~]/);
+			if (m) {
+				i += m[0].length - 1;
+				continue;
+			}
+		}
+		if (visible === visibleIndex) return i;
+		visible += visibleWidth(row[i]) || 1;
+	}
+	return row.length;
+}
+
+/**
+ * Keeps a collapsed thinking row on ONE line at the given render width,
+ * truncating the recap so the expand hint always survives — the same behavior
+ * as prime-agent's CollapsedThinkingRow. Non-row markdown passes through.
+ */
+export function fitThinkingRowToWidth(row: string, availableWidth: number | undefined): string {
+	if (!availableWidth || availableWidth <= 0) return row;
+	if (!row.includes(THINKING_ROW_LABEL) || row.includes("\n")) return row;
+	const plain = stripAnsi(row);
+	if (!plain.trimStart().startsWith(THINKING_ROW_LABEL) || !plain.includes(THINKING_ROW_EXPAND_HINT)) return row;
+
+	const labelEnd = plain.indexOf(THINKING_ROW_LABEL) + THINKING_ROW_LABEL.length;
+	const sepMatch = plain.slice(labelEnd).match(/^\s*·\s*/);
+	const recapStartPlain = labelEnd + (sepMatch?.[0].length ?? 0);
+	const recapStart = rawOffsetForVisibleIndex(row, recapStartPlain);
+	const hintStart = rawOffsetForVisibleIndex(row, plain.indexOf(THINKING_ROW_EXPAND_HINT) - 1);
+	const labelSepRaw = row.slice(0, recapStart);
+	const recapRaw = row.slice(recapStart, hintStart);
+	const hintRaw = row.slice(hintStart);
+
+	const fixedWidth = visibleWidth(stripAnsi(labelSepRaw)) + visibleWidth(stripAnsi(hintRaw));
+	const recapWidth = Math.max(8, availableWidth - fixedWidth - THINKING_ROW_WIDTH_MARGIN);
+	const recapPlain = stripAnsi(recapRaw).trim();
+	if (visibleWidth(recapPlain) <= recapWidth) return row;
+
+	const colorPrefix = recapRaw.match(/^(\x1b\[[0-9;?]*m)+/)?.[0] ?? "";
+	const colorSuffix = recapRaw.match(/(\x1b\[[0-9;?]*m)+$/)?.[0] ?? "";
+	return labelSepRaw + colorPrefix + truncateToWidth(recapPlain, recapWidth) + colorSuffix + hintRaw;
+}
 
 function maybeFileUrlToPath(value: string): string {
-  return value.startsWith("file:") ? fileURLToPath(value) : value;
+	return value.startsWith("file:") ? fileURLToPath(value) : value;
+}
+
+export function piRuntimeEntryForCliPath(cliPath: string): string | undefined {
+	if (cliPath.endsWith("/dist/bundle/cli.js")) return join(dirname(cliPath), "index.js");
+	if (cliPath.endsWith("/dist/cli.js")) return join(dirname(cliPath), "index.js");
+	return undefined;
 }
 
 function resolvePiCodingAgentEntryPath(): string {
-  const candidates: string[] = [];
+	const candidates: string[] = [];
 
-  const argvPath = process.argv[1];
-  if (argvPath && existsSync(argvPath)) {
-    const realArgvPath = realpathSync(argvPath);
-    if (realArgvPath.endsWith("/dist/cli.js")) {
-      candidates.push(join(dirname(realArgvPath), "index.js"));
-    }
-  }
+	const argvPath = process.argv[1];
+	if (argvPath && existsSync(argvPath)) {
+		const runtimeEntry = piRuntimeEntryForCliPath(realpathSync(argvPath));
+		if (runtimeEntry) candidates.push(runtimeEntry);
+	}
 
-  candidates.push(
-    join(dirname(process.execPath), "..", "lib", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js"),
-  );
+	const globalDist = join(
+		dirname(process.execPath),
+		"..",
+		"lib",
+		"node_modules",
+		"@earendil-works",
+		"pi-coding-agent",
+		"dist",
+	);
+	candidates.push(join(globalDist, "bundle", "index.js"), join(globalDist, "index.js"));
 
-  try {
-    candidates.push(maybeFileUrlToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
-  } catch {}
+	try {
+		candidates.push(maybeFileUrlToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
+	} catch {}
 
-  const entryPath = candidates.find((candidate) => existsSync(candidate));
-  if (!entryPath) throw new Error("Could not resolve pi-coding-agent entry path");
-  return entryPath;
+	const entryPath = candidates.find((candidate) => existsSync(candidate));
+	if (!entryPath) throw new Error("Could not resolve active pi-coding-agent runtime entry path");
+	return entryPath;
 }
 
-async function installSilentHiddenThinkingPatch(): Promise<void> {
-  const entryPath = resolvePiCodingAgentEntryPath();
-  const componentPath = join(dirname(entryPath), "modes", "interactive", "components", "assistant-message.js");
-  const mod = await import(pathToFileURL(componentPath).href) as {
-    AssistantMessageComponent?: AssistantMessageComponentCtor;
-  };
-  const proto = mod.AssistantMessageComponent?.prototype as
-    | (AssistantMessageComponentCtor["prototype"] & { [PATCHED_ASSISTANT_MESSAGE]?: boolean })
-    | undefined;
-  if (!proto?.updateContent || proto[PATCHED_ASSISTANT_MESSAGE]) return;
+// Pi's initial hideThinkingBlock is false (thinking expanded). We default to
+// compact previews until the user toggles; once a real toggle is visible
+// (a component with hideThinkingBlock === true), follow pi's toggle exactly.
+// The latch is process-lifetime module state (pi caches the extension factory
+// per process); session_start resets it per session (xtrm-6ggil). The patch
+// factory takes the holder as a parameter so tests run with an isolated latch.
+export type ThinkingToggleLatch = { followsToggle: boolean };
+const thinkingToggleLatch: ThinkingToggleLatch = { followsToggle: false };
 
-  const updateContent = proto.updateContent;
-  proto.updateContent = function patchedUpdateContent(this: PatchableAssistantMessage, message: AssistantMessageLike) {
-    if (this.hiddenThinkingLabel === "" && Array.isArray(message.content)) {
-      if (!this.__xtrmThinkingExpanded) {
-        updateContent.call(this, {
-          ...message,
-          content: message.content.filter((block) => block.type !== "thinking" || !block.thinking?.trim()),
-        });
-        return;
-      }
+/**
+ * Wraps AssistantMessageComponent.updateContent so thinking blocks render as
+ * XTRM preview rows. Exported for unit tests: pass the original updateContent,
+ * a style, and (optionally) an isolated latch.
+ */
+export function createPatchedUpdateContent(
+	updateContent: (message: AssistantMessageLike) => void,
+	style: ThinkingRowStyle,
+	latch: ThinkingToggleLatch = thinkingToggleLatch,
+): (this: PatchableAssistantMessage, message: AssistantMessageLike) => void {
+	return function patchedUpdateContent(this: PatchableAssistantMessage, message: AssistantMessageLike) {
+		if (Array.isArray(message.content)) {
+			const hasThinking = message.content.some((block) => block.type === "thinking" && block.thinking?.trim());
+			if (hasThinking) {
+				if (this.hideThinkingBlock) latch.followsToggle = true;
+				const compact = this.hideThinkingBlock === true || !latch.followsToggle;
+				const content = message.content.flatMap((block, index) => {
+					if (block.type !== "thinking" || !block.thinking?.trim()) return [block];
+					const row = compact
+						? buildCollapsedThinkingRow(buildThinkingRecap(block.thinking), block.thinking.length, style)
+						: buildExpandedThinkingBlock(block.thinking, style);
+					// Text blocks render even when pi's hideThinkingBlock branch is
+					// active (a "thinking" block would be swallowed and replaced by the
+					// empty hidden label). Append an invisible single-line block (a
+					// zero-width space survives pi's text trim and renders as a blank
+					// line) when a visible text/thinking block follows — mirroring pi's
+					// Spacer(1) after thinking runs; none before tool-call blocks.
+					const hasVisibleAfter = message.content
+						.slice(index + 1)
+						.some((c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()));
+					return hasVisibleAfter
+						? [{ type: "text", text: row }, { type: "text", text: "\u200b" }]
+						: [{ type: "text", text: row }];
+				});
+				updateContent.call(this, { ...message, content });
+				// Pi stores lastMessage and re-renders from it in
+				// setHideThinkingBlock()/invalidate()/setHiddenThinkingLabel().
+				// Restore the RAW message so those re-renders re-enter this patch
+				// with the original thinking blocks; otherwise the toggle renders
+				// the already-converted rows and existing thinking rows never flip.
+				this.lastMessage = message;
+				return;
+			}
+		}
+		updateContent.call(this, message);
+	};
+}
 
-      const previousHideThinking = this.hideThinkingBlock;
-      this.hideThinkingBlock = false;
-      updateContent.call(this, message);
-      this.hideThinkingBlock = previousHideThinking;
-      return;
-    }
-    updateContent.call(this, message);
-  };
+export function selectPatchBase<T>(
+  current: T | undefined,
+  installedVersion: number | boolean | undefined,
+  targetVersion: number,
+  original: T | undefined,
+  patchName: string,
+): T | undefined {
+  if (!current || installedVersion === targetVersion) return undefined;
+  if (installedVersion !== undefined && !original) {
+    throw new Error(`${patchName} was installed by a legacy version; restart pi before upgrading`);
+  }
+  return original ?? current;
+}
 
-  proto.setExpanded = function setExpanded(this: PatchableAssistantMessage, expanded: boolean) {
-    this.__xtrmThinkingExpanded = expanded;
-    if (this.lastMessage) this.updateContent?.(this.lastMessage);
+async function installThinkingPreviewPatch(): Promise<void> {
+	const entryPath = resolvePiCodingAgentEntryPath();
+	const mod = await import(pathToFileURL(entryPath).href) as {
+		AssistantMessageComponent?: AssistantMessageComponentCtor;
+	};
+	// xtrm-dark and xtrm-light both map thinkingText/dim to these values. Raw
+	// SGR avoids importing the unbundled theme singleton when pi runs bundle/cli.js.
+	const thinkingText = (text: string) => `\x1b[38;2;167;167;167m${text}\x1b[39m`;
+	const dimText = (text: string) => `\x1b[38;2;138;138;138m${text}\x1b[39m`;
+	const style: ThinkingRowStyle = {
+		label: (text) => `\x1b[1m${thinkingText(text)}\x1b[22m`,
+		recap: thinkingText,
+		hint: dimText,
+		sep: dimText(" · "),
+	};
+	const proto = mod.AssistantMessageComponent?.prototype as
+		| (AssistantMessageComponentCtor["prototype"] & {
+			[PATCHED_ASSISTANT_MESSAGE]?: number | boolean;
+			[ORIGINAL_ASSISTANT_UPDATE]?: (message: AssistantMessageLike) => void;
+		})
+		| undefined;
+	if (!proto) return;
+
+	const updateContent = selectPatchBase(
+		proto.updateContent,
+		proto[PATCHED_ASSISTANT_MESSAGE],
+		THINKING_PREVIEW_PATCH_VERSION,
+		proto[ORIGINAL_ASSISTANT_UPDATE],
+		"xtrm-ui thinking preview patch",
+	);
+	if (!updateContent) return;
+	proto[ORIGINAL_ASSISTANT_UPDATE] ??= updateContent;
+	proto.updateContent = createPatchedUpdateContent(updateContent, style);
+	proto[PATCHED_ASSISTANT_MESSAGE] = THINKING_PREVIEW_PATCH_VERSION;
+}
+
+let retryFailureWarned = false;
+function warnRetryFailedOnce(error: unknown): void {
+  if (retryFailureWarned) return;
+  retryFailureWarned = true;
+  const message = error instanceof Error ? error.message : String(error);
+  // stderr so it surfaces even when Pi's UI eats stdout.
+  process.stderr.write(
+    `[xtrm-ui] thinking-preview install still failing at session_start: ${message.slice(0, 300)}\n`,
+  );
+}
+
+/**
+ * Single-flight wrapper around the thinking-preview prototype patch install.
+ * The extension factory runs during Pi's resource loading, BEFORE the TUI
+ * controller constructor calls initTheme(); the theme module (theme.js)
+ * exports a Proxy that throws "Theme not initialized" until then, so the
+ * factory-time attempt can fail. session_start fires after the controller is
+ * constructed, so awaiting ensureInstalled() there retries a failed install
+ * before the first assistant message renders (xtrm-3tus9). Exported for unit
+ * tests: pass an install function and an isolated state holder.
+ *
+ * @internal — factored out and exported for unit-test isolation only.
+ * `handlers.test.ts` constructs isolated install states per test to avoid
+ * process-lifetime state bleed. Not part of the public extension API and
+ * not intended for use outside this package's tests. Do not import from
+ * downstream extensions.
+ */
+export function createThinkingPreviewInstallState(install: () => Promise<void>): {
+  ensureInstalled: () => Promise<void>;
+  isInstalled: () => boolean;
+} {
+  let installed = false;
+  let current: Promise<void> | null = null;
+  return {
+    ensureInstalled() {
+      if (installed) return Promise.resolve();
+      if (current) return current;
+      current = install().then(
+        () => {
+          installed = true;
+          current = null;
+        },
+        (error: unknown) => {
+          current = null;
+          throw error;
+        },
+      );
+      return current;
+    },
+    isInstalled: () => installed,
   };
-  proto[PATCHED_ASSISTANT_MESSAGE] = true;
 }
 
 type ToolExecutionComponentCtor = {
@@ -221,6 +456,7 @@ type PatchableToolExecutionComponent = {
   args?: unknown;
   result?: { content?: Array<{ type: string; text?: string }>; details?: unknown; isError?: boolean };
   expanded?: boolean;
+  isPartial?: boolean;
   hasRendererDefinition?: () => boolean;
   __xtrmExternalStartedAt?: number;
   __xtrmExternalDurationMs?: number;
@@ -229,8 +465,42 @@ type PatchableToolExecutionComponent = {
 type ExternalToolFrameKind = "serena" | "gitnexus" | "structured" | "process" | "external";
 
 const PATCHED_EXTERNAL_TOOL_FRAME = "__xtrmUiExternalToolFrame";
-const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 18;
+const ORIGINAL_EXTERNAL_RENDER = "__xtrmUiExternalToolFrameOriginalRender";
+const ORIGINAL_EXTERNAL_GET_RENDER_SHELL = "__xtrmUiExternalToolFrameOriginalGetRenderShell";
+const EXTERNAL_TOOL_FRAME_PATCH_VERSION = 23;
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+
+// XTRM extension accent (#9a8bff) — pi's theme.fg() only accepts named tokens and
+// throws on raw hex, so emit the truecolor SGR directly (repo already uses raw
+// SGR escapes for bold).
+const XTRM_EXT_ACCENT = "\x1b[38;2;154;139;255m";
+
+type ToolRowStatus = "pending" | "success" | "error";
+
+function boldSgr(text: string): string {
+  return `\x1b[1m${text}\x1b[22m`;
+}
+
+/**
+ * External tool row header in native tool style:
+ *   • used <Extension> <tool>
+ *   - dot: plain prompt color; dim once the command succeeds (like native rows)
+ *   - "used": bold action word
+ *   - extension: #9a8bff, bold
+ *   - tool: bold, dim until success, default (light) when success
+ */
+function externalToolHeaderLine(
+  status: ToolRowStatus,
+  provider: string,
+  tool?: string,
+): string {
+  const dot = status === "success" ? "\x1b[2m•\x1b[22m" : "•";
+  const ext = `${XTRM_EXT_ACCENT}${boldSgr(provider)}\x1b[39m`;
+  const toolColor = status === "success" ? "" : "\x1b[2m";
+  const toolReset = status === "success" ? "" : "\x1b[22m";
+  const toolName = tool ? ` ${toolColor}${boldSgr(tool)}${toolReset}` : "";
+  return `${dot} ${boldSgr("used")} ${ext}${toolName}`;
+}
 
 function stripAnsi(text: string): string {
   return text.replace(ANSI_PATTERN, "");
@@ -290,42 +560,6 @@ function trimRenderedToolLines(lines: string[]): string[] {
   return lines.slice(start, end).map((line) => line.replace(/\s+$/u, ""));
 }
 
-function externalToolBadgeColor(kind: ExternalToolFrameKind, text: string): string {
-  const bgColors: Record<ExternalToolFrameKind, [number, number, number]> = {
-    serena: [82, 210, 255],
-    gitnexus: [178, 154, 255],
-    structured: [205, 166, 255],
-    process: [92, 226, 255],
-    external: [178, 190, 210],
-  };
-  const [badgeR, badgeG, badgeB] = bgColors[kind];
-  return `\x1b[38;2;3;8;12m\x1b[48;2;${badgeR};${badgeG};${badgeB}m${text}\x1b[39m\x1b[49m`;
-}
-
-function boldExternalToolAction(action: string): string {
-  return `\x1b[1m${action}\x1b[22m`;
-}
-
-export function highlightExternalToolBadge(kind: ExternalToolFrameKind, line: string): string {
-  const markedHeader = line.match(/^([•›]\s+)(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])(\s+)(\S+)(.*)$/u);
-  if (markedHeader?.[1] && markedHeader[2] && markedHeader[3] && markedHeader[4]) {
-    return `${markedHeader[1]}${externalToolBadgeColor(kind, markedHeader[2])}${markedHeader[3]}${boldExternalToolAction(markedHeader[4])}${markedHeader[5] ?? ""}`;
-  }
-
-  const providerHeader = line.match(/^(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])(\s+)(\S+)(.*)$/u);
-  if (providerHeader?.[1] && providerHeader[2] && providerHeader[3]) {
-    return `${externalToolBadgeColor(kind, providerHeader[1])}${providerHeader[2]}${boldExternalToolAction(providerHeader[3])}${providerHeader[4] ?? ""}`;
-  }
-
-  const marked = line.match(/^([•›]\s+)(\S+)/u);
-  if (marked?.[1] && marked[2]) {
-    return marked[1] + externalToolBadgeColor(kind, marked[2]) + line.slice(marked[1].length + marked[2].length);
-  }
-
-  const provider = line.match(/^(\[[A-Za-z][A-Za-z0-9 _-]{0,31}\])/u)?.[1];
-  return provider ? externalToolBadgeColor(kind, provider) + line.slice(provider.length) : line;
-}
-
 export function collapsedExternalToolLines(contentLines: string[], expanded: boolean): string[] {
   if (expanded || contentLines.length <= 6) return contentLines;
   return [
@@ -373,6 +607,7 @@ export function renderExternalToolBackgroundLines(
   expanded: boolean,
   toolName?: string,
   durationMs?: number,
+  status: ToolRowStatus = "pending",
 ): string[] {
   let displayLines = contentLines;
   const raw = contentLines.length === 1 ? contentLines[0]?.trim() : undefined;
@@ -389,10 +624,8 @@ export function renderExternalToolBackgroundLines(
     || /^[•›]\s+\S+/u.test(firstLine);
   const header = externalToolHeader(kind, toolName, firstLine);
   const payloadLines = hasHeader ? displayLines.slice(1) : displayLines;
-  displayLines = [
-    `${TOOL_ROW_MARKER} [${header.provider}]${header.action ? ` ${header.action}` : ""}`,
-    ...payloadLines,
-  ];
+  const headerLine = externalToolHeaderLine(status, header.provider, header.action);
+  displayLines = [headerLine, ...payloadLines];
 
   const renderedHeader = displayLines[0] ?? "";
   const visiblePayload = expanded ? payloadLines : payloadLines.slice(0, 6);
@@ -408,7 +641,7 @@ export function renderExternalToolBackgroundLines(
   ]);
   const renderWidth = Math.max(8, width);
   const body = [
-    highlightExternalToolBadge(kind, truncateToWidth(renderedHeader, renderWidth)),
+    truncateToWidth(renderedHeader, renderWidth),
     ...visiblePayload.map((rawLine) => truncateToWidth(rawLine, renderWidth)),
   ];
   return footerMeta
@@ -423,26 +656,39 @@ function renderExternalToolLines(
   expanded = false,
   toolName?: string,
   durationMs?: number,
+  status: ToolRowStatus = "pending",
 ): string[] {
   const contentLines = trimRenderedToolLines(lines).filter((line) => !isBlankRenderedLine(line));
   return contentLines.length > 0
-    ? renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs)
+    ? renderExternalToolBackgroundLines(contentLines, width, kind, expanded, toolName, durationMs, status)
     : [];
 }
 
 async function installExternalToolFramePatch(): Promise<void> {
   const entryPath = resolvePiCodingAgentEntryPath();
-  const componentPath = join(dirname(entryPath), "modes", "interactive", "components", "tool-execution.js");
-  const mod = await import(pathToFileURL(componentPath).href) as {
+  const mod = await import(pathToFileURL(entryPath).href) as {
     ToolExecutionComponent?: ToolExecutionComponentCtor;
   };
   const proto = mod.ToolExecutionComponent?.prototype as
-    | (ToolExecutionComponentCtor["prototype"] & { [PATCHED_EXTERNAL_TOOL_FRAME]?: number })
+    | (ToolExecutionComponentCtor["prototype"] & {
+      [PATCHED_EXTERNAL_TOOL_FRAME]?: number;
+      [ORIGINAL_EXTERNAL_RENDER]?: (width: number) => string[];
+      [ORIGINAL_EXTERNAL_GET_RENDER_SHELL]?: () => "default" | "self";
+    })
     | undefined;
-  if (!proto?.render || proto[PATCHED_EXTERNAL_TOOL_FRAME] === EXTERNAL_TOOL_FRAME_PATCH_VERSION) return;
+  if (!proto) return;
 
-  const getRenderShell = proto.getRenderShell;
-  const render = proto.render;
+  const render = selectPatchBase(
+    proto.render,
+    proto[PATCHED_EXTERNAL_TOOL_FRAME],
+    EXTERNAL_TOOL_FRAME_PATCH_VERSION,
+    proto[ORIGINAL_EXTERNAL_RENDER],
+    "xtrm-ui external tool frame patch",
+  );
+  if (!render) return;
+  proto[ORIGINAL_EXTERNAL_RENDER] ??= render;
+  proto[ORIGINAL_EXTERNAL_GET_RENDER_SHELL] ??= proto.getRenderShell;
+  const getRenderShell = proto[ORIGINAL_EXTERNAL_GET_RENDER_SHELL];
 
   proto.getRenderShell = function patchedGetRenderShell(this: PatchableToolExecutionComponent) {
     const kind = externalToolFrameKind(this.toolName);
@@ -462,14 +708,22 @@ async function installExternalToolFramePatch(): Promise<void> {
     const firstContentIndex = rendered.findIndex((line) => !isBlankRenderedLine(line));
     const leading = firstContentIndex > 0 ? rendered.slice(0, firstContentIndex) : [];
     const content = extractResultTextLines(this) ?? rendered;
-    const styled = renderExternalToolLines(
-      content,
-      width,
-      kind,
-      Boolean(this.expanded),
-      this.toolName,
-      this.__xtrmExternalDurationMs,
-    );
+    const status: ToolRowStatus = this.result ? (this.result.isError ? "error" : "success") : "pending";
+    let styled: string[];
+    try {
+      styled = renderExternalToolLines(
+        content,
+        width,
+        kind,
+        Boolean(this.expanded),
+        this.toolName,
+        this.__xtrmExternalDurationMs,
+        status,
+      );
+    } catch {
+      // A patched renderer must never take the interactive mode down.
+      return rendered;
+    }
     return styled.length > 0 ? [...leading, ...styled] : rendered;
   };
 
@@ -561,17 +815,10 @@ function applyXtrmChrome(
 // Tool Render Helpers
 // ============================================================================
 
-function renderOutputPreview(theme: any, lines: string[], maxLines: number): string {
-  const subset = lines.slice(0, maxLines);
-  let text = subset.map((line) => theme.fg("toolOutput", `  ${line}`)).join("\n");
-  if (lines.length > maxLines) text += `\n${theme.fg("muted", `  … +${lines.length - maxLines} more`)}`;
-  return text;
-}
-
 function renderVerticalPreview(theme: any, lines: string[], maxLines: number): string {
   const subset = lines.slice(0, maxLines);
-  let text = subset.map((line) => `${theme.fg("muted", "│")} ${theme.fg("toolOutput", line)}`).join("\n");
-  if (lines.length > maxLines) text += `\n${theme.fg("muted", "│")} ${theme.fg("muted", `… +${lines.length - maxLines} more lines`)}`;
+  let text = subset.map((line) => theme.fg("toolOutput", line)).join("\n");
+  if (lines.length > maxLines) text += `\n${theme.fg("muted", `… +${lines.length - maxLines} more lines`)}`;
   return text;
 }
 
@@ -583,8 +830,16 @@ function lineRange(offset?: number, limit?: number): string | undefined {
   return `${start}-${start + limit - 1}`;
 }
 
+const DEFAULT_TOOL_PREVIEW_LINES = 6;
+
 function summarizeCount(text: string): number {
   return text.split("\n").filter((line) => line.trim().length > 0).length;
+}
+
+function previewSummary(shown: number, total: number, noun: string, expanded: boolean): string {
+  return !expanded && shown < total
+    ? `showing ${shown}/${total} ${noun}s (ctrl+o expand)`
+    : formatLineLabel(total, noun);
 }
 
 // ============================================================================
@@ -861,17 +1116,57 @@ function createWritePreview(path: string, nextContent: string): XtrmWritePreview
   };
 }
 
-function appendToolFooter(theme: any, text: string, parts: Array<string | undefined>): string {
-  const meta = joinMeta(parts);
-  return meta ? `${text}\n${theme.fg("dim", `└─ ${meta}`)}` : text;
+function appendToolTree(
+  theme: any,
+  lines: string[],
+  outputLines: string[],
+  meta?: string,
+): string {
+  outputLines.forEach((line, index) => {
+    lines.push(index === 0
+      ? `${theme.fg("muted", "└")} ${theme.fg("toolOutput", line)}`
+      : `  ${theme.fg("toolOutput", line)}`);
+  });
+  if (meta) lines.push(theme.fg("dim", meta));
+  return lines.join("\n");
+}
+
+function renderBashTree(
+  theme: any,
+  statusColor: string,
+  command: string,
+  outputLines: string[] = [],
+  meta?: string,
+): string {
+  const commandColor = statusColor === "success" ? "text" : "dim";
+  const [firstCommand = "", ...continuedCommands] = command.split("\n");
+  // theme.bold is a chalk no-op in pi's runtime; emit the SGR escape directly.
+  const boldCommand = (text: string) => `\x1b[1m${text}\x1b[22m`;
+  return appendToolTree(theme, [
+    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold("Ran"))} ${boldCommand(theme.fg(commandColor, firstCommand))}`,
+    ...continuedCommands.map((line) => boldCommand(theme.fg(commandColor, line))),
+  ], outputLines, meta);
+}
+
+function renderNamedToolTree(
+  theme: any,
+  statusColor: string,
+  label: string,
+  subject: string,
+  outputLines: string[] = [],
+  meta?: string,
+): string {
+  const subjectColor = statusColor === "success" ? "text" : "dim";
+  return appendToolTree(theme, [
+    `${theme.fg(statusColor, "•")} ${theme.fg(statusColor, theme.bold(label))}${subject ? ` ${theme.fg(subjectColor, subject)}` : ""}`,
+  ], outputLines, meta);
 }
 
 function renderPendingCall(toolName: string, args: Record<string, unknown>, theme: any): Text {
   if (toolName === "bash") {
-    const command = shortenCommand(String(args.command ?? ""), 80);
-    return new Text(`${theme.fg("accent", TOOL_ROW_MARKER)} ${theme.fg("accent", "$")} ${theme.fg("accent", command)}`, 0, 0);
+    return new Text(renderBashTree(theme, "accent", String(args.command ?? "")), 0, 0);
   }
-  return new Text(renderToolSummary(theme, "pending", toolName, summarizeToolSubject(toolName, args), undefined), 0, 0);
+  return new Text(renderNamedToolTree(theme, "accent", toolName, summarizeToolSubject(toolName, args) ?? ""), 0, 0);
 }
 
 function summarizeToolSubject(toolName: string, args: Record<string, unknown>): string | undefined {
@@ -1057,25 +1352,19 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const args = context.args as Record<string, unknown>;
       const command = String(args.command ?? "");
       if (isPartial) {
-        return toolRowText(theme, `${theme.fg("accent", TOOL_ROW_MARKER)} ${theme.fg("accent", "$")} ${theme.fg("accent", command)}`);
+        return toolRowText(theme, renderBashTree(theme, "accent", command));
       }
       const output = getTextContent(result as any);
       const outputLines = cleanOutputLines(output);
       const statusColor = context.isError ? "error" : "success";
-      let text = `${theme.fg(statusColor, TOOL_ROW_MARKER)} ${theme.fg(statusColor, "$")} ${theme.fg(statusColor, command)}`;
-      const visibleLines = expanded ? outputLines : outputLines.slice(-4);
-      if (visibleLines.length > 0) {
-        text += "\n" + visibleLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-      }
-      const lineSummary = !expanded && visibleLines.length < outputLines.length
-        ? `showing ${visibleLines.length}/${outputLines.length} lines (ctrl+o expand)`
-        : formatLineLabel(outputLines.length, "line");
-      text = appendToolFooter(theme, text, [
+      const visibleLines = expanded ? outputLines : outputLines.slice(-DEFAULT_TOOL_PREVIEW_LINES);
+      const lineSummary = previewSummary(visibleLines.length, outputLines.length, "line", expanded);
+      const text = renderBashTree(theme, statusColor, command, visibleLines, joinMeta([
         lineSummary,
         renderDuration(context),
         formatPayloadSize(output),
         details.truncation?.truncated ? "truncated" : undefined,
-      ]);
+      ]));
       return toolRowText(theme, text);
     },
   });
@@ -1090,7 +1379,7 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("read", args as Record<string, unknown>, theme, context),
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "read", "loading", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "read", "loading"));
       const details = (result.details ?? {}) as ReadToolDetails;
       const args = context.args as Record<string, unknown>;
       const subjectBase = shortenPath(String(args.path ?? ""));
@@ -1098,30 +1387,33 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       const subject = range ? `${subjectBase}:${range}` : subjectBase;
       const first = result.content[0];
       if (first?.type === "image") {
-        const text = appendToolFooter(
+        return toolRowText(theme, renderNamedToolTree(
           theme,
-          renderToolSummary(theme, "success", "read", subject, undefined),
-          ["image", renderDuration(context)],
-        );
-        return toolRowText(theme, text);
+          "success",
+          "read",
+          subject,
+          [],
+          joinMeta(["image", renderDuration(context)]),
+        ));
       }
       const textContent = getTextContent(result as any);
       const lines = textContent.split("\n");
       const totalLines = lines.length;
-      const showContent = expanded || totalLines <= 6;
-      let text = renderToolSummary(theme, context.isError ? "error" : "success", "read", subject, undefined);
-      if (showContent && totalLines > 0) {
-        text += "\n" + lines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-      }
-      const lineSummary = !showContent && totalLines > 0
-        ? `${formatLineLabel(totalLines, "line")} (ctrl+o expand)`
-        : formatLineLabel(totalLines, "line");
-      text = appendToolFooter(theme, text, [
-        lineSummary,
-        renderDuration(context),
-        formatPayloadSize(textContent),
-        details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined,
-      ]);
+      const visibleLines = expanded ? lines : lines.slice(0, DEFAULT_TOOL_PREVIEW_LINES);
+      const lineSummary = previewSummary(visibleLines.length, totalLines, "line", expanded);
+      const text = renderNamedToolTree(
+        theme,
+        context.isError ? "error" : "success",
+        "read",
+        subject,
+        totalLines > 0 ? visibleLines : [],
+        joinMeta([
+          lineSummary,
+          renderDuration(context),
+          formatPayloadSize(textContent),
+          details.truncation?.truncated ? `from ${details.truncation.totalLines}` : undefined,
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1136,23 +1428,30 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("edit", args as Record<string, unknown>, theme, context),
     renderResult(result, { isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "edit", "applying", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "edit", "applying"));
       const details = (result.details ?? {}) as EditToolDetails;
       const args = context.args as Record<string, unknown>;
       const path = String(args.path ?? "");
       const textContent = getTextContent(result as any);
       if (context.isError) {
-        const text = appendToolFooter(
+        return toolRowText(theme, renderNamedToolTree(
           theme,
-          renderToolSummary(theme, "error", "edit", path, textContent.split("\n")[0]),
-          [renderDuration(context)],
-        );
-        return toolRowText(theme, text);
+          "error",
+          "edit",
+          path,
+          [],
+          joinMeta([textContent.split("\n")[0], renderDuration(context)]),
+        ));
       }
       const stats = details.diff ? diffStats(details.diff) : { additions: 0, removals: 0 };
-      let text = renderToolSummary(theme, "success", "edit", path, undefined);
-      if (details.diff) text += `\n${renderRichDiffPreview(theme, details.diff, 18)}`;
-      text = appendToolFooter(theme, text, [`+${stats.additions}`, `-${stats.removals}`, renderDuration(context)]);
+      const text = renderNamedToolTree(
+        theme,
+        "success",
+        "edit",
+        path,
+        details.diff ? renderRichDiffPreview(theme, details.diff, 18).split("\n") : [],
+        joinMeta([`+${stats.additions}`, `-${stats.removals}`, renderDuration(context)]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1173,48 +1472,59 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
       return renderCall("write", input, theme, context);
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "write", "writing", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "write", "writing"));
       const args = context.args as Record<string, unknown>;
       const path = String(args.path ?? "");
       const content = String(args.content ?? "");
       const textContent = getTextContent(result as any);
       if (context.isError) {
-        const text = appendToolFooter(
+        return toolRowText(theme, renderNamedToolTree(
           theme,
-          renderToolSummary(theme, "error", "write", path, textContent.split("\n")[0]),
-          [renderDuration(context)],
-        );
-        return toolRowText(theme, text);
+          "error",
+          "write",
+          path,
+          [],
+          joinMeta([textContent.split("\n")[0], renderDuration(context)]),
+        ));
       }
 
       const preview = (context.state as XtrmToolRenderState).writePreview;
       if (preview?.kind === "unchanged") {
-        const text = appendToolFooter(
+        return toolRowText(theme, renderNamedToolTree(
           theme,
-          renderToolSummary(theme, "success", "write", path, undefined),
-          ["no changes", renderDuration(context)],
-        );
-        return toolRowText(theme, text);
+          "success",
+          "write",
+          path,
+          [],
+          joinMeta(["no changes", renderDuration(context)]),
+        ));
       }
       if (preview?.kind === "updated") {
-        let text = renderToolSummary(theme, "success", "write", path, undefined);
-        if (preview.diff) text += `\n${renderRichDiffPreview(theme, preview.diff, 18)}`;
-        text = appendToolFooter(theme, text, [`+${preview.additions}`, `-${preview.removals}`, renderDuration(context)]);
-        return toolRowText(theme, text);
+        return toolRowText(theme, renderNamedToolTree(
+          theme,
+          "success",
+          "write",
+          path,
+          preview.diff ? renderRichDiffPreview(theme, preview.diff, 18).split("\n") : [],
+          joinMeta([`+${preview.additions}`, `-${preview.removals}`, renderDuration(context)]),
+        ));
       }
 
       const lines = preview?.kind === "created" ? preview.lineCount : lineCount(content);
-      let text = renderToolSummary(theme, "success", "write", path, undefined);
       const contentLines = content.split("\n");
-      const showContent = content && (expanded || contentLines.length <= 6);
-      if (showContent) {
-        text += "\n" + contentLines.map((line) => `  ${theme.fg("toolOutput", line)}`).join("\n");
-      }
-      text = appendToolFooter(theme, text, [
-        !showContent && lines > 0 ? `${formatLineLabel(lines, "line")} (ctrl+o expand)` : formatLineLabel(lines, "line"),
-        renderDuration(context),
-        formatPayloadSize(content),
-      ]);
+      const visibleLines = !content ? [] : expanded ? contentLines : contentLines.slice(0, DEFAULT_TOOL_PREVIEW_LINES);
+      const text = renderNamedToolTree(
+        theme,
+        "success",
+        "write",
+        path,
+        visibleLines,
+        joinMeta([
+          previewSummary(visibleLines.length, lines, "line", expanded),
+          renderDuration(context),
+          formatPayloadSize(content),
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1229,19 +1539,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("find", args as Record<string, unknown>, theme, context),
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "find", "searching", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "find", "searching"));
       const details = (result.details ?? {}) as FindToolDetails;
       const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = summarizeCount(textContent);
-      let text = renderToolSummary(theme, context.isError ? "error" : "success", "find", String(args.pattern ?? ""), undefined);
-      if (expanded && count > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 10), 10)}`;
-      text = appendToolFooter(theme, text, [
-        !expanded && count > 0 ? `${formatLineLabel(count, "match")} (ctrl+o expand)` : formatLineLabel(count, "match"),
-        renderDuration(context),
-        formatPayloadSize(textContent),
-        details.resultLimitReached ? "limit reached" : undefined,
-      ]);
+      const outputLines = count > 0 ? previewLines(textContent, expanded ? 10 : DEFAULT_TOOL_PREVIEW_LINES) : [];
+      const text = renderNamedToolTree(
+        theme,
+        context.isError ? "error" : "success",
+        "find",
+        String(args.pattern ?? ""),
+        outputLines,
+        joinMeta([
+          previewSummary(Math.min(outputLines.length, count), count, "match", expanded),
+          renderDuration(context),
+          formatPayloadSize(textContent),
+          details.resultLimitReached ? "limit reached" : undefined,
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1256,19 +1572,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("grep", args as Record<string, unknown>, theme, context),
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "grep", "searching", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "grep", "searching"));
       const details = (result.details ?? {}) as GrepToolDetails;
       const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = countPrefixedItems(textContent, ["-- "]) || summarizeCount(textContent);
-      let text = renderToolSummary(theme, context.isError ? "error" : "success", "grep", String(args.pattern ?? ""), undefined);
-      if (expanded && textContent.length > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 12), 12)}`;
-      text = appendToolFooter(theme, text, [
-        !expanded && count > 0 ? `${formatLineLabel(count, "match")} (ctrl+o expand)` : formatLineLabel(count, "match"),
-        renderDuration(context),
-        formatPayloadSize(textContent),
-        details.matchLimitReached ? "limit reached" : undefined,
-      ]);
+      const outputLines = textContent.length > 0 ? previewLines(textContent, expanded ? 12 : DEFAULT_TOOL_PREVIEW_LINES) : [];
+      const text = renderNamedToolTree(
+        theme,
+        context.isError ? "error" : "success",
+        "grep",
+        String(args.pattern ?? ""),
+        outputLines,
+        joinMeta([
+          previewSummary(Math.min(outputLines.length, count), count, "match", expanded),
+          renderDuration(context),
+          formatPayloadSize(textContent),
+          details.matchLimitReached ? "limit reached" : undefined,
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1283,19 +1605,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
     renderCall: (args, theme, context) =>
       renderCall("ls", args as Record<string, unknown>, theme, context),
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return toolRowText(theme, renderToolSummary(theme, "pending", "ls", "listing", undefined));
+      if (isPartial) return toolRowText(theme, renderNamedToolTree(theme, "accent", "ls", "listing"));
       const details = (result.details ?? {}) as LsToolDetails;
       const args = context.args as Record<string, unknown>;
       const textContent = getTextContent(result as any);
       const count = summarizeCount(textContent);
-      let text = renderToolSummary(theme, context.isError ? "error" : "success", "ls", shortenPath(String(args.path ?? ".")), undefined);
-      if (expanded && count > 0) text += `\n${renderOutputPreview(theme, previewLines(textContent, 12), 12)}`;
-      text = appendToolFooter(theme, text, [
-        !expanded && count > 0 ? `${formatLineLabel(count, "entry")} (ctrl+o expand)` : formatLineLabel(count, "entry"),
-        renderDuration(context),
-        formatPayloadSize(textContent),
-        details.entryLimitReached ? "limit reached" : undefined,
-      ]);
+      const outputLines = count > 0 ? previewLines(textContent, expanded ? 12 : DEFAULT_TOOL_PREVIEW_LINES) : [];
+      const text = renderNamedToolTree(
+        theme,
+        context.isError ? "error" : "success",
+        "ls",
+        shortenPath(String(args.path ?? ".")),
+        outputLines,
+        joinMeta([
+          previewSummary(Math.min(outputLines.length, count), count, "entry", expanded),
+          renderDuration(context),
+          formatPayloadSize(textContent),
+          details.entryLimitReached ? "limit reached" : undefined,
+        ]),
+      );
       return toolRowText(theme, text);
     },
   });
@@ -1306,8 +1634,25 @@ function registerXtrmUiTools(pi: ExtensionAPI, getPrefs: () => XtrmUiPrefs): voi
 // ============================================================================
 
 export default function xtrmUiExtension(pi: ExtensionAPI): void {
-  void installSilentHiddenThinkingPatch().catch(() => undefined);
-  void installExternalToolFramePatch().catch(() => undefined);
+  const thinkingPreviewInstall = createThinkingPreviewInstallState(installThinkingPreviewPatch);
+  // Warm-up attempt. It can fail while Pi's theme is not initialized yet (the
+  // factory runs during resource loading, before initTheme()); session_start
+  // below retries via ensureInstalled() before the first message renders.
+  void thinkingPreviewInstall.ensureInstalled().catch(() => undefined);
+  // Same treatment for the external tool frame patch: fire-and-forget at factory
+  // time, retried on session_start. A silent factory-time failure must not leave
+  // external tool rows rendering through pi's unpatched default path.
+  const externalToolInstall = createThinkingPreviewInstallState(installExternalToolFramePatch);
+  void externalToolInstall.ensureInstalled().catch(() => undefined);
+
+  // Keep collapsed thinking rows to one line: the recap is truncated to the
+  // render width so the expand hint never wraps or disappears. Runs for both
+  // plain assistant text and 'assistant-thinking' blocks (the collapsed row is
+  // a thinking block again so pi can add its post-thinking spacer).
+  pi.registerMarkdownTransformer((markdown, context) => {
+    if (!markdown.includes("Thinking...")) return markdown;
+    return fitThinkingRowToWidth(markdown, context.availableWidth);
+  });
 
   let prefs: XtrmUiPrefs = { ...DEFAULT_PREFS };
   const getPrefs = () => prefs;
@@ -1325,8 +1670,37 @@ export default function xtrmUiExtension(pi: ExtensionAPI): void {
   };
 
   pi.on("session_start", async (_event, ctx) => {
+    // thinkingToggleLatch is process-lifetime module state (the extension
+    // factory is cached per process and the prototype patch installs once).
+    // Reset it per session so a stale latch from an earlier session cannot
+    // flip the first thinking block of a fresh session to the expanded raw
+    // trace (xtrm-6ggil).
+    thinkingToggleLatch.followsToggle = false;
     setPrefs(loadPrefs(ctx.sessionManager.getEntries() as Array<MaybeCustomEntry>));
+    // Await the prototype patch BEFORE the first message can render: a
+    // factory-time install failure (theme not initialized yet) must be
+    // retried here, after Pi's theme controller has run initTheme(), or the
+    // first thinking block renders through Pi's unpatched empty hidden label
+    // (xtrm-3tus9). No-op once installed.
+    await thinkingPreviewInstall.ensureInstalled().catch((error: unknown) => {
+      // If BOTH the factory warm-up AND this session_start retry fail, the
+      // prototype patch never installs and Pi's own hideThinkingBlock branch
+      // renders an empty label instead of the collapsed one-liner. Surface
+      // once per process so the operator sees a signal (silent .catch() is
+      // exactly the regression this whole PR closes) — never throw here,
+      // session_start must not fail because of this.
+      if (!thinkingPreviewInstall.isInstalled()) {
+        warnRetryFailedOnce(error);
+      }
+    });
+    // Thinking/editor chrome must not depend on external tool patch startup.
     refresh(ctx);
+    // External tool rows: retry the frame patch before session_start returns.
+    await externalToolInstall.ensureInstalled().catch((error: unknown) => {
+      if (!externalToolInstall.isInstalled()) {
+        warnRetryFailedOnce(error);
+      }
+    });
   });
 
   pi.on("session_switch", async (_event, ctx) => {

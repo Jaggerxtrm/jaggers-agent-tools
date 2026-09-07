@@ -45,6 +45,7 @@ describe.skipIf(SYMLINK_UNSUPPORTED)('skills migration boundary contracts', () =
       expect(verification.skillsRuntime.globalPiPointerReady).toBe(false);
       expect(verification.skillsRuntime.projectClaudePointerState).toBe('ready');
       expect(verification.skillsRuntime.projectPiPointerState).toBe('ready');
+      expect(verification.skillsRuntime.projectCodexPointerState).toBe('ready');
       expect(await fs.pathExists(path.join(projectSkillsRoot, 'active'))).toBe(false);
       expect(await fs.pathExists(path.join(projectRoot, '.pi', 'settings.json'))).toBe(false);
     } finally {

@@ -9,6 +9,132 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-04
+
+### Added
+- Single-line render for pi footer and claude hook ([1e6c2f5](https://github.com/xtrm-dev/core/commit/1e6c2f57e690b2b87af63334906b128416d0705e))
+- Native-style external tool rows + #9a8bff model accent ([1fd5889](https://github.com/xtrm-dev/core/commit/1fd58895c737147449659d41898662ac608ad70f))
+- Launcher-owned --name from worktree slug + drop auto-session-name (xtrm-rhmm1) ([7f5874c](https://github.com/xtrm-dev/core/commit/7f5874c17608a5d1e61036afeac14951e3c48cac))
+- Resolve bare skill names from v2 project packs + claude loadability (xtrm-lk07w.14) ([ef14bf4](https://github.com/xtrm-dev/core/commit/ef14bf44030ee6cd02d4dd21f0856f067baf54f3))
+- Skillbridge — mount python-backed skills as importable kernel modules (xtrm-h7uwi.1) ([48cd3ae](https://github.com/xtrm-dev/core/commit/48cd3ae3961f9116618edbd894628736cd7ac7ae))
+- Python-kernel QoL — stdlib prelude + output truncation with shape hint (xtrm-h7uwi.2) ([8aa5b17](https://github.com/xtrm-dev/core/commit/8aa5b1751e51b9881bce3716c4b2011c3b51e268))
+- Python-kernel audit seam — kernel mutation events visible to host (xtrm-h7uwi.3) ([cf7da84](https://github.com/xtrm-dev/core/commit/cf7da847ca9a2b84883501d6ce89ce14e35aee78))
+
+### Fixed
+- Retry external tool frame patch on session_start ([18bc72f](https://github.com/xtrm-dev/core/commit/18bc72f6c69aff19f556f7efe8e327f7c9c45616))
+- Replace prototype patches without wrapper stacking ([5312a04](https://github.com/xtrm-dev/core/commit/5312a04769b54512d6d577763cbc93596b71a88e))
+- Patch active bundled pi runtime classes (#604) ([296be42](https://github.com/xtrm-dev/core/commit/296be42923d76f2eb6dced60390bb37e4b7c3874))
+- Prevent destructive global cleanup ([b869756](https://github.com/xtrm-dev/core/commit/b8697569b8711a0a716605f27a1a81fa67ebabf0))
+
+### Project maintenance
+- Reconcile Core residual architecture pointers (#596) ([3b04202](https://github.com/xtrm-dev/core/commit/3b04202289627334266b9100236ae2a2a9cd45d4))
+- Update parity test to single-line statusline contract ([0850349](https://github.com/xtrm-dev/core/commit/0850349c7a28b23b4cf5781a18300349b6980693))
+- Remove 5 retired extensions cleanly (xtrm-lqfjq) ([aead627](https://github.com/xtrm-dev/core/commit/aead627fdf790d3a9c48e041d5b3432ac9a01c56))
+- Rebuild cli/dist after registry fix (xtrm-lqfjq) ([5d7d3a4](https://github.com/xtrm-dev/core/commit/5d7d3a43ac115a2c66c3a9b6110cc94a153cb2d4))
+- Seed retirement ownership proof ([28aed2d](https://github.com/xtrm-dev/core/commit/28aed2d99b693d0598c75ee9c1d937a19e87d3be))
+- Refresh README to 0.11.6 user-facing surface ([12ee408](https://github.com/xtrm-dev/core/commit/12ee408ccd994835882b1f1d490be82f676ecedc))
+
+## [0.11.6] - 2026-08-20
+
+### Fixed
+- Replace hardcoded pi path with PATH lookup ([cc98590](https://github.com/xtrm-dev/core/commit/cc98590b3c4c319a1882782fa5a310f8a063d7e9))
+
+## [0.11.5] - 2026-08-20
+
+Broad reliability sweep on the launch model plus a Pi extension polish pass. Structured launch outcomes are now schema-validated, refuse invalid slugs before spawning, preflight the codex/claude/pi paths, and degrade cleanly on incomplete persistence — the code path every session starts through. Pi extension gets a rendering refresh: phase-colored tool prefixes (dim command when success), preserved tree indentation on wrapped tool lines, flat rows for external tools, char counts on collapsed thinking rows, and accented bash command-names + light-magenta separators for readable multi-command lines. Also new: `xt worktree reap` for reclaiming abandoned worktrees, an experimental Codex runtime with K4 distribution parity, a dedicated `read-line-numbers` Pi extension that owns model-facing line numbering, a Python kernel + global prompt doctrine subsystem (`xtrm-3ljgz`), a `board-audit` hook feature (bd exporter + PR-checkpoint adapter), and the `sp log` monitor-recipe corrections in the `using-specialists` skill that fix silent-fail monitors on keep-alive specialists (via specialists v3.21.5 re-vendor).
+
+### Added
+- Add deterministic launch outcomes ([cfa1dce](https://github.com/xtrm-dev/core/commit/cfa1dce95f691ee11c43e8175fa92fc5d1c4f1cd))
+- Add experimental codex runtime ([2b6322f](https://github.com/xtrm-dev/core/commit/2b6322fa238a55710e57d75edb3a600689ab8c32))
+- Complete K4 Codex distribution parity ([2c49238](https://github.com/xtrm-dev/core/commit/2c492385952f6b4aa12af801b777de2074c853de))
+- Xt worktree reap — reclaim abandoned worktrees safely (xtrm-oentn) ([4b9a85b](https://github.com/xtrm-dev/core/commit/4b9a85bf040be3c5b28e6c954b565ba7561d7042))
+- Preserve tree indentation when tool lines wrap ([40d7dc9](https://github.com/xtrm-dev/core/commit/40d7dc9c26904bd3639960510a8308e0cee55edb))
+- Phase-color only the tool prefix, dim command unless success ([2a8aeaf](https://github.com/xtrm-dev/core/commit/2a8aeafe87dab94fa075d7c76bc1bbf3a89a65a2))
+- External tool rows in parity — kind color label, phase bg, no brackets (xtrm-lipn5) ([888f431](https://github.com/xtrm-dev/core/commit/888f43113d1d40e74de0a246ea1a05cf2171261f))
+- Flat tool rows — drop tree indent from tool output, keep └ corner (xtrm-sqzv6) ([409bf45](https://github.com/xtrm-dev/core/commit/409bf45e883f533e8bc5fc4fca9effb6aa126dbb))
+- Raw char count on collapsed thinking row (xtrm-ib5lm) ([c2f4fce](https://github.com/xtrm-dev/core/commit/c2f4fcea5ca23c01eca425dd27c80e16cc51ebd6))
+- Paint bash command separators light magenta (xtrm-2bgmu) ([af55f8f](https://github.com/xtrm-dev/core/commit/af55f8f8a0ea07bf534967f9581c579457823678))
+- Accent the command name of each bash segment (xtrm-50gq5) ([a6fd9c6](https://github.com/xtrm-dev/core/commit/a6fd9c6c1f8d1256f4c41b870f89085e68a69e4c))
+- Read-line-numbers extension (owner of model-facing numbering) ([09137ea](https://github.com/xtrm-dev/core/commit/09137eae4297b8bd04736fb7861ff9bc3e657dc9))
+- Manage Python kernel and global prompt doctrine (xtrm-3ljgz) ([df07bca](https://github.com/xtrm-dev/core/commit/df07bcae1304b3f9a20b47d9f0c496910a9a46b9))
+- Board-audit — bd board/work-package exporter + PR-checkpoint hook adapter (xtrm-7yj7h) (#592) ([487e607](https://github.com/xtrm-dev/core/commit/487e6074e3aaacad3ca2b0250d2c6f6689f276d7))
+
+### Fixed
+- Select context-aware tmux attach action ([29994bd](https://github.com/xtrm-dev/core/commit/29994bdafb5d8193cb271d23abffec9869771d22))
+- Keep launch outcomes schema-valid ([be29d8b](https://github.com/xtrm-dev/core/commit/be29d8b78305e9cbe36e4f19bea025cd87e81fc4))
+- Reject invalid outcome slugs before launch ([a3e48fa](https://github.com/xtrm-dev/core/commit/a3e48fa6fbd047ac3fc58864147b57e689d2acd5))
+- Preflight structured launch paths ([e63e4bb](https://github.com/xtrm-dev/core/commit/e63e4bba31822f064c2c37b59c8c24c589c34d77))
+- Close remaining structured launch preflights ([8555928](https://github.com/xtrm-dev/core/commit/855592804fd384889786f4c2a6087dc31a204d6a))
+- Omit unavailable resume action ([cf8aee1](https://github.com/xtrm-dev/core/commit/cf8aee14075b106231e8d699231d2b55f542347c))
+- Bind structured launch to one executable ([cc5675c](https://github.com/xtrm-dev/core/commit/cc5675c3cfaa49fb6f786de4038169babf252a1d))
+- Require live detached session identity ([7437fba](https://github.com/xtrm-dev/core/commit/7437fba1c7a262252337950a5e39123f8d312982))
+- Prefer exact attach branch selector ([de6fd3b](https://github.com/xtrm-dev/core/commit/de6fd3b709c41054912f7a93265d4880ffb938bd))
+- Canonicalize structured launch selectors ([ec0e1c2](https://github.com/xtrm-dev/core/commit/ec0e1c23dfe14f010c91d2aaee5f36837b2ef964))
+- Degrade incomplete launch persistence ([7333c69](https://github.com/xtrm-dev/core/commit/7333c69341cda82f5d5328c16b30a1a502068e04))
+- Probe runtime version from worktree cwd ([1ed512a](https://github.com/xtrm-dev/core/commit/1ed512a49efaf75f3e84c128f9d82958ece09d3a))
+- Persist codex worktree trust profile ([9b59fa5](https://github.com/xtrm-dev/core/commit/9b59fa5a7eed86b68f18f929ea3d37b072ae0891))
+- Avoid duplicate Codex default skills ([d65aac6](https://github.com/xtrm-dev/core/commit/d65aac6e757d8f0b07415a8d719610156bddb640))
+- Re-check liveness at apply time, not only at plan time ([3646c10](https://github.com/xtrm-dev/core/commit/3646c1054e1a65f38d6acaeedafd909dffc2e11e))
+- Eliminate O(n²) tool-row wrap path causing render lag ([d1cc26d](https://github.com/xtrm-dev/core/commit/d1cc26d900414bb1a56c2723dc5910d001ecdcdf))
+- Degrade instead of destroying a live session with no thread id (#549) ([884a7ef](https://github.com/xtrm-dev/core/commit/884a7efc800fd78e60eee1073894fd71872c1bb1))
+- Remove tool-row wrap feature causing render lag (xtrm-ql4xs) ([37d62ad](https://github.com/xtrm-dev/core/commit/37d62adb554a62460b6f3452ba950949eaac615d))
+- Theme.bg must be called through the theme proxy (xtrm-lipn5) ([d8d86c1](https://github.com/xtrm-dev/core/commit/d8d86c18c3e39796b2499ae3b7f5d116ec9a0393))
+- Thinking chrome — bold via raw SGR, recap + one-line fit (other agent's work, moved off shared branch) ([390e31c](https://github.com/xtrm-dev/core/commit/390e31c4feb37b214c6b8b5d62be537a7f6853f9))
+- Pad external tool rows to full width before phase bg (xtrm-6rnpj) ([e609bc4](https://github.com/xtrm-dev/core/commit/e609bc4e8b72547539b7c073458dbe0ba35e99ad))
+- Restore exact pre-change badge chip on external tool names (xtrm-ma1je) ([8a9b29d](https://github.com/xtrm-dev/core/commit/8a9b29d92fc8b08183d8df397db72288023d86ca))
+- Pad external tool chip with colored space on each side (xtrm-ma1je) ([1478ab0](https://github.com/xtrm-dev/core/commit/1478ab0d153d57e3a6946bfe70b834dcda054360))
+- Restore blank line after thinking row before agent response (xtrm-2z1t0) ([b1cb161](https://github.com/xtrm-dev/core/commit/b1cb161990cb6c02556205a2231517a94ca89e15))
+- Restore thinking-row visibility; blank line via invisible spacer block (xtrm-2z1t0) ([01a0f8d](https://github.com/xtrm-dev/core/commit/01a0f8de03a1b32292cde853a0d3747aed74eb82))
+- Match desired flat row shape — └ on first output line, bold command, flush meta (xtrm-sqzv6) ([b5812da](https://github.com/xtrm-dev/core/commit/b5812da5b0271ebf0e34a0acab7865d3b7375b33))
+- Separator coloring — exclude bare & (xtrm-3s2bd) ([24b1dc9](https://github.com/xtrm-dev/core/commit/24b1dc9d27cb11c69c7af8362c6ba51a6e74aa9c))
+- Color separators only when whitespace-adjacent (xtrm-s8d5d) ([ed639fc](https://github.com/xtrm-dev/core/commit/ed639fc76856a5ec0ee6866de86bbb2d4dc209a2))
+- Thinking row never rendered — remove dead hiddenThinkingLabel gate (xtrm-d4wfh) ([e36abcd](https://github.com/xtrm-dev/core/commit/e36abcda974b93774d092d6f8a87e57e1b021573))
+- Honor Pi package dry-run semantics (xtrm-zruao) ([32ee794](https://github.com/xtrm-dev/core/commit/32ee794acf41331e1f310191f7cfec7bbb4db394))
+- Safely adopt legacy runtime skill roots (xtrm-2d6fw) ([7b79f92](https://github.com/xtrm-dev/core/commit/7b79f922c5b7383ed835dd18edb6260d77190074))
+- Validate restore archives before extraction (xtrm-zc1rs) ([fc92ffa](https://github.com/xtrm-dev/core/commit/fc92ffa5ac27595501fc2031f3c51ecfa83ef4de))
+- Number REAL blank source lines (xtrm-oi5sg) (#576) ([a1ccb6f](https://github.com/xtrm-dev/core/commit/a1ccb6f36060192ab8c1fcf7c75a6a99badb4d4b))
+- Close 4 OSV advisories via override bumps (fast-uri, nanoid, postcss) (#577) ([96d5f37](https://github.com/xtrm-dev/core/commit/96d5f3711ac01c022e812677b2addd31709e20dc))
+- Correct read-line-numbers to Pi split('\n') EOF model + image text-note passthrough (xtrm-4enz5) (#579) ([837baca](https://github.com/xtrm-dev/core/commit/837baca87b2c6e63757c9ae42d1ad177cfec392e))
+- Reset thinking follow-toggle latch per session (xtrm-6ggil) ([eefbdd0](https://github.com/xtrm-dev/core/commit/eefbdd0f72510d49948419931c53844d7ab03b7a))
+- Re-render existing thinking rows on Ctrl+T toggle (xtrm-5vi8u) (#581) ([8a47ddd](https://github.com/xtrm-dev/core/commit/8a47ddd3395f4d5039237655f3a910c36568a647))
+- Pre-push chain must exit 0 on success [exit-status-bug] ([d6ca062](https://github.com/xtrm-dev/core/commit/d6ca06275fdca88f6dfe89b00656097851e325be))
+- Resolve xtrm-ui hidden-thinking empty-row on session start (xtrm-3tus9) (#583) ([c4a168c](https://github.com/xtrm-dev/core/commit/c4a168c61a0b99195dc4255676d1d0af706975a9))
+
+### Other changes
+- Add capacity-reclaim, third devops-sre materialization (xtrm-gvek4) ([a36e9d9](https://github.com/xtrm-dev/core/commit/a36e9d94b92ba73e856a725fa830defa5d8fd433))
+- Drop divisor + command-name coloring — plain command (xtrm-oj0ll) ([e21e717](https://github.com/xtrm-dev/core/commit/e21e717bfcb719f3b7a18e8c57d94b6ea0aca622))
+- Sync Beads/Dolt via GitHub origin on push/merge (refs/dolt/data) (#569) ([7a41bb1](https://github.com/xtrm-dev/core/commit/7a41bb114eac0844dc29e98cd46a1e65760278e7))
+
+### Project maintenance
+- Characterize runtime boundary (xtrm-ozknq.5) ([70afff9](https://github.com/xtrm-dev/core/commit/70afff9b26184ed73ddfb2147d362a7c249f5f9d))
+- Redact fixture provenance (xtrm-ozknq.5) ([f14e14e](https://github.com/xtrm-dev/core/commit/f14e14e697b9f446e660101af68e790a4ceac5ae))
+- Harden fixture path hygiene (xtrm-ozknq.5) ([29f7354](https://github.com/xtrm-dev/core/commit/29f735419c9090141ed782787da61042a783661f))
+- K1 characterization + version-pinned Codex 0.146.0 fixtures (xtrm-ozknq.5) ([d53edc5](https://github.com/xtrm-dev/core/commit/d53edc502ef5641d37d39db7c13acc91a74e00e2))
+- Reconcile K1 lifecycle fixtures ([a992532](https://github.com/xtrm-dev/core/commit/a992532cbc20e90240810d94b29653d2c47cf084))
+- Sync attach selector bundle ([ed792fd](https://github.com/xtrm-dev/core/commit/ed792fd0bccd2638c163fb72fdbdfe9451032683))
+- Refresh Specialists-owned assets to K4 master (xtrm-ozknq.15) (#542) ([dd93751](https://github.com/xtrm-dev/core/commit/dd937514c4b34adc8bba59d4ed6b324c62e05716))
+- Add committed-artifact case to the deploy-gap guard (xtrm-7tjik) ([d812d6a](https://github.com/xtrm-dev/core/commit/d812d6a5b5bb6c5d4608e7eae7bb4db1be9ba991))
+- Hide niche skills from model invocation, restore starting-and-resuming-work ([f9ffed2](https://github.com/xtrm-dev/core/commit/f9ffed22cf59715f5eec0a10ecfb6b0086fb647b))
+- Refresh GitNexus injected block in AGENTS.md and CLAUDE.md ([2ddbd9d](https://github.com/xtrm-dev/core/commit/2ddbd9d2286dc5ebba7fadaaea3afd570178b7ca))
+- Archive completed pi-extensions-migration plan ([f8b4e8b](https://github.com/xtrm-dev/core/commit/f8b4e8b56cedfabece7abc8a7ad21876f8fff0d9))
+- Reconcile skills registry and specialists manifest ([812dde9](https://github.com/xtrm-dev/core/commit/812dde9aeee4dc0f9b64bdfa744dce46faae5ce5))
+- Re-pin specialists to upstream disable-model-invocation patch ([f056567](https://github.com/xtrm-dev/core/commit/f05656753cee4eb78f6d8505282bc8f2de5d7b02))
+- --notes REPLACES notes, document --append-notes (#551) ([a1287e9](https://github.com/xtrm-dev/core/commit/a1287e9d546001fae0a1350d63b31a1652c63a09))
+- Re-pin K1 fixtures at 0.147.0 and prove the contract held (#554) ([b8a4818](https://github.com/xtrm-dev/core/commit/b8a481819204964cca785a5e5384fdf568f39745))
+- Make prompt sync checks environment-independent (xtrm-3ljgz) ([852882f](https://github.com/xtrm-dev/core/commit/852882fcd3bba322c7dc3a53712794a576af9014))
+- Create the whole board in one bash invocation (#584) ([861d1ba](https://github.com/xtrm-dev/core/commit/861d1ba136bebef5633bb813bdbc3c37a252f339))
+- Re-vendor specialists skills at master bcdbd30c (xtrm-hpz9p) (#586) ([c9a0299](https://github.com/xtrm-dev/core/commit/c9a0299c2896e50719e40e7d9a9955cebeea2e34))
+- Sync managed hooks to bd v1.2.1 (xtrm-6xbb5) (#587) ([e8af1a7](https://github.com/xtrm-dev/core/commit/e8af1a71adc6fcd74fda1f78761d6979dcefe429))
+- Sync sre-triage core mirror to v1.6 SSOT (xtrm-234l4) (#588) ([46944d8](https://github.com/xtrm-dev/core/commit/46944d853daae086fa29d45a876335ca23982943))
+- Cross-ref keep-alive monitor recipe (xtrm-lf4ri) (#589) ([925fc48](https://github.com/xtrm-dev/core/commit/925fc48396d0c736ca0fae644796d07ea1b038ca))
+- Propose dev/main promoted-only branch model on every bootstrap (xtrm-ofsea) (#591) ([6b2a2c3](https://github.com/xtrm-dev/core/commit/6b2a2c314038471915943264d92c7357c6338563))
+- Pin specialists@v3.21.5 (0253e3e4) (#593) ([5efe874](https://github.com/xtrm-dev/core/commit/5efe874529ffb95dbd9299cc912a8175d01589f5))
+
+## [0.11.4] - 2026-07-30
+
+### Added
+- Unify native tool rendering (xtrm-cgxqy) (#534) ([5a897c8](https://github.com/xtrm-dev/core/commit/5a897c89e991a4741850abbc3d31d32d496f2104))
+
 ## [0.11.3] - 2026-07-28
 
 ### Added

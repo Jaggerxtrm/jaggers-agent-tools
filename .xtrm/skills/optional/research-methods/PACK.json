@@ -1,12 +1,7 @@
 {
   "schemaVersion": "1",
   "name": "research-methods",
-  "version": "1.0.0",
-  "description": "Research and analysis skills",
-  "skills": [
-    "brainstorming",
-    "academic-researcher",
-    "deep-research",
-    "fact-checker"
-  ]
+  "version": "2.0.0",
+  "description": "Current documentation, code-search, recent-web, academic and fact-checking research",
+  "skills": ["research"]
 }

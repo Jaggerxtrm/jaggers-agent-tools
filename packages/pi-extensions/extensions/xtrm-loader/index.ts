@@ -15,28 +15,31 @@ import * as path from "node:path";
  *     start reflex + trigger patterns that now live in
  *     .xtrm/config/instructions/{agents,claude}-top.md
  *
- * Only .xtrm/memory.md survives here. It is small (<= a few KB), user-owned,
- * per-project, and can't live in a global -top file. Everything else moved
- * to routing pointers in the -top templates; the using-xtrm skill body is
- * on-demand via `/skill:using-xtrm` when detailed workflow examples are
- * needed.
+ * Only the shared bd memory doctrine survives here (xtrm-3ljgz.3): a small,
+ * canonical retrieval doctrine shipped as
+ * .xtrm/config/instructions/memory-doctrine.md and consumed identically by
+ * the Claude project-memory hook. `.xtrm/memory.md` is never injected — it
+ * stays a user-owned artifact of `xt memory update`, and live `bd memories`
+ * retrieval replaces it. Everything else moved to routing pointers in the
+ * -top templates; the using-xtrm skill body is on-demand via
+ * `/skill:using-xtrm` when detailed workflow examples are needed.
  */
 
 export default function (pi: ExtensionAPI) {
 	pi.on("before_agent_start", async (event, ctx) => {
-		const memoryPath = path.join(ctx.cwd, ".xtrm", "memory.md");
-		if (!fs.existsSync(memoryPath)) return undefined;
+		const doctrinePath = path.join(ctx.cwd, ".xtrm", "config", "instructions", "memory-doctrine.md");
+		if (!fs.existsSync(doctrinePath)) return undefined;
 
-		let memoryContent = "";
+		let doctrineContent = "";
 		try {
-			memoryContent = fs.readFileSync(memoryPath, "utf8").trim();
+			doctrineContent = fs.readFileSync(doctrinePath, "utf8").trim();
 		} catch {
 			return undefined; // fail open
 		}
-		if (!memoryContent) return undefined;
+		if (!doctrineContent) return undefined;
 
 		return {
-			systemPrompt: event.systemPrompt + "\n\n" + memoryContent,
+			systemPrompt: event.systemPrompt + "\n\n" + doctrineContent,
 		};
 	});
 }

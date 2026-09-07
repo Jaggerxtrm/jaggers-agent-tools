@@ -1,58 +1,46 @@
 {
-  "version": 1,
+  "version": 2,
+  "digest": "git-blob-sha1",
   "source": {
     "kind": "ref",
     "ref": "master",
-    "resolved_sha": "c1e660ab4e6ec4369e890074d822cd9ef1eb6e83",
+    "resolved_sha": "5d2f2907f49877f6c4dcf32de95e8cb945c067c7",
     "repo_path": "../specialists",
     "source_path": "config/skills"
   },
   "skills": [
-    "specialists-creator",
     "update-specialists",
-    "using-kpi",
-    "using-nodes",
-    "using-script-specialists",
-    "using-specialists",
-    "using-specialists-auto"
+    "using-specialists"
   ],
-  "files": {
-    "specialists-creator": {
-      "scripts/audit-spec-uniformity.mjs": "0ada06784cfd5c3adfa9c9908a9cd23380e8278fb57329fc616a83140a47fb33",
-      "scripts/scaffold-specialist.ts": "c1bfa3693d644072e6d387d2519e131624d99c5b85521ae638680d7485267403",
-      "scripts/validate-specialist.ts": "3a5f5a3a77c50e98ecf9188634ff2882f8143b19d0f28a53aff5c42e1bd09dfa",
-      "SKILL.md": "f825f500e531e3a04b252c0f9a22b8acaa396f9d093368338d13e21ac43c30d4"
-    },
+  "placements": {
     "update-specialists": {
-      "SKILL.md": "fdf8c680cf3e5dce80c9426f52b56c953f4f7f663c23a33a3378b2b6e4bab5a9"
-    },
-    "using-kpi": {
-      "SKILL.md": "dc22c51783b5bfb787c5bb10f46d3585151a33a3486e76ae38e3f43fb09f03bb"
-    },
-    "using-nodes": {
-      "SKILL.md": "742e9d2ad512a05c86855b88ae65f9065370876d9e7c1b10db2b68958248bc7b"
-    },
-    "using-script-specialists": {
-      "SKILL.md": "e87511d685eb7bc95c374641056194931a9da79434b624fdfb2805bd9dbac7b6"
+      "tier": "optional",
+      "pack": "xtrm-maintenance"
     },
     "using-specialists": {
-      "evals/evals.json": "8fdca75958021860c95b35676f5ce3ca24aae7e046acffecdc259bbd993a4172",
-      "evals/fixtures/qa-routing/bad-test-result.json": "20e0d3698809c87f9445ea533545998143ffc151a0c2774ea37415b5a984a011",
-      "evals/fixtures/qa-routing/reviewer-input.json": "8c3bea5b93a55944aef036c498a090c3e2a6ae4a86c378d66cddfe7cda2aa093",
-      "evals/fixtures/qa-routing/source-regression-result.json": "0f566ca2ad84458ce183a1ca4a925ef0b308c8d8cc61fa75b90dc14685d9e3bf",
-      "evals/fixtures/qa-routing/source-regression.diff": "7fc1868c75cae4ec9ecd87eeead1b4f0b82d9e1f41d1edf1697d7ab4d40598d0",
-      "evals/README.md": "c6c871a9e2a5ca8d9cea7b23f89033018791fd1fcdb8fec775b888fe88d4dfa9",
-      "references/bead-contracts.md": "b2c3f08758e5a998d52b37c8b5239db81f496a5ea63d93b680a5f49dd0446db4",
-      "references/chain-recipes.md": "c92e6447f8ec443db30a28b369d59bdec1f8438115803b9f4661437e97f88f75",
-      "references/content-migration-map.json": "095dc0573b575521ca25cdc4f75d9d12239aad01ec924494819aa8e5ae2910eb",
-      "references/dispatch-preconditions.md": "66c7f52379fe546e79fe3eac0c0d52c47df1fc8d1491f805531f48cf83a89dd8",
-      "references/merge-and-integration.md": "7884a445b5ee7031fd0cf2b548a6f6bf4df8daa2ab1db5ec28f32c47cbc4d6dd",
-      "references/monitoring.md": "4871fca2072cffd73ba0932ce0f4514ab2dcbab974ce7bd17e77dc73c1807465",
-      "references/registry-and-locations.md": "d02cb1c2e68f59e14f57d8fda7e80e109fe5666bbd33cae4c0ab8f9b10814460",
-      "SKILL.md": "74fb9a29fdcb679c90b34e614c9e43645da5a12ad8cb1d44d10d9a723a2d792d"
+      "tier": "default"
+    }
+  },
+  "files": {
+    "update-specialists": {
+      "SKILL.md": "109fcbf874fc58baa93f8a0ebc942a2a1f34cd58"
     },
-    "using-specialists-auto": {
-      "SKILL.md": "0668f03dc701d3895defc1e3f3973fa41976355db5a1c38278b6272c95f145c4"
+    "using-specialists": {
+      "references/bead-contracts.md": "1a5698a5869f55bc5531514142e58946acbd6278",
+      "references/chain-recipes.md": "42f02267eed5fa18dc33b814a7b1c7a054fddb8c",
+      "references/dispatch-preconditions.md": "ce5e270d76e173cab628b2c5a9edf8d5df0a86f8",
+      "references/kpi.md": "93caf443c4f3d19f824b4ebbec133a902addb520",
+      "references/merge-and-integration.md": "22ea211e322d971242110dc1ebfa65d6f1e31f68",
+      "references/monitoring.md": "089ddb679fd644e32fd608d657807e04fd9d9efe",
+      "references/nodes.md": "8f1ada01a2940601fe758757d0ab1bfe0a7b6e60",
+      "references/registry-and-locations.md": "f31b077ebf3f7faaefd5002f66e0b751e4547ce3",
+      "references/script-class.md": "795a05041a1c5676a82bb3fda0051d0e6608d82a",
+      "references/specialist-definitions.md": "e74d7104167cc73dc665a970705054f753d7a1f1",
+      "scripts/specialist-definitions/audit-spec-uniformity.mjs": "72bc5772d8fc4f8afdd323668bac6db5ed75582c",
+      "scripts/specialist-definitions/resolve-specialists-root.mjs": "6bd6a3593e4ce89f39a3024d35f7033e78858397",
+      "scripts/specialist-definitions/scaffold-specialist.ts": "e993d46432492429b72ccac5ac498813026013af",
+      "scripts/specialist-definitions/validate-specialist.ts": "19f298eae0e0dbc809d0fa6ac282bf204cec1d4c",
+      "SKILL.md": "704c7fad7afb0dd0a0500d76323cc929f5db026c"
     }
   }
 }

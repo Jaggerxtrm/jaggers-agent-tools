@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -8,11 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, '..');
-const destinationRoot = path.join(repoRoot, '.xtrm', 'skills', 'default');
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const defaultRoot = path.join(repoRoot, '.xtrm', 'skills', 'default');
+const optionalRoot = path.join(repoRoot, '.xtrm', 'skills', 'optional');
 const manifestPath = path.join(repoRoot, '.xtrm', 'specialists-source.json');
 const ownershipManifestPath = path.join(repoRoot, 'docs', 'skills-ownership.json');
 const fallbackSpecialistsRepoPaths = [
@@ -20,29 +17,30 @@ const fallbackSpecialistsRepoPaths = [
   path.resolve(repoRoot, '../../../../specialists'),
 ];
 
-async function assertDirectoryExists(directoryPath, errorMessage) {
-  try {
-    const stats = await fs.stat(directoryPath);
-    if (!stats.isDirectory()) throw new Error(errorMessage);
-  } catch {
-    throw new Error(errorMessage);
-  }
-}
-
 async function readJson(filePath) {
   return JSON.parse(await fs.readFile(filePath, 'utf8'));
 }
 
-function getSpecialistsSkillNames(manifest) {
-  return Object.entries(manifest.owners)
-    .filter(([, owner]) => owner.owner === 'specialists')
-    .map(([skillName]) => skillName)
-    .sort();
+async function readJsonIfExists(filePath) {
+  try {
+    return await readJson(filePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+async function assertDirectoryExists(directoryPath, message) {
+  try {
+    if ((await fs.stat(directoryPath)).isDirectory()) return;
+  } catch {
+    // handled below
+  }
+  throw new Error(message);
 }
 
 function parseArgs(argv) {
   const source = { kind: 'repo' };
-
   for (let i = 0; i < argv.length; i += 1) {
     const value = argv[i];
     if (value === '--specialists-tarball' || value.startsWith('--specialists-tarball=')) source.kind = 'tarball';
@@ -55,137 +53,165 @@ function parseArgs(argv) {
       source.ref = value.slice('--specialists-ref='.length);
     }
   }
-
   return source;
 }
 
-async function resolveCommitSha(specialistsRepoPath) {
-  try {
-    const { stdout } = await execFileAsync('git', ['-C', specialistsRepoPath, 'rev-parse', 'HEAD']);
-    return stdout.trim();
-  } catch {
-    return null;
-  }
+async function gitText(repoPath, args) {
+  const { stdout } = await execFileAsync('git', ['-C', repoPath, ...args], {
+    encoding: 'utf8',
+    maxBuffer: 64 << 20,
+  });
+  return stdout.trim();
 }
 
-async function resolveCommitRef(specialistsRepoPath) {
-  try {
-    const { stdout } = await execFileAsync('git', ['-C', specialistsRepoPath, 'rev-parse', '--abbrev-ref', 'HEAD']);
-    const ref = stdout.trim();
-    return ref === 'HEAD' ? null : ref;
-  } catch {
-    return null;
-  }
+async function gitBytes(repoPath, args) {
+  const { stdout } = await execFileAsync('git', ['-C', repoPath, ...args], {
+    encoding: 'buffer',
+    maxBuffer: 64 << 20,
+  });
+  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout);
 }
 
 async function resolveSpecialistsRepoPath() {
   if (process.env.SPECIALISTS_REPO_PATH) {
     const explicitPath = path.resolve(repoRoot, process.env.SPECIALISTS_REPO_PATH);
-    await assertDirectoryExists(
-      explicitPath,
-      `Missing specialists repo: ${explicitPath}. Set SPECIALISTS_REPO_PATH to specialists checkout.`,
-    );
+    await assertDirectoryExists(explicitPath, `Missing specialists repo: ${explicitPath}`);
     return explicitPath;
   }
-
-  for (const candidatePath of fallbackSpecialistsRepoPaths) {
+  for (const candidate of fallbackSpecialistsRepoPaths) {
     try {
-      await assertDirectoryExists(candidatePath, `Missing specialists repo: ${candidatePath}`);
-      return candidatePath;
+      await assertDirectoryExists(candidate, `Missing specialists repo: ${candidate}`);
+      return candidate;
     } catch {
-      continue;
+      // keep looking
     }
   }
-
-  throw new Error(
-    `Missing specialists repo. Looked in: ${fallbackSpecialistsRepoPaths.join(', ')}. Set SPECIALISTS_REPO_PATH to specialists checkout.`,
-  );
+  throw new Error(`Missing specialists repo. Looked in: ${fallbackSpecialistsRepoPaths.join(', ')}`);
 }
 
-async function collectFilePaths(rootDir) {
-  const entries = await fs.readdir(rootDir, { withFileTypes: true });
-  const files = [];
-
-  for (const entry of entries) {
-    if (entry.name === '__pycache__') continue;
-    const absolutePath = path.join(rootDir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await collectFilePaths(absolutePath));
-      continue;
-    }
-    if (entry.isFile()) files.push(absolutePath);
+function normalizePlacement(owner) {
+  const placement = owner.placement ?? { tier: 'default' };
+  if (placement.tier === 'default') return { tier: 'default' };
+  if (placement.tier === 'optional' && typeof placement.pack === 'string' && placement.pack.length > 0) {
+    return { tier: 'optional', pack: placement.pack };
   }
-
-  return files;
+  throw new Error(`Invalid specialists skill placement: ${JSON.stringify(placement)}`);
 }
 
-async function hashFile(filePath) {
-  const content = await fs.readFile(filePath);
-  return crypto.createHash('sha256').update(content).digest('hex');
+function destinationDir(skillName, placement) {
+  if (placement.tier === 'default') return path.join(defaultRoot, skillName);
+  return path.join(optionalRoot, placement.pack, skillName);
 }
 
-async function copySkillDirectory(specialistsSkillsRoot, skillName) {
-  const sourceDir = path.join(specialistsSkillsRoot, skillName);
-  const destinationDir = path.join(destinationRoot, skillName);
+function previousPlacement(manifest, skillName) {
+  return manifest?.placements?.[skillName] ?? { tier: 'default' };
+}
 
-  await assertDirectoryExists(sourceDir, `Missing specialists skill dir: ${sourceDir}`);
-  await fs.rm(destinationDir, { recursive: true, force: true });
-  await fs.mkdir(destinationDir, { recursive: true });
-  await fs.cp(sourceDir, destinationDir, { recursive: true, force: true, errorOnExist: false });
-  console.log(`Vendored ${skillName} from ${sourceDir}`);
+function specialistsEntries(ownershipManifest) {
+  return Object.entries(ownershipManifest.owners ?? {})
+    .filter(([, owner]) => owner.owner === 'specialists')
+    .map(([skillName, owner]) => ({ skillName, placement: normalizePlacement(owner) }))
+    .sort((a, b) => a.skillName.localeCompare(b.skillName));
+}
+
+async function removePreviousVendoredPaths(previousManifest, currentEntries) {
+  const cleanup = new Map();
+  for (const skillName of previousManifest?.skills ?? []) {
+    cleanup.set(destinationDir(skillName, previousPlacement(previousManifest, skillName)), true);
+  }
+  for (const { skillName, placement } of currentEntries) {
+    cleanup.set(path.join(defaultRoot, skillName), true); // v1 compatibility cleanup
+    cleanup.set(destinationDir(skillName, placement), true);
+  }
+  for (const target of cleanup.keys()) await fs.rm(target, { recursive: true, force: true });
 }
 
 function sortObject(value) {
   return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
 }
 
-async function buildManifest(source, specialistsRepoPath, specialistsSkillsRoot, skillNames) {
-  const files = {};
-  for (const skillName of skillNames) {
-    const skillDir = path.join(specialistsSkillsRoot, skillName);
-    const skillFiles = await collectFilePaths(skillDir);
-    const hashes = {};
-    for (const filePath of skillFiles) {
-      const relativePath = path.relative(skillDir, filePath).split(path.sep).join('/');
-      hashes[relativePath] = await hashFile(filePath);
-    }
-    files[skillName] = sortObject(hashes);
+function shouldVendor(relativePath) {
+  // Evals/workspaces are source-repo development fixtures, not runtime payload.
+  return relativePath.length > 0
+    && !relativePath.startsWith('evals/')
+    && !relativePath.startsWith('workspace/');
+}
+
+async function listSkillFiles(specialistsRepoPath, resolvedSha, sourcePath, skillName) {
+  const prefix = `${sourcePath}/${skillName}`.replaceAll('\\', '/');
+  const output = await gitText(specialistsRepoPath, ['ls-tree', '-r', '--name-only', resolvedSha, '--', prefix]);
+  const files = (output ? output.split('\n').filter(Boolean) : [])
+    .map((fullPath) => ({ fullPath, relativePath: fullPath.slice(prefix.length + 1) }))
+    .filter(({ relativePath }) => shouldVendor(relativePath));
+  if (files.length === 0) throw new Error(`Missing runtime Specialists skill content at ${resolvedSha}:${prefix}`);
+  return files;
+}
+
+async function vendorSkill({ specialistsRepoPath, resolvedSha, sourcePath, skillName, placement }) {
+  const destination = destinationDir(skillName, placement);
+  await fs.mkdir(destination, { recursive: true });
+
+  const files = await listSkillFiles(specialistsRepoPath, resolvedSha, sourcePath, skillName);
+  const gitBlobs = {};
+  for (const { fullPath, relativePath } of files) {
+    const bytes = await gitBytes(specialistsRepoPath, ['show', `${resolvedSha}:${fullPath}`]);
+    const target = path.join(destination, ...relativePath.split('/'));
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, bytes);
+    gitBlobs[relativePath] = await gitText(specialistsRepoPath, ['rev-parse', `${resolvedSha}:${fullPath}`]);
   }
 
-  const resolvedSha = await resolveCommitSha(specialistsRepoPath);
-  const detectedRef = source.ref ?? (await resolveCommitRef(specialistsRepoPath));
-
-  const sourceBlock = {
-    ...source,
-    ...(detectedRef ? { ref: detectedRef } : {}),
-    ...(resolvedSha ? { resolved_sha: resolvedSha } : {}),
-    repo_path: path.relative(repoRoot, specialistsRepoPath).split(path.sep).join('/'),
-    source_path: path.relative(specialistsRepoPath, specialistsSkillsRoot).split(path.sep).join('/'),
-  };
-
-  return {
-    version: 1,
-    source: sourceBlock,
-    skills: skillNames,
-    files,
-  };
+  const location = placement.tier === 'default' ? 'default' : `optional/${placement.pack}`;
+  console.log(`Vendored ${skillName} @ ${resolvedSha.slice(0, 12)} -> ${location}`);
+  return sortObject(gitBlobs);
 }
 
 async function main() {
   const source = parseArgs(process.argv.slice(2));
-  const ownershipManifest = await readJson(ownershipManifestPath);
+  const ownership = await readJson(ownershipManifestPath);
+  const entries = specialistsEntries(ownership);
   const specialistsRepoPath = await resolveSpecialistsRepoPath();
-  const specialistsSkillsRoot = path.join(specialistsRepoPath, ownershipManifest.mirrors.specialists.source_path);
-  const skillNames = getSpecialistsSkillNames(ownershipManifest);
+  const sourcePath = ownership.mirrors?.specialists?.source_path;
+  if (!sourcePath) throw new Error('docs/skills-ownership.json missing mirrors.specialists.source_path');
 
-  await assertDirectoryExists(specialistsSkillsRoot, `Missing specialists skills root: ${specialistsSkillsRoot}`);
-  await assertDirectoryExists(destinationRoot, `Missing destination root: ${destinationRoot}`);
+  await assertDirectoryExists(defaultRoot, `Missing default skill root: ${defaultRoot}`);
+  await assertDirectoryExists(optionalRoot, `Missing optional skill root: ${optionalRoot}`);
 
-  for (const skillName of skillNames) {
-    await copySkillDirectory(specialistsSkillsRoot, skillName);
+  const requestedRef = source.ref ?? 'HEAD';
+  const resolvedSha = await gitText(specialistsRepoPath, ['rev-parse', `${requestedRef}^{commit}`]);
+  const detectedRef = source.ref ?? await gitText(specialistsRepoPath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const previousManifest = await readJsonIfExists(manifestPath);
+
+  await removePreviousVendoredPaths(previousManifest, entries);
+
+  const files = {};
+  const placements = {};
+  for (const entry of entries) {
+    if (entry.placement.tier === 'optional') {
+      await assertDirectoryExists(
+        path.join(optionalRoot, entry.placement.pack),
+        `Missing optional pack for ${entry.skillName}: ${entry.placement.pack}`,
+      );
+    }
+    files[entry.skillName] = await vendorSkill({ specialistsRepoPath, resolvedSha, sourcePath, ...entry });
+    placements[entry.skillName] = entry.placement;
   }
 
-  const manifest = await buildManifest(source, specialistsRepoPath, specialistsSkillsRoot, skillNames);
+  const manifest = {
+    version: 2,
+    digest: 'git-blob-sha1',
+    source: {
+      ...source,
+      ...(detectedRef && detectedRef !== 'HEAD' ? { ref: detectedRef } : {}),
+      resolved_sha: resolvedSha,
+      repo_path: path.relative(repoRoot, specialistsRepoPath).split(path.sep).join('/'),
+      source_path: sourcePath,
+    },
+    skills: entries.map(({ skillName }) => skillName),
+    placements: sortObject(placements),
+    files: sortObject(files),
+  };
+
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   console.log(`Wrote ${path.relative(repoRoot, manifestPath)}`);
 }

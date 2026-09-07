@@ -21,7 +21,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0   # git-cliff needs full history for CHANGELOG.md [Unreleased] check
+        fetch-depth: 0
 
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
@@ -41,16 +41,8 @@ jobs:
       run: npm run check:package
 
     - name: CHANGELOG.md [Unreleased] is an empty placeholder
-      # Guard: no branch commits generated [Unreleased] entries. They are produced from
-      # the git log at release time by `npm version`, so a branch that carries them adds
-      # nothing and conflicts every other open PR on the next merge (bead xtrm-wiy5n.4.28).
-      # Fix locally with: npm run changelog:update   (pending entries: npm run changelog:preview)
-      # Satisfiable on main and on a PR alike — the target state does not depend on commit ids.
       run: npm run changelog:check
 
-    # cli consumes @xtrm/contracts, whose package.json entry points resolve to
-    # ./dist. That directory is gitignored, so it must be built before anything
-    # imports the package or resolution fails.
     - name: Build contracts package
       run: npm run build:contracts
 
@@ -70,15 +62,12 @@ jobs:
         npx eslint . --ignore-pattern "**/node_modules/**" || echo "Eslint not configured yet"
         ruff check . || echo "Ruff not configured yet"
 
-    - name: Check skills ownership drift
-      run: npm run check:skills-ownership
+    - name: Check skills ownership and managed skill contracts
+      run: |
+        npm run check:skills-ownership
+        npm run check:managed-skills
 
     - name: Policy parity checks (Claude + Pi)
-      # PI_AGENT_DIR points at a scratch dir so this step never writes to the
-      # runner's real HOME. On the self-hosted runner HOME is the operator's
-      # machine, and copying loose extensions into ~/.pi/agent/extensions/
-      # broke Pi startup (module resolution + tool-name conflicts vs the
-      # global npm package). See bead xtrm-spcuo.
       env:
         PI_AGENT_DIR: ${{ runner.temp }}/pi-agent
       run: |
@@ -87,12 +76,13 @@ jobs:
         node scripts/compile-policies.mjs --check
         node scripts/compile-policies.mjs --check-pi
 
-    - name: Verify specialists vendor freshness
+    - name: Verify specialists vendor and package registry freshness
       run: |
         npm run check:skills-ownership
+        npm run check:managed-skills
         npm run check:registry-pack-parity
         npm run check:specialists-vendor
-        git diff --exit-code -- .xtrm/skills/default .xtrm/specialists-source.json .xtrm/registry.json
+        git diff --exit-code -- .xtrm/skills/default .xtrm/skills/optional .xtrm/specialists-source.json .xtrm/registry.json
 
     - name: Verify command deprecation ledger
       run: npm run check:deprecations
@@ -112,8 +102,6 @@ jobs:
     - name: Forbidden-phrase drift guard
       run: npm run check:forbidden-phrases
 
-    # No Specialists checkout on the runner, so this skips unless SPECIALISTS_REPO_PATH
-    # is provided; it is a hard gate locally and in prepublishOnly.
     - name: Vendored Specialists skill parity guard
       run: npm run check:vendored-specialists-parity
 

@@ -1,17 +1,13 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import manifest from "./manifest.json" with { type: "json" };
-import autoSessionNameExtension from "./extensions/auto-session-name.ts";
 import beadsExtension from "./extensions/beads.ts";
 import compactHeaderExtension from "./extensions/compact-header.ts";
 import customFooterExtension from "./extensions/custom-footer.ts";
-import customProviderQwenCliExtension from "./extensions/custom-provider-qwen-cli.ts";
 import gitCheckpointExtension from "./extensions/git-checkpoint.ts";
-import lspBootstrapExtension from "./extensions/lsp-bootstrap.ts";
-import piSerenaCompactExtension from "./extensions/pi-serena-compact.ts";
-import serenaPoolExtension from "./extensions/serena-pool.ts";
+import pythonKernelExtension from "./extensions/python-kernel.ts";
 import qualityGatesExtension from "./extensions/quality-gates.ts";
-import serviceSkillsExtension from "./extensions/service-skills.ts";
+import readLineNumbersExtension from "./extensions/read-line-numbers.ts";
 import sessionFlowExtension from "./extensions/session-flow.ts";
 import spTerminalOverlayExtension from "./extensions/sp-terminal-overlay.ts";
 import xtrmLoaderExtension from "./extensions/xtrm-loader.ts";
@@ -24,17 +20,13 @@ export type ManagedPiExtension = {
 };
 
 const availableManagedPiExtensions: readonly ManagedPiExtension[] = [
-  { id: "auto-session-name", register: autoSessionNameExtension },
   { id: "beads", register: beadsExtension },
   { id: "compact-header", register: compactHeaderExtension },
   { id: "custom-footer", register: customFooterExtension },
-  { id: "custom-provider-qwen-cli", register: customProviderQwenCliExtension },
   { id: "git-checkpoint", register: gitCheckpointExtension },
-  { id: "lsp-bootstrap", register: lspBootstrapExtension },
-  { id: "pi-serena-compact", register: piSerenaCompactExtension },
+  { id: "python-kernel", register: pythonKernelExtension },
   { id: "quality-gates", register: qualityGatesExtension },
-  { id: "serena-pool", register: serenaPoolExtension },
-  { id: "service-skills", register: serviceSkillsExtension },
+  { id: "read-line-numbers", register: readLineNumbersExtension },
   { id: "session-flow", register: sessionFlowExtension },
   { id: "sp-terminal-overlay", register: spTerminalOverlayExtension },
   { id: "xtrm-loader", register: xtrmLoaderExtension },

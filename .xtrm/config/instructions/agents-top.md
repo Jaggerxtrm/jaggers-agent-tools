@@ -1,133 +1,66 @@
 # XTRM Agent Workflow
 
-> Full reference: `XTRM-GUIDE.md` | Session manual: `/using-xtrm` skill.
+> Full reference: `/using-xtrm` skill (or `XTRM-GUIDE.md` where present).
 > This is a compact managed block. Use CLI `--help` and skills for details; do not paste full manuals here.
+> Shared canonical contract (`.xtrm/config/instructions/agent-contract.md`); the sections between the contract markers are byte-identical in both tops. Only the trailing Runtime notes differ.
+
+<!-- contract:start -->
 
 ## Canonical Sources
-- **CLI `--help` is canonical.** Run `<tool> --help` or `<tool> <subcmd> --help` when unsure; skills own **when**, help owns **how**.
-- Managed blocks (this file, `claude-top.md`, `/using-xtrm`) are compact routers, not replacements for `--help`.
-- Managed blocks and installed skills update via `xt update --apply`; consumers see changes on the next run.
-- Check runtime versions with `xt version --check-updates` (`npm outdated -g` fallback) for `xtrm-tools`, `@jaggerxtrm/xtmux`, and `@jaggerxtrm/specialists`.
+- CLI `--help` is canonical for syntax; skills own **when**. Managed blocks are routers, not manuals.
+- Managed blocks and installed skills update via `xt update --apply`; check versions with `xt version --check-updates`.
 
-## Session start
+## Session start (targeted — no bulk context dump)
 
-1. `bd prime` — load workflow context and active claims.
-2. `bd memories <topic>` / `bd recall <key>` — retrieve durable context before answering questions or changing workflow-sensitive code.
-3. Catch up on recent work: check handoff/next-session beads, latest `xt report` handoffs, recent merged/closed PRs, and `bd list --status=in_progress`.
-4. `bv --robot-triage --format toon` or `bv --robot-next` — choose work when needed. Never run bare `bv`.
-5. If board state is unclear, run `/issue-triage` or the robot triage/plan commands before editing.
-6. For service/docs/project context, run `/scope` or `/using-service-skills`; note stale/missing service skills before relying on them.
-7. `bd ready` / `bd show <id>` / `bd update <id> --claim` — inspect and claim before edits.
-8. If the runtime supports local task planning, use it before non-trivial work and keep it synchronized with the active bead.
+1. Read repo identity + non-negotiables at the top of the root agent guide first.
+2. Service/docs/project context: check `service-knowledge status` / `index stats` (rebuild when stale/absent), then `service-knowledge index query "<3-5 task terms>" --bundle`; read only the cited evidence. Skip repos without a service registry.
+3. Executable work: targeted Beads lookup (`bd ready`, `bd list --status=in_progress`, `bd search "<terms>"`, `bd show <id>`), then `bd update <id> --claim` before edits. `bd memories <topic>` / `bd recall <key>` only when history is relevant.
+4. Catch up: handoff/next-session beads, latest `xt report` handoffs, recent merged/closed PRs.
+5. If the runtime supports local task planning, use it for non-trivial work, synchronized with the active bead.
+
+## Operating model
+
+- Beads owns durable work identity, dependencies, memory gates, and closure; runtime-local task plans are ephemeral execution tracking.
+- For work another worker consumes, the Bead is the prompt: requirements live in the durable contract, not only in chat. A `contract:draft` item is not dispatchable.
+- Contract baseline: PROBLEM, SUCCESS, SCOPE, NON_GOALS, CONSTRAINTS, VALIDATION, OUTPUT; add SCRUTINY and rollout/rollback when they affect correctness.
+- Worker summaries are claims. Verify important ones against live code, tests, or runtime state.
+- Prefer native/runtime communication surfaces over tmux scraping; `/multiplexing` owns send, reply, ownership, continuation, and handoff semantics.
+- Shape: work here when context suffices; native subagent for a bounded independent question; `xt pi|claude|codex` peers with `/multiplexing` for parallel ownership; `/using-specialists` for governed role lifecycles; a script or runtime primitive for deterministic transforms. Parallelize only when ownership boundaries are real.
 
 ## Operating rules
 
-- Beads is authoritative for ownership, dependencies, memory gates, and closure.
-- Runtime-local task plans are ephemeral execution tracking only; they do not replace beads.
-- Close beads and satisfy memory ack before commit: `bd remember` when useful, then `bd kv set memory-acked:<id> saved:<key>` or `nothing novel:<reason>`, then `bd close <id> --reason="..."`.
-- Ask before destructive, irreversible, production-impacting, or history-rewriting actions.
-- Do not ask repetitive “Proceed?” confirmations for normal implementation once scope is clear.
-- For reply-required xtmux messages, preserve `messageKey` and use a correlated reply (`message-reply` or successful `safe-send-pointer --reply-to`); ack and target-only sends do not fulfil the request.
+- Memory gate at close: `bd remember` when useful, then `bd kv set memory-acked:<id> saved:<key>` or `nothing novel:<reason>`, then `bd close <id> --reason="..."`.
+- Before editing existing symbols run GitNexus impact (`gitnexus_impact`) when available; before commit, run `gitnexus_detect_changes`.
+- Ask before destructive, irreversible, production-impacting, or history-rewriting actions; skip repetitive "Proceed?" confirmations once scope is clear.
+- Run targeted tests/build/typecheck for changed files; fix quality failures before commit.
+- Use the smallest correct change; never simplify away validation, security, accessibility, rollback, or required failure handling.
+- For regressions reconstruct causality before patching: symptom → first bad observation → code path → change → mechanism → smallest correction → regression proof.
 
-## XTMUX COMMUNICATION INVARIANTS
-- Coordination mutations are standalone `--json` commands.
-- FYI/status/PASS use `--expects-reply=false`.
-- Decision/blocker requests preserve `messageKey` and require a fresh requester-owned monitor.
-- Read exact inbound content with `message-get`; ack only according to the declared receipt contract.
-- Fulfil through `message-reply` or successful correlated safe-send.
-- Use `agent-last` for a completed interactive turn.
-- Use `sp result` / `sp resume` for managed Specialist jobs.
-- Pane capture is live-state diagnosis only.
-- Before waiting or closing, inspect inbox, obligations, and monitors.
+## Skill routing (on demand)
 
-## Code restraint (when implementing directly)
-
-- YAGNI first. Lazy solution that actually works: reuse existing → stdlib → native → one line → minimum. Prefer deletion. No unrequested abstractions. Match existing project conventions; never invent a new style mid-file.
-- Never simplify away: input validation at trust boundaries, error handling preventing data loss, security, accessibility, explicitly requested behavior. Never lazy about understanding the problem.
-- Mark deliberate shortcuts `// SIMPLIFIED: <ceiling>. upgrade when <trigger>.` Unmarked shortcuts silently rot.
-
-## Essential command surface
-
-Use these as the minimal operational surface; use `--help` for full syntax.
-
-- `bd prime`, `bd ready`, `bd list --status=in_progress`, `bd show <id>`
-- `bd update <id> --claim`, `bd remember "<insight>"`, `bd close <id> --reason="..."`
-- `bd set-state <id> <dim>=<val> --reason="..."`, `bd state <id> <dim>` — operational state labels (e.g. `contract=ready`, `patrol=muted`, `health=healthy`)
-- `bd ready --claim` — atomic claim-on-ready; `bd ready --explain` — why an issue is ready/blocked
-- `bd create --graph <plan.json> --dry-run` — issue-graph decomposition; `--waits-for <id> --waits-for-gate all-children|any-children` for fan-in/out; `--spec-id`/`--skills` to link specs/required skills
-- `bv --robot-triage --format toon`, `bv --robot-next` — never bare `bv`
-- `xt report list` / latest report file, `xt update --apply`, `xt end`
-- `xt worktree --help` — PR/branch/restart audit primitives (`audit-prs`, `branch-gc`, `restart-audit`); pair with specialists `doctor --pr-drift` / `doctor --reap-dead-jobs`. Details: `/using-xtrm`.
-- `gh pr list --state merged --limit 5` or equivalent host CLI when PR context matters
-- `sp --help`, `sp list` / `specialists list`, `sp ps`, `sp feed <job-id>`, `sp result <job-id>`
-
-## Skill routing
-
-| Need | Use |
+| Need | Skill |
 |---|---|
-| xtrm/beads workflow | `/using-xtrm`; `bd --help`; `xt --help` |
-| Specialist orchestration | **WHEN:** work is substantial enough to delegate (implementation, review, debug, test, or merge chains); use latest `/using-specialists-*`, prefer `/using-specialists`; check `sp --help` + `sp list` first |
-| Multi-pane coordination | **WHEN:** coordinating ≥2 tmux sessions or dispatching to a delegated pane; use `/multiplexing`; delegated panes use `/multiplexing-team` |
-| xtmux CLI (messaging, handoff, agent-state) | `xtmux --help`, `xtmux <cmd> --help` first |
-| Service/docs/project context | canonical service-skills skill set: `/scope`, `/using-service-skills` |
-| Planning/tests/docs | `/planning`, `/test-planning`, `/sync-docs` |
-| Board unclear/backlog messy | `/issue-triage`; `bv --robot-triage --format toon`; `bv --robot-plan` |
-| Release/session close | `/releasing`, `/xt-end`, `/session-close-report`, `/xt-merge` |
+| XTRM doctrine, contracts, evidence, work shape | `/using-xtrm` |
+| Resume, takeover, context-pressure continuation | `/starting-and-resuming-work` |
+| Peer and subagent coordination, replies, continuation | `/multiplexing` |
+| Contracts, decomposition, board triage, validation planning | `/planning` |
+| Debug, review, test, verify, reduce | `/engineering-quality` |
+| Specialists runtime and role/job lifecycle | `/using-specialists` |
+| Code graph, impact, debugging, refactoring | `/gitnexus` |
+| Create or improve skills | `/skill-creator` |
+| Discover or import governed skills | `/find-skills` |
 
-## Trigger patterns
-
-| When | Do |
-|---|---|
-| user prompt has `?` | `bd memories <keywords>` before answering |
-| unfamiliar area of code | `gitnexus_query({query: "concept"})` before opening files |
-| about to edit a symbol | `gitnexus_impact({target, direction:"upstream"})` |
-| before `git commit` | `gitnexus_detect_changes({scope:"staged"})` |
-| about to `bd create` for a specialist dispatch | pass `--parent <bead-it-services>` + title `<role>: <task>` |
-| about to `sp run` | check `bd state <id> contract`; promote `draft` → `ready` first |
-| just capturing an idea, not working it | `bd create --labels contract:draft` with real PROBLEM + rough SCOPE |
-| tmux/xtmux coordination or reply-required msg | `/multiplexing`; preserve returned `messageKey`; use `message-reply --in-reply-to` |
-| reading code | `get_symbols_overview` → `find_symbol` (never whole files) |
-| memory is wrong / superseded | `bd forget <key>` — beats leaving stale entries to poison future `bd memories` searches |
-| stale session claim blocking commit gate | `bd kv clear "claimed:<pid>"` (note: `bd kv clear`, NOT `bd kv delete`) |
-| session end | memory gate fires — evaluate `bd remember` per closed issue; ack with `bd kv set "memory-acked:<id>" "saved:<key>"` or `"nothing novel:<reason>"` |
+Domain packs (`sre-ops`, `security-ops`, `research-methods`, `xtrm-development`, `xtrm-maintenance`) are optional; inspect `xt skills` rather than assuming they are active. Syntax per CLI: `bd --help`, `bv --robot-triage --format toon`, `xt --help`, `xtmux --help`, `sp --help`.
 
 ## Rule conflict — TaskCreate / TodoWrite
 
-`bd prime` (auto-injected at SessionStart) says *"Prohibited: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking"*. **This project overrides that line.** Runtime-local task planning (TaskCreate / TodoWrite-style features when the runtime provides them) is used *alongside* beads for non-trivial work — beads remains authoritative for ownership, dependencies, memory gates, and closure; local task plans are ephemeral execution tracking scoped to the active bead. Do not create MEMORY.md files (the bd prime rule against those still holds).
+`bd prime` is an opt-in full-context diagnostic; it is never a session-start step. If that diagnostic reports *"Prohibited: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking"*, **this project overrides that line.** Runtime-local task planning coexists with beads — beads is the durable authority; local plans are ephemeral execution tracking. Do not create MEMORY.md files.
 
-## Project intelligence — on demand (xtrm-x12p3)
+<!-- contract:end -->
 
-xtrm-loader no longer embeds project bodies in every request. Read them when the task needs them:
+## Runtime notes (Pi / runtime-neutral)
 
-- Architecture / roadmap: first of `architecture/project_roadmap.md`, `ROADMAP.md`, `architecture/index.md`.
-- Project rules: `.claude/rules/**/*.md`.
 - Project skills catalog: Pi's native `<available_skills>` metadata; force-load a skill's body at turn 1 via `/skill:<name>`.
-- Durable cross-session knowledge: `bd memories <topic>` / `bd recall <key>` / `bd remember "<insight>"`.
 - Full workflow examples + prompt-shaping guidance: `/skill:using-xtrm` (on demand — no longer eager-injected on Pi).
-- Auto-injected essential (small): `.xtrm/memory.md` per-project synthesized state.
-
-## Code intelligence and edits
-
-- Before editing an existing function/class/method, run GitNexus impact analysis when GitNexus is available.
-- Warn before proceeding if impact risk is HIGH or CRITICAL.
-- For unfamiliar code, inspect execution flows before broad grep-heavy reads.
-- Before commit or handoff, verify affected scope.
-- Prefer targeted symbol/file reads and precise edits over whole-tree dumps.
-- When Serena is available, prefer symbolic tools (`find_symbol` → `get_symbols_overview` → `replace_symbol_body`; `find_referencing_symbols`/`rename_symbol` for LSP-accurate references) over grep-read-sed for code reads and edits.
-
-## Context and output management
-
-- Use context-mode automatically to keep command/file output compact: `ctx_execute` for logs, tests, large command output, and structured data processing; `ctx_execute_file` for deriving facts from files without dumping contents; `ctx_batch_execute` for multi-command research; `ctx_search` for previously indexed material.
-- Use normal read/edit tools only when exact file text is needed for a patch. Do not `cat`/dump large outputs into the conversation when a context-mode tool can summarize or index them.
 - Use background process tooling for long-running servers, watchers, and log tails instead of shell backgrounding.
-
-## Quality gates
-
-- Run targeted tests/build/typecheck relevant to changed files.
-- Fix quality failures before commit.
-
-## Worktree sessions
-
-- `xt pi` — launch Pi in a sandboxed worktree.
-- `xt pi --role <specialist>` — spawn an interactive specialist session (e.g. `chain-coordinator` for tracking epic chains, `pr-reviewer`, `sre-triage`). Coordination and escalation live in `/multiplexing` Pattern 7 and `/using-specialists`.
-- `xt end` — close session: commit / push / PR / cleanup when appropriate.
+- Worktree launch: `xt pi` — launch Pi in a sandboxed worktree; `xt pi --role <specialist>` for an interactive specialist session (e.g. `chain-coordinator`, `pr-reviewer`, `sre-triage`). Coordination and escalation live in `/multiplexing` Pattern 7 and `/using-specialists`.

@@ -5,17 +5,19 @@ import { spawnSync } from 'node:child_process';
 import { t } from '../utils/theme.js';
 import { runPiLaunchPreflight } from '../core/pi-runtime.js';
 import { listXtWorktrees, getRepoRoot } from './worktree.js';
+import { readCodexWorktreeSession } from '../core/codex-session.js';
+import { buildCodexResumeArgs } from '../core/codex-runtime.js';
 
 export function createAttachCommand(): Command {
     return new Command('attach')
-        .description('Re-attach to an existing xt worktree and resume the Claude or Pi session')
+        .description('Re-attach to an existing xt worktree and resume its Claude, Pi, or Codex session')
         .argument('[name]', 'Worktree slug or branch name to attach to (e.g. "abc1" or "xt/abc1")')
         .action(async (name: string | undefined) => {
             const repoRoot = getRepoRoot(process.cwd());
             const worktrees = listXtWorktrees(repoRoot);
 
             if (worktrees.length === 0) {
-                console.log(kleur.dim('\n  No xt worktrees found — start one with: xt claude\n'));
+                console.log(kleur.dim('\n  No xt worktrees found — start one with: xt claude, xt pi, or xt codex\n'));
                 return;
             }
 
@@ -24,10 +26,8 @@ export function createAttachCommand(): Command {
             if (name) {
                 const norm = name.startsWith('xt/') ? `refs/heads/${name}` : `refs/heads/xt/${name}`;
                 const found = worktrees.find(wt =>
-                    wt.path.endsWith(name) ||
-                    wt.branch === norm ||
-                    wt.branch === `refs/heads/${name}`
-                );
+                    wt.branch === norm || wt.branch === `refs/heads/${name}`
+                ) ?? worktrees.find(wt => wt.path.endsWith(name));
                 if (!found) {
                     console.error(kleur.red(`\n  ✗ No xt worktree found matching "${name}"\n`));
                     console.log(kleur.dim('  Run: xt worktree list\n'));
@@ -70,9 +70,19 @@ export function createAttachCommand(): Command {
             const branch = target.branch.replace('refs/heads/', '');
             const runtime = target.runtime ?? await pickRuntime();
 
-            const resumeArgs = runtime === 'claude'
-                ? ['--continue', '--dangerously-skip-permissions']
-                : ['-c'];
+            let resumeArgs: string[];
+            if (runtime === 'codex') {
+                const session = readCodexWorktreeSession(target.path);
+                if (!session) {
+                    console.error(kleur.red('\n  ✗ Codex session metadata is missing or invalid; refusing positional resume\n'));
+                    process.exit(1);
+                }
+                resumeArgs = buildCodexResumeArgs(session.threadId, session.safetyProfile, session.profileName);
+            } else {
+                resumeArgs = runtime === 'claude'
+                    ? ['--continue', '--dangerously-skip-permissions']
+                    : ['-c'];
+            }
 
             console.log(t.bold(`\n  Attaching to ${branch}`));
             console.log(kleur.dim(`  runtime: ${runtime}  (resuming session)`));

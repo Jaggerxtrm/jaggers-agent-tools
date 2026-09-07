@@ -12,6 +12,7 @@ import { shouldUseGlobalHooks } from '../core/global-hooks-flag.js';
 import { reconcileGlobalClaudeHooks } from '../core/claude-runtime-sync.js';
 import { reconcileGlobalPiHooks } from '../core/pi-runtime-hooks.js';
 import { assureXtManagedPiPackages, runExternalPiToolPatch } from '../core/pi-runtime.js';
+import { printGlobalPromptSyncSummary, syncGlobalPrompts } from '../core/global-prompt-sync.js';
 import { scanXtrmRepos } from '../core/repo-discovery.js';
 import { isStrictRegistryMode, runInstall } from './install.js';
 import { ensureBeadsSharedServerEnabled, hasBeadsDir } from '../core/beads-shared-server.js';
@@ -144,6 +145,9 @@ async function updateRepo(repoRoot: string, opts: UpdateOpts): Promise<RepoUpdat
                 skipClaudeRuntimeSync: true,
                 skipGlobalPiPackageAssurance: true,
                 skipExternalPiToolPatch: true,
+                // Global system-prompt preflight runs exactly once per update command,
+                // before repo resolution and reconciliation — never once per repo (xtrm-3ljgz.2).
+                skipGlobalPromptSync: true,
                 strictRegistry: isStrictRegistryMode(opts),
             });
         } catch (error) {
@@ -319,6 +323,7 @@ export function createUpdateCommand(): Command {
         .option('--json', 'Print JSON output', false)
         .action(async (opts) => {
             const typedOpts = opts as UpdateOpts;
+            const promptSync = await syncGlobalPrompts({ dryRun: !typedOpts.apply });
             const { targets, incomplete } = await resolveTargetRepos(typedOpts);
             const rows: RepoUpdateResult[] = [];
             for (const repo of targets) {
@@ -343,17 +348,18 @@ export function createUpdateCommand(): Command {
                 });
             }
 
-            const packageAssurance = await assureXtManagedPiPackages(Boolean(typedOpts.apply));
+            const packageAssurance = await assureXtManagedPiPackages(!Boolean(typedOpts.apply));
             if (typedOpts.apply) runExternalPiToolPatch(resolvePackageRoot(), false);
 
             if (opts.json) {
-                console.log(JSON.stringify({ repos: rows, packages: packageAssurance }, null, 2));
+                console.log(JSON.stringify({ repos: rows, packages: packageAssurance, promptSync }, null, 2));
             } else {
                 printTable(rows);
                 for (const row of rows) {
                     if (row.maintenance) printDependencyMaintenanceSummary(row.maintenance);
                 }
                 printPiPackages(packageAssurance);
+                printGlobalPromptSyncSummary(promptSync);
             }
 
             if (rows.some(row => row.status === 'failed') || packageAssurance.failed.length > 0) {

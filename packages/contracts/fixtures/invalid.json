@@ -25,6 +25,16 @@
             }
         ]
     },
+    "xtrm.command-outcome.v1": {
+        "schema_version": "xtrm.command-outcome.v1",
+        "status": "ok",
+        "reason_code": "session_created",
+        "summary": "invalid because raw prompt content is not part of this contract",
+        "authoritative_mutation": { "completed": true, "kind": "interactive-session.created" },
+        "side_effects": [],
+        "next_actions": [],
+        "prompt": "untrusted runtime content"
+    },
     "xtrm.runtime-matrix.v1": {
         "schema_version": "xtrm.runtime-matrix.v1",
         "core": { "minimum": ">=24.0.0" },

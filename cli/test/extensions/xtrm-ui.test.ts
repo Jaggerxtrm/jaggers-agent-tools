@@ -23,15 +23,35 @@ vi.mock("@earendil-works/pi-tui", () => ({
     constructor(private text: string) {}
     render() { return this.text.split("\n"); }
   },
-  truncateToWidth: (text: string) => text,
+  truncateToWidth: (text: string, width?: number) =>
+    typeof width === "number" && width > 0 && text.length > width ? text.slice(0, width) : text,
   visibleWidth: (text: string) => text.length,
+  wrapTextWithAnsi: (text: string, width: number) => {
+    const lines: string[] = [];
+    for (const line of text.split("\n")) {
+      if (!line) {
+        lines.push("");
+        continue;
+      }
+      for (let offset = 0; offset < line.length; offset += width) {
+        lines.push(line.slice(offset, offset + width));
+      }
+    }
+    return lines;
+  },
 }));
 
 const {
-  collapsedExternalToolLines,
-  DEFAULT_PREFS,
-  default: xtrmUiExtension,
-  renderExternalToolBackgroundLines,
+	buildCollapsedThinkingRow,
+	buildExpandedThinkingBlock,
+	buildThinkingRecap,
+	collapsedExternalToolLines,
+	DEFAULT_PREFS,
+	default: xtrmUiExtension,
+	fitThinkingRowToWidth,
+	piRuntimeEntryForCliPath,
+	renderExternalToolBackgroundLines,
+	selectPatchBase,
 } = await import("../../../packages/pi-extensions/extensions/xtrm-ui/index");
 
 function loadExtension() {
@@ -244,6 +264,81 @@ describe("xtrm-ui commands", () => {
   });
 });
 
+const thinkingStyle = {
+	label: (text: string) => `B[${text}]`,
+	recap: (text: string) => `D[${text}]`,
+	hint: (text: string) => `H[${text}]`,
+	sep: " · ",
+};
+
+describe("xtrm-ui thinking chrome", () => {
+  it("recaps the first non-empty thinking line", () => {
+    expect(buildThinkingRecap("\nPR #522 is queued. Only 5 checks listed.\n")).toBe(
+      "PR #522 is queued. Only 5 checks listed.",
+    );
+  });
+
+  it("skips one-word fragments and picks the first substantive line", () => {
+    expect(buildThinkingRecap("**The**\nThe user reports no bold at the render width in the real pipeline")).toBe(
+      "The user reports no bold at the render width in the real pipeline",
+    );
+  });
+
+  it("skips fragment first lines and strips list markers", () => {
+    const recap = buildThinkingRecap("Now:\n- \"toggled compact preview\" PASSES (test bug fixed)");
+    expect(recap).toBe("\"toggled compact preview\" PASSES (test bug fixed)");
+  });
+
+  it("strips markdown emphasis and collapses whitespace", () => {
+    expect(buildThinkingRecap("**bold** and `code` with   spaces\nnext")).toBe("bold and code with spaces");
+  });
+
+  it("truncates long recaps with an ellipsis", () => {
+    const long = "x".repeat(500);
+    const recap = buildThinkingRecap(long);
+    expect(recap.length).toBe(120);
+    expect(recap.endsWith("...")).toBe(true);
+  });
+
+  it("falls back to the label when thinking is blank", () => {
+    expect(buildThinkingRecap("   \n\t\n")).toBe("Thinking...");
+  });
+
+  it("builds the collapsed row with bold label, dim recap, char count and expand hint", () => {
+    const row = buildCollapsedThinkingRow("PR #522 queued", 14, thinkingStyle);
+    expect(row).toBe(" B[Thinking...] · D[PR #522 queued] · D[14] H[(Ctrl+T to expand)]");
+  });
+
+  it("builds the expanded block with collapse hint and full dimmed trace", () => {
+    const block = buildExpandedThinkingBlock("Full trace\nsecond line", thinkingStyle);
+    expect(block).toBe("B[Thinking...] H[(Ctrl+T to collapse)]\n\nD[Full trace\nsecond line]");
+  });
+  it("keeps the collapsed row on one line and truncates the recap to fit", () => {
+    const row = ` Thinking... · ${'x'.repeat(80)} (Ctrl+T to expand)`;
+    const fitted = fitThinkingRowToWidth(row, 40);
+    expect(fitted.split("\n")).toHaveLength(1);
+    expect(fitted.startsWith(" Thinking... · ")).toBe(true);
+    expect(fitted.endsWith(" (Ctrl+T to expand)")).toBe(true);
+    expect(fitted.length).toBeLessThan(row.length);
+  });
+
+  it("leaves a fitting row untouched", () => {
+    const row = " Thinking... · short recap (Ctrl+T to expand)";
+    expect(fitThinkingRowToWidth(row, 80)).toBe(row);
+  });
+
+  it("leaves expanded and non-row markdown untouched", () => {
+    const expanded = "Thinking... (Ctrl+T to collapse)\n\nfull trace here";
+    expect(fitThinkingRowToWidth(expanded, 40)).toBe(expanded);
+    expect(fitThinkingRowToWidth("regular assistant text", 40)).toBe("regular assistant text");
+  });
+
+  it("passes through when no width is available", () => {
+    const row = " Thinking... · " + "x".repeat(80) + " (Ctrl+T to expand)";
+    expect(fitThinkingRowToWidth(row, undefined)).toBe(row);
+  });
+});
+
 describe("xtrm-ui built-in tool rendering", () => {
   it("uses one consistent bash row across call phases", () => {
     const { tools } = loadExtension();
@@ -259,22 +354,128 @@ describe("xtrm-ui built-in tool rendering", () => {
       context(args, { executionStarted: true, isPartial: true }),
     );
 
-    expect(pending.render(200).join("\n")).toContain("$ echo context-label");
+    expect(pending.render(200).join("\n")).toBe("• Ran \x1b[1mecho context-label\x1b[22m");
     expect(running.render(200).join("\n")).toBe("");
   });
 
-  it("reads bash labels from render context args", () => {
+  it("renders multiline bash commands and six collapsed output lines flat", () => {
     const { tools } = loadExtension();
+    const output = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
     const component = tools.bash.renderResult(
-      { content: [{ type: "text", text: "ok" }], details: {} },
+      { content: [{ type: "text", text: output }], details: {} },
       { expanded: false, isPartial: false },
       theme,
-      context({ command: "echo context-label" }),
+      context({ command: "echo one\necho two" }),
     );
 
     const lines = component.render(200);
-    expect(lines[0]).toBe("› $ echo context-label");
-    expect(lines.at(-1)).toBe("└─ 1 line · 2B");
+    expect(lines.slice(0, 3)).toEqual([
+      "• Ran \x1b[1mecho one\x1b[22m",
+      "\x1b[1mecho two\x1b[22m",
+      "└ line 3",
+    ]);
+    expect(lines.at(-1)).toContain("showing 6/8 lines (ctrl+o expand)");
+  });
+
+  it("colors only the Ran prefix with phase status and dims the command unless success", () => {
+    const { tools } = loadExtension();
+    const colors: string[] = [];
+    const spyTheme = {
+      ...theme,
+      fg: (color: string, text: string) => {
+        colors.push(color);
+        return text;
+      },
+    };
+    const result = { content: [{ type: "text", text: "" }], details: {} };
+    const renderOptions = { expanded: false, isPartial: false };
+
+    colors.length = 0;
+    tools.bash.renderResult(result, renderOptions, spyTheme, context({ command: "echo ok" }));
+    expect(colors.slice(0, 3)).toEqual(["success", "success", "text"]); // • , Ran, command
+
+    colors.length = 0;
+    tools.bash.renderResult(
+      result,
+      renderOptions,
+      spyTheme,
+      context({ command: "echo fail" }, { isError: true }),
+    );
+    expect(colors.slice(0, 3)).toEqual(["error", "error", "dim"]); // • , Ran, command
+
+    colors.length = 0;
+    tools.bash.renderCall(
+      { command: "echo pending" },
+      spyTheme,
+      context({ command: "echo pending" }, { executionStarted: false, isPartial: true }),
+    );
+    expect(colors).toEqual(["accent", "accent", "dim"]); // •, Ran, command
+  });
+
+  it.each([
+    ["read", { path: "sample.txt" }, "sample.txt", "line"],
+    ["find", { pattern: "*.ts" }, "*.ts", "match"],
+    ["grep", { pattern: "needle" }, "needle", "match"],
+    ["ls", { path: "." }, ".", "entry"],
+  ])("shows six collapsed output lines for %s", (name, args, subject, noun) => {
+    const { tools } = loadExtension();
+    const output = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
+    const component = tools[name].renderResult(
+      { content: [{ type: "text", text: output }], details: {} },
+      { expanded: false, isPartial: false },
+      theme,
+      context(args),
+    );
+
+    const lines = component.render(200);
+    expect(lines[0]).toBe(`• ${name} ${subject}`);
+    expect(lines[1]).toBe("└ line 1");
+    expect(lines[6]).toBe("  line 6");
+    expect(lines.at(-1)).toContain(`showing 6/8 ${noun}s (ctrl+o expand)`);
+  });
+
+  it("shows small native results without an expansion hint", () => {
+    const { tools } = loadExtension();
+    const lines = tools.find.renderResult(
+      { content: [{ type: "text", text: "only.ts" }], details: {} },
+      { expanded: false, isPartial: false },
+      theme,
+      context({ pattern: "*.ts" }),
+    ).render(200);
+
+    expect(lines).toEqual([
+      "• find *.ts",
+      "└ only.ts",
+      "1 match · 7B",
+    ]);
+    expect(lines.join("\n")).not.toContain("ctrl+o expand");
+  });
+
+  it("renders edit diffs and new writes flat", () => {
+    const { tools } = loadExtension();
+    const path = join(mkdtempSync(join(tmpdir(), "xtrm-ui-")), "new.txt");
+    const content = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
+    const writeContext = context({ path, content });
+    tools.write.renderCall(writeContext.args, theme, writeContext);
+
+    const write = tools.write.renderResult(
+      { content: [{ type: "text", text: "ok" }], details: undefined },
+      { expanded: false, isPartial: false },
+      theme,
+      writeContext,
+    ).render(200);
+    const edit = tools.edit.renderResult(
+      { content: [{ type: "text", text: "ok" }], details: { diff: "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new" } },
+      { expanded: false, isPartial: false },
+      theme,
+      context({ path }),
+    ).render(200);
+
+    expect(write[0]).toBe(`• write ${path}`);
+    expect(write[1]).toBe("└ line 1");
+    expect(write.at(-1)).toContain("showing 6/8 lines (ctrl+o expand)");
+    expect(edit[0]).toBe(`• edit ${path}`);
+    expect(edit[1]).toMatch(/│ /); // diff line-number gutter, not the tool tree
   });
 
   it("keeps pre-write diff data in renderer-local state", () => {
@@ -303,6 +504,44 @@ describe("xtrm-ui built-in tool rendering", () => {
   });
 });
 
+describe("xtrm-ui pi runtime resolution", () => {
+  it("targets the bundled runtime used by dist/bundle/cli.js", () => {
+    expect(piRuntimeEntryForCliPath("/opt/pi/dist/bundle/cli.js"))
+      .toBe("/opt/pi/dist/bundle/index.js");
+  });
+
+  it("keeps unbundled dist/cli.js compatibility", () => {
+    expect(piRuntimeEntryForCliPath("/opt/pi/dist/cli.js"))
+      .toBe("/opt/pi/dist/index.js");
+  });
+
+  it("rejects unrelated entry paths", () => {
+    expect(piRuntimeEntryForCliPath("/opt/other/cli.js")).toBeUndefined();
+  });
+});
+
+describe("xtrm-ui prototype patch upgrades", () => {
+  const base = () => "base";
+  const wrapped = () => "wrapped";
+
+  it("uses the current method for a fresh install", () => {
+    expect(selectPatchBase(base, undefined, 23, undefined, "test patch")).toBe(base);
+  });
+
+  it("skips an already-current patch", () => {
+    expect(selectPatchBase(wrapped, 23, 23, base, "test patch")).toBeUndefined();
+  });
+
+  it("replaces an older patch from the preserved original", () => {
+    expect(selectPatchBase(wrapped, 22, 23, base, "test patch")).toBe(base);
+  });
+
+  it("refuses to stack over a legacy patch without its original", () => {
+    expect(() => selectPatchBase(wrapped, 22, 23, undefined, "test patch"))
+      .toThrow("test patch was installed by a legacy version; restart pi before upgrading");
+  });
+});
+
 describe("xtrm-ui external tool rendering", () => {
   it("renders one unindented Claude-style footer", () => {
     const rendered = renderExternalToolBackgroundLines(
@@ -318,7 +557,7 @@ describe("xtrm-ui external tool rendering", () => {
     expect(footer).toMatch(/^└─ showing 6\/94 lines \(ctrl\+o expand\) · 1\.6s · \d+B$/);
   });
 
-  it("adds a Serena badge and pretty-prints single-line JSON", () => {
+  it("renders a Serena row in native style and pretty-prints single-line JSON", () => {
     const rendered = renderExternalToolBackgroundLines(
       ['[{"name_path":"highlightExternalToolBadge","kind":"Function"}]'],
       200,
@@ -327,13 +566,13 @@ describe("xtrm-ui external tool rendering", () => {
       "find_symbol",
     );
 
-    expect(rendered[0]).toContain("\x1b[48;2;82;210;255m[Serena]");
-    expect(rendered[0]).toContain("\x1b[49m \x1b[1mfind_symbol\x1b[22m");
+    // • used <Serena #9a8bff bold> <find_symbol bold dim>
+    expect(rendered[0]).toBe("• \x1b[1mused\x1b[22m \x1b[38;2;154;139;255m\x1b[1mSerena\x1b[22m\x1b[39m \x1b[2m\x1b[1mfind_symbol\x1b[22m\x1b[22m");
     expect(rendered.length).toBeGreaterThan(2);
     expect(rendered.join("\n")).toContain('"name_path": "highlightExternalToolBadge"');
   });
 
-  it("uses the real name for generic external tool badges", () => {
+  it("uses the real name for generic external tools", () => {
     const rendered = renderExternalToolBackgroundLines(
       ["plain result"],
       200,
@@ -342,10 +581,10 @@ describe("xtrm-ui external tool rendering", () => {
       "mcp_custom_tool",
     );
 
-    expect(rendered[0]).toContain("› \x1b[38;2;3;8;12m\x1b[48;2;178;190;210m[mcp]\x1b[39m\x1b[49m \x1b[1mcustom_tool\x1b[22m");
+    expect(rendered[0]).toBe("• \x1b[1mused\x1b[22m \x1b[38;2;154;139;255m\x1b[1mmcp\x1b[22m\x1b[39m \x1b[2m\x1b[1mcustom_tool\x1b[22m\x1b[22m");
   });
 
-  it("keeps a colored provider badge and action for raw GitNexus output", () => {
+  it("keeps a colored provider label and tool for raw GitNexus output", () => {
     const rendered = renderExternalToolBackgroundLines(
       ["[GitNexus]", "{", '  "status": "found"', "}"],
       200,
@@ -354,28 +593,40 @@ describe("xtrm-ui external tool rendering", () => {
       "gitnexus_query",
     );
 
-    expect(rendered[0]).toContain("\x1b[48;2;178;154;255m[GitNexus]");
-    expect(rendered[0]).toContain("\x1b[49m \x1b[1mquery\x1b[22m");
+    expect(rendered[0]).toBe("• \x1b[1mused\x1b[22m \x1b[38;2;154;139;255m\x1b[1mGitNexus\x1b[22m\x1b[39m \x1b[2m\x1b[1mquery\x1b[22m\x1b[22m");
   });
 
-  it("keeps the provider header and bold action stable across lifecycle states", () => {
+  it("dims the dot and brightens the tool on success, keeps them muted while pending", () => {
     const stripAnsi = (value: string) => value.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
-    const states = [
-      ["› [Serena] execute_shell_command", "running"],
-      ["[Serena] execute_shell_command", "success"],
-      ["[Serena] execute_shell_command", "failure"],
-    ] as const;
+    const statuses = ["pending", "success", "error"] as const;
+    const expected = [
+      "• used Serena execute_shell_command",
+      "• used Serena execute_shell_command",
+      "• used Serena execute_shell_command",
+    ];
 
-    for (const [header] of states) {
+    for (let index = 0; index < statuses.length; index++) {
+      const status = statuses[index];
       const rendered = renderExternalToolBackgroundLines(
-        [header, "result"],
+        ["[Serena] execute_shell_command", "result"],
         200,
         "serena",
         false,
         "execute_shell_command",
+        undefined,
+        status,
       );
-      expect(stripAnsi(rendered[0] ?? "")).toBe("› [Serena] execute_shell_command");
-      expect(rendered[0]).toContain("\x1b[1mexecute_shell_command\x1b[22m");
+      // Plain text layout is identical across states (same stripped content).
+      expect(stripAnsi(rendered[0] ?? "")).toBe(expected[index]);
+      const line = rendered[0] ?? "";
+      if (status === "success") {
+        expect(line).toContain("\x1b[2m•\x1b[22m"); // dot dimmed on success
+        expect(line).toContain("\x1b[1mexecute_shell_command\x1b[22m"); // tool bright (no dim)
+      } else {
+        expect(line).toContain("\x1b[2m\x1b[1mexecute_shell_command\x1b[22m\x1b[22m"); // tool dim while pending/error
+      }
+      // Extension is always #9a8bff bold.
+      expect(line).toContain("\x1b[38;2;154;139;255m\x1b[1mSerena\x1b[22m\x1b[39m");
     }
   });
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { cleanupConflictingPiPackageSettings, inventoryPiRuntime, executePiSync, ensureAlwaysGlobalPiPackages, getXtManagedPiPackages, syncManagedPiThemes, updatePiSettings } from '../src/core/pi-runtime.js';
+import { cleanupConflictingPiPackageSettings, inventoryPiRuntime, executePiSync, ensureAlwaysGlobalPiPackages, getXtManagedPiPackages, parseNpmPackageName, syncManagedPiThemes, updatePiSettings } from '../src/core/pi-runtime.js';
 
 async function makeExtension(baseDir: string, name: string, extraFiles: Record<string, string> = {}): Promise<void> {
     const extDir = path.join(baseDir, name);
@@ -126,17 +126,22 @@ describe('updatePiSettings', () => {
     });
 
     it.each([
-        [undefined, []],
-        [{ blockedTools: ['read', 'write', 'edit', 'ls', 'find', 'grep'] }, []],
-        [{ blockedTools: ['execute_shell_command'] }, ['execute_shell_command']],
-    ])('repairs Serena native-tool blocking while preserving custom blocks', async (serena, blockedTools) => {
+        undefined,
+        { blockedTools: ['read', 'write', 'edit', 'ls', 'find', 'grep'] },
+        { blockedTools: ['execute_shell_command'] },
+    ])('preserves unowned Serena settings without managing them', async (serena) => {
         const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-settings-'));
         await fs.ensureDir(path.join(projectRoot, '.pi'));
         await fs.writeJson(path.join(projectRoot, '.pi', 'settings.json'), { serena });
 
         try {
             await updatePiSettings(projectRoot, false);
-            expect((await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'))).serena.blockedTools).toEqual(blockedTools);
+            const settings = await fs.readJson(path.join(projectRoot, '.pi', 'settings.json'));
+            if (serena === undefined) {
+                expect(settings).not.toHaveProperty('serena');
+            } else {
+                expect(settings.serena).toEqual(serena);
+            }
         } finally {
             await fs.remove(projectRoot);
         }
@@ -220,12 +225,12 @@ describe('inventoryPiRuntime', () => {
     });
 
     it('detects retired managed extensions without treating user extensions as orphans', async () => {
-        await makeExtension(targetDir, 'pi-serena-compact');
+        await makeExtension(targetDir, 'quality-gates');
         await makeExtension(targetDir, 'user-extension');
 
         const plan = await inventoryPiRuntime(sourceDir, targetDir);
 
-        expect(plan.orphanedExtensions).toEqual(['pi-serena-compact']);
+        expect(plan.orphanedExtensions).toEqual(['quality-gates']);
     });
 
     it('reports allPresent when everything is synced', async () => {
@@ -264,15 +269,20 @@ describe('ensureAlwaysGlobalPiPackages', () => {
     });
 
     it('does not invoke pi install when global package directories already exist', async () => {
+        const installedGitPackages: string[] = [];
         for (const pkg of getXtManagedPiPackages()) {
-            await fs.ensureDir(path.join(agentDir, 'npm', 'node_modules', pkg.id.slice(4)));
+            const npmName = parseNpmPackageName(pkg.id);
+            if (npmName) {
+                await fs.ensureDir(path.join(agentDir, 'npm', 'node_modules', npmName));
+            } else {
+                installedGitPackages.push(pkg.id);
+            }
         }
-
         let installCalls = 0;
         const result = await ensureAlwaysGlobalPiPackages(false, undefined, agentDir, () => {
             installCalls += 1;
             return { status: 0, stdout: '', stderr: '' };
-        });
+        }, null, installedGitPackages);
 
         expect(installCalls).toBe(0);
         expect(result.installed).toEqual([]);
@@ -284,7 +294,7 @@ describe('ensureAlwaysGlobalPiPackages', () => {
         const result = await ensureAlwaysGlobalPiPackages(false, undefined, agentDir, (piPackageId) => {
             installOrder.push(piPackageId);
             return { status: 0, stdout: '', stderr: '' };
-        }, null);
+        }, null, []);
 
         const expectedPackageIds = getXtManagedPiPackages().map(pkg => pkg.id);
         expect(installOrder).toEqual(expectedPackageIds);
@@ -330,14 +340,14 @@ describe('executePiSync', () => {
     });
 
     it('removes retired managed extensions without touching user extensions', async () => {
-        await makeExtension(targetDir, 'pi-serena-compact');
+        await makeExtension(targetDir, 'quality-gates');
         await makeExtension(targetDir, 'user-extension');
 
         const plan = await inventoryPiRuntime(sourceDir, targetDir);
         const result = await executePiSync(plan, sourceDir, targetDir, { removeOrphaned: true });
 
-        expect(result.extensionsRemoved).toContain('pi-serena-compact');
-        expect(await fs.pathExists(path.join(targetDir, 'pi-serena-compact'))).toBe(false);
+        expect(result.extensionsRemoved).toContain('quality-gates');
+        expect(await fs.pathExists(path.join(targetDir, 'quality-gates'))).toBe(false);
         expect(await fs.pathExists(path.join(targetDir, 'user-extension'))).toBe(true);
     });
 
@@ -352,7 +362,7 @@ describe('executePiSync', () => {
     });
 
     it('dry run enrolls current extensions and skips disabled or library IDs', async () => {
-        await makeExtension(sourceDir, 'serena-pool');
+        await makeExtension(sourceDir, 'quality-gates');
         await makeExtension(sourceDir, 'sp-terminal-overlay');
         await makeExtension(sourceDir, 'xtprompt');
 
@@ -362,13 +372,11 @@ describe('executePiSync', () => {
 
         expect(result.extensionsAdded).toHaveLength(0);
         expect(logs).toEqual(expect.arrayContaining([
-            '[DRY RUN] + serena-pool',
             '[DRY RUN] + sp-terminal-overlay',
             '[DRY RUN] + xtprompt',
         ]));
-        expect(logs.join('\n')).not.toContain('core');
-        expect(logs.join('\n')).not.toContain('pi-serena-compact');
         expect(logs.join('\n')).not.toContain('quality-gates');
-        expect(await fs.pathExists(path.join(targetDir, 'serena-pool'))).toBe(false);
+        expect(logs.join('\n')).not.toContain('core');
+        expect(await fs.pathExists(path.join(targetDir, 'quality-gates'))).toBe(false);
     });
 });

@@ -69,13 +69,10 @@ const XTRM_MANAGED_PI_EXTENSIONS = new Set([
   'service-skills',
   'xtrm-loader',
   'custom-footer',
-  'lsp-bootstrap',
   'plan-mode',
-  'auto-session-name',
   'auto-update',
   'compact-header',
   'git-checkpoint',
-  'pi-serena-compact',
   'xtrm-ui',
   'core',
 ]);

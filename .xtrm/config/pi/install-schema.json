@@ -25,21 +25,26 @@
       "instruction": "Run `pi` and authenticate via Google OAuth"
     },
     {
-      "key": "qwen-cli",
-      "instruction": "Inside `pi`, run `/login qwen-cli` for OAuth device flow"
-    },
-    {
       "key": "google-antigravity",
       "instruction": "Run `pi` and authenticate via Google OAuth (Antigravity)"
     }
   ],
   "packages": [
     "npm:pi-gitnexus",
-    "npm:pi-serena-tools",
-    "npm:@zenobius/pi-worktrees",
     "npm:@robhowley/pi-structured-return",
     "npm:@aliou/pi-guardrails",
-    "npm:@aliou/pi-processes",
-    "npm:pi-mcp-adapter"
+    "npm:@narumitw/pi-goal",
+    "git:github.com/DietrichGebert/ponytail",
+    "npm:@tintinweb/pi-tasks",
+    "npm:pi-background-tasks@latest",
+    "npm:@gotgenes/pi-subagents",
+    "npm:pi-mcp-adapter",
+    "npm:pi-mermaid-viewer",
+    "npm:@jaggerxtrm/pi-service-knowledge",
+    "npm:pi-intercom",
+    "git:github.com/alonw0/pi-claude-link",
+    "npm:pi-ast-grep",
+    "npm:@zenobius/pi-worktrees",
+    "npm:@aliou/pi-processes"
   ]
 }

@@ -1,0 +1,32 @@
+name: OSV Scanner
+
+# Dependency vulnerability scan. XTRM policy treats ordinary PR findings as
+# advisory and keeps push/scheduled scans blocking. SECURITY_FORCED
+# classification is handled by the dependency-update workflow when installed.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: "0 6 * * 1"  # Monday 06:00 UTC weekly
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: OSV scan
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@baa4139e56d6312335d899e6ba045fa16d1d3d0b # v2.5.1
+        with:
+          scan-args: |-
+            --recursive
+            ./

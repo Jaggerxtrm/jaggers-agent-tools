@@ -1,0 +1,22 @@
+{
+  "name": "read-line-numbers",
+  "version": "1.0.0",
+  "description": "Prefix model-facing read tool output with true source line numbers",
+  "keywords": [
+    "pi",
+    "pi-extension",
+    "read",
+    "line-numbers"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "index.ts",
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.80.0"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

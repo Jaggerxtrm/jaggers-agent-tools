@@ -107,7 +107,7 @@ describe('pi launch self-heal regression', () => {
     expect(resolvedTarget).toBe(path.resolve(path.join(worktreePath, '.xtrm', 'extensions', 'core')));
     expect(await fs.pathExists(overrideDir)).toBe(false);
 
-    expect(mocked.spawnSync).toHaveBeenCalledWith('pi', [], expect.objectContaining({ cwd: worktreePath }));
+    expect(mocked.spawnSync).toHaveBeenCalledWith('pi', ['--name', 'repo-xt-pi-heal1'], expect.objectContaining({ cwd: worktreePath }));
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
@@ -165,6 +165,72 @@ describe('pi launch self-heal regression', () => {
     expect(resolvedTarget).toBe(path.resolve(path.join(worktreePath, '.xtrm', 'extensions', 'core')));
     expect(await fs.pathExists(overrideDir)).toBe(false);
     expect(mocked.spawnSync).toHaveBeenCalledWith('pi', ['-c'], expect.objectContaining({ cwd: worktreePath, stdio: 'inherit' }));
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('prefers an exact branch over an earlier path suffix match', async () => {
+    const repoRoot = path.join(tempRoot, 'repo');
+    const barfooPath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-barfoo');
+    const fooPath = path.join(repoRoot, '.xtrm', 'worktrees', 'repo-xt-foo');
+
+    for (const worktreePath of [barfooPath, fooPath]) {
+      await fs.ensureDir(path.join(worktreePath, '.xtrm'));
+      await fs.writeJson(path.join(worktreePath, '.xtrm', 'session-meta.json'), {
+        runtime: 'pi',
+        launchedAt: '2026-04-01T00:00:00.000Z',
+      });
+    }
+    process.chdir(repoRoot);
+
+    mocked.spawnSync.mockImplementation((command: string, args: string[]) => {
+      const joinedArgs = args.join(' ');
+
+      if (command === 'git' && joinedArgs === 'rev-parse --git-common-dir') {
+        return { status: 0, stdout: '.git\n', stderr: '' };
+      }
+
+      if (command === 'git' && joinedArgs === 'worktree list --porcelain') {
+        return {
+          status: 0,
+          stdout: [
+            `worktree ${repoRoot}`,
+            'HEAD 111',
+            'branch refs/heads/main',
+            '',
+            `worktree ${barfooPath}`,
+            'HEAD 222',
+            'branch refs/heads/xt/barfoo',
+            '',
+            `worktree ${fooPath}`,
+            'HEAD 333',
+            'branch refs/heads/xt/foo',
+            '',
+          ].join('\n'),
+          stderr: '',
+        };
+      }
+
+      if (command === 'git' && joinedArgs.startsWith('log -1 --format=')) {
+        return { status: 0, stdout: '2026-04-03 12:00:00 +0000\x1fresume\n', stderr: '' };
+      }
+
+      if (command === 'pi' && joinedArgs === '-c') {
+        return { status: 0, stdout: '', stderr: '' };
+      }
+
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const exitSpy = mockProcessExit();
+    const { createAttachCommand } = await import('../commands/attach.js');
+
+    await expect(createAttachCommand().parseAsync(['node', 'attach', 'foo'])).rejects.toThrow('exit:0');
+
+    expect(mocked.spawnSync).toHaveBeenCalledWith(
+      'pi',
+      ['-c'],
+      expect.objectContaining({ cwd: fooPath, stdio: 'inherit' }),
+    );
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 });

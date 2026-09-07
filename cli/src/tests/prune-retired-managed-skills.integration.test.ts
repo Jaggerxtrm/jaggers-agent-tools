@@ -90,7 +90,7 @@ describe('runInstall — retired managed-skill prune (xtrm-1o63w.1)', () => {
     await fs.writeFile(path.join(skillDir, 'SKILL.md'), body || `# ${name}\n`, 'utf8');
   }
 
-  it('removes managed default no longer in registry + matching active symlink; keeps user content', async () => {
+  it('removes only retired managed defaults proved by prior ownership; keeps unmanaged entries', async () => {
     const packageRoot = path.join(tmpDir, 'pkg');
     const packageDefault = path.join(packageRoot, '.xtrm', 'skills', 'default');
     const userXtrmDir = path.join(tmpDir, '.xtrm');
@@ -114,9 +114,27 @@ describe('runInstall — retired managed-skill prune (xtrm-1o63w.1)', () => {
       },
     });
 
-    // Consumer fixture (matches the repro): real default/using-specialists-v3 + active symlink.
+    // Prior repo snapshot proves only these two defaults were xt-managed.
+    await fs.ensureDir(userXtrmDir);
+    await fs.writeJson(path.join(userXtrmDir, 'registry.json'), {
+      version: '0.9.0',
+      assets: {
+        skills: {
+          source_dir: '.xtrm/skills/default',
+          install_mode: 'copy',
+          files: {
+            'using-specialists/SKILL.md': { hash: 'old', version: '0.9.0' },
+            'using-specialists-v3/SKILL.md': { hash: 'old', version: '0.9.0' },
+          },
+        },
+      },
+    });
+
+    // Consumer fixture: one retired managed skill, one current managed skill,
+    // and one unmanaged drop-in that must survive.
     await writeSkill(targetDefault, 'using-specialists-v3');
     await writeSkill(targetDefault, 'using-specialists');
+    await writeSkill(targetDefault, 'user-dropin');
     await fs.ensureDir(targetActive);
     await fs.symlink(
       path.join('..', 'default', 'using-specialists-v3'),
@@ -153,10 +171,53 @@ describe('runInstall — retired managed-skill prune (xtrm-1o63w.1)', () => {
     expect(await fs.pathExists(path.join(targetDefault, 'using-specialists', 'SKILL.md'))).toBe(true);
     expect(await fs.pathExists(path.join(targetActive, 'using-specialists'))).toBe(true);
 
-    // User-owned active content preserved.
+    // Unmanaged/default-root and user-owned active content preserved.
+    expect(await fs.pathExists(path.join(targetDefault, 'user-dropin', 'SKILL.md'))).toBe(true);
     expect(await fs.readFile(path.join(targetActive, 'user-real', 'SKILL.md'), 'utf8')).toBe('# user\n');
     expect(await fs.pathExists(path.join(targetActive, 'my-skill'))).toBe(true);
     expect((await fs.lstat(path.join(targetActive, 'my-skill'))).isSymbolicLink()).toBe(true);
+  });
+
+  it('hydrates managed skills without pruning a false three-entry pre-state that lacks ownership proof', async () => {
+    const packageRoot = path.join(tmpDir, 'pkg');
+    const packageDefault = path.join(packageRoot, '.xtrm', 'skills', 'default');
+    const userXtrmDir = path.join(tmpDir, '.xtrm');
+    const targetDefault = path.join(userXtrmDir, 'skills', 'default');
+
+    fs.ensureDirSync(path.join(packageRoot, '.xtrm'));
+    fs.writeJsonSync(path.join(packageRoot, 'package.json'), { version: '1.0.0' });
+    await writeSkill(packageDefault, 'using-specialists');
+    fs.writeJsonSync(path.join(packageRoot, '.xtrm', 'registry.json'), {
+      version: '1.0.0',
+      assets: {
+        skills: {
+          source_dir: '.xtrm/skills/default',
+          install_mode: 'copy',
+          files: {
+            'using-specialists/SKILL.md': { hash: 'x', version: '1.0.0' },
+          },
+        },
+      },
+    });
+
+    await fs.ensureDir(targetDefault);
+    for (const name of ['alpha-baseline', 'beta-baseline', 'gamma-baseline']) {
+      await writeSkill(targetDefault, name);
+    }
+
+    await runInstall({
+      yes: true,
+      dryRun: false,
+      projectRoot: tmpDir,
+      packageRoot,
+      skipMachineBootstrap: true,
+      skipClaudeRuntimeSync: true,
+    });
+
+    for (const name of ['alpha-baseline', 'beta-baseline', 'gamma-baseline']) {
+      expect(await fs.pathExists(path.join(targetDefault, name, 'SKILL.md'))).toBe(true);
+    }
+    expect(await fs.pathExists(path.join(targetDefault, 'using-specialists', 'SKILL.md'))).toBe(true);
   });
 
   it('dry-run reports but does not touch disk', async () => {

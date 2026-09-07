@@ -114,8 +114,8 @@ describe("custom-footer shared beads cache", () => {
 		});
 		await start();
 		const lines = footerRenderer.render(120);
-		expect(lines).toHaveLength(3);
-		expect(lines[2].replace(/\x1b\[[0-9;]*m/g, "")).toContain("12 open · 2 in progress · epic k2ufi (1/3 done)");
+		expect(lines).toHaveLength(1);
+		expect(lines[0].replace(/\x1b\[[0-9;]*m/g, "")).toContain("o:12 p:2");
 	});
 
 	it("render performs no subprocess work", async () => {
@@ -146,8 +146,8 @@ describe("custom-footer shared beads cache", () => {
 		expect(calls.filter(([cmd]) => cmd === "bd")).toHaveLength(0);
 		expect(calls.filter(([cmd]) => cmd !== "git" && cmd !== "bd")).toHaveLength(0);
 
-		// The footer still renders exactly three lines: path/branch, context/model, compact beads.
-		expect(footerRenderer.render(120)).toHaveLength(3);
+		// The footer renders exactly one line: path/branch, context/model, compact beads.
+		expect(footerRenderer.render(120)).toHaveLength(1);
 	});
 
 	it("re-reads the cache file (no subprocess) when a bd mutation tool_result arrives", async () => {

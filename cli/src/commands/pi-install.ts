@@ -15,6 +15,7 @@ import { homedir } from 'node:os';
 import { t } from '../utils/theme.js';
 import { runPiRuntimeSync, type PiSyncResult } from '../core/pi-runtime.js';
 import { isPiInstalled, isPnpmInstalled } from '../core/machine-bootstrap.js';
+import { printGlobalPromptSyncSummary, syncGlobalPrompts } from '../core/global-prompt-sync.js';
 
 const PI_AGENT_DIR = process.env.PI_AGENT_DIR || path.join(homedir(), '.pi', 'agent');
 
@@ -47,6 +48,8 @@ function ensurePnpm(dryRun: boolean): void {
 export interface PiInstallOptions {
     skipGlobalPackageAssurance?: boolean;
     skipExternalToolPatch?: boolean;
+    /** Update performs the global prompt sync once after all repo reconciliations. */
+    skipGlobalPromptSync?: boolean;
 }
 
 export async function runPiInstall(
@@ -99,6 +102,14 @@ export async function runPiInstall(
         skipGlobalPackageAssurance: options.skipGlobalPackageAssurance,
         skipExternalToolPatch: options.skipExternalToolPatch,
     });
+
+    // Ownership-safe global prompt sync — exactly once per invocation, never
+    // once per repo (xtrm-3ljgz.2). update passes skipGlobalPromptSync and
+    // runs it once after all repo reconciliations.
+    if (!options.skipGlobalPromptSync) {
+        const promptSync = await syncGlobalPrompts({ dryRun });
+        printGlobalPromptSyncSummary(promptSync);
+    }
 
     // Seed sane per-package defaults (idempotent — skips if user already has one)
     seedGitnexusDefaults(dryRun);

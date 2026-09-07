@@ -3,12 +3,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, realpathSync, rmSync, readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, unlinkSync, lstatSync, readlinkSync, realpathSync, rmSync, readdirSync, accessSync, constants as fsConstants } from 'node:fs';
 
 import { shouldUseGlobalSkills } from '../core/global-skills-flag.js';
 import { ensureAgentsSkillsSymlink } from '../core/skills-scaffold.js';
+import { isSafeRuntimeLinkName } from '../core/skills-state.js';
+import { RESERVED_PACK_NAMES, resolveSkillsRoot, SKILL_FILE_NAME } from '../core/skills-layout.js';
 import { runPiLaunchPreflight } from '../core/pi-runtime.js';
 import { runtimeCompatibilityError } from '../core/runtime-compat.js';
+import {
+    buildDetachedLaunchOutcome,
+    checkStructuredLaunchPaths,
+    checkStructuredLaunchOptions,
+    parseLiveTmuxSessionListing,
+    sanitizeRuntimeVersion,
+} from '../core/launch-outcome.js';
 
 /**
  * Hard ceiling for the turn-1 shell command length. tmux new-session refuses
@@ -183,6 +192,8 @@ export interface WorktreeSessionOptions {
     /** Explicit turn-1 body text (case ii). Mutually exclusive with --bead. */
     prompt?: string;
     attach?: boolean;
+    /** Emit one xtrm.command-outcome.v1 object. Valid only with detached, non-reuse launches. */
+    json?: boolean;
     /** Explicit runtime --model override; with --role, wins over the specialist default. */
     model?: string;
     /** Explicit Pi --thinking override; with --role, wins over the specialist default. */
@@ -397,31 +408,939 @@ export function resolveSkillPath(mainRepoRoot: string, rawPath: string): string 
     return repoResolved;
 }
 
-export function resolveRequestedSkills(mainRepoRoot: string, requested: string[]): string[] {
+// Bare logical name → v2 project-pack resolution seam (xtrm-lk07w.14). The
+// repo layout flattens consumer-owned skills to <root>/.xtrm/skills/<pack>/<skill>/,
+// with pack names varying per repository. Mirrors the flat-pack shape used by
+// discoverRepoPacks in core/skill-discovery.ts (direct child packs of the
+// .xtrm/skills root, reserved tier names excluded), without its async PACK.json
+// metadata walk: launch resolution is synchronous and existence-bounded. Returns
+// the sole matching SKILL.md, null when no pack owns the name. Multiple matches
+// fail deterministically — first-match by filesystem order is never acceptable.
+
+function errnoCode(error: unknown): string | undefined {
+    return error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+}
+
+/** True only for a genuinely absent target. ENOTDIR is a layout violation, not
+ * absence: an existing non-directory at a slot must fail loudly. */
+function isEnoent(error: unknown): boolean {
+    return errnoCode(error) === 'ENOENT';
+}
+
+function isPathInside(child: string, parent: string): boolean {
+    const rel = path.relative(parent, child);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/** Replace C0/C1 control bytes and ESC with escaped forms in diagnostics so a
+ * hostile skill/pack name can never inject terminal control into an error. */
+function sanitizeDiagnosticName(value: string): string {
+    const escaped = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
+        return `\\u{${ch.charCodeAt(0).toString(16).padStart(2, '0')}}`;
+    });
+    return escaped.length > 256 ? `${escaped.slice(0, 256)}…` : escaped;
+}
+
+function describeSkillRequest(mainRepoRoot: string, skill: string): string {
+    if (!path.isAbsolute(skill)) return sanitizeDiagnosticName(skill);
+    const relative = path.relative(mainRepoRoot, skill);
+    return sanitizeDiagnosticName(isPathInside(skill, mainRepoRoot) ? relative : path.basename(skill));
+}
+
+/**
+ * Validate the v2 pack-skill slot against the canonical skills root, per the
+ * accepted fail-closed contract: ONLY a genuinely absent skill directory
+ * (ENOENT) is a no-match for the pack. Every existing-but-malformed slot
+ * throws a bounded, sanitized diagnostic: the slot being a file/symlink, a
+ * missing/symlink/non-regular SKILL.md, an unreadable SKILL.md, or a SKILL.md
+ * whose canonical location escapes the consumer skills root. Returns the
+ * SKILL.md path only for the fully valid case.
+ */
+function probePackSkillDir(
+    skillDir: string,
+    skillFile: string,
+    canonicalSkillsRoot: string,
+    describe: string,
+): string | null {
+    let dirStat;
+    try {
+        dirStat = lstatSync(skillDir);
+    } catch (error) {
+        if (isEnoent(error)) return null; // genuine no-match: pack does not own the name
+        throw new Error(`cannot probe project-pack skill '${sanitizeDiagnosticName(describe)}': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    // An existing slot must be a real, non-symlink directory.
+    if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) {
+        throw new Error(
+            `project-pack skill '${sanitizeDiagnosticName(describe)}' slot is not a real directory.`,
+        );
+    }
+    // SKILL.md must exist as a regular file: a missing, symlinked, directory,
+    // fifo, or other special SKILL.md is a violation, not a fallback signal.
+    let fileStat;
+    try {
+        fileStat = lstatSync(skillFile);
+    } catch (error) {
+        if (isEnoent(error)) {
+            throw new Error(`project-pack skill '${sanitizeDiagnosticName(describe)}' has no ${SKILL_FILE_NAME}.`);
+        }
+        throw new Error(`cannot probe ${SKILL_FILE_NAME} for project-pack skill '${sanitizeDiagnosticName(describe)}': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
+        throw new Error(
+            `project-pack skill '${sanitizeDiagnosticName(describe)}' ${SKILL_FILE_NAME} is not a regular file.`,
+        );
+    }
+    // Canonical containment: a symlinked skill dir / SKILL.md that escapes
+    // .xtrm/skills is a violation, not a fallback signal.
+    let canonicalFile;
+    try {
+        canonicalFile = realpathSync(skillFile);
+    } catch (error) {
+        throw new Error(`cannot canonicalize project-pack skill '${sanitizeDiagnosticName(describe)}': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    if (!isPathInside(canonicalFile, canonicalSkillsRoot)) {
+        throw new Error(`project-pack skill '${sanitizeDiagnosticName(describe)}' escapes the skills root.`);
+    }
+    try {
+        accessSync(skillFile, fsConstants.R_OK);
+    } catch (error) {
+        throw new Error(`cannot read project-pack skill '${sanitizeDiagnosticName(describe)}': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    return skillFile;
+}
+
+/**
+ * Strict validation for a pack-root SKILL.md (and other optional skill files):
+ * absence is a legitimate "no such skill here", but a present SKILL.md that is
+ * a symlink, non-regular, unreadable, or escaping the skills root is a
+ * violation and throws. Mirrors the fail-closed contract of probePackSkillDir
+ * while allowing a pack container to exist without a root skill.
+ */
+function probeOptionalPackSkillFile(skillFile: string, canonicalSkillsRoot: string, describe: string): string | null {
+    let stat;
+    try {
+        stat = lstatSync(skillFile);
+    } catch (error) {
+        if (isEnoent(error)) return null;
+        throw new Error(`cannot probe project-pack skill '${sanitizeDiagnosticName(describe)}': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+        throw new Error(
+            `project-pack skill '${sanitizeDiagnosticName(describe)}' ${SKILL_FILE_NAME} is not a regular file.`,
+        );
+    }
+    let canonicalFile;
+    try {
+        canonicalFile = realpathSync(skillFile);
+    } catch (error) {
+        throw new Error(`cannot canonicalize project-pack skill '${sanitizeDiagnosticName(describe)}': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    if (!isPathInside(canonicalFile, canonicalSkillsRoot)) {
+        throw new Error(`project-pack skill '${sanitizeDiagnosticName(describe)}' escapes the skills root.`);
+    }
+    try {
+        accessSync(skillFile, fsConstants.R_OK);
+    } catch (error) {
+        throw new Error(`cannot read project-pack skill '${sanitizeDiagnosticName(describe)}': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    return skillFile;
+}
+
+function resolveRepoPackSkill(mainRepoRoot: string, skillName: string): string | null {
+    // A bare name is a single safe basename. Anything else cannot be a pack
+    // skill reference and must keep its existing literal-path semantics.
+    if (!isSafeRuntimeLinkName(skillName)) return null;
+    const skillsRoot = resolveSkillsRoot(mainRepoRoot);
+    let entries;
+    try {
+        entries = readdirSync(skillsRoot, { withFileTypes: true });
+    } catch (error) {
+        if (isEnoent(error)) return null; // repo has no .xtrm/skills at all
+        // EACCES, EIO and ENOTDIR ('.xtrm/skills' is a file) are violations.
+        throw new Error(`cannot enumerate project pack root '.xtrm/skills': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    let canonicalRepoRoot: string;
+    let canonicalSkillsRoot: string;
+    try {
+        canonicalRepoRoot = realpathSync(mainRepoRoot);
+        canonicalSkillsRoot = realpathSync(skillsRoot);
+    } catch (error) {
+        if (isEnoent(error)) return null;
+        throw new Error(`cannot canonicalize project pack root '.xtrm/skills': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    // .xtrm/skills must stay inside the consumer checkout root; a skills root
+    // that escapes it is a violation, not a fallback signal.
+    if (!isPathInside(canonicalSkillsRoot, canonicalRepoRoot)) {
+        throw new Error("project pack root '.xtrm/skills' escapes the consumer checkout root.");
+    }
+    const matches: ProjectPackSkillEntry[] = [];
+    for (const entry of entries) {
+        // Ordinary metadata files (state.json, INVARIANTS.md, ...) are skipped
+        // by the directory check. A top-level non-reserved SYMLINK pack is a
+        // layout violation and must fail loudly — never silently excluded
+        // into a global fallback.
+        if (entry.isSymbolicLink()) {
+            if (!RESERVED_PACK_NAMES.has(entry.name)) {
+                throw new Error(
+                    `project pack '${sanitizeDiagnosticName(entry.name)}' at .xtrm/skills/${sanitizeDiagnosticName(entry.name)} is a symlink; packs must be real directories.`,
+                );
+            }
+            continue;
+        }
+        if (!entry.isDirectory()) continue;
+        if (RESERVED_PACK_NAMES.has(entry.name)) continue;
+        const packPath = path.join(skillsRoot, entry.name);
+        // Pack-root SKILL.md: optional (a pack container may hold only child
+        // skills), but a present-and-malformed root skill is a violation. Its
+        // runtime identity is the frontmatter name or, failing that, the pack
+        // name.
+        const rootSkill = probeOptionalPackSkillFile(
+            path.join(packPath, SKILL_FILE_NAME),
+            canonicalSkillsRoot,
+            `${sanitizeDiagnosticName(entry.name)}/${SKILL_FILE_NAME}`,
+        );
+        if (rootSkill) {
+            const runtimeName = readSkillRuntimeNameSync(rootSkill, entry.name);
+            assertSafeRuntimeIdentity(runtimeName, `${sanitizeDiagnosticName(entry.name)}/${SKILL_FILE_NAME}`);
+            // Canonical runtimeName OR the pack name (dirname semantics for a
+            // root skill whose frontmatter renames it).
+            if (runtimeName === skillName || entry.name === skillName) {
+                matches.push({
+                    runtimeName,
+                    canonicalPath: realpathSync(rootSkill),
+                    packName: entry.name,
+                    repoRelativeDir: path.join('.xtrm', 'skills', entry.name),
+                });
+            }
+        }
+        // Direct child skill dirs, matched by canonical runtimeName (frontmatter
+        // may differ from the directory basename, e.g. catalog -> name:
+        // service-knowledge). A directory named exactly like the requested
+        // skill that exists but is not a valid skill slot is a violation, not
+        // a fallback signal; other child dirs without SKILL.md are not skills
+        // and are skipped (canonical discovery parity).
+        let children;
+        try {
+            children = readdirSync(packPath, { withFileTypes: true });
+        } catch (error) {
+            throw new Error(`cannot enumerate pack '.xtrm/skills/${sanitizeDiagnosticName(entry.name)}': ${errnoCode(error) ?? 'UnknownError'}`);
+        }
+        for (const child of children) {
+            if (child.isSymbolicLink()) {
+                if (child.name === skillName) {
+                    throw new Error(
+                        `project-pack skill '${sanitizeDiagnosticName(child.name)}' slot in pack '${sanitizeDiagnosticName(entry.name)}' is a symlink; must be a real directory.`,
+                    );
+                }
+                continue;
+            }
+            if (!child.isDirectory()) {
+                if (child.name === skillName) {
+                    throw new Error(
+                        `project-pack skill '${sanitizeDiagnosticName(child.name)}' slot in pack '${sanitizeDiagnosticName(entry.name)}' is not a real directory.`,
+                    );
+                }
+                continue;
+            }
+            const slotDir = path.join(packPath, child.name);
+            const slotFile = path.join(slotDir, SKILL_FILE_NAME);
+            // SEC-FINAL-03: lstat the SKILL candidate — only a true ENOENT for
+            // a non-requested child means "not a skill dir" (skip). A PRESENT
+            // symlink (dangling or not), EACCES/EIO, or non-regular entry must
+            // throw; an exact requested-name dir with no SKILL.md still throws.
+            let slotStat;
+            try {
+                slotStat = lstatSync(slotFile);
+            } catch (error) {
+                if (isEnoent(error)) {
+                    if (child.name === skillName) {
+                        throw new Error(
+                            `project-pack skill '${sanitizeDiagnosticName(child.name)}' slot in pack '${sanitizeDiagnosticName(entry.name)}' has no ${SKILL_FILE_NAME}.`,
+                        );
+                    }
+                    continue; // genuinely absent: not a skill dir
+                }
+                throw new Error(`cannot probe ${SKILL_FILE_NAME} for pack '${sanitizeDiagnosticName(entry.name)}': ${errnoCode(error) ?? 'UnknownError'}`);
+            }
+            if (slotStat.isSymbolicLink() || !slotStat.isFile()) {
+                throw new Error(
+                    `project-pack skill '${sanitizeDiagnosticName(child.name)}' slot in pack '${sanitizeDiagnosticName(entry.name)}' ${SKILL_FILE_NAME} is not a regular file.`,
+                );
+            }
+            const describe = `${sanitizeDiagnosticName(entry.name)}/${sanitizeDiagnosticName(child.name)}/${SKILL_FILE_NAME}`;
+            const probed = probePackSkillDir(slotDir, slotFile, canonicalSkillsRoot, describe);
+            if (!probed) continue;
+            const runtimeName = readSkillRuntimeNameSync(slotFile, child.name);
+            assertSafeRuntimeIdentity(runtimeName, describe);
+            // Canonical runtimeName OR the slot directory basename: the dirname
+            // arm preserves consumer layouts whose frontmatter renames the
+            // skill (e.g. infra's service-knowledge/ dir with a longer name),
+            // while the runtimeName arm resolves renamed children.
+            if (runtimeName !== skillName && child.name !== skillName) continue;
+            matches.push({
+                runtimeName,
+                canonicalPath: realpathSync(slotFile),
+                packName: entry.name,
+                repoRelativeDir: path.join('.xtrm', 'skills', entry.name, child.name),
+            });
+        }
+    }
+    if (matches.length === 0) return null;
+    if (matches.length > 1) {
+        // Deterministic duplicate runtime-name detection (never first-match by
+        // filesystem order).
+        const owners = matches
+            .map((match) => sanitizeDiagnosticName(match.repoRelativeDir))
+            .sort((a, b) => a.localeCompare(b));
+        throw new Error(
+            `skill '${sanitizeDiagnosticName(skillName)}' is ambiguous: matches project packs '${owners.join("', '")}'. `
+            + 'Enable one or pass an explicit path.',
+        );
+    }
+    return matches[0].canonicalPath;
+}
+
+/**
+ * Strict normalized pack direct: containment (canonical skills root inside the
+ * canonical checkout root) FIRST, then the lstat probe (regular/readable/
+ * canonical SKILL.md, dangling symlink fails), then the safe canonical
+ * identity. Shared by lexically-pinned relative pack requests and absolute
+ * pack-shaped directs; never falls back to the HOME tier (c7e/SEC-963).
+ */
+function probeResolvedPackDirect(mainRepoRoot: string, skill: string, direct: string): string {
+    const describedSkill = describeSkillRequest(mainRepoRoot, skill);
+    let canonicalSkillsRoot: string;
+    try {
+        const canonicalRepoRoot = realpathSync(mainRepoRoot);
+        canonicalSkillsRoot = realpathSync(resolveSkillsRoot(mainRepoRoot));
+        if (!isPathInside(canonicalSkillsRoot, canonicalRepoRoot)) {
+            throw new Error("project pack root '.xtrm/skills' escapes the consumer checkout root.");
+        }
+    } catch (error) {
+        if (error instanceof Error && error.message.includes('escapes the consumer checkout root')) throw error;
+        if (isEnoent(error)) {
+            throw new Error(`skill '${describedSkill}' is not a valid project-pack skill`);
+        }
+        throw new Error(`cannot canonicalize project pack root '.xtrm/skills': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    const skillDir = packSkillDir(direct);
+    const slotFile = path.join(skillDir, SKILL_FILE_NAME);
+    const probed = probePackSkillDir(
+        skillDir,
+        slotFile,
+        canonicalSkillsRoot,
+        sanitizeDiagnosticName(path.relative(mainRepoRoot, skillDir)),
+    );
+    if (!probed) {
+        throw new Error(`skill '${describedSkill}' is not a valid project-pack skill`);
+    }
+    // Safe canonical identity required for every runtime (SEC-196-03).
+    const entry = resolveProjectPackEntry(mainRepoRoot, direct);
+    if (!entry) {
+        throw new Error(`skill '${describedSkill}' is not a valid project-pack skill`);
+    }
+    // Return the canonical SKILL.md path (dir and file forms unify).
+    return slotFile;
+}
+
+export function resolveRequestedSkills(
+    mainRepoRoot: string,
+    requested: string[],
+    runtime: 'pi' | 'claude' | 'codex' = 'pi',
+): string[] {
+    // Runtime-targeted views (SEC-07): each runtime sees only its own enabled
+    // runtime root, so a bare name can never resolve a Pi view for a Claude
+    // launch and hide a valid project pack. Pi's home view is the agent
+    // directory; claude/codex use their own roots.
+    const repoView = runtime === 'pi' ? '.pi' : runtime === 'claude' ? '.claude' : '.agents';
+    const homeView = runtime === 'pi' ? path.join('.pi', 'agent', 'skills') : path.join(repoView, 'skills');
     const resolved = requested.map((skill) => {
+        // c7e: classify a RAW RELATIVE pack-shaped request LEXICALLY, pinned to
+        // the main repo root, BEFORE resolveSkillPath's repo->$HOME fallback —
+        // a missing repo pack must fail here and can never home-fallback into
+        // matching HOME content. Absolute/~ requests keep the tiered behavior.
+        const pinnedPackPath = !path.isAbsolute(skill) && !skill.startsWith('~')
+            ? (isProjectPackShapePath(mainRepoRoot, path.resolve(mainRepoRoot, skill)) ? path.resolve(mainRepoRoot, skill) : null)
+            : null;
+        if (pinnedPackPath) {
+            return probeResolvedPackDirect(mainRepoRoot, skill, pinnedPackPath);
+        }
         const direct = resolveSkillPath(mainRepoRoot, skill);
+        // SEC-FINAL-03 follow-up: pack-SHAPE routes through the strict probe
+        // even when the target doesn't exist (dangling SKILL.md symlink) —
+        // shape recognition is independent of existence.
+        if (isProjectPackShapePath(mainRepoRoot, direct)) {
+            return probeResolvedPackDirect(mainRepoRoot, skill, direct);
+        }
         if (existsSync(direct)) {
             const valid = lstatSync(direct).isDirectory()
                 ? existsSync(path.join(direct, 'SKILL.md'))
                 : path.basename(direct) === 'SKILL.md';
-            if (!valid) throw new Error(`skill '${skill}' is not a skill directory or SKILL.md`);
+            if (!valid) throw new Error(`skill '${describeSkillRequest(mainRepoRoot, skill)}' is not a skill directory or SKILL.md`);
             return direct;
         }
 
+        // Enabled repo runtime-view precedes pack discovery: the operator's
+        // explicit enablement resolves the name before any pack ambiguity can
+        // arise. Never first-match; never shadow an enabled instance with an
+        // unselected pack source.
+        const repoRuntimeView = path.join(mainRepoRoot, repoView, 'skills', skill, SKILL_FILE_NAME);
+        if (existsSync(repoRuntimeView)) return repoRuntimeView;
+
+        // Project-pack tier precedes the global fallback: exactly one pack
+        // match wins, multiple matches fail deterministically, zero continues.
+        const repoPackSkill = resolveRepoPackSkill(mainRepoRoot, skill);
         const candidates = [
-            path.join(mainRepoRoot, '.pi', 'skills', skill, 'SKILL.md'),
-            path.join(mainRepoRoot, '.claude', 'skills', skill, 'SKILL.md'),
-            path.join(mainRepoRoot, '.agents', 'skills', skill, 'SKILL.md'),
-            path.join(os.homedir(), '.pi', 'agent', 'skills', skill, 'SKILL.md'),
-            path.join(os.homedir(), '.claude', 'skills', skill, 'SKILL.md'),
-            path.join(os.homedir(), '.agents', 'skills', skill, 'SKILL.md'),
-            path.join(os.homedir(), '.xtrm', 'skills', 'default', skill, 'SKILL.md'),
+            ...(repoPackSkill ? [repoPackSkill] : []),
+            path.join(os.homedir(), homeView, skill, SKILL_FILE_NAME),
+            path.join(os.homedir(), '.xtrm', 'skills', 'default', skill, SKILL_FILE_NAME),
         ];
         const found = candidates.find(existsSync);
-        if (!found) throw new Error(`skill '${skill}' not found`);
+        if (!found) throw new Error(`skill '${describeSkillRequest(mainRepoRoot, skill)}' not found`);
         return found;
     });
     return [...new Set(resolved.map((skillPath) => realpathSync(skillPath)))];
+}
+
+// --- Claude pack-skill loadability (xtrm-lk07w.14) -----------------------
+// Claude has no native --skill: a skill is loadable only as '/<name>' from a
+// runtime root Claude discovers (<cwd>/.claude/skills or ~/.claude/skills).
+// Project-pack skills live under <root>/.xtrm/skills/<pack>/ — not a runtime
+// root — so the launcher materializes a bounded symlink for pack-tier skills
+// inside the disposable worktree's .claude/skills after creation (the pane
+// runs with cwd=worktreePath). No state.json writes: the link is
+// worktree-local, non-managed (reap never touches it), and dies with the
+// worktree on `xt end`.
+
+export interface ProjectPackSkillEntry {
+    /** Canonical runtime identity from SKILL.md frontmatter `name:` (fallback:
+     * skill-dir basename, or pack name for a pack-root SKILL.md) — mirrors
+     * skill-discovery.ts discoverSkill/discoverPackSkills semantics. */
+    readonly runtimeName: string;
+    /** realpath of the SKILL.md file in the main checkout. */
+    readonly canonicalPath: string;
+    readonly packName: string;
+    /** Repo-relative directory of the skill slot, e.g.
+     * `.xtrm/skills/infra/catalog` or `.xtrm/skills/infra` for a pack root. */
+    readonly repoRelativeDir: string;
+}
+
+export interface ClaudePackSkillEntry extends ProjectPackSkillEntry {
+    /** The '/<name>' this launch binds: the requested bare name when the slot
+     * was resolved by name (including dirname-matched skills whose frontmatter
+     * differs), the canonical runtimeName for explicit pack paths. */
+    readonly name: string;
+}
+
+/** Pack-shaped resolved path forms: root skill file, child skill dir, child
+ * skill file. Deeper descendants are never project-pack skills. */
+/** Syntactic pack-shape recognition, INDEPENDENT of existence (SEC-FINAL-03
+ * follow-up): a direct path under <root>/.xtrm/skills/<pack>/<skill> — even a
+ * dangling SKILL.md symlink or a pack ROOT DIRECTORY — must still route
+ * through the strict canonical probe instead of degrading to a generic
+ * 'not found' (reviewer 751b HIGH). */
+export function isProjectPackShapePath(mainRepoRoot: string, resolvedPath: string): boolean {
+    const rel = path.relative(mainRepoRoot, resolvedPath);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return false;
+    const segments = rel.split(path.sep);
+    if (segments[0] !== '.xtrm' || segments[1] !== 'skills') return false;
+    if (segments.length === 3) return !RESERVED_PACK_NAMES.has(segments[2]); // pack root DIRECTORY
+    if (segments.length === 4 && segments[3] === SKILL_FILE_NAME) return true; // pack-root skill file
+    if (segments.length === 4) return !RESERVED_PACK_NAMES.has(segments[2]);    // child dir
+    if (segments.length === 5 && segments[4] === SKILL_FILE_NAME) return !RESERVED_PACK_NAMES.has(segments[2]); // child file
+    return false;
+}
+
+export function isProjectPackSkillPath(mainRepoRoot: string, resolvedPath: string): boolean {
+    if (!isProjectPackShapePath(mainRepoRoot, resolvedPath)) return false;
+    const rel = path.relative(mainRepoRoot, resolvedPath).split(path.sep);
+    const packName = rel[2];
+    const isRootForm = rel.length === 3 || (rel.length === 4 && rel[3] === SKILL_FILE_NAME);
+    const slot = isRootForm
+        ? path.join(mainRepoRoot, '.xtrm', 'skills', packName, SKILL_FILE_NAME)
+        : path.join(mainRepoRoot, '.xtrm', 'skills', packName, rel[3], SKILL_FILE_NAME);
+    return existsSync(slot);
+}
+
+/** Canonical runtime name of a SKILL.md, mirroring skill-discovery.ts's
+ * readSkillFrontmatterName/discoverSkill semantics EXACTLY: reads the full
+ * file (no truncation — the probe already established regularity/readability;
+ * a concurrent read failure after that must NOT silently rename identity, so
+ * it fails closed with a sanitized diagnostic). Frontmatter `name:` wins,
+ * otherwise null (callers apply the dir/pack-name fallback). */
+function readSkillFrontmatterNameSync(skillFile: string): string | null {
+    let content: string;
+    try {
+        content = readFileSync(skillFile, { encoding: 'utf8' });
+    } catch (error) {
+        throw new Error(`cannot read project-pack skill frontmatter at '${sanitizeDiagnosticName(path.basename(path.dirname(skillFile)))}': ${errnoCode(error) ?? 'UnknownError'}`);
+    }
+    const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!frontmatter) return null;
+    const nameLine = frontmatter[1].split(/\r?\n/).find((line) => /^name\s*:/.test(line));
+    if (!nameLine) return null;
+    return nameLine.replace(/^name\s*:/, '').trim().replace(/^["']|["']$/g, '').trim() || null;
+}
+
+function readSkillRuntimeNameSync(skillFile: string, fallbackName: string): string {
+    return readSkillFrontmatterNameSync(skillFile) ?? fallbackName;
+}
+
+/**
+ * Enforce a safe runtime identity (SEC-NEW follow-up): frontmatter names with
+ * separators, dot segments, C0/C1/ESC controls, or other slash-unsafe content
+ * must never resolve, alias, link, or match — bounded escaped diagnostics.
+ * Strictly mirrors discoverSkill's assertSafeRuntimeLinkName and additionally
+ * rejects control bytes so pi and claude aliases stay injection-free.
+ */
+function assertSafeRuntimeIdentity(runtimeName: string, describe: string): void {
+    if (!isSafeRuntimeName(runtimeName) || !isSafeRuntimeLinkName(runtimeName)) {
+        throw new Error(
+            `project-pack skill '${sanitizeDiagnosticName(describe)}' declares unsafe runtime name '${sanitizeDiagnosticName(runtimeName)}'.`,
+        );
+    }
+}
+
+/** Normalize a resolved pack path to its skill directory (either form). */
+function packSkillDir(resolvedPath: string): string {
+    return path.basename(resolvedPath) === SKILL_FILE_NAME
+        ? path.dirname(resolvedPath)
+        : resolvedPath;
+}
+
+/** Structured canonical entry for any pack-shaped resolved path (runtimeName
+ * read from frontmatter, never reconstructed from the directory basename). */
+export function resolveProjectPackEntry(mainRepoRoot: string, resolvedPath: string): ProjectPackSkillEntry | null {
+    if (!isProjectPackSkillPath(mainRepoRoot, resolvedPath)) return null;
+    const rel = path.relative(mainRepoRoot, resolvedPath).split(path.sep);
+    const isRootForm = rel.length === 3 || (rel.length === 4 && rel[3] === SKILL_FILE_NAME);
+    const packName = rel[2];
+    const skillFile = isRootForm
+        ? path.join(mainRepoRoot, '.xtrm', 'skills', packName, SKILL_FILE_NAME)
+        : path.join(mainRepoRoot, '.xtrm', 'skills', packName, rel[3], SKILL_FILE_NAME);
+    if (!existsSync(skillFile)) return null;
+    const fallback = isRootForm ? packName : rel[3];
+    const runtimeName = readSkillRuntimeNameSync(skillFile, fallback);
+    const describe = isRootForm
+        ? path.join('.xtrm', 'skills', packName, SKILL_FILE_NAME)
+        : path.join('.xtrm', 'skills', packName, rel[3], SKILL_FILE_NAME);
+    assertSafeRuntimeIdentity(runtimeName, describe);
+    return {
+        runtimeName,
+        canonicalPath: realpathSync(skillFile),
+        packName,
+        repoRelativeDir: isRootForm
+            ? path.join('.xtrm', 'skills', packName)
+            : path.join('.xtrm', 'skills', packName, rel[3]),
+    };
+}
+
+/**
+ * Deterministic claude identity binding (security fa12): for each canonical
+ * pack identity, the bound '/<name>' NEVER depends on request order. Policy:
+ * prefer the safe slot-dir/pack alias when ANY request names it (needed for
+ * the real infra layout where the declaration names the slot dir), else the
+ * sole requested name, else the canonical runtimeName; requests that name one
+ * identity with several different names are rejected deterministically. Role
+ * declarations carry the sp prefix name per declaration (sp resolves bare
+ * declarations to slot paths, so the declared name only survives in the
+ * prefix); explicit path requests contribute no name, bare requests do.
+ */
+export function bindClaudePackNames(
+    mainRepoRoot: string,
+    roleDecls: string[],
+    rolePrefixNames: string[] | null,
+    explicitRequests: string[],
+    runtime: 'pi' | 'claude' | 'codex' = 'pi',
+): { roleEntries: ClaudePackSkillEntry[]; explicitEntries: ClaudePackSkillEntry[] } {
+    type Candidate = { entry: ProjectPackSkillEntry; names: Set<string>; roleOwned: boolean; explicitOwned: boolean };
+    const candidates = new Map<string, Candidate>();
+
+    const add = (raw: string, name: string | null, isExplicit: boolean): void => {
+        if (typeof raw !== 'string' || !raw) return;
+        const resolved = resolveRequestedSkills(mainRepoRoot, [raw], runtime)[0];
+        const entry = resolved ? resolveProjectPackEntry(mainRepoRoot, resolved) : null;
+        if (!entry) return;
+        const bucket = candidates.get(entry.canonicalPath)
+            ?? { entry, names: new Set<string>(), roleOwned: false, explicitOwned: false };
+        if (isExplicit) bucket.explicitOwned = true;
+        else bucket.roleOwned = true;
+        if (name) bucket.names.add(name);
+        candidates.set(entry.canonicalPath, bucket);
+    };
+
+    roleDecls.forEach((decl, i) => {
+        const requestedName = rolePrefixNames ? rolePrefixNames[i] : null;
+        const name = requestedName ?? (isSafeRuntimeLinkName(decl) && !path.isAbsolute(decl) && !decl.includes(path.sep) ? decl : null);
+        add(decl, name, false);
+    });
+    explicitRequests.forEach((req) => {
+        const name = isSafeRuntimeLinkName(req) && !path.isAbsolute(req) && !req.includes(path.sep) ? req : null;
+        add(req, name, true);
+    });
+
+    const byName = (entry: ProjectPackSkillEntry): string => path.basename(entry.repoRelativeDir);
+    const roleEntries: ClaudePackSkillEntry[] = [];
+    const explicitEntries: ClaudePackSkillEntry[] = [];
+    for (const bucket of candidates.values()) {
+        const { entry, names } = bucket;
+        const slotAlias = byName(entry);
+        // Allowed-name policy (reviewer 78): a requested name must be the slot
+        // alias or the canonical runtime name — ANY other alias rejects before
+        // creation; slot wins when both are present, order-independently;
+        // path-only requests (no requested name) keep canonical runtimeName
+        // (approved explicit-path / old-sp contract — never force slot alias).
+        for (const name of names) {
+            if (name !== slotAlias && name !== entry.runtimeName) {
+                throw new Error(
+                    `project-pack skill '${sanitizeDiagnosticName(entry.repoRelativeDir)}' is requested under '${sanitizeDiagnosticName(name)}', `
+                    + `which is neither its slot name '${sanitizeDiagnosticName(slotAlias)}' nor its canonical runtime name '${sanitizeDiagnosticName(entry.runtimeName)}'. `
+                    + 'Remove the conflicting declaration.',
+                );
+            }
+        }
+        let bound: string;
+        if (names.has(slotAlias)) {
+            bound = slotAlias;
+        } else if (names.has(entry.runtimeName)) {
+            bound = entry.runtimeName;
+        } else {
+            bound = entry.runtimeName;
+        }
+        if (!isSafeRuntimeName(bound)) {
+            throw new Error(
+                `project-pack skill '${sanitizeDiagnosticName(entry.repoRelativeDir)}' has unsafe bound name '${sanitizeDiagnosticName(bound)}'.`,
+            );
+        }
+        const named: ClaudePackSkillEntry = { ...entry, name: bound };
+        // Independent ownership: an identity declared by the role belongs in
+        // the ROLE block regardless of an explicit duplicate; only explicit-
+        // only identities go to explicitEntries.
+        if (bucket.roleOwned || !bucket.explicitOwned) roleEntries.push(named);
+        else explicitEntries.push(named);
+    }
+    return { roleEntries, explicitEntries };
+}
+
+/**
+ * Deduped explicit turn-1 lines: explicit identities already covered by the
+ * role block (same canonical identity, coalesced bound name) are dropped, and
+ * any explicit name already appearing in the role prefix is dropped — a
+ * command is never emitted without ITS link, and never duplicated.
+ */
+export function composeClaudeExplicitLines(
+    mainRepoRoot: string,
+    explicitSkillPaths: string[],
+    claudePackEntries: ClaudePackSkillEntry[],
+    roleCommandNames: Set<string>,
+): string {
+    const lines = claudeExplicitLinesFor(mainRepoRoot, explicitSkillPaths, claudePackEntries)
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('/'));
+    return lines
+        .filter((line) => !roleCommandNames.has(line.slice(1)))
+        .join('\n');
+}
+
+/**
+ * Reconstruct the claude role command block so it carries exactly ONE command
+ * per canonical identity (seconder ca9f): pack declarations are rewritten to
+ * the deterministic bound name (duplicates for one identity are removed, even
+ * when the sp prefix named them differently); non-pack declarations keep
+ * their sp prefix name (or basename in the fallback) in declaration order.
+ */
+export function composeClaudeRoleBlock(
+    mainRepoRoot: string,
+    roleDecls: string[],
+    spPrefixNames: string[] | null,
+    roleEntries: ClaudePackSkillEntry[],
+    runtime: 'pi' | 'claude' | 'codex' = 'pi',
+): string {
+    const entryByPath = new Map(roleEntries.map((entry) => [entry.canonicalPath, entry]));
+    const emitted = new Set<string>();
+    const lines: string[] = [];
+    for (let i = 0; i < roleDecls.length; i += 1) {
+        // SEC-02: resolve EACH declaration individually — resolveRequestedSkills
+        // dedupes at the array level, which would corrupt raw-declaration index
+        // alignment for duplicate alias declarations.
+        let entry: ClaudePackSkillEntry | undefined;
+        try {
+            const resolved = resolveRequestedSkills(mainRepoRoot, [roleDecls[i]], runtime)[0];
+            entry = resolved ? entryByPath.get(realpathSync(resolved)) : undefined;
+        } catch {
+            entry = undefined;
+        }
+        if (entry) {
+            if (emitted.has(entry.canonicalPath)) continue; // duplicate identity: rewritten/removed
+            emitted.add(entry.canonicalPath);
+            lines.push(`/${entry.name}`);
+            continue;
+        }
+        const name = spPrefixNames?.[i]
+            ?? (path.basename(roleDecls[i]) === SKILL_FILE_NAME ? path.basename(path.dirname(roleDecls[i])) : path.basename(roleDecls[i]));
+        lines.push(`/${name}`);
+    }
+    return lines.length === 0 ? '' : `${lines.join('\n')}\n\n`;
+}
+
+/** Safe slash-name check for runtime identities (claude link targets). */
+function isSafeRuntimeName(name: string): boolean {
+    return /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name);
+}
+
+/** Logical slash name of a resolved project-pack skill path (SEC-03 uses it
+ * for the codex unsupported-error message). */
+export function projectPackSkillName(mainRepoRoot: string, resolvedPath: string): string | null {
+    const entry = resolveProjectPackEntry(mainRepoRoot, resolvedPath);
+    return entry && isSafeRuntimeName(entry.runtimeName) ? entry.runtimeName : null;
+}
+
+/**
+ * Preflight gate for claude role-declared and explicit --skill paths that
+ * resolved to a project pack. The pack path is not natively discoverable, so
+ * the worktree link below carries loadability; what must fail here is a name
+ * conflict that would make claude load a different skill than the one
+ * requested — an occupied main-root slot with different content, or a
+ * same-named user-global (v2 policy: user-global silently wins for claude,
+ * so the pack skill would be shadowed). Applies to the combined
+ * role-declared + operator-requested set, before worktree creation.
+ */
+/** Normalize gate/materializer inputs: strings resolve to their canonical
+ * entry (name = runtimeName); structured entries carry the bound name. */
+function normalizeClaudeEntry(
+    mainRepoRoot: string,
+    item: string | ClaudePackSkillEntry,
+): ClaudePackSkillEntry | null {
+    if (typeof item === 'string') {
+        const entry = resolveProjectPackEntry(mainRepoRoot, item);
+        return entry ? { ...entry, name: entry.runtimeName } : null;
+    }
+    return item;
+}
+
+export function assertClaudePackSkillsLoadable(mainRepoRoot: string, resolvedPaths: Array<string | ClaudePackSkillEntry>): void {
+    // Pairwise identity guard (SEC-06 + SEC-NEW-02): every resolved pack skill
+    // contributes its bound '/<name>' -> canonical identity; two different
+    // identities for one bound name must fail before worktree creation.
+    const identities = new Map<string, { identity: string; dir: string }>();
+    for (const item of resolvedPaths) {
+        const entry = normalizeClaudeEntry(mainRepoRoot, item);
+        if (!entry) continue;
+        const name = entry.name;
+        if (!isSafeRuntimeName(name)) {
+            throw new Error(
+                `project pack skill in '${sanitizeDiagnosticName(entry.repoRelativeDir)}' declares unsafe runtime name '${sanitizeDiagnosticName(name)}'.`,
+            );
+        }
+        const existing = identities.get(name);
+        if (existing && existing.identity !== entry.canonicalPath) {
+            const firstRel = sanitizeDiagnosticName(entry.repoRelativeDir);
+            const secondRel = sanitizeDiagnosticName(existing.dir);
+            throw new Error(
+                `skill '/${sanitizeDiagnosticName(name)}' is declared from two different project packs `
+                + `(${firstRel} vs ${secondRel}). Remove the duplicate declaration.`,
+            );
+        }
+        identities.set(name, { identity: entry.canonicalPath, dir: entry.repoRelativeDir });
+        const requestedFile = entry.canonicalPath;
+        const mainSlotFile = path.join(mainRepoRoot, '.claude', 'skills', name, SKILL_FILE_NAME);
+        if (existsSync(mainSlotFile)) {
+            // Local slot: allowed only when it already resolves to the
+            // requested skill; anything else would load different content.
+            // Validating local first must never skip the global check.
+            let localIsRequested = false;
+            try {
+                localIsRequested = realpathSync(mainSlotFile) === requestedFile;
+            } catch {
+                localIsRequested = false;
+            }
+            if (!localIsRequested) {
+                throw new Error(
+                    `skill '/${sanitizeDiagnosticName(name)}' resolves to a project pack but ${path.join(mainRepoRoot, '.claude', 'skills', name)} `
+                    + 'already holds a different skill. Remove or rename that slot, then retry.',
+                );
+            }
+        }
+        // Always consulted, independent of the local slot outcome.
+        const homeSlot = path.join(os.homedir(), '.claude', 'skills', name);
+        if (existsSync(homeSlot)) {
+            throw new Error(
+                `skill '/${sanitizeDiagnosticName(name)}' resolves to a project pack but a same-named global skill exists at ${homeSlot}. `
+                + 'Remove or rename the global skill, then retry.',
+            );
+        }
+        // Divergent-name fail-safe (reviewer 7f5): when the bound alias differs
+        // from the canonical runtimeName, claude could also load '/<runtimeName>'.
+        // Occupied local/user-global namespace under the runtimeName is allowed
+        // only when it holds the SAME canonical content — wrong content or an
+        // occupied unknown slot must fail deterministically.
+        if (name !== entry.runtimeName) {
+            const canonicalSlotFile = path.join(mainRepoRoot, '.claude', 'skills', entry.runtimeName, SKILL_FILE_NAME);
+            if (existsSync(canonicalSlotFile)) {
+                let same = false;
+                try { same = realpathSync(canonicalSlotFile) === entry.canonicalPath; } catch { same = false; }
+                if (!same) {
+                    throw new Error(
+                        `skill '/${sanitizeDiagnosticName(name)}' resolves to a project pack whose canonical runtime name '${sanitizeDiagnosticName(entry.runtimeName)}' `
+                        + `is occupied by a different skill at ${path.join(mainRepoRoot, '.claude', 'skills', entry.runtimeName)}. `
+                        + 'Remove or rename that slot, then retry.',
+                    );
+                }
+            }
+            const canonicalHomeSlot = path.join(os.homedir(), '.claude', 'skills', entry.runtimeName);
+            if (existsSync(canonicalHomeSlot)) {
+                throw new Error(
+                    `skill '/${sanitizeDiagnosticName(name)}' resolves to a project pack whose canonical runtime name '${sanitizeDiagnosticName(entry.runtimeName)}' `
+                    + `is shadowed by a global skill at ${canonicalHomeSlot}. Remove or rename the global skill, then retry.`,
+                );
+            }
+        }
+    }
+}
+
+/**
+ * Materialize worktree-local '.claude/skills/<runtimeName>' links for resolved
+ * pack-tier skills so the claude pane (cwd=worktreePath) can load them as
+ * '/<runtimeName>'. Link names and identities come from the canonical
+ * SKILL.md frontmatter name, never the directory basename (SEC-NEW-02).
+ * Required startup state: an occupied slot that does not already resolve to
+ * the requested skill, or a same-named user-global slot, throws instead of
+ * silently loading a different skill. Returns the created link paths.
+ */
+export function ensureClaudePackSkillLinks(worktreePath: string, mainRepoRoot: string, resolvedPaths: Array<string | ClaudePackSkillEntry>): string[] {
+    const created: string[] = [];
+    try {
+        const seen = new Set<string>();
+        for (const item of resolvedPaths) {
+            const entry = normalizeClaudeEntry(mainRepoRoot, item);
+            if (!entry) continue;
+            if (seen.has(entry.canonicalPath)) continue;
+            seen.add(entry.canonicalPath);
+            const name = entry.name;
+            if (!isSafeRuntimeName(name)) {
+                throw new Error(
+                    `cannot link pack skill in '${sanitizeDiagnosticName(entry.repoRelativeDir)}': unsafe runtime name '${sanitizeDiagnosticName(name)}'.`,
+                );
+            }
+            // Same-skill user-global slot is still a shadow for claude (global
+            // wins); the preflight gate rejects this before creation, and
+            // materialization refuses it defensively as well.
+            const homeSlot = path.join(os.homedir(), '.claude', 'skills', name);
+            if (existsSync(homeSlot)) {
+                throw new Error(
+                    `cannot link pack skill '${sanitizeDiagnosticName(name)}' into the worktree: same-named user-global exists at ${homeSlot}. `
+                    + 'Remove or rename the global skill, then retry.',
+                );
+            }
+            // SEC-05: link the WORKTREE-LOCAL pack copy — the launched pane's
+            // checkout is the session's immutable view; the main checkout stays
+            // mutable and is never a link target.
+            const wtSkillDir = path.join(worktreePath, entry.repoRelativeDir);
+            const wtSkillFile = path.join(wtSkillDir, SKILL_FILE_NAME);
+            // Divergent-name fail-safe (reviewer 7f5): the canonical runtimeName
+            // namespace in the worktree must not hold different content.
+            if (name !== entry.runtimeName) {
+                const wtCanonicalSlot = path.join(worktreePath, '.claude', 'skills', entry.runtimeName, SKILL_FILE_NAME);
+                if (existsSync(wtCanonicalSlot)) {
+                    let same = false;
+                    try { same = realpathSync(wtCanonicalSlot) === realpathSync(wtSkillFile); } catch { same = false; }
+                    if (!same) {
+                        throw new Error(
+                            `cannot link pack skill '${sanitizeDiagnosticName(name)}': the worktree canonical runtime name '${sanitizeDiagnosticName(entry.runtimeName)}' `
+                            + 'slot holds different content. Remove or rename that slot, then retry.',
+                        );
+                    }
+                }
+            }
+            const wtSkillsRoot = resolveSkillsRoot(worktreePath);
+            let wtRoot: string;
+            let canonicalWtSkillsRoot: string;
+            try {
+                wtRoot = realpathSync(worktreePath);
+                canonicalWtSkillsRoot = realpathSync(wtSkillsRoot);
+            } catch (error) {
+                if (isEnoent(error)) {
+                    throw new Error(
+                        `cannot link pack skill '${sanitizeDiagnosticName(name)}': the worktree does not contain .xtrm/skills. `
+                        + 'Pack skills must be tracked so worktrees receive them.',
+                    );
+                }
+                throw new Error(`cannot canonicalize the worktree skills root: ${errnoCode(error) ?? 'UnknownError'}`);
+            }
+            if (!isPathInside(canonicalWtSkillsRoot, wtRoot)) {
+                throw new Error(
+                    `cannot link pack skill '${sanitizeDiagnosticName(name)}': the worktree skills root escapes the worktree root.`,
+                );
+            }
+            const describe = `${sanitizeDiagnosticName(entry.repoRelativeDir)}/${SKILL_FILE_NAME}`;
+            // Shared fail-closed probe: absent worktree slot -> no match ->
+            // 'must be tracked'; any malformed local copy throws its bounded
+            // diagnostic (SEC-02/05).
+            const probed = probePackSkillDir(wtSkillDir, wtSkillFile, canonicalWtSkillsRoot, describe);
+            if (!probed) {
+                throw new Error(
+                    `cannot link pack skill '${sanitizeDiagnosticName(name)}': ${describe} is absent from the worktree. `
+                    + 'Pack skills must be tracked so worktrees receive them.',
+                );
+            }
+            // The worktree copy must carry the SAME canonical runtime identity;
+            // a divergent copy would link the wrong skill under this name.
+            const wtRuntimeName = readSkillRuntimeNameSync(wtSkillFile, path.basename(wtSkillDir));
+            if (wtRuntimeName !== entry.runtimeName) {
+                throw new Error(
+                    `cannot link pack skill '${sanitizeDiagnosticName(name)}': the worktree copy at '${describe}' `
+                    + `declares runtime name '${sanitizeDiagnosticName(wtRuntimeName)}'.`,
+                );
+            }
+            const linkPath = path.join(worktreePath, '.claude', 'skills', name);
+            if (existsSync(linkPath)) {
+                // Occupied: allowed only when it already resolves to the
+                // requested worktree skill; anything else would load a
+                // different skill under the same '/<name>'.
+                try {
+                    const slotFile = path.join(linkPath, SKILL_FILE_NAME);
+                    if (realpathSync(slotFile) === realpathSync(wtSkillFile)) {
+                        continue;
+                    }
+                } catch {
+                    // broken link or non-skill content: falls through to error
+                }
+                throw new Error(
+                    `cannot link pack skill '${name}' into the worktree: ${path.join(worktreePath, '.claude', 'skills', name)} `
+                    + 'already holds a different skill. Remove or rename that slot, then retry.',
+                );
+            }
+            mkdirSync(path.dirname(linkPath), { recursive: true });
+            // Symlink targets resolve relative to the link's own directory
+            // (.claude/skills), not the worktree root.
+            const target = path.relative(path.dirname(linkPath), wtSkillDir);
+            symlinkSync(target, linkPath, 'dir');
+            created.push(linkPath);
+            // Verify link identity after creation and roll back on mismatch
+            // (SEC-05/06): never leave a link that resolves elsewhere.
+            try {
+                if (realpathSync(path.join(linkPath, SKILL_FILE_NAME)) !== realpathSync(wtSkillFile)) {
+                    unlinkSync(linkPath);
+                    created.pop();
+                    throw new Error(`pack skill link '${name}' failed identity verification and was removed.`);
+                }
+            } catch (error) {
+                if (error instanceof Error && error.message.includes('failed identity verification')) throw error;
+                unlinkSync(linkPath);
+                created.pop();
+                throw new Error(`pack skill link '${name}' failed identity verification and was removed: ${errnoCode(error) ?? 'UnknownError'}`);
+            }
+        }
+        return created;
+    } catch (error) {
+        // Transactional rollback (SEC-06): remove any links this call created
+        // before propagating — no orphan launcher-owned state.
+        for (const link of created) {
+            try { unlinkSync(link); } catch { /* best-effort */ }
+        }
+        throw error;
+    }
 }
 
 export function assertClaudeSkillsDiscoverable(mainRepoRoot: string, requestedPaths: string[]): void {
@@ -448,7 +1367,11 @@ export function assertClaudeSkillsDiscoverable(mainRepoRoot: string, requestedPa
 
 // Exposed for unit testing. sp view <name> --raw is the source of truth for
 // specialist resolution — do not reimplement its .specialists/user + installed
-// package precedence here.
+// package precedence here. Declared skill paths are returned verbatim (bare
+// names and unresolved relatives stay raw): resolveRequestedSkills is the
+// single resolver for role-declared and operator-requested skills, so a bare
+// name like 'service-knowledge' can reach v2 project-pack discovery instead of
+// being frozen into a nonexistent repo-resolved path at parse time.
 export function parseSpecialistJson(name: string, raw: string, mainRepoRoot: string = process.cwd()): ResolvedRole {
     let parsed: unknown;
     try {
@@ -470,7 +1393,6 @@ export function parseSpecialistJson(name: string, raw: string, mainRepoRoot: str
     const skillPaths = Array.isArray(rawPaths)
         ? rawPaths
             .filter((p): p is string => typeof p === 'string' && p.length > 0)
-            .map((skillPath) => resolveSkillPath(mainRepoRoot, skillPath))
         : [];
     const mode = (spec as { system_prompt_mode?: unknown }).system_prompt_mode;
     if (mode === 'replace') {
@@ -512,7 +1434,10 @@ export function resolveRole(
     runtime: 'pi' | 'claude' = 'pi',
     allowLegacyFallback = false,
 ): ResolvedRole {
+    // SEC-01: sp resolves repo-local .specialists specs from its cwd — pin it
+    // to the main checkout root so a subdirectory launch still sees them.
     let result = spawnSync('sp', ['view', name, '--raw', '--surface', runtime], {
+        cwd: mainRepoRoot,
         encoding: 'utf8',
         stdio: 'pipe',
     });
@@ -525,7 +1450,10 @@ export function resolveRole(
     if (result.status !== 0
         && (runtime === 'pi' || allowLegacyFallback)
         && isUnsupportedSurfaceOption(stderr)) {
+        // Legacy sp: same main-root cwd so repo-local specs resolve from a
+        // subdirectory launch (reviewer 751b MED).
         result = spawnSync('sp', ['view', name, '--raw'], {
+            cwd: mainRepoRoot,
             encoding: 'utf8',
             stdio: 'pipe',
         });
@@ -611,6 +1539,17 @@ function shellQuote(s: string): string {
     return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+function resolveRuntimeExecutable(runtime: 'pi' | 'claude'): string | null {
+    const result = spawnSync('sh', ['-c', 'command -v "$1"', 'xtrm', runtime], {
+        encoding: 'utf8',
+        stdio: 'pipe',
+    });
+    const executable = (result.stdout ?? '').trim();
+    return result.status === 0 && executable
+        ? path.resolve(process.cwd(), executable)
+        : null;
+}
+
 export function createRuntimeBufferName(): string {
     return `xtrm-role-${randomBytes(16).toString('hex')}`;
 }
@@ -625,6 +1564,7 @@ export function buildBufferedRuntimeCommand(
 ): string {
     const script = [
         "const { execFileSync, spawnSync } = require('node:child_process')",
+        "const path = require('node:path')",
         'const buffer = process.argv[1]',
         "const cleanup = () => spawnSync('tmux', ['delete-buffer', '-b', buffer], { stdio: 'ignore' })",
         "for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => { cleanup(); process.exit(1) })",
@@ -637,7 +1577,7 @@ export function buildBufferedRuntimeCommand(
         '  cleanup()',
         '}',
         'const payload = JSON.parse(raw)',
-        "if (!['pi', 'claude'].includes(payload.runtimeCmd) || !Array.isArray(payload.runtimeArgs) || payload.runtimeArgs.some((arg) => typeof arg !== 'string')) process.exit(2)",
+        "if (typeof payload.runtimeCmd !== 'string' || !['pi', 'claude'].includes(path.basename(payload.runtimeCmd)) || (!['pi', 'claude'].includes(payload.runtimeCmd) && !path.isAbsolute(payload.runtimeCmd)) || !Array.isArray(payload.runtimeArgs) || payload.runtimeArgs.some((arg) => typeof arg !== 'string')) process.exit(2)",
         "const result = spawnSync(payload.runtimeCmd, payload.runtimeArgs, { stdio: 'inherit' })",
         'if (result.error) throw result.error',
         'process.exit(result.status ?? 1)',
@@ -754,12 +1694,37 @@ export function checkPositionZeroSlash(
  * force-load lines for claude explicit --skill delivery (xtrm-8zsi1
  * follow-up: --plugin-dir scaffold is gone, this is the replacement).
  */
-export function claudeExplicitSkillLines(paths: string[]): string {
+export function claudeExplicitSkillLines(paths: string[], mainRepoRoot: string = process.cwd()): string {
     return paths
         .map((p) => {
-            const name = path.basename(p) === 'SKILL.md'
-                ? path.basename(path.dirname(p))
-                : path.basename(p);
+            // Canonical runtime identity for pack-shaped paths (frontmatter
+            // name), basename for everything else (SEC-NEW-02: never link the
+            // directory name of a renamed pack skill).
+            const name = resolveProjectPackEntry(mainRepoRoot, p)?.runtimeName
+                ?? (path.basename(p) === 'SKILL.md' ? path.basename(path.dirname(p)) : path.basename(p));
+            return `/${name}`;
+        })
+        .join('\n');
+}
+
+/**
+ * Explicit-prefix rendering with structured claude entries: pack paths bind
+ * their entry '/<name>' (requested name for name-resolved slots), while
+ * non-pack paths keep basename identity — so a prefix line can never reintro-
+ * duce basename identity for a renamed pack skill.
+ */
+export function claudeExplicitLinesFor(
+    mainRepoRoot: string,
+    paths: string[],
+    entries: ClaudePackSkillEntry[],
+): string {
+    const byPath = new Map(entries.map((entry) => [entry.canonicalPath, entry.name]));
+    return paths
+        .map((p) => {
+            let key: string;
+            try { key = realpathSync(p); } catch { key = p; }
+            const name = byPath.get(key)
+                ?? (path.basename(p) === 'SKILL.md' ? path.basename(path.dirname(p)) : path.basename(p));
             return `/${name}`;
         })
         .join('\n');
@@ -768,10 +1733,22 @@ export function claudeExplicitSkillLines(paths: string[]): string {
 export function renderDeclaredSkillPrefix(
     paths: string[],
     runtime: 'pi' | 'claude',
+    mainRepoRoot: string = process.cwd(),
+    entries?: ClaudePackSkillEntry[],
 ): string {
-    const names = [...new Set(paths.map((p) => path.basename(p) === 'SKILL.md'
-        ? path.basename(path.dirname(p))
-        : path.basename(p)))];
+    const byPath = new Map((entries ?? []).map((entry) => [entry.canonicalPath, entry.name]));
+    const names = [...new Set(paths.map((p) => {
+        // Pack paths bind the structured entry name (requested alias for
+        // name-resolved slots) so the fallback prefix always agrees with the
+        // worktree link; without entries, fall back to canonical runtimeName.
+        const bound = byPath.get(realpathSyncSafe(p));
+        if (bound) return bound;
+        const packName = resolveProjectPackEntry(mainRepoRoot, p)?.runtimeName;
+        if (packName) return packName;
+        return path.basename(p) === 'SKILL.md'
+            ? path.basename(path.dirname(p))
+            : path.basename(p);
+    }))];
     for (const name of names) {
         if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) {
             throw new Error(`invalid declared skill name '${name}'`);
@@ -780,6 +1757,10 @@ export function renderDeclaredSkillPrefix(
     if (names.length === 0) return '';
     const commands = names.map((name) => runtime === 'pi' ? `/skill:${name}` : `/${name}`);
     return `${commands.join(runtime === 'pi' ? ' ' : '\n')}\n\n`;
+}
+
+function realpathSyncSafe(p: string): string {
+    try { return realpathSync(p); } catch { return p; }
 }
 
 export function checkByteCeiling(parts: {
@@ -833,6 +1814,8 @@ export function chooseAttachCommand(sessionName: string, insideTmux: boolean): s
 interface CommonTmuxPlanArgs {
     /** Which runtime binary this plan targets. */
     runtime: 'pi' | 'claude';
+    /** Session display name passed to the runtime via --name (worktree slug). */
+    sessionDisplayName: string;
     bead?: string;
     parentSessionId: string;
     /** Absolute path of the worktree this session owns. Required, not optional:
@@ -883,6 +1866,7 @@ function finalizeTmuxPlan(args: {
     sessionName: string;
     /** Head args, mutated in place with the shared tail. */
     runtimeArgs: string[];
+    sessionDisplayName: string;
     agentTask: string;
     bead?: string;
     /** Role name in role mode; absent in bare mode (a bare session has no role). */
@@ -896,9 +1880,15 @@ function finalizeTmuxPlan(args: {
     passthrough?: string[];
 }): TmuxLaunchPlan {
     const {
-        runtime, sessionName, runtimeArgs, agentTask, bead, role, parentSessionId,
-        worktreePath, branchName, turn1Body, model, thinking, passthrough,
+        runtime, sessionName, runtimeArgs, sessionDisplayName, agentTask, bead, role,
+        parentSessionId, worktreePath, branchName, turn1Body, model, thinking, passthrough,
     } = args;
+
+    // Launcher-owned session display name. Pushed first so nothing later in the
+    // shared tail (or the runtime's own argv handling) can shadow it; the
+    // passthrough guard already rejects user-supplied --name as xt-owned.
+    // xtrm-rhmm1.
+    runtimeArgs.unshift('--name', sessionDisplayName);
 
     // Model: both runtimes accept --model <name>; pi and claude resolve their
     // own defaults when unset.
@@ -958,8 +1948,8 @@ export function buildRoleTmuxPlan(args: CommonTmuxPlanArgs & {
     role: ResolvedRole;
 }): TmuxLaunchPlan {
     const {
-        runtime, role, bead, parentSessionId, worktreePath, branchName, turn1Body,
-        modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
+        runtime, sessionDisplayName, role, bead, parentSessionId, worktreePath, branchName,
+        turn1Body, modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
     } = args;
 
     // Include runtime in the session name so xt pi --role X --bead Y and
@@ -1021,6 +2011,7 @@ export function buildRoleTmuxPlan(args: CommonTmuxPlanArgs & {
 
     return finalizeTmuxPlan({
         runtime,
+        sessionDisplayName,
         sessionName,
         runtimeArgs,
         agentTask: `role:${role.name}`,
@@ -1049,8 +2040,8 @@ export function buildBareTmuxPlan(args: CommonTmuxPlanArgs & {
     sessionSlug: string;
 }): TmuxLaunchPlan {
     const {
-        runtime, sessionSlug, bead, parentSessionId, worktreePath, branchName,
-        turn1Body, modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
+        runtime, sessionDisplayName, sessionSlug, bead, parentSessionId, worktreePath,
+        branchName, turn1Body, modelOverride, thinkingOverride, explicitSkillPaths = [], passthrough,
     } = args;
 
     const runtimeArgs: string[] = [];
@@ -1065,6 +2056,7 @@ export function buildBareTmuxPlan(args: CommonTmuxPlanArgs & {
 
     return finalizeTmuxPlan({
         runtime,
+        sessionDisplayName,
         sessionName: `${runtime}-${slugifyForSession(sessionSlug)}`,
         runtimeArgs,
         agentTask: `session:${sessionSlug}`,
@@ -1143,6 +2135,39 @@ function gitMainRepoRoot(cwd: string): string | null {
     return commonDir.endsWith('/.git') || commonDir.endsWith('\\.git')
         ? path.dirname(commonDir)
         : commonDir;
+}
+
+/**
+ * Transactional rollback of a launcher-created worktree and — only when THIS
+ * invocation created the branch (SEC-FINAL-01) — its branch. `git worktree
+ * remove --force` removes the working tree but leaves the `xt/<slug>` branch;
+ * a pre-existing reused branch/ref/commit must survive provisioning failure,
+ * so `git branch -D` runs only for launcher-created branches. When the
+ * worktree removal itself fails, report that the branch may remain. Exported
+ * for unit testing.
+ */
+export function rollbackLauncherWorktree(mainRepoRoot: string, worktreePath: string, branchName: string, deleteBranch: boolean): void {
+    const removal = spawnSync('git', ['worktree', 'remove', '--force', worktreePath], {
+        cwd: mainRepoRoot,
+        stdio: 'pipe',
+    });
+    if (removal.status !== 0) {
+        process.stderr.write(kleur.yellow(
+            `  ⚠ provisioning failed and worktree removal did not succeed; branch '${branchName}' may remain. `
+            + `Run 'xt worktree doctor'; manually 'git branch -D ${branchName}'\n`,
+        ));
+        return;
+    }
+    if (!deleteBranch) return;
+    const branchRemoval = spawnSync('git', ['branch', '-D', branchName], {
+        cwd: mainRepoRoot,
+        stdio: 'pipe',
+    });
+    if (branchRemoval.status !== 0) {
+        process.stderr.write(kleur.yellow(
+            `  ⚠ worktree removed but branch '${branchName}' could not be deleted; run 'git branch -D ${branchName}'\n`,
+        ));
+    }
 }
 
 function resolveStatuslineScript(worktreePath: string): string | null {
@@ -1259,7 +2284,7 @@ function markPathSkipWorktree(worktreePath: string, pathspec: string): void {
 }
 
 export interface SessionMeta {
-    runtime: 'claude' | 'pi';
+    runtime: 'claude' | 'pi' | 'codex';
     launchedAt: string;
 }
 
@@ -1268,14 +2293,15 @@ function sessionMetaPath(worktreePath: string): string {
     return path.join(worktreePath, '.xtrm', 'session-meta.json');
 }
 
-export function writeSessionMeta(worktreePath: string, runtime: 'claude' | 'pi'): void {
+export function writeSessionMeta(worktreePath: string, runtime: 'claude' | 'pi'): boolean {
     try {
         const meta: SessionMeta = { runtime, launchedAt: new Date().toISOString() };
         const dest = sessionMetaPath(worktreePath);
         mkdirSync(path.dirname(dest), { recursive: true });
         writeFileSync(dest, JSON.stringify(meta, null, 2));
+        return true;
     } catch {
-        // non-fatal
+        return false;
     }
 }
 
@@ -1490,6 +2516,21 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         child = subordinate.child;
     }
 
+    const structuredOutput = Boolean(opts.json);
+    const structuredCheck = checkStructuredLaunchOptions({
+        json: structuredOutput,
+        attach,
+        reuse: Boolean(opts.reuse),
+        sessionSlug: name,
+        role: Boolean(roleName),
+        insideTmux: Boolean(process.env.TMUX),
+        newSession: Boolean(newSession),
+    });
+    if (!structuredCheck.ok) {
+        console.error(kleur.red(`\n  ✗ ${structuredCheck.error}\n`));
+        process.exit(1);
+    }
+
     // Mutual exclusion: in role mode --bead renders a tracked task and
     // --prompt supplies a literal turn-1 body; the two contract different
     // composition paths and can't stack. Rejected at the launcher rather than
@@ -1518,6 +2559,42 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         process.exit(1);
     }
 
+    // Guard passthrough before repository discovery or any worktree mutation.
+    let guardedPassthrough: string[] = [];
+    if (opts.passthrough && opts.passthrough.length > 0) {
+        const guard = guardRolePassthrough(opts.passthrough);
+        if (guard.guardedError) {
+            console.error(kleur.red(`\n  ✗ ${guard.guardedError}\n`));
+            process.exit(1);
+        }
+        for (const warning of guard.warnings) {
+            process.stderr.write(kleur.yellow(`  ⚠ ${warning}\n`));
+        }
+        guardedPassthrough = guard.filteredArgs;
+    }
+
+    // SEC-01: git defines the resolution root. Compute the current checkout
+    // root and the common/main repo root BEFORE any role/skill resolution and
+    // refuse a nested-worktree launch up front, so a launch from repo/subdir
+    // resolves against the main checkout root (never subdir/.xtrm) and can
+    // never fall to a global skill while the root pack exists.
+    const currentRepoRoot = gitRepoRoot(cwd);
+    const mainRepoRoot = gitMainRepoRoot(cwd);
+    if (!currentRepoRoot || !mainRepoRoot) {
+        console.error(kleur.red('\n  ✗ Not inside a git repository\n'));
+        process.exit(1);
+    }
+    if (currentRepoRoot !== mainRepoRoot) {
+        console.error(kleur.red('\n  ✗ Refusing to create nested worktree from inside an existing worktree.\n'));
+        console.error(kleur.dim(`  current worktree: ${currentRepoRoot}`));
+        console.error(kleur.dim(`  main repo root:  ${mainRepoRoot}`));
+        console.error(kleur.dim('\n  Remediation:'));
+        console.error(kleur.dim('    1) cd to the main repo checkout'));
+        console.error(kleur.dim('    2) run xt claude|pi there (or use xt attach to resume this session)'));
+        console.error(kleur.dim('    3) run xt worktree doctor to inspect stale/nested entries\n'));
+        process.exit(1);
+    }
+
     // Resolve role up-front so we fail fast on an unknown role name before
     // creating a worktree (which would otherwise leak on a bad --role typo).
     // Probe sp render-skill-prefix before worktree creation so every launch
@@ -1526,9 +2603,12 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     let renderedTask: RenderedRoleTask | undefined;
     let composedTurn1Body: string = '';
     let explicitSkillPaths: string[] = [];
+    // Structured claude pack entries (bound '/<name>' + canonical identity),
+    // computed preflight and consumed by gates and worktree materialization.
+    let claudePackEntries: ClaudePackSkillEntry[] = [];
     if (roleName) {
         try {
-            resolvedRole = resolveRole(roleName, cwd, runtime, Boolean(model));
+            resolvedRole = resolveRole(roleName, mainRepoRoot, runtime, Boolean(model));
 
             // The P1-05 checks that need the resolved role. Placed immediately
             // after `sp view` answers and long before worktree creation, so a
@@ -1542,22 +2622,87 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
                 if (!coordinatorCheck.ok) throw new Error(coordinatorCheck.error);
             }
 
-            resolvedRole.skillPaths = resolveRequestedSkills(cwd, resolvedRole.skillPaths);
-            explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
-            if (runtime === 'claude') assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
+            // Declared skill paths are verbatim (raw) pre-resolution; keep
+            // them for the structured claude entries, then resolve once.
+            const rawRoleSkillPaths = [...resolvedRole.skillPaths];
+            resolvedRole.skillPaths = resolveRequestedSkills(mainRepoRoot, rawRoleSkillPaths, runtime);
+            explicitSkillPaths = resolveRequestedSkills(mainRepoRoot, opts.skills ?? [], runtime);
 
             // Prefer sp's canonical renderer. Older sp versions do not expose
             // render-skill-prefix, so derive the same block from trusted merged
             // role metadata instead of accepting task text that merely looks
-            // like a slash command.
+            // like a slash command. The prefix is retrieved FIRST so its
+            // per-declaration names (sp renders in declaration order) can drive
+            // deterministic identity binding before gates and composition.
             const probe = probeSkillPrefixAvailable();
-            const trustedSkillPrefix = probe.ok
-                ? renderSkillPrefix({ role: roleName, runtime, cwd }).skillPrefix
-                : renderDeclaredSkillPrefix(resolvedRole.skillPaths, runtime);
+            let spPrefix: string | null = null;
+            if (probe.ok) {
+                spPrefix = renderSkillPrefix({ role: roleName, runtime, cwd: mainRepoRoot }).skillPrefix;
+            }
+
+            let claudeRoleEntries: ClaudePackSkillEntry[] = [];
+            let claudeExplicitLines = '';
+            if (runtime === 'claude') {
+                // Deterministic, order-independent identity binding: role
+                // declarations (sp-resolved slot paths) keep their sp prefix
+                // name per declaration; explicit requests contribute bare
+                // names; one bound name per canonical identity (slot-dir
+                // alias preferred when named, else the sole requested name,
+                // else runtimeName).
+                const prefixNames = spPrefix !== null
+                    ? spPrefix.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith('/')).map((line) => line.slice(1))
+                    : null;
+                if (prefixNames !== null && prefixNames.length !== rawRoleSkillPaths.length) {
+                    throw new Error(
+                        `role '${roleName}': sp skill prefix names do not align with declared skills `
+                        + `(${prefixNames.length} prefix names vs ${rawRoleSkillPaths.length} declarations).`,
+                    );
+                }
+                const { roleEntries, explicitEntries } = bindClaudePackNames(
+                    mainRepoRoot,
+                    rawRoleSkillPaths,
+                    prefixNames,
+                    opts.skills ?? [],
+                    runtime,
+                );
+                claudeRoleEntries = roleEntries;
+                const merged: ClaudePackSkillEntry[] = [];
+                const seen = new Set<string>();
+                for (const entry of [...roleEntries, ...explicitEntries]) {
+                    if (seen.has(entry.canonicalPath)) continue;
+                    seen.add(entry.canonicalPath);
+                    merged.push(entry);
+                }
+                claudePackEntries = merged;
+                const claudeCombined = [...resolvedRole.skillPaths, ...explicitSkillPaths];
+                assertClaudeSkillsDiscoverable(mainRepoRoot, claudeCombined.filter((p) => !isProjectPackSkillPath(mainRepoRoot, p)));
+                assertClaudePackSkillsLoadable(mainRepoRoot, claudePackEntries);
+            }
+
+            // Reconstruct the claude role block so it carries exactly ONE
+            // per-declaration identity command with the deterministic bound
+            // name (sp prefix text is never used verbatim: duplicates for one
+            // identity are rewritten/removed, non-pack commands preserved in
+            // declaration order). Pi keeps the sp/fallback block.
+            const trustedSkillPrefix = runtime === 'claude'
+                ? composeClaudeRoleBlock(mainRepoRoot, rawRoleSkillPaths, spPrefix?.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith('/')).map((line) => line.slice(1)) ?? null, claudeRoleEntries, runtime)
+                : (spPrefix ?? renderDeclaredSkillPrefix(resolvedRole.skillPaths, runtime, mainRepoRoot));
             let trustedPrefix = trustedSkillPrefix;
 
+            // Deduped explicit turn-1 lines: identities already covered by the
+            // role block (coalesced bound name) and names already present in
+            // the role prefix are never re-emitted.
+            if (runtime === 'claude') {
+                const roleCommandNames = new Set(trustedSkillPrefix
+                    .split(/\r?\n/)
+                    .map((line) => line.trim())
+                    .filter((line) => line.startsWith('/'))
+                    .map((line) => line.slice(1)));
+                claudeExplicitLines = composeClaudeExplicitLines(mainRepoRoot, explicitSkillPaths, claudePackEntries, roleCommandNames);
+            }
+
             const rawBody = bead
-                ? (renderedTask = renderRoleTask({ role: roleName, bead, cwd, runtime })).initialPrompt
+                ? (renderedTask = renderRoleTask({ role: roleName, bead, cwd: mainRepoRoot, runtime })).initialPrompt
                 : (prompt ?? '');
             let untrustedBody = rawBody;
             if (bead && probe.ok && trustedSkillPrefix) {
@@ -1581,9 +2726,10 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             composedTurn1Body = trustedSkillPrefix + untrustedBody;
 
             // Claude explicit --skill delivery is launcher-owned but still
-            // derived only from validated, discoverable skill metadata.
-            if (runtime === 'claude' && explicitSkillPaths.length > 0) {
-                const explicitPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}${trustedPrefix ? '\n' : '\n\n'}`;
+            // derived only from validated, discoverable skill metadata;
+            // claudeExplicitLines is identity-deduped against the role block.
+            if (runtime === 'claude' && claudeExplicitLines.length > 0) {
+                const explicitPrefix = `${claudeExplicitLines}${trustedPrefix ? '\n' : '\n\n'}`;
                 composedTurn1Body = explicitPrefix + composedTurn1Body;
                 trustedPrefix = explicitPrefix + trustedPrefix;
             }
@@ -1615,13 +2761,22 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         }
     } else {
         try {
-            explicitSkillPaths = resolveRequestedSkills(cwd, opts.skills ?? []);
+            explicitSkillPaths = resolveRequestedSkills(mainRepoRoot, opts.skills ?? [], runtime);
             composedTurn1Body = prompt ?? '';
             let trustedPrefix = '';
 
             if (runtime === 'claude' && explicitSkillPaths.length > 0) {
-                assertClaudeSkillsDiscoverable(cwd, explicitSkillPaths);
-                trustedPrefix = `${claudeExplicitSkillLines(explicitSkillPaths)}\n\n`;
+                // Pack-tier explicit paths are materialized in the worktree
+                // after creation; non-pack paths keep the strict native gate.
+                // SEC-03: bare explicit requests route through the same
+                // deterministic identity binder (empty role ownership) so
+                // dir/file/canonical/slot permutations bind the slot alias
+                // order-independently and non-slot aliases reject.
+                const { explicitEntries } = bindClaudePackNames(mainRepoRoot, [], null, opts.skills ?? [], runtime);
+                claudePackEntries = explicitEntries;
+                assertClaudeSkillsDiscoverable(mainRepoRoot, explicitSkillPaths.filter((p) => !isProjectPackSkillPath(mainRepoRoot, p)));
+                assertClaudePackSkillsLoadable(mainRepoRoot, claudePackEntries);
+                trustedPrefix = `${claudeExplicitLinesFor(mainRepoRoot, explicitSkillPaths, claudePackEntries)}\n\n`;
                 composedTurn1Body = trustedPrefix + composedTurn1Body;
             }
 
@@ -1648,40 +2803,8 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         }
     }
 
-    // Guard passthrough up-front — refuse xt-owned flags before we build any
-    // worktree state. Skip-flags produce warnings but continue.
-    let guardedPassthrough: string[] = [];
-    if (opts.passthrough && opts.passthrough.length > 0) {
-        const guard = guardRolePassthrough(opts.passthrough);
-        if (guard.guardedError) {
-            console.error(kleur.red(`\n  ✗ ${guard.guardedError}\n`));
-            process.exit(1);
-        }
-        for (const w of guard.warnings) {
-            process.stderr.write(kleur.yellow(`  ⚠ ${w}\n`));
-        }
-        guardedPassthrough = guard.filteredArgs;
-    }
-
-    // Use git to find both current checkout root and common/main repo root.
-    const currentRepoRoot = gitRepoRoot(cwd);
-    const mainRepoRoot = gitMainRepoRoot(cwd);
-    if (!currentRepoRoot || !mainRepoRoot) {
-        console.error(kleur.red('\n  ✗ Not inside a git repository\n'));
-        process.exit(1);
-    }
-
-    // Guardrail: never create a worktree from inside another worktree.
-    if (currentRepoRoot !== mainRepoRoot) {
-        console.error(kleur.red('\n  ✗ Refusing to create nested worktree from inside an existing worktree.\n'));
-        console.error(kleur.dim(`  current worktree: ${currentRepoRoot}`));
-        console.error(kleur.dim(`  main repo root:  ${mainRepoRoot}`));
-        console.error(kleur.dim('\n  Remediation:'));
-        console.error(kleur.dim('    1) cd to the main repo checkout'));
-        console.error(kleur.dim('    2) run xt claude|pi there (or use xt attach to resume this session)'));
-        console.error(kleur.dim('    3) run xt worktree doctor to inspect stale/nested entries\n'));
-        process.exit(1);
-    }
+    // The nested-worktree guard and main-root discovery now run before role
+    // resolution (SEC-01); the remainder of the launcher uses mainRepoRoot.
 
     const cwdBasename = path.basename(mainRepoRoot);
 
@@ -1721,9 +2844,27 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // Branch name
     const branchName = `xt/${slug}`;
 
-    console.log(kleur.bold(`\n  Launching ${runtime} session`));
-    console.log(kleur.dim(`  worktree: ${worktreePath}`));
-    console.log(kleur.dim(`  branch:   ${branchName}\n`));
+    const structuredPathCheck = checkStructuredLaunchPaths({
+        json: structuredOutput,
+        worktreePath,
+        branchName,
+    });
+    if (!structuredPathCheck.ok) {
+        console.error(kleur.red(`\n  ✗ ${structuredPathCheck.error}\n`));
+        process.exit(1);
+    }
+
+    const runtimeExecutable = structuredOutput ? resolveRuntimeExecutable(runtime) : runtime;
+    if (!runtimeExecutable) {
+        console.error(kleur.red(`\n  ✗ Could not resolve an absolute ${runtime} executable for structured launch\n`));
+        process.exit(1);
+    }
+
+    if (!structuredOutput) {
+        console.log(kleur.bold(`\n  Launching ${runtime} session`));
+        console.log(kleur.dim(`  worktree: ${worktreePath}`));
+        console.log(kleur.dim(`  branch:   ${branchName}\n`));
+    }
 
     // Use bd worktree create — sets up git worktree + canonical .beads/redirect in one step.
     // Falls back to plain git worktree add if bd is unavailable or the project has no .beads/.
@@ -1736,14 +2877,22 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         process.exit(1);
     }
 
+    // SEC-FINAL-01: record whether THIS invocation creates the branch. A
+    // pre-existing xt/<slug> branch may legitimately be reused by design;
+    // rollback must never delete a branch it did not create.
+    const branchExistedBefore = spawnSync('git', ['rev-parse', '--verify', branchName], {
+        cwd: mainRepoRoot, stdio: 'pipe',
+    }).status === 0;
+    const branchCreatedByLauncher = !branchExistedBefore;
+
     const bdResult = spawnSync('bd', ['worktree', 'create', worktreePath, '--branch', branchName], {
-        cwd: mainRepoRoot, stdio: 'inherit',
+        cwd: mainRepoRoot, stdio: structuredOutput ? 'pipe' : 'inherit',
     });
 
     if (bdResult.error || bdResult.status !== 0) {
         // Fall back to plain git worktree add (bd not found or no .beads/ in project)
         if (bdResult.status !== 0 && !bdResult.error) {
-            console.log(kleur.dim('  beads: no database found, creating worktree without redirect'));
+            if (!structuredOutput) console.log(kleur.dim('  beads: no database found, creating worktree without redirect'));
         }
         const branchExists = spawnSync('git', ['rev-parse', '--verify', branchName], {
             cwd: mainRepoRoot, stdio: 'pipe',
@@ -1753,7 +2902,10 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             ? ['worktree', 'add', worktreePath, branchName]
             : ['worktree', 'add', '-b', branchName, worktreePath];
 
-        const gitResult = spawnSync('git', gitArgs, { cwd: mainRepoRoot, stdio: 'inherit' });
+        const gitResult = spawnSync('git', gitArgs, {
+            cwd: mainRepoRoot,
+            stdio: structuredOutput ? 'pipe' : 'inherit',
+        });
         if (gitResult.status !== 0) {
             console.error(kleur.red(`\n  ✗ Failed to create worktree at ${worktreePath}\n`));
             process.exit(1);
@@ -1781,10 +2933,12 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         // Non-fatal: bd will recover via git common-dir resolution regardless.
     }
 
-    writeSessionMeta(worktreePath, runtime);
-    console.log(kleur.green(`\n  ✓ Worktree ready — launching ${runtime}...\n`));
-    console.log(kleur.dim('  note: clean git worktrees do not include ignored dependency dirs like node_modules/ or .venv/'));
-    console.log(kleur.dim('        if lint/tests need them, run this repo\'s normal bootstrap inside the worktree (make bootstrap, just setup, npm ci, uv sync, etc.)\n'));
+    const metadataPersisted = writeSessionMeta(worktreePath, runtime);
+    if (!structuredOutput) {
+        console.log(kleur.green(`\n  ✓ Worktree ready — launching ${runtime}...\n`));
+        console.log(kleur.dim('  note: clean git worktrees do not include ignored dependency dirs like node_modules/ or .venv/'));
+        console.log(kleur.dim('        if lint/tests need them, run this repo\'s normal bootstrap inside the worktree (make bootstrap, just setup, npm ci, uv sync, etc.)\n'));
+    }
 
     // Pi runtime bootstrap is handled globally. Project dependency setup is still repo-owned.
     // - Extensions: globally linked (~/.pi/agent/extensions/ → repo)
@@ -1794,6 +2948,10 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // Claude-only scaffold. Pi role sessions now receive absolute --skill
     // paths from resolveRole(), so they no longer need worktree-local
     // .specialists/ or .xtrm/skills/active scaffolds.
+    // SEC-06: post-creation provisioning is transactional — any hard failure
+    // (pack-skill link conflict, preflight rejection) removes the freshly
+    // created worktree and its branch instead of leaving orphan state.
+    try {
     if (runtime === 'claude') {
         const claudeDir = path.join(worktreePath, '.claude');
 
@@ -1806,8 +2964,15 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.log(kleur.dim(`  warning: could not reconcile runtime skills (${message})`));
+            const warning = kleur.dim(`  warning: could not reconcile runtime skills (${message})`);
+            if (structuredOutput) console.error(warning); else console.log(warning);
         }
+
+        // 1b. Materialize launcher-owned links for pack-tier skills so the
+        //     pane can load declared/requested '/<name>' commands. Required
+        //     startup state: a conflict here fails the launch (never start
+        //     with a dead or wrong slash).
+        ensureClaudePackSkillLinks(worktreePath, mainRepoRoot, claudePackEntries);
 
         // 2. Symlink specialist definition directories into worktree so
         //    SpecialistLoader can resolve .specialists/default|user from cwd.
@@ -1815,7 +2980,8 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
             ensureWorktreeSpecialists(worktreePath, mainRepoRoot);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.log(kleur.dim(`  warning: could not provision specialist definitions (${message})`));
+            const warning = kleur.dim(`  warning: could not provision specialist definitions (${message})`);
+            if (structuredOutput) console.error(warning); else console.log(warning);
         }
 
         // 3. Write settings.local.json with statusLine bound to this worktree's
@@ -1842,6 +3008,13 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     if (runtime === 'pi') {
         await runPiLaunchPreflight(worktreePath, false);
     }
+    } catch (error) {
+        // Roll back the launcher-created worktree (and its branch only when
+        // this invocation created the branch — a pre-existing reused
+        // xt/<slug> ref must survive provisioning failure, SEC-FINAL-01).
+        rollbackLauncherWorktree(mainRepoRoot, worktreePath, branchName, branchCreatedByLauncher);
+        throw error;
+    }
 
     // One decision, taken once: a role launch always needs the tmux path
     // (metadata, telemetry, buffered transport for the system prompt). A bare
@@ -1851,11 +3024,14 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
     // those still gets a plain runtime in the current terminal. xtrm-3xgs5.
     const common = {
         runtime,
+        runtimeExecutable,
+        sessionDisplayName: worktreeName,
         sessionSlug: slug,
         bead,
         attach,
         worktreePath,
         branchName,
+        metadataPersisted,
         modelOverride: model,
         thinkingOverride: thinking,
         turn1Body: composedTurn1Body,
@@ -1865,6 +3041,7 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         reuse: opts.reuse,
         parent: opts.parent,
         child,
+        json: structuredOutput,
     };
 
     if (resolvedRole) {
@@ -1880,9 +3057,11 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
         return;
     }
 
-    // Launch the runtime in the worktree
+    // Launch the runtime in the worktree. Launcher-owned --name (worktree slug)
+    // is first; claude also needs its permission skip. xtrm-rhmm1.
     const runtimeCmd = runtime === 'claude' ? 'claude' : 'pi';
-    const runtimeArgs = runtime === 'claude' ? ['--dangerously-skip-permissions'] : [];
+    const runtimeArgs = ['--name', worktreeName];
+    if (runtime === 'claude') runtimeArgs.push('--dangerously-skip-permissions');
     const launchResult = spawnSync(runtimeCmd, runtimeArgs, {
         cwd: worktreePath,
         stdio: 'inherit',
@@ -1942,11 +3121,14 @@ function emitAgentRoleLaunched(fields: Record<string, string>): void {
  */
 type TmuxLaunchArgs = {
     runtime: 'pi' | 'claude';
+    runtimeExecutable: string;
+    sessionDisplayName: string;
     sessionSlug: string;
     bead?: string;
     attach: boolean;
     worktreePath: string;
     branchName: string;
+    metadataPersisted: boolean;
     modelOverride?: string;
     thinkingOverride?: string;
     /** Composed turn-1 positional body (sp prefix + user body). Empty = skills-only prime. */
@@ -1957,6 +3139,7 @@ type TmuxLaunchArgs = {
     parent?: string;
     child?: boolean;
     reuse?: boolean;
+    json?: boolean;
 } & (
     | {
         mode: 'role';
@@ -1969,8 +3152,8 @@ type TmuxLaunchArgs = {
 
 async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     const {
-        runtime, sessionSlug, bead, attach, worktreePath, branchName, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
-        newSession, parent, child, reuse,
+        runtime, runtimeExecutable, sessionDisplayName, sessionSlug, bead, attach, worktreePath, branchName, metadataPersisted, modelOverride, thinkingOverride, turn1Body, explicitSkillPaths = [], passthrough,
+        newSession, parent, child, reuse, json: structuredOutput = false,
     } = args;
 
     const insideTmux = Boolean(process.env.TMUX);
@@ -2018,12 +3201,13 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     // trusted to inspect or control the session.
 
     const planCommon = {
-        runtime, bead, parentSessionId, worktreePath, branchName, turn1Body,
-        modelOverride, thinkingOverride, explicitSkillPaths, passthrough,
+        runtime, sessionDisplayName, bead, parentSessionId, worktreePath, branchName,
+        turn1Body, modelOverride, thinkingOverride, explicitSkillPaths, passthrough,
     };
     const plan = args.mode === 'role'
         ? buildRoleTmuxPlan({ ...planCommon, role: args.role })
         : buildBareTmuxPlan({ ...planCommon, sessionSlug });
+    const runtimeCmdString = [runtimeExecutable, ...plan.runtimeArgs].map(shellQuote).join(' ');
 
     const agentEnv = buildAgentEnv(plan.paneOptions);
 
@@ -2065,7 +3249,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
         }
 
         if (!bead) {
-            const runtimeResult = spawnSync(plan.runtimeCmd, plan.runtimeArgs, {
+            const runtimeResult = spawnSync(runtimeExecutable, plan.runtimeArgs, {
                 cwd: worktreePath,
                 stdio: 'inherit',
                 env: { ...process.env, ...agentEnv },
@@ -2076,7 +3260,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
         // Before spawn, not after: the runtime's agent.ready fires once, and a
         // watermark taken later could reject it. See AssignBeadOptions.readyAfterMs.
         const readyAfterMs = Date.now();
-        const runtimeProcess = spawn(plan.runtimeCmd, plan.runtimeArgs, {
+        const runtimeProcess = spawn(runtimeExecutable, plan.runtimeArgs, {
             cwd: worktreePath,
             stdio: 'inherit',
             env: { ...process.env, ...agentEnv },
@@ -2183,7 +3367,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
             '-s', plan.sessionName,
             '-c', worktreePath,
             ...envArgs,
-            plan.runtimeCmdString,
+            runtimeCmdString,
         ], { stdio: 'pipe', encoding: 'utf8' });
         if (newSess.status !== 0) failNewSession((newSess.stderr ?? '').trim());
     } else {
@@ -2212,7 +3396,7 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
         }
 
         const bufferedPayload = JSON.stringify({
-            runtimeCmd: plan.runtimeCmd,
+            runtimeCmd: runtimeExecutable,
             runtimeArgs: plan.runtimeArgs,
         });
         const loaded = spawnSync('tmux', ['load-buffer', '-b', runtimeBuffer, '-'], {
@@ -2268,8 +3452,48 @@ async function launchTmuxSession(args: TmuxLaunchArgs): Promise<never> {
     }
 
     if (!attach) {
-        // Contract: exactly one line on stdout, session_name:pane_id
-        process.stdout.write(`${plan.sessionName}:${paneId}\n`);
+        // Detached output remains exactly one line: the released
+        // session_name:pane_id text, or the opt-in versioned JSON object.
+        if (structuredOutput) {
+            const sessionIdResult = spawnSync('tmux', [
+                'list-sessions', '-F', '#{session_name}\t#{session_id}',
+            ], { stdio: 'pipe', encoding: 'utf8' });
+            const sessionIdentity = parseLiveTmuxSessionListing(
+                sessionIdResult.status,
+                sessionIdResult.stdout ?? '',
+                plan.sessionName,
+            );
+            if (!sessionIdentity.ok) {
+                process.stderr.write(kleur.red(`\n  ✗ ${sessionIdentity.error}\n`));
+                process.exit(1);
+            }
+            const tmuxSessionId = sessionIdentity.sessionId;
+            const versionResult = spawnSync(runtimeExecutable, ['--version'], {
+                cwd: worktreePath,
+                stdio: 'pipe',
+                encoding: 'utf8',
+                timeout: 5_000,
+            });
+            const runtimeVersionLine = versionResult.status === 0
+                ? (versionResult.stdout ?? '').trim().split(/\r?\n/, 1)[0]?.slice(0, 128) ?? ''
+                : '';
+            const runtimeVersion = sanitizeRuntimeVersion(runtimeVersionLine);
+            const outcome = buildDetachedLaunchOutcome({
+                runtime,
+                runtimeVersion,
+                sessionSlug,
+                sessionName: plan.sessionName,
+                tmuxSessionId,
+                paneId,
+                worktreePath,
+                branchName,
+                metadataPersisted,
+                insideTmux,
+            });
+            process.stdout.write(`${JSON.stringify(outcome)}\n`);
+        } else {
+            process.stdout.write(`${plan.sessionName}:${paneId}\n`);
+        }
         process.exit(0);
     }
 

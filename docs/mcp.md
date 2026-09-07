@@ -44,7 +44,6 @@ MCP definitions are maintained in canonical config files and synced by `xtrm ini
 
 | Server | Purpose | Requirement |
 |---|---|---|
-| `serena` | Semantic code navigation/edit support | `uvx` |
 | `context7` | Live documentation lookup | `CONTEXT7_API_KEY` |
 | `github-grep` | Code search | none |
 | `deepwiki` | Technical docs context | none |

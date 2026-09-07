@@ -20,14 +20,14 @@ async function createTempDir(): Promise<string> {
 
 describe('skills-runtime-views', () => {
   it('describes project runtime directories rather than an active pointer', () => {
-    expect(getRuntimePointerTarget({ scope: 'project' })).toBe('real .claude/skills and .pi/skills directories');
+    expect(getRuntimePointerTarget({ scope: 'project' })).toBe('real .claude/skills, .pi/skills, and .agents/skills directories');
   });
 
   it('targets global default skills rather than retired active view', () => {
     expect(getRuntimePointerTarget({ scope: 'global' })).toBe(path.join(os.homedir(), '.xtrm', 'skills', 'default'));
   });
 
-  it('accepts direct Claude and Pi runtime directories with manifest-owned links and no Pi settings file', async () => {
+  it('accepts direct Claude, Pi, and Codex runtime directories with manifest-owned links and no Pi settings file', async () => {
     const tempHome = await createTempDir();
     const projectRoot = await createTempDir();
     const previousHome = process.env.HOME;
@@ -45,17 +45,18 @@ describe('skills-runtime-views', () => {
       await fs.ensureDir(path.join(tempHome, '.pi', 'agent'));
       await fs.symlink(globalDefaultRoot, path.join(tempHome, '.pi', 'agent', 'skills'));
 
-      for (const runtime of ['claude', 'pi'] as const) {
-        const runtimeSkills = path.join(projectRoot, runtime === 'claude' ? '.claude' : '.pi', 'skills');
+      for (const runtime of ['claude', 'pi', 'codex'] as const) {
+        const runtimeSkills = path.join(projectRoot, runtime === 'claude' ? '.claude' : runtime === 'pi' ? '.pi' : '.agents', 'skills');
         await fs.ensureDir(runtimeSkills);
         await fs.symlink(localSkillRoot, path.join(runtimeSkills, 'local-skill'));
       }
       await fs.writeJson(path.join(projectRoot, '.xtrm', 'skills', 'state.json'), {
         schemaVersion: '2',
-        enabledPacks: { claude: ['local'], pi: ['local'] },
+        enabledPacks: { claude: ['local'], pi: ['local'], codex: ['local'] },
         managedLinks: {
           claude: { 'local-skill': '.xtrm/skills/local/local-skill' },
           pi: { 'local-skill': '.xtrm/skills/local/local-skill' },
+          codex: { 'local-skill': '.xtrm/skills/local/local-skill' },
         },
       });
 

@@ -53,6 +53,7 @@ export interface VerificationResult {
         globalPiPointerReady: boolean;
         projectClaudePointerState: 'ready' | 'skipped' | 'missing';
         projectPiPointerState: 'ready' | 'skipped' | 'missing';
+        projectCodexPointerState: 'ready' | 'skipped' | 'missing';
     };
     projectBootstrap: {
         beadsInitialized: boolean;
@@ -220,6 +221,7 @@ export async function runInitVerification(projectRoot: string): Promise<Verifica
         skillsRuntimeResult.globalPiPointerReady &&
         skillsRuntimeResult.projectClaudePointerState !== 'missing' &&
         skillsRuntimeResult.projectPiPointerState !== 'missing' &&
+        skillsRuntimeResult.projectCodexPointerState !== 'missing' &&
         projectResult.beadsInitialized;
 
     return {
@@ -239,7 +241,7 @@ export async function runInitVerification(projectRoot: string): Promise<Verifica
             globalPiPointerReady: skillsRuntimeResult.globalPiPointerReady,
             projectClaudePointerState: skillsRuntimeResult.projectClaudePointerState,
             projectPiPointerState: skillsRuntimeResult.projectPiPointerState,
-
+            projectCodexPointerState: skillsRuntimeResult.projectCodexPointerState,
         },
         projectBootstrap: projectResult,
         allPassed,
@@ -294,6 +296,7 @@ export function renderVerificationSummary(result: VerificationResult): void {
     if (!result.skillsRuntime.globalPiPointerReady) skillsParts.push('~/.pi/agent/skills pointer');
     if (result.skillsRuntime.projectClaudePointerState === 'missing') skillsParts.push('.claude/skills pointer');
     if (result.skillsRuntime.projectPiPointerState === 'missing') skillsParts.push('.pi settings skills pointer');
+    if (result.skillsRuntime.projectCodexPointerState === 'missing') skillsParts.push('.agents/skills directory');
     const srIcon = skillsParts.length === 0 ? sym.ok : sym.warn;
     if (skillsParts.length === 0) {
         console.log(`  ${srIcon} Skills Runtime`);

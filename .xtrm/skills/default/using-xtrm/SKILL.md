@@ -1,159 +1,168 @@
 ---
 name: using-xtrm
 description: >
-  Behavioral operating manual for an xtrm-equipped Claude Code session.
-  Covers when to use which tool, how to handle questions and triggers,
-  workflow examples, and skill routing. Reference material (hook list,
-  gate rules, full bd commands, git workflow) lives in CLAUDE.md.
-  Injected automatically at session start via additionalSystemPrompt.
+  Core operating doctrine for an XTRM-equipped agent. Use at the start of substantial
+  work and whenever deciding how to work, create or hand off durable work, delegate to
+  another agent, recover current state, or choose between direct work, native subagents,
+  xt peers, Specialists, and deterministic workflows. XTRM agents work as participants
+  in a durable multi-agent system, not as isolated chat sessions. This skill defines the
+  shared contract, evidence, minimal-engineering, and routing rules; runtime hooks own
+  deterministic enforcement.
 priority: high
 ---
 
-# XTRM — When to Use What
+# Using XTRM
 
-> Gates, commands, and git workflow are in CLAUDE.md.
-> This is the behavioral layer: triggers, patterns, examples.
+You are working inside XTRM, not alone.
 
-## Session Start
+Your current model/session is one participant in a durable work system. Work may move
+between this session, native subagents, `xt pi` / `xt claude` / `xt codex` peers,
+Specialists, and later runtime stages. Design your work so another participant can pick
+it up without reconstructing your private context.
 
-```bash
-bd prime                          # load workflow context + active claims
-bd memories <today's topic>       # retrieve relevant past context
-bv --robot-triage                 # graph-ranked picks, quick wins, unblock targets
-bd update <id> --claim            # claim before any edit
+## The system contract
+
+1. **Live state wins.** Current code, CLI help, Beads state, runtime state, tests, and
+   external systems beat remembered commands, old reports, and model memory.
+2. **Beads owns durable work.** Use the board for work identity, contracts, dependencies,
+   progress, evidence, and handoff. Messages are coordination, not the source of truth.
+3. **A dispatchable work item is a contract.** Do not hand another agent a title and
+   expect it to infer the job.
+4. **XTRM is multi-agent by default, not delegation-by-default.** Use another worker when
+   separation, parallelism, role independence, fresh context, or long-running ownership
+   adds value. Do obvious local work locally.
+5. **Evidence before completion.** A worker summary is a claim. Verify important claims
+   against the current tree, tests, runtime state, or external system.
+6. **Continuity is part of execution.** If the work can outlive this context, arm or
+   prepare continuation before the context becomes unreliable.
+7. **Debug causally.** For regressions, reconstruct symptom -> runtime/code path -> recent
+   change -> commit/PR/Bead/worker intent -> causal mechanism before proposing a fix.
+
+## Contract quality applies to every worker
+
+The same quality floor applies whether a bead goes to a Specialist, an `xt` peer, a
+native subagent, a human, or a future ChainRun participant.
+
+A ready contract answers:
+
+```text
+PROBLEM      why this work exists and what is wrong/missing
+SUCCESS      observable end state
+SCOPE        files/systems/work boundary the worker owns
+NON_GOALS    nearby work it must not absorb
+CONSTRAINTS  invariants, compatibility, safety and ownership rules
+VALIDATION   commands/checks/evidence that prove success
+OUTPUT       durable result expected from the worker
 ```
 
-> Use `bv --robot-next` for the single top pick. Use `bv --robot-triage --format toon` to save context tokens. **Never run bare `bv` — it launches an interactive TUI.**
+Add `REFERENCES`, `LIBRARIES`, `SCRUTINY`, rollout/rollback, or telemetry requirements
+when they matter.
 
----
+A backlog idea may be explicitly `contract:draft`, but a draft is not dispatchable. It
+must still state a real problem and rough scope instead of pretending unknown details are
+known. Before another worker consumes it, ground current state and promote it to a real
+contract. `/planning` owns the detailed authoring procedure.
 
-## Current xt Command Surfaces
+## How to engineer: smallest correct system change
 
-Use these command surfaces when the task is operational rather than code-editing:
+Use a Ponytail-style reduction ladder, adapted for XTRM. The goal is not the fewest lines;
+it is the least new machinery that fully satisfies the contract.
 
-| Need | Command | Notes |
-|------|---------|-------|
-| Refresh xtrm-managed skills/hooks/reports in one repo | `xt update --apply` | Default `xt update` is dry-run; `--apply` writes. Also reports bd/GitNexus maintenance and applies the bd auto-stage patch. |
-| Refresh many repos under a root | `xt update --apply --root <dir>` | Discovers repos with `.xtrm/registry.json`; failures are reported per repo. |
-| Sweep standard local fleet | `xt update --all-repos` then `xt update --apply --all-repos` | Scans `~/dev` + `~/projects`; dry-run first. Apply patches and commits each changed repo. |
-| Cut a release | `xt release prepare --patch` then `xt release publish` | `prepare` drafts from xt reports; `publish` tags/pushes. If `prepare` fails on changelog script compatibility, check specialists `unitAI-dnmcg` state and use the manual fallback in `/releasing`. |
-| Close a session report | update latest same-day `.xtrm/reports/<date>-*.md` | `session-close-report` prefers one same-day SSOT handoff; do not create duplicate reports unless asked. |
+Before adding code or infrastructure:
 
+1. Trace the real call/data/control flow and current behavior.
+2. Ask whether a change is actually required.
+3. Prefer deleting obsolete behavior or reusing an existing project primitive.
+4. Prefer a capability the current runtime/platform already provides.
+5. Prefer the language standard library.
+6. Prefer an already-installed dependency with the right semantics.
+7. Add the smallest custom implementation that remains clear and testable.
 
-### Worktree dependency setup
+Avoid abstractions with one speculative consumer, wrappers that only rename an API,
+parallel systems that duplicate an existing authority, and configuration for hypothetical
+future flexibility.
 
-`xt claude` / `xt pi` sessions use clean git worktrees. Git does not copy ignored dependency artifacts such as `node_modules/`, `.venv/`, build caches, or generated outputs. If a repo's lint/tests need those files, run the repo's normal bootstrap inside the worktree (`make bootstrap`, `just setup`, `npm ci`, `uv sync`, etc.). Do not track dependency directories to make worktrees pass.
+**Do not optimize away load-bearing requirements.** Minimalism never justifies removing
+validation, safety checks, security boundaries, accessibility, observability, rollback,
+evidence, tests, durable state, or required failure handling.
 
-## Multi-pane coordination
+## Choose the work shape deliberately
 
-Route orchestrators to `/multiplexing` and delegated panes to `/multiplexing-team`. A beaded `xtmux message-send` requires a reply unless it explicitly says `--expects-reply=false`.
+```text
+one coherent task, current context is sufficient
+  -> work here
 
-For reply-required inbound work, preserve the SQLite `messageKey`, acknowledge receipt, then use `message-reply --in-reply-to <messageKey>`; ack or a target/bead-matched send does not fulfil it. If the reply must also wake a pane, use confirmed `safe-send-pointer --reply-to <messageKey>` so fulfilment happens only after injection succeeds.
+bounded independent question / fresh context helps
+  -> native subagent when the harness provides it
 
-SQLite owns obligations and waits across restarts. Recover with `obligations list`, `monitor-list`, and `message-status`; never create or delete runtime marker files. Runtime identities and ownership come from the invoking live tmux session/pane, not message text or caller-supplied metadata.
+long-lived peer, separate worktree, cross-agent collaboration
+  -> xt pi|claude|codex + /multiplexing
 
----
+role-shaped tracked work with supervised evidence/review lifecycle
+  -> /using-specialists
 
-## Trigger Patterns
-
-| Situation | Action |
-|-----------|--------|
-| User prompt contains `?` | `bd memories <keywords>` before answering — check stored context first |
-| "What should I work on?" | `bv --robot-triage` — ranked picks with dependency context |
-| "What was I working on?" | `bd list --status=in_progress` |
-| Unfamiliar area of code | `gitnexus_query({query: "concept"})` before opening any file |
-| About to edit a symbol | `gitnexus_impact({target: "name", direction: "upstream"})` |
-| Before `git commit` | `gitnexus_detect_changes({scope: "staged"})` to verify scope |
-| About to `bd create` a bead for a specialist dispatch | Add `--parent <bead-it-services>` (nests `.1`, recursive `.1.1`) + title `<role>: <task>` — never a loose top-level bead |
-| About to dispatch a specialist (`sp run`) | `bd state <id> contract` — if `draft` or unset, promote first (explore + rewrite full contract + `bd set-state <id> contract=ready`); never dispatch against a draft |
-| Just capturing an idea for later, not working it now | `bd create --labels contract:draft` with a real PROBLEM + rough SCOPE, everything else `TBD` — never a one-liner |
-| Coordinating tmux panes or handling a reply-required xtmux message | `/multiplexing` (or `/multiplexing-team` when delegated); preserve and correlate the returned `messageKey` |
-| Reading code | `get_symbols_overview` → `find_symbol` — never read whole files |
-| Task is tests | use /test-planning
-| Task is docs updates | use /sync-docs
-| Session end (issue closed) | Memory gate fires — evaluate `bd remember` for each closed issue |
-
----
-
-## Handling `?` Prompts
-
-When the user's message contains a question, check stored context before answering:
-
-```bash
-bd memories <keywords from question>   # search project memory
-bd recall <key>                        # retrieve specific memory if key is known
+deterministic mechanical transform or validation
+  -> script/tool/runtime primitive rather than another reasoning agent
 ```
 
-Example — user asks *"why does the quality gate run twice?"*:
-```bash
-bd memories "quality gate"
-# → "quality-check.cjs and quality-check.py are separate hooks —
-#    JS/TS and Python each get their own PostToolUse pass"
-```
+Do not choose a bigger topology before you understand the work-list and overlap surface.
+Parallelism is useful only when ownership boundaries are real.
 
-If it's a code question, also run:
-```bash
-gitnexus_query({query: "<topic>"})     # find relevant execution flows
-```
+## Before handing work to another agent
 
----
+- Re-read the bead and current state.
+- Make the contract complete enough that the recipient does not need your hidden context.
+- State ownership and non-goals, especially for shared files/services.
+- Give exact validation/evidence expectations.
+- Choose a durable result location.
+- Make reply/decision expectations explicit through `/multiplexing` when coordination is
+  required.
 
-## Workflow Examples
+If two workers would edit the same surface without a defined ordering/merge owner, do not
+parallelize them.
 
-**Fixing a bug:**
-```bash
-bd ready                                                        # find the issue
-bd update bd-xyz --claim                                        # claim it
-gitnexus_impact({target: "parseComposeServices", direction: "upstream"})
-# → 2 callers, LOW risk — safe to edit
-get_symbols_overview("hooks/init.ts")                           # map file
-find_symbol("parseComposeServices", include_body=True)          # read just this
-replace_symbol_body("parseComposeServices", newBody)            # Serena edit
-bd close bd-xyz --reason="Fix YAML parse edge case"            # close issue
-xt end                                                         # push, PR, merge, cleanup
-```
+## Memory and inherited context
 
-**Exploring unfamiliar code:**
-```bash
-gitnexus_query({query: "session claim enforcement"})
-# → beads-gate-core.mjs, resolveClaimAndWorkState, decideCommitGate
-gitnexus_context({name: "resolveClaimAndWorkState"})            # callers + callees
-get_symbols_overview("hooks/beads-gate-core.mjs")               # map the file
-find_symbol("resolveClaimAndWorkState", include_body=True)      # read only this
-```
+Use `bd memories <topic>` when prior project history is relevant. Memories are dated
+leads, never authority. Confirm anything actionable against live state. Do not search
+memory merely because a prompt contains a question mark.
 
-**Persisting an insight:**
-```bash
-bd remember "quality-check runs twice: separate .cjs (JS) and .py (Python) hooks"
-# retrievable next session:
-bd memories "quality check"
-bd recall "quality-check-runs-twice-..."
-```
+A handoff report, old bead note, worker result, or prior assistant summary is also a lead.
+Re-derive expensive or irreversible facts before acting.
 
----
+## Runtime enforcement
 
-## Prompt Shaping (silent, before every non-trivial task)
+Do not duplicate deterministic runtime gates in prose or manually simulate them.
+Depending on the installed runtime, XTRM may enforce or inject claim/edit/commit gates,
+worktree boundaries, memory doctrine, compact restore, quality checks, GitNexus context,
+inbox reminders, logging, and other lifecycle behavior.
 
-| Task type | Apply |
-|-----------|-------|
-| `analyze / investigate / why` | `<thinking>` block + structured `<outputs>` |
-| `implement / build / fix` | 1-2 `<example>` blocks + `<constraints>` |
-| `refactor / simplify` | `<constraints>` (preserve behavior, tests pass) + `<current_state>` |
+Inspect the current runtime when exact behavior matters. Hooks/extensions are the
+enforcement plane; skills are the judgment/procedure plane.
 
-Vague prompt (under 8 words, no specifics)? Ask one clarifying question before proceeding.
+## Route to the focused skill
 
----
+| Need | Skill |
+|---|---|
+| Cold start, takeover, context pressure, handoff, resume | `/starting-and-resuming-work` |
+| Coordinate peers/subagents and replies/wakeups | `/multiplexing` |
+| Build/promote contracts, decompose work, triage/test-plan | `/planning` |
+| Debug regressions, review, test, verify, reduce complexity | `/engineering-quality` |
+| Use supervised Specialist roles/jobs | `/using-specialists` |
+| Explore code graph, callers/processes, blast radius | `/gitnexus` |
+| Create or improve skills | `/skill-creator` |
+| Find/import additional governed skills | `/find-skills` |
+| Production/SRE investigation when pack is enabled | `/sre-ops` |
 
-## Skill Routing
+Load the focused skill when you reach that phase. Do not preload every manual.
 
-| Need | Use |
-|------|-----|
-| Code read / edit | Serena — `get_symbols_overview` → `find_symbol` → `replace_symbol_body` |
-| Blast radius before edit | `gitnexus-impact-analysis` |
-| Navigate unfamiliar code | `gitnexus-exploring` |
-| Trace a bug | `gitnexus-debugging` |
-| Safe rename / refactor | `gitnexus-refactoring` |
-| Docs maintenance | `sync-docs` |
-| Docker service project | `using-service-skills` |
-| Build / improve a skill | `skill-creator` |
-| Orchestrate tmux panes / answer correlated requests | `multiplexing` / `multiplexing-team` |
+## Completion rule
+
+Before declaring work done, answer four questions with evidence:
+
+1. Is the intended state actually present now?
+2. Did the required validation run, and what did it show?
+3. Is durable work state updated so the next participant sees reality?
+4. Are there unresolved workers, replies, risks, or follow-ups that change the claim?
+
+If any answer is unknown, report the unknown instead of converting it into success.

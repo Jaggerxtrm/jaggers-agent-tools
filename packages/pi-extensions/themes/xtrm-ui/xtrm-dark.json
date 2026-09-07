@@ -16,13 +16,14 @@
     "gray": "#a7a7a7",
     "dimGray": "#8a8a8a",
     "borderGray": "#666666",
-    "borderBright": "#9a9a9a"
+    "borderBright": "#9a9a9a",
+    "borderMuted50": "#333333"
   },
   "colors": {
     "accent": "accentBlue",
     "border": "borderGray",
     "borderAccent": "borderBright",
-    "borderMuted": "borderGray",
+    "borderMuted": "borderMuted50",
     "success": "successGreen",
     "error": "errorRed",
     "warning": "warningAmber",

@@ -75,13 +75,27 @@ function resolveDesiredSkills(options: ReconcileRuntimeLinksOptions, defaults: r
     }
     seen.set(skill.runtimeName, skill.path);
   }
-  return selected;
+  return options.runtime === 'codex' ? [...defaults, ...selected] : selected;
+}
+
+function runtimeSkillsDirectory(projectRoot: string, runtime: SkillsRuntime): string {
+  if (runtime === 'claude') return path.join(projectRoot, '.claude', 'skills');
+  if (runtime === 'pi') return path.join(projectRoot, '.pi', 'skills');
+  return path.join(projectRoot, '.agents', 'skills');
 }
 
 async function ensureRuntimeDirectory(directory: string): Promise<void> {
   const existing = await fs.lstat(directory).catch(() => null);
   if (existing?.isSymbolicLink()) {
-    throw new Error(`Refusing to replace user-owned runtime directory ${directory}.`);
+    // xtrm-2d6fw: keep failing closed, but name the exact explicit adoption
+    // path so the operator can preview and execute without digging for it.
+    // Never echoes prompt/skill bodies.
+    const projectRoot = path.resolve(path.dirname(path.dirname(directory)));
+    throw new Error(
+      `Refusing to replace user-owned runtime directory ${directory}. ` +
+      `Run 'xt migrate skills-layout --repo ${projectRoot}' to preview legacy adoption, ` +
+      `or 'xt migrate skills-layout --repo ${projectRoot} --apply --yes' to execute.`,
+    );
   }
   if (existing && !existing.isDirectory()) {
     throw new Error(`Refusing to replace non-directory runtime path ${directory}.`);
@@ -122,21 +136,26 @@ async function discoverManagedLinks(
   return result;
 }
 
-export async function selectRuntimeSkills(runtime: SkillsRuntime, skillsRoot: string, state: { enabledPacks: { claude: string[]; pi: string[] }; managedLinks?: SkillsState['managedLinks'] }, additionalRoots: readonly string[] = []): Promise<{ runtime: SkillsRuntime; enabledPacks: string[]; skills: DiscoveredSkill[] }> {
+export async function selectRuntimeSkills(runtime: SkillsRuntime, skillsRoot: string, state: Pick<SkillsState, 'enabledPacks'> & { managedLinks?: SkillsState['managedLinks'] }, additionalRoots: readonly string[] = []): Promise<{ runtime: SkillsRuntime; enabledPacks: string[]; skills: DiscoveredSkill[] }> {
   const roots = [skillsRoot, ...additionalRoots];
-  const normalizedState: SkillsState = { schemaVersion: '2', enabledPacks: state.enabledPacks, managedLinks: state.managedLinks ?? { claude: {}, pi: {} } };
+  const normalizedState: SkillsState = {
+    schemaVersion: '2',
+    enabledPacks: state.enabledPacks,
+    managedLinks: state.managedLinks ?? { claude: {}, pi: {}, codex: {} },
+  };
   const packs = (await Promise.all(roots.map(async (root) => [
     ...(await discoverTierPacks(root, 'optional')),
     ...(await discoverTierPacks(root, 'user')),
   ]))).flat();
   const defaults = await discoverDefaultSkills(skillsRoot);
-  const skills = resolveDesiredSkills({ projectRoot: path.dirname(path.dirname(skillsRoot)), state: normalizedState, runtime, discoveredPacks: packs, globalDefaultRoot: skillsRoot, globalOptionalRoot: path.join(skillsRoot, 'optional') }, defaults);
-  return { runtime, enabledPacks: [...normalizedState.enabledPacks[runtime]], skills: [...defaults, ...skills] };
+  const desired = resolveDesiredSkills({ projectRoot: path.dirname(path.dirname(skillsRoot)), state: normalizedState, runtime, discoveredPacks: packs, globalDefaultRoot: skillsRoot, globalOptionalRoot: path.join(skillsRoot, 'optional') }, defaults);
+  const skills = runtime === 'codex' ? desired : [...defaults, ...desired];
+  return { runtime, enabledPacks: [...normalizedState.enabledPacks[runtime]], skills };
 }
 
 export async function reconcileRuntimeLinks(options: ReconcileRuntimeLinksOptions): Promise<RuntimeLinksReconcileResult> {
   const { projectRoot, runtime, state, globalDefaultRoot, globalOptionalRoot } = options;
-  const runtimeDirectory = path.join(projectRoot, runtime === 'claude' ? '.claude' : '.pi', 'skills');
+  const runtimeDirectory = runtimeSkillsDirectory(projectRoot, runtime);
   const defaults = await discoverDirectSkills(globalDefaultRoot);
   const selected = resolveDesiredSkills(options, defaults);
   const desiredLinks: Record<string, string> = {};
@@ -148,7 +167,7 @@ export async function reconcileRuntimeLinks(options: ReconcileRuntimeLinksOption
   const oldManifest = state.managedLinks?.[runtime] ?? {};
   for (const name of Object.keys(oldManifest)) resolveRuntimeLinkPath(runtimeDirectory, name);
   await ensureRuntimeDirectory(runtimeDirectory);
-  const roots = [path.join(projectRoot, '.xtrm', 'skills'), globalOptionalRoot];
+  const roots = [path.join(projectRoot, '.xtrm', 'skills'), globalDefaultRoot, globalOptionalRoot];
   const bootstrapped = Object.keys(oldManifest).length === 0
     ? await discoverManagedLinks(projectRoot, runtimeDirectory, desiredLinks, roots)
     : {};

@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { reconcileRuntimeLinks } from '../core/skills-runtime-reconcile.js';
+import { reconcileRuntimeLinks, selectRuntimeSkills } from '../core/skills-runtime-reconcile.js';
 import { createDefaultSkillsState, readSkillsState, type SkillsState } from '../core/skills-state.js';
 import type { DiscoveredPack } from '../core/skill-discovery.js';
 
@@ -23,7 +23,7 @@ beforeEach(async () => {
 });
 afterEach(async () => fs.remove(root));
 
-async function run(runtime: 'claude' | 'pi' = 'claude', state: SkillsState = { ...createDefaultSkillsState(), enabledPacks: { claude: runtime === 'claude' ? ['local'] : [], pi: runtime === 'pi' ? ['local'] : [] } }) {
+async function run(runtime: 'claude' | 'pi' = 'claude', state: SkillsState = { ...createDefaultSkillsState(), enabledPacks: { claude: runtime === 'claude' ? ['local'] : [], pi: runtime === 'pi' ? ['local'] : [], codex: [] } }) {
   const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'local');
   await fs.ensureDir(path.join(localPackPath, 'local-skill'));
   await fs.writeFile(path.join(localPackPath, 'PACK.json'), '{}');
@@ -32,6 +32,12 @@ async function run(runtime: 'claude' | 'pi' = 'claude', state: SkillsState = { .
 }
 
 describe('reconcileRuntimeLinks', () => {
+  it('selects each Codex default skill exactly once', async () => {
+    const selection = await selectRuntimeSkills('codex', globalRoot, createDefaultSkillsState());
+
+    expect(selection.skills.map((skill) => skill.runtimeName)).toEqual(['base']);
+  });
+
   it('creates idempotent direct Claude links and persists only relative manifest ownership', async () => {
     const first = await run();
     const second = await run('claude', first.state);
@@ -94,6 +100,7 @@ describe('reconcileRuntimeLinks', () => {
       managedLinks: {
         claude: { 'local-skill': path.relative(projectRoot, staleSubpath) },
         pi: {},
+        codex: {},
       },
     };
 
@@ -140,7 +147,7 @@ describe('reconcileRuntimeLinks', () => {
     await fs.ensureDir(manualTarget);
     await fs.symlink(manualTarget, path.join(runtimeRoot, 'manual-skill'));
 
-    const nextState = { ...first.state, enabledPacks: { claude: [], pi: [] } };
+    const nextState = { ...first.state, enabledPacks: { claude: [], pi: [], codex: [] } };
     const result = await reconcileRuntimeLinks({ projectRoot, state: nextState, runtime: 'claude', discoveredPacks: [], globalDefaultRoot: path.join(globalRoot, 'default'), globalOptionalRoot: path.join(globalRoot, 'optional') });
 
     expect(result.removedLinks).toEqual(['local-skill']);
@@ -162,7 +169,7 @@ describe('reconcileRuntimeLinks', () => {
     const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'local');
     const state = {
       ...createDefaultSkillsState(),
-      enabledPacks: { claude: runtime === 'claude' ? ['local'] : [], pi: runtime === 'pi' ? ['local'] : [] },
+      enabledPacks: { claude: runtime === 'claude' ? ['local'] : [], pi: runtime === 'pi' ? ['local'] : [], codex: [] },
     };
     const unsafePack = pack('local', localPackPath, '../outside');
 
@@ -173,10 +180,10 @@ describe('reconcileRuntimeLinks', () => {
   it.each(['claude', 'pi'] as const)('rejects unsafe managed-link keys before mutating %s runtime', async (runtime) => {
     const state: SkillsState = {
       ...createDefaultSkillsState(),
-      enabledPacks: { claude: [], pi: [] },
+      enabledPacks: { claude: [], pi: [], codex: [] },
       managedLinks: runtime === 'claude'
-        ? { claude: { '../outside': '.xtrm/skills/old' }, pi: {} }
-        : { claude: {}, pi: { '../outside': '.xtrm/skills/old' } },
+        ? { claude: { '../outside': '.xtrm/skills/old' }, pi: {}, codex: {} }
+        : { claude: {}, pi: { '../outside': '.xtrm/skills/old' }, codex: {} },
     };
 
     await expect(reconcileRuntimeLinks({ runtime, projectRoot, state, discoveredPacks: [], globalDefaultRoot: path.join(globalRoot, 'default'), globalOptionalRoot: path.join(globalRoot, 'optional') })).rejects.toThrow(/Unsafe runtime skill name/);
@@ -186,7 +193,7 @@ describe('reconcileRuntimeLinks', () => {
   it('rejects same-name optional packs from global and project scope', async () => {
     const globalPackPath = path.join(globalRoot, 'optional', 'shared');
     const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'optional', 'shared');
-    const state = { ...createDefaultSkillsState(), enabledPacks: { claude: ['shared'], pi: [] } };
+    const state = { ...createDefaultSkillsState(), enabledPacks: { claude: ['shared'], pi: [], codex: [] } };
 
     await expect(reconcileRuntimeLinks({ projectRoot, state, runtime: 'claude', discoveredPacks: [pack('shared', globalPackPath, 'global-skill'), pack('shared', localPackPath, 'local-skill')], globalDefaultRoot: path.join(globalRoot, 'default'), globalOptionalRoot: path.join(globalRoot, 'optional') })).rejects.toThrow(/present in more than one scope/);
   });
@@ -194,7 +201,7 @@ describe('reconcileRuntimeLinks', () => {
   it('rejects collision with global default and preserves user links', async () => {
     const localPackPath = path.join(projectRoot, '.xtrm', 'skills', 'local');
     const collision = pack('local', localPackPath, 'base');
-    await expect(reconcileRuntimeLinks({ projectRoot, state: { ...createDefaultSkillsState(), enabledPacks: { claude: ['local'], pi: [] } }, runtime: 'claude', discoveredPacks: [collision], globalDefaultRoot: path.join(globalRoot, 'default'), globalOptionalRoot: path.join(globalRoot, 'optional') })).rejects.toThrow(/global default/);
+    await expect(reconcileRuntimeLinks({ projectRoot, state: { ...createDefaultSkillsState(), enabledPacks: { claude: ['local'], pi: [], codex: [] } }, runtime: 'claude', discoveredPacks: [collision], globalDefaultRoot: path.join(globalRoot, 'default'), globalOptionalRoot: path.join(globalRoot, 'optional') })).rejects.toThrow(/global default/);
     await fs.ensureDir(path.join(projectRoot, '.claude', 'skills'));
     await fs.writeFile(path.join(projectRoot, '.claude', 'skills', 'hand-linked'), 'user');
     expect(await fs.readFile(path.join(projectRoot, '.claude', 'skills', 'hand-linked'), 'utf8')).toBe('user');
@@ -210,6 +217,17 @@ describe('reconcileRuntimeLinks', () => {
 
     await expect(run()).rejects.toThrow(/Refusing to replace user-owned runtime directory/);
     expect((await fs.lstat(path.join(projectRoot, '.claude', 'skills'))).isSymbolicLink()).toBe(true);
+  });
+
+  it('refusal names the exact skills-layout adoption command (xtrm-2d6fw)', async () => {
+    const runtimeDirectory = path.join(projectRoot, '.claude', 'skills');
+    await fs.ensureDir(path.dirname(runtimeDirectory));
+    await fs.symlink(path.join(root, 'user-runtime-dir'), runtimeDirectory);
+
+    await expect(run()).rejects.toThrow(
+      `xt migrate skills-layout --repo ${projectRoot} --apply --yes`,
+    );
+    expect((await fs.lstat(runtimeDirectory)).isSymbolicLink()).toBe(true);
   });
 
   it('refuses to overwrite an untracked real dir whose name collides with a managed skill', async () => {

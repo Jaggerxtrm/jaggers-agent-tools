@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1",
+  "name": "sre-ops",
+  "version": "2.0.0",
+  "description": "SRE operations: health triage, incidents, deploy verification, capacity and observability",
+  "skills": ["sre-ops"]
+}
