@@ -2170,7 +2170,23 @@ export function rollbackLauncherWorktree(mainRepoRoot: string, worktreePath: str
     }
 }
 
+function hasGlobalStatusline(): boolean {
+    // The user's own settings own the statusline when they define one. A
+    // worktree copy of statusline.mjs is a checked-in file and drifts behind
+    // ~/.xtrm/hooks/statusline.mjs, so binding to it silently pins sandbox
+    // sessions to a stale renderer.
+    for (const file of ['settings.json', 'settings.local.json']) {
+        try {
+            const raw = readFileSync(path.join(os.homedir(), '.claude', file), 'utf8');
+            if ((JSON.parse(raw) as { statusLine?: unknown }).statusLine) return true;
+        } catch { /* absent or unreadable: no global statusline from this file */ }
+    }
+    return false;
+}
+
 function resolveStatuslineScript(worktreePath: string): string | null {
+    if (hasGlobalStatusline()) return null;
+
     const localStatusline = path.join(worktreePath, '.xtrm', 'hooks', 'statusline.mjs');
     if (existsSync(localStatusline)) return localStatusline;
 
@@ -3002,6 +3018,10 @@ export async function launchWorktreeSession(opts: WorktreeSessionOptions): Promi
                 mkdirSync(claudeDir, { recursive: true });
                 writeFileSync(localSettingsPath, JSON.stringify(localSettings, null, 2));
             } catch { /* non-fatal */ }
+        } else if (existsSync(localSettingsPath)) {
+            // A previous launch may have pinned a statusline the user now owns
+            // globally. Remove the stale override instead of leaving it.
+            try { unlinkSync(localSettingsPath); } catch { /* non-fatal */ }
         }
     }
 
