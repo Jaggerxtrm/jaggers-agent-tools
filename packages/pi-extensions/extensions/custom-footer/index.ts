@@ -60,6 +60,30 @@ export function registerFooterSection(key: string, renderBelow: FooterSectionRen
 	};
 }
 
+// Fleet hook publication (unitAI-plbug): the fleet looks up
+// globalThis.__registerFooterSection and falls back to belowEditor when absent.
+// Publish on load, clear on unload. Never throws; silent without globalThis.
+function publishFooterHook(): void {
+	try {
+		if (typeof globalThis === "undefined") return;
+		(globalThis as Record<string, unknown>).__registerFooterSection = registerFooterSection;
+	} catch {
+		// Silent: hook publication must never break load.
+	}
+}
+
+function clearFooterHook(): void {
+	try {
+		if (typeof globalThis === "undefined") return;
+		const g = globalThis as Record<string, unknown>;
+		if (g.__registerFooterSection === registerFooterSection) delete g.__registerFooterSection;
+	} catch {
+		// Silent: hook cleanup must never break unload.
+	}
+}
+
+publishFooterHook();
+
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
 	if (count < 10_000) return `${(count / 1000).toFixed(1)}k`;
@@ -80,6 +104,7 @@ function parseGitFlags(porcelain: string): string {
 }
 
 export default function registerCustomFooter(pi: ExtensionAPI): void {
+	publishFooterHook();
 	let capturedCtx: any = null;
 	let cacheModule: CacheModule | null = null;
 	let mainRoot = "";
@@ -281,6 +306,7 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 		return undefined;
 	});
 	pi.on("session_shutdown", async () => {
+		clearFooterHook();
 		for (const timer of [footerReapplyTimer, runtimeRefreshTimer]) if (timer) clearTimeout(timer);
 		if (cacheSyncTimer) clearInterval(cacheSyncTimer);
 		footerReapplyTimer = runtimeRefreshTimer = null;
