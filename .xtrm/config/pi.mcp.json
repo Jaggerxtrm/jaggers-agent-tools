@@ -23,6 +23,12 @@
       "lifecycle": "lazy",
       "idleTimeout": 10
     },
+    "exa": {
+      "command": "npx",
+      "args": ["-y", "pi-mcp-adapter", "https://mcp.exa.ai/mcp?tools=web_search_exa,web_fetch_exa,web_search_advanced_exa,agent_run"],
+      "lifecycle": "lazy",
+      "idleTimeout": 10
+    },
     "gitnexus": {
       "command": "gitnexus",
       "args": ["mcp"],
