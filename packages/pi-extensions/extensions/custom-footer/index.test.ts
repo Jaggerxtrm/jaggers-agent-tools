@@ -135,3 +135,55 @@ describe("registerFooterSection seam", () => {
 		}
 	});
 });
+
+describe("globalThis hook publication (unitAI-plbug)", () => {
+	test("importing the module publishes the hook", () => {
+		collectHandlers(); // load publishes (idempotent)
+		const g = globalThis as Record<string, unknown>;
+		expect(g.__registerFooterSection).toBe(registerFooterSection);
+	});
+
+	test("section registered through the global hook renders", async () => {
+		const { render } = await makeFooter();
+		const g = globalThis as Record<string, unknown>;
+		const hook = g.__registerFooterSection as typeof registerFooterSection;
+		const base = render(80);
+		const unregister = hook("via-global", () => ["global line"]);
+		try {
+			expect(render(80)).toEqual([...base, "global line"]);
+		} finally {
+			unregister();
+		}
+	});
+
+	test("session_shutdown clears the hook", async () => {
+		const { handlers } = await makeFooter();
+		const g = globalThis as Record<string, unknown>;
+		expect(g.__registerFooterSection).toBe(registerFooterSection);
+		await handlers.get("session_shutdown")?.({}, {});
+		expect(g.__registerFooterSection).toBeUndefined();
+		// Restore for other tests / importers.
+		collectHandlers();
+	});
+
+	test("double load is idempotent", () => {
+		const g = globalThis as Record<string, unknown>;
+		collectHandlers();
+		collectHandlers();
+		expect(g.__registerFooterSection).toBe(registerFooterSection);
+	});
+
+	test("shutdown does not clobber a foreign hook", async () => {
+		const { handlers } = await makeFooter();
+		const g = globalThis as Record<string, unknown>;
+		const foreign = () => () => {};
+		g.__registerFooterSection = foreign;
+		try {
+			await handlers.get("session_shutdown")?.({}, {});
+			expect(g.__registerFooterSection).toBe(foreign);
+		} finally {
+			delete g.__registerFooterSection;
+			collectHandlers();
+		}
+	});
+});
