@@ -58290,7 +58290,18 @@ function rollbackLauncherWorktree(mainRepoRoot, worktreePath, branchName, delete
     ));
   }
 }
+function hasGlobalStatusline() {
+  for (const file2 of ["settings.json", "settings.local.json"]) {
+    try {
+      const raw = (0, import_node_fs2.readFileSync)(import_node_path13.default.join(import_node_os7.default.homedir(), ".claude", file2), "utf8");
+      if (JSON.parse(raw).statusLine) return true;
+    } catch {
+    }
+  }
+  return false;
+}
 function resolveStatuslineScript(worktreePath) {
+  if (hasGlobalStatusline()) return null;
   const localStatusline = import_node_path13.default.join(worktreePath, ".xtrm", "hooks", "statusline.mjs");
   if ((0, import_node_fs2.existsSync)(localStatusline)) return localStatusline;
   const repoStatusline = import_node_path13.default.join(worktreePath, "hooks", "statusline.mjs");
@@ -58805,6 +58816,11 @@ async function launchWorktreeSession(opts) {
         try {
           (0, import_node_fs2.mkdirSync)(claudeDir, { recursive: true });
           (0, import_node_fs2.writeFileSync)(localSettingsPath, JSON.stringify(localSettings, null, 2));
+        } catch {
+        }
+      } else if ((0, import_node_fs2.existsSync)(localSettingsPath)) {
+        try {
+          (0, import_node_fs2.unlinkSync)(localSettingsPath);
         } catch {
         }
       }
