@@ -42,6 +42,24 @@ const FOOTER_REAPPLY_DELAY_MS = 40;
 // uses raw SGR escapes for bold path and thinking level).
 const XTRM_ACCENT = "\x1b[38;2;154;139;255m";
 
+export type FooterSectionRenderer = (width: number) => string[];
+
+const footerSections = new Map<string, FooterSectionRenderer>();
+let footerDisabled = false;
+
+// Fleet composition seam (unitAI-beqby.2): registers lines rendered below the
+// statusline. Re-registering a key replaces it. When the footer is
+// absent/disabled the call is a silent no-op returning a no-op unregister.
+export function registerFooterSection(key: string, renderBelow: FooterSectionRenderer): () => void {
+	const noop = (): void => {};
+	if (footerDisabled) return noop;
+	if (typeof key !== "string" || !key || typeof renderBelow !== "function") return noop;
+	footerSections.set(key, renderBelow);
+	return () => {
+		if (footerSections.get(key) === renderBelow) footerSections.delete(key);
+	};
+}
+
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
 	if (count < 10_000) return `${(count / 1000).toFixed(1)}k`;
@@ -144,6 +162,10 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 
 	const applyFooter = (ctx: any): void => {
 		capturedCtx = ctx;
+		if (typeof ctx.ui?.setFooter !== "function") {
+			footerDisabled = true;
+			return;
+		}
 		ctx.ui.setFooter((tui: any, theme: any, footerData: any) => {
 			const instanceRender = () => tui.requestRender();
 			requestRender = instanceRender;
@@ -192,7 +214,15 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 					// Bold + default fg (not dim) so the path/branch reads first.
 					const head = `\x1b[1m${pwd}\x1b[22m`;
 					const line = `${head} ${theme.fg(usageColor, contextDisplay)} ${XTRM_ACCENT}${modelDisplay}\x1b[39m${theme.fg("dim", beadsDisplay)}`;
-					return [truncateToWidth(line, width)];
+					const lines = [truncateToWidth(line, width)];
+					for (const renderBelow of footerSections.values()) {
+						try {
+							for (const sectionLine of renderBelow(width) ?? []) lines.push(truncateToWidth(sectionLine, width));
+						} catch {
+							// A faulty section must never break the statusline.
+						}
+					}
+					return lines;
 				},
 			};
 		});
@@ -258,5 +288,6 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 		branchChangeUnsub?.();
 		branchChangeUnsub = null;
 		requestRender = null;
+		footerDisabled = false;
 	});
 }
