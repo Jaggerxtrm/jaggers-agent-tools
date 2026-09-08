@@ -151,11 +151,21 @@ export async function runClaudeRuntimeSyncPhase(opts: ClaudeRuntimeSyncOptions):
     const hasExistingSettings = await fs.pathExists(settingsPath);
     const baseSettings = await readBaseSettings(settingsTemplatePath);
     const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
+    // Global-only hooks direction: never (re-)write a registration the global
+    // install already covers — a project copy would fire twice (fatal for the
+    // stateful beads gates). Same guard as reconcileProjectClaudeHooks; fail-open
+    // without a readable global baseline. Pre-existing residue is cured on the
+    // reconcile path by planLegacyHookDedupe.
+    const coverage = await filterGloballyCoveredHooks(repoRoot, generatedHooks);
+    for (const skip of coverage.skipped) {
+        console.log(t.muted(`  ↻ hook covered globally, skipped at project scope: ${skip.event} ${skip.command.slice(0, 80)}`));
+        if (skip.drift) console.log(t.muted(`    ↳ ${skip.drift}`));
+    }
     // xtrm-61cdl: preserve third-party (unmanaged) wrappers on merge instead of
     // wholesale-replacing the project settings.json hooks map. Applies to both
     // shouldUseGlobalHooks() branches — the mode toggle only affects which paths
     // get rewritten, not whether we clobber user hooks.
-    const filteredHooks = mergeProjectOwnedHooks(existingSettings.hooks ?? {}, generatedHooks, projectHooksDir);
+    const filteredHooks = mergeProjectOwnedHooks(existingSettings.hooks ?? {}, coverage.hooks, projectHooksDir);
 
     const mergedSettings: ClaudeSettings = hasExistingSettings
         ? { ...existingSettings, hooks: filteredHooks }
