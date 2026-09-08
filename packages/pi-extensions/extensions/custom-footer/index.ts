@@ -227,9 +227,13 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 					const percentValue = usage?.percent ?? 0;
 					const contextDisplay = usage?.percent == null ? `?/${formatTokens(contextWindow)}` : `${percentValue.toFixed(1)}%/${formatTokens(contextWindow)}`;
 					let modelDisplay = model?.id || "no-model";
-					// theme.bold is a no-op in pi TUI — use SGR bold directly for the thinking level.
-					if (model?.reasoning) modelDisplay += ` \x1b[1m${pi.getThinkingLevel() || "off"}\x1b[22m`;
 					if (footerData.getAvailableProviderCount() > 1 && model) modelDisplay = `(${model.provider}) ${modelDisplay}`;
+					// Neutral model: bold light-white, slightly dimmed. Only the effort
+					// level below carries color. Raw SGR like XTRM_ACCENT — theme.fg()
+					// only accepts named tokens.
+					modelDisplay = `\x1b[1m\x1b[2m\x1b[97m${modelDisplay}\x1b[39m\x1b[22m`;
+					// theme.bold is a no-op in pi TUI — use SGR bold directly for the thinking level.
+					if (model?.reasoning) modelDisplay += ` ${XTRM_ACCENT}\x1b[1m${pi.getThinkingLevel() || "off"}\x1b[22m\x1b[39m`;
 
 					const counts = beadsCache?.counts;
 					let beadsDisplay = "";
@@ -238,7 +242,7 @@ export default function registerCustomFooter(pi: ExtensionAPI): void {
 					const usageColor = percentValue > 90 ? "error" : percentValue > 70 ? "warning" : "dim";
 					// Bold + default fg (not dim) so the path/branch reads first.
 					const head = `\x1b[1m${pwd}\x1b[22m`;
-					const line = `${head} ${theme.fg(usageColor, contextDisplay)} ${XTRM_ACCENT}${modelDisplay}\x1b[39m${theme.fg("dim", beadsDisplay)}`;
+					const line = `${head} ${theme.fg(usageColor, contextDisplay)} ${modelDisplay}${theme.fg("dim", beadsDisplay)}`;
 					const lines = [truncateToWidth(line, width)];
 					for (const renderBelow of footerSections.values()) {
 						try {
