@@ -19,7 +19,7 @@
       "url": "https://mcp.exa.ai/mcp?tools=web_search_exa,web_fetch_exa,web_search_advanced_exa,agent_run",
       "_notes": {
         "description": "Exa semantic web research, source retrieval, advanced search, and authenticated multi-step research",
-        "auth": "OAuth preferred; anonymous search/fetch may be rate-limited; never commit EXA_API_KEY"
+        "auth": "OAuth preferred; anonymous search/fetch may be rate-limited; never commit the API key"
       }
     },
     "gitnexus": {
