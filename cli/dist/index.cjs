@@ -40055,7 +40055,12 @@ async function runClaudeRuntimeSyncPhase(opts) {
   const hasExistingSettings = await import_fs_extra6.default.pathExists(settingsPath);
   const baseSettings = await readBaseSettings(settingsTemplatePath);
   const existingSettings = hasExistingSettings ? await readSettings(settingsPath) : {};
-  const filteredHooks = mergeProjectOwnedHooks(existingSettings.hooks ?? {}, generatedHooks, projectHooksDir);
+  const coverage = await filterGloballyCoveredHooks(repoRoot, generatedHooks);
+  for (const skip of coverage.skipped) {
+    console.log(t.muted(`  \u21BB hook covered globally, skipped at project scope: ${skip.event} ${skip.command.slice(0, 80)}`));
+    if (skip.drift) console.log(t.muted(`    \u21B3 ${skip.drift}`));
+  }
+  const filteredHooks = mergeProjectOwnedHooks(existingSettings.hooks ?? {}, coverage.hooks, projectHooksDir);
   const mergedSettings = hasExistingSettings ? { ...existingSettings, hooks: filteredHooks } : { ...baseSettings, hooks: filteredHooks };
   if (generatedStatusLine) {
     mergedSettings.statusLine = generatedStatusLine;

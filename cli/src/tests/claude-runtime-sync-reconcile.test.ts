@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { mergeProjectOwnedHooks, reconcileProjectClaudeHooks, resolveHooksForGlobalRuntime } from '../core/claude-runtime-sync.js';
+import { mergeProjectOwnedHooks, reconcileProjectClaudeHooks, resolveHooksForGlobalRuntime, runClaudeRuntimeSyncPhase } from '../core/claude-runtime-sync.js';
 
 // reconcileProjectClaudeHooks resolves the canonical hooks.json from the package root
 // (the xtrm-tools repo root in tests, via __dirname walk), then rewrites the project's
@@ -32,6 +32,56 @@ afterEach(() => {
   fs.removeSync(fakeHome);
   fs.removeSync(repoRoot);
 });
+
+type Wrapper = { matcher?: string; hooks: Array<{ type?: string; command: string }> };
+
+// Promote the written project settings hooks to a byte-identical fake global
+// install: registrations re-pointed at the fake global hooks dir, plus the same
+// hook files materialised under both dirs. Mirrors the production steady state
+// where the global install covers every canonical registration.
+function seedGlobalBaselineFromProjectSettings(projectHooks: Record<string, Wrapper[]>, homeDir: string): void {
+  const projectHooksDir = path.join(repoRoot, '.xtrm', 'hooks');
+  const globalHooksDir = path.join(homeDir, '.xtrm', 'hooks');
+  const toGlobal = (s: string): string => s.split(projectHooksDir).join(globalHooksDir);
+  const globalHooks: Record<string, unknown[]> = {};
+  for (const [event, wrappers] of Object.entries(projectHooks)) {
+    globalHooks[event] = wrappers.map((w) => ({
+      matcher: w.matcher,
+      hooks: w.hooks.map((h) => ({ type: 'command', command: toGlobal(h.command) })),
+    }));
+  }
+  fs.ensureDirSync(path.join(homeDir, '.claude'));
+  fs.writeJsonSync(path.join(homeDir, '.claude', 'settings.json'), { hooks: globalHooks });
+  for (const [, wrappers] of Object.entries(projectHooks)) {
+    for (const w of wrappers) {
+      for (const h of w.hooks) {
+        const rel = path.relative(projectHooksDir, h.command.replace(/^node "|"$/g, '').replace(/^python3 "/, ''));
+        if (!rel || rel.startsWith('..')) continue;
+        fs.ensureDirSync(path.dirname(path.join(globalHooksDir, rel)));
+        fs.writeFileSync(path.join(globalHooksDir, rel), 'global-copy');
+        fs.ensureDirSync(path.dirname(path.join(projectHooksDir, rel)));
+        fs.writeFileSync(path.join(projectHooksDir, rel), 'global-copy');
+      }
+    }
+  }
+}
+
+// Steady-state fixture: reconcile against an empty global baseline (fail-open)
+// writes the full canonical set, then that set is promoted to a byte-identical
+// fake global install. After this the global install covers every canonical
+// registration — the state the machine-wide cleanup produced.
+async function wireGlobalBaseline(): Promise<Record<string, Wrapper[]>> {
+  const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
+  fs.ensureDirSync(path.dirname(settingsPath));
+  fs.writeJsonSync(settingsPath, { hooks: {} });
+  const first = await reconcileProjectClaudeHooks(repoRoot, { dryRun: false });
+  expect(first.changed).toBe(true);
+  expect(first.skippedGloballyCovered ?? 0).toBe(0);
+  const canonicalWritten = fs.readJsonSync(settingsPath).hooks as Record<string, Wrapper[]>;
+  expect(Object.keys(canonicalWritten).length).toBeGreaterThan(0);
+  seedGlobalBaselineFromProjectSettings(canonicalWritten, fakeHome);
+  return canonicalWritten;
+}
 
 describe('reconcileProjectClaudeHooks', () => {
   it('wires canonical hooks into an existing settings.json with no hooks, preserving other keys', async () => {
@@ -111,44 +161,7 @@ describe('reconcileProjectClaudeHooks', () => {
 
   it('skips generated hooks already covered by the global install (global-only direction)', async () => {
     const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
-    fs.ensureDirSync(path.dirname(settingsPath));
-    fs.writeJsonSync(settingsPath, { hooks: {} });
-
-    // First run with an empty global baseline wires the full canonical set.
-    const first = await reconcileProjectClaudeHooks(repoRoot, { dryRun: false });
-    expect(first.changed).toBe(true);
-    expect(first.skippedGloballyCovered ?? 0).toBe(0);
-    const canonicalWritten = fs.readJsonSync(settingsPath).hooks;
-    expect(Object.keys(canonicalWritten).length).toBeGreaterThan(0);
-
-    // Promote the written project hooks to a fake global install by rewriting
-    // the project hooks dir to the fake global one, with byte-identical files.
-    const projectHooksDir = path.join(repoRoot, '.xtrm', 'hooks');
-    const globalHooksDir = path.join(fakeHome, '.xtrm', 'hooks');
-    const toGlobal = (s: string): string => s.split(projectHooksDir).join(globalHooksDir);
-    type Wrapper = { matcher?: string; hooks: Array<{ command: string }> };
-    const canonicalEntries = Object.entries(canonicalWritten) as Array<[string, Wrapper[]]>;
-    const globalHooks: Record<string, unknown[]> = {};
-    for (const [event, wrappers] of canonicalEntries) {
-      globalHooks[event] = wrappers.map((w) => ({
-        matcher: w.matcher,
-        hooks: w.hooks.map((h) => ({ type: 'command', command: toGlobal(h.command) })),
-      }));
-    }
-    fs.ensureDirSync(path.join(fakeHome, '.claude'));
-    fs.writeJsonSync(path.join(fakeHome, '.claude', 'settings.json'), { hooks: globalHooks });
-    for (const [, wrappers] of canonicalEntries) {
-      for (const w of wrappers) {
-        for (const h of w.hooks) {
-          const rel = path.relative(projectHooksDir, h.command.replace(/^node "|"$/g, '').replace(/^python3 "/, ''));
-          if (!rel || rel.startsWith('..')) continue;
-          fs.ensureDirSync(path.dirname(path.join(globalHooksDir, rel)));
-          fs.writeFileSync(path.join(globalHooksDir, rel), 'global-copy');
-          fs.ensureDirSync(path.dirname(path.join(projectHooksDir, rel)));
-          fs.writeFileSync(path.join(projectHooksDir, rel), 'global-copy');
-        }
-      }
-    }
+    await wireGlobalBaseline();
 
     // Second run with full global coverage writes nothing project-scoped.
     fs.writeJsonSync(settingsPath, { hooks: {} });
@@ -156,6 +169,53 @@ describe('reconcileProjectClaudeHooks', () => {
     expect((second.skippedGloballyCovered ?? 0)).toBeGreaterThan(0);
     const rewritten = fs.readJsonSync(settingsPath).hooks;
     expect(Object.keys(rewritten).length).toBe(0);
+  });
+
+  it('preserves foreign hooks under reconcile + dedupe when the global install covers canonical (xtrm-17gv0)', async () => {
+    const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
+    const canonicalWritten = await wireGlobalBaseline();
+
+    // Existing project settings carry the pre-cleanup canonical residue next to
+    // a foreign wrapper. Reconcile must drop the globally-covered canonical
+    // registrations and keep the foreign wrapper verbatim.
+    const foreign = {
+      matcher: 'Bash',
+      hooks: [{ type: 'command' as const, command: 'node /home/dawid/dev/xtmux/bin/auto-monitor.mjs' }],
+    };
+    fs.writeJsonSync(settingsPath, { hooks: { ...canonicalWritten, PreToolUse: [foreign] } });
+
+    const result = await reconcileProjectClaudeHooks(repoRoot, { dryRun: false });
+
+    expect(result.changed).toBe(true);
+    expect(Number(result.skippedGloballyCovered ?? 0)).toBeGreaterThan(0);
+    const after = fs.readJsonSync(settingsPath);
+    const commands = (Object.values(after.hooks) as Wrapper[][]).flatMap((ws) => ws.flatMap((w) => w.hooks.map((h) => h.command)));
+    expect(commands).toContain('node /home/dawid/dev/xtmux/bin/auto-monitor.mjs');
+    // No project-scoped canonical registration survives — covered globally, so
+    // neither the guard nor the dedupe (nor the merge) re-writes it.
+    expect(commands.filter((c) => c.includes(path.join(repoRoot, '.xtrm', 'hooks')))).toHaveLength(0);
+  });
+
+  it('sync path skips globally-covered hooks and preserves foreign hooks (xtrm-17gv0)', async () => {
+    const settingsPath = path.join(repoRoot, '.claude', 'settings.json');
+    const canonicalWritten = await wireGlobalBaseline();
+
+    // Pre-cleanup residue + a foreign wrapper. The sync path (runClaudeRuntimeSyncPhase,
+    // isGlobal=false) must apply the same globally-covered guard as reconcile: the
+    // covered canonical residue is dropped and not re-added, the foreign wrapper stays.
+    const foreign = {
+      matcher: 'Bash',
+      hooks: [{ type: 'command' as const, command: 'node /home/dawid/dev/xtmux/bin/auto-monitor.mjs' }],
+    };
+    fs.writeJsonSync(settingsPath, { hooks: { ...canonicalWritten, PreToolUse: [foreign] } });
+
+    const result = await runClaudeRuntimeSyncPhase({ repoRoot, dryRun: false, isGlobal: false });
+
+    expect(result.wroteSettings).toBe(true);
+    const after = fs.readJsonSync(settingsPath);
+    const commands = (Object.values(after.hooks) as Wrapper[][]).flatMap((ws) => ws.flatMap((w) => w.hooks.map((h) => h.command)));
+    expect(commands).toContain('node /home/dawid/dev/xtmux/bin/auto-monitor.mjs');
+    expect(commands.filter((c) => c.includes(path.join(repoRoot, '.xtrm', 'hooks')))).toHaveLength(0);
   });
 
   it('drops a stale xtrm-managed wrapper whose hash no longer matches canonical (xtrm-61cdl)', async () => {
