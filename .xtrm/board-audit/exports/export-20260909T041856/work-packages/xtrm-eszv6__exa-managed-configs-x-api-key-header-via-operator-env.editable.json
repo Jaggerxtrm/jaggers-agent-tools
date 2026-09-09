@@ -1,0 +1,76 @@
+{
+  "content_sha256": "f99e5e2f00d748c7f8c5e2926af2a966c52fe12b654bf024e92a8d032bbd88c7",
+  "desired_issues": {
+    "xtrm-eszv6": {
+      "_type": "issue",
+      "assignee": "jaggerxtrm",
+      "comment_count": 0,
+      "created_at": "2026-09-09T02:17:35Z",
+      "created_by": "jaggerxtrm",
+      "dependency_count": 0,
+      "dependent_count": 0,
+      "description": "Add headers x-api-key=${EXA_API_KEY} to Claude+Pi exa entries (proven live: env expansion works, search succeeds). Tests assert exact reference + UUID-pattern guard. Docs wiring. Push to feat/exa-researcher-mcp.",
+      "heartbeat_at": "2026-09-09T02:17:40Z",
+      "id": "xtrm-eszv6",
+      "issue_type": "task",
+      "lease_expires_at": "2026-09-09T02:22:40Z",
+      "owner": "dawid.jgg@gmail.com",
+      "priority": 1,
+      "started_at": "2026-09-09T02:17:40Z",
+      "status": "in_progress",
+      "title": "Exa managed configs: x-api-key header via operator env",
+      "updated_at": "2026-09-09T02:17:40Z"
+    }
+  },
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-eszv6"
+  },
+  "issues": {
+    "xtrm-eszv6": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "comment_count": 0,
+        "created_at": "2026-09-09T02:17:35Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Add headers x-api-key=${EXA_API_KEY} to Claude+Pi exa entries (proven live: env expansion works, search succeeds). Tests assert exact reference + UUID-pattern guard. Docs wiring. Push to feat/exa-researcher-mcp.",
+        "heartbeat_at": "2026-09-09T02:17:40Z",
+        "id": "xtrm-eszv6",
+        "issue_type": "task",
+        "lease_expires_at": "2026-09-09T02:22:40Z",
+        "owner": "dawid.jgg@gmail.com",
+        "priority": 1,
+        "started_at": "2026-09-09T02:17:40Z",
+        "status": "in_progress",
+        "title": "Exa managed configs: x-api-key header via operator env",
+        "updated_at": "2026-09-09T02:17:40Z"
+      }
+    }
+  },
+  "new_comments": {},
+  "relations": [],
+  "repository": "xtrm-dev/core",
+  "root_id": "xtrm-eszv6",
+  "root_title": "Exa managed configs: x-api-key header via operator env",
+  "roundtrip": {
+    "base_package_sha256": "f99e5e2f00d748c7f8c5e2926af2a966c52fe12b654bf024e92a8d032bbd88c7",
+    "base_record_sha256": {
+      "xtrm-eszv6": "b8af9fcbb509d9a4523d81f385f94b965df2a6479a100caf1cf570fb9554e4bb"
+    },
+    "edit_contract": "modify desired_issues and new_comments only; issues.*.source is immutable base state",
+    "prepared_at": "2026-09-09T02:19:01Z",
+    "schema_version": "xtrm.board-audit.roundtrip.v1"
+  },
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}
