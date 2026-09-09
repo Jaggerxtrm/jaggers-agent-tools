@@ -76,7 +76,7 @@ Project `.pi/mcp.json` (synced from `.xtrm/config/pi.mcp.json`):
 | `context7` | npx stdio | Upstash context7 MCP for docs lookup |
 | `deepwiki` | npx adapter | Wiki/docs lookup via `pi-mcp-adapter` |
 | `github-grep` | npx adapter | GitHub code search via `pi-mcp-adapter` |
-| `exa` | npx adapter | Exa semantic search/fetch, filtered retrieval and multi-step research via `pi-mcp-adapter` |
+| `exa` | http | Semantic web search/fetch, advanced retrieval and authenticated multi-step research via `https://mcp.exa.ai/mcp` |
 | `gitnexus` | gitnexus stdio | Code intelligence MCP |
 | `specialists` | specialists stdio | Specialists workflow orchestration |
 
