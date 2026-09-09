@@ -28,8 +28,9 @@ describe('managed Exa MCP baseline', () => {
     expect(exa.url).toContain('https://mcp.exa.ai/mcp?tools=');
     for (const tool of CURRENT_TOOLS) expect(exa.url).toContain(tool);
     for (const tool of RETIRED_TOOLS) expect(exa.url).not.toContain(tool);
-    expect(JSON.stringify(exa)).not.toContain('EXA_API_KEY');
+    expect(exa.headers?.['x-api-key']).toBe('${EXA_API_KEY}');
     expect(JSON.stringify(exa)).not.toContain('exaApiKey=');
+    expect(JSON.stringify(exa)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
   });
 
   it('ships Exa as a native Pi HTTP MCP without embedding credentials', async () => {
@@ -42,7 +43,8 @@ describe('managed Exa MCP baseline', () => {
     expect(exa.url).toContain('https://mcp.exa.ai/mcp?tools=');
     for (const tool of CURRENT_TOOLS) expect(exa.url).toContain(tool);
     for (const tool of RETIRED_TOOLS) expect(exa.url).not.toContain(tool);
-    expect(JSON.stringify(exa)).not.toContain('EXA_API_KEY');
+    expect(exa.headers?.['x-api-key']).toBe('${EXA_API_KEY}');
     expect(JSON.stringify(exa)).not.toContain('exaApiKey=');
+    expect(JSON.stringify(exa)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
   });
 });

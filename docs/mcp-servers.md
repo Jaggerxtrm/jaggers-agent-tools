@@ -93,7 +93,8 @@ Exa can provide limited anonymous search/fetch, while authenticated capabilities
 limits use OAuth or an API key. XTRM policy is:
 
 - prefer OAuth when the harness/adapter supports it;
-- use `EXA_API_KEY` only through the operator environment or secret store when OAuth is not suitable;
+- use `EXA_API_KEY` only through the operator environment or secret store when OAuth is not suitable (e.g. `export EXA_API_KEY="$(cat ~/.secrets/exa-api-key.txt)"` from your shell profile);
+- managed configs reference the key as `${EXA_API_KEY}` (expanded by the harness at runtime) and pi/Claude send it as the `x-api-key` header;
 - never commit the API key, encode it into the managed URL, or print it in logs/output;
 - surface auth/rate-limit failures instead of silently claiming equivalent research occurred.
 
